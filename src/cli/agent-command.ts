@@ -124,10 +124,12 @@ function formatGadgetSummary(result: {
     return `${chalk.yellow("⏹")} ${gadgetLabel} ${chalk.yellow("finished:")} ${result.result} ${timeLabel}`;
   }
 
-  // Truncate long results for cleaner output
+  // For TellUser, show full text without truncation since it's meant for user messages
+  // For other gadgets, truncate long results for cleaner output
   const maxLen = 80;
+  const shouldTruncate = result.gadgetName !== "TellUser";
   const resultText = result.result
-    ? result.result.length > maxLen
+    ? shouldTruncate && result.result.length > maxLen
       ? `${result.result.slice(0, maxLen)}...`
       : result.result
     : "";
