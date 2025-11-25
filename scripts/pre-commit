@@ -1,0 +1,45 @@
+#!/bin/sh
+
+# Pre-commit hook that runs typecheck, linter and unit tests
+# This ensures code quality before commits
+
+echo "Running pre-commit checks..."
+
+# Run typecheck
+echo "→ Running typecheck..."
+bun run typecheck
+TYPECHECK_EXIT=$?
+
+if [ $TYPECHECK_EXIT -ne 0 ]; then
+  echo "❌ Typecheck failed! Please fix TypeScript errors before committing."
+  exit 1
+fi
+
+echo "✓ Typecheck passed"
+
+# Run linter
+echo "→ Running linter..."
+bun run lint
+LINT_EXIT=$?
+
+if [ $LINT_EXIT -ne 0 ]; then
+  echo "❌ Linter failed! Please fix linting errors before committing."
+  exit 1
+fi
+
+echo "✓ Linter passed"
+
+# Run unit tests (excluding E2E tests)
+echo "→ Running unit tests..."
+bun test src/agent src/core src/gadgets src/providers src/testing --timeout 30000
+TEST_EXIT=$?
+
+if [ $TEST_EXIT -ne 0 ]; then
+  echo "❌ Unit tests failed! Please fix failing tests before committing."
+  exit 1
+fi
+
+echo "✓ Unit tests passed"
+echo "✓ All pre-commit checks passed!"
+
+exit 0

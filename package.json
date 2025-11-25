@@ -1,0 +1,102 @@
+{
+  "name": "@zbigniewsobiecki/llmist",
+  "version": "0.0.1",
+  "description": "Universal TypeScript LLM client with streaming-first agent framework. Works with any model - no structured outputs or native tool calling required. Implements its own flexible grammar for function calling.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing/index.d.ts",
+        "default": "./dist/testing/index.js"
+      },
+      "require": {
+        "types": "./dist/testing/index.d.cts",
+        "default": "./dist/testing/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "cli": "bun run scripts/cli-runner.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "test": "bun test",
+    "test:unit": "bun test src/agent src/core src/gadgets src/providers src/testing",
+    "test:watch": "bun test --watch",
+    "test:e2e": "bun test src/e2e --timeout 60000 --bail 1",
+    "test:e2e:watch": "bun test src/e2e --watch --timeout 60000",
+    "test:all": "bun run test && bun run test:e2e",
+    "clean": "rimraf dist",
+    "postinstall": "node scripts/install-hooks.js"
+  },
+  "bin": {
+    "llmist": "dist/cli.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zbigniewsobiecki/llmist.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "llm",
+    "ai",
+    "agent",
+    "agents",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini",
+    "gpt",
+    "streaming",
+    "function-calling",
+    "tool-calling",
+    "typescript",
+    "universal-client",
+    "multi-provider",
+    "hooks",
+    "gadgets"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
+    "@google/genai": "^1.27.0",
+    "chalk": "^5.6.2",
+    "commander": "^12.1.0",
+    "js-yaml": "^4.1.0",
+    "openai": "^4.0.0",
+    "tiktoken": "^1.0.22",
+    "tslog": "^4.10.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.2",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.12.7",
+    "bun-types": "^1.3.2",
+    "dotenv": "^17.2.3",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.4.5"
+  }
+}
