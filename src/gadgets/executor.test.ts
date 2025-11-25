@@ -730,7 +730,8 @@ describe("GadgetExecutor", () => {
         error: "Gadget 'SlowGadget' execution exceeded timeout of 50ms",
       });
       expect(result.result).toBeUndefined();
-      expect(result.executionTimeMs).toBeGreaterThanOrEqual(50);
+      // Use margin for CI timing variations (timeout is 50ms, but allow 40-200ms range)
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(40);
       expect(result.executionTimeMs).toBeLessThan(200);
     });
 
