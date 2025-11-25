@@ -1,6 +1,6 @@
 {
   "name": "llmist",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Universal TypeScript LLM client with streaming-first agent framework. Works with any model - no structured outputs or native tool calling required. Implements its own flexible grammar for function calling.",
   "type": "module",
   "main": "dist/index.cjs",
