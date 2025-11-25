@@ -38,14 +38,23 @@ bun add llmist
 ## 🖥️ Command Line Interface
 
 ```bash
-# Quick chat
-bunx llmist chat "Explain TypeScript generics" --model haiku
+# Quick completion
+bunx llmist complete "Explain TypeScript generics" --model haiku
 
 # Agent with tools
 bunx llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 
 # Pipe input
-cat document.txt | llmist chat "Summarize" --model gpt-5-nano
+cat document.txt | llmist complete "Summarize" --model gpt-5-nano
+```
+
+**Built-in gadgets** are included by default in agent mode:
+- `AskUser` - Prompts for user input when clarification is needed
+- `TellUser` - Displays important messages (info/success/warning/error) and can end conversations
+
+```bash
+# Disable built-in gadgets
+bunx llmist agent "Task" --no-builtins -g ./my-tools.ts
 ```
 
 📖 **[CLI Reference](./docs/CLI.md)** | **[CLI Gadgets Guide](./docs/CLI_GADGETS.md)**

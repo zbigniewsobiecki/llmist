@@ -197,15 +197,15 @@ const errors: Error[] = [];
 ## CLI Debugging
 
 ```bash
-# Chat with verbose output
-llmist chat "test" --model haiku 2>&1 | tee debug.log
+# Complete with verbose output
+llmist complete "test" --model haiku 2>&1 | tee debug.log
 
 # Agent with gadget output
 llmist agent "test" --gadget ./tool.ts 2>&1
 
 # Check stderr for summaries
-llmist chat "test" 2>/dev/null  # stdout only
-llmist chat "test" >/dev/null   # stderr only
+llmist complete "test" 2>/dev/null  # stdout only
+llmist complete "test" >/dev/null   # stderr only
 ```
 
 ## See Also
