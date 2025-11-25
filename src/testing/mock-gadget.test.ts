@@ -120,14 +120,15 @@ describe("createMockGadget", () => {
     const mock = createMockGadget({
       name: "Slow",
       result: "done",
-      delayMs: 50,
+      delayMs: 100,
     });
 
     const start = Date.now();
     await mock.execute({});
     const elapsed = Date.now() - start;
 
-    expect(elapsed).toBeGreaterThanOrEqual(50);
+    // Use a slightly lower threshold to account for timer resolution
+    expect(elapsed).toBeGreaterThanOrEqual(95);
   });
 
   it("supports schema", () => {
@@ -232,13 +233,14 @@ describe("mockGadget fluent builder", () => {
   });
 
   it("supports delay", async () => {
-    const mock = mockGadget().withName("Slow").returns("done").withDelay(30).build();
+    const mock = mockGadget().withName("Slow").returns("done").withDelay(100).build();
 
     const start = Date.now();
     await mock.execute({});
     const elapsed = Date.now() - start;
 
-    expect(elapsed).toBeGreaterThanOrEqual(30);
+    // Use a slightly lower threshold to account for timer resolution
+    expect(elapsed).toBeGreaterThanOrEqual(95);
   });
 
   it("supports timeout", () => {
