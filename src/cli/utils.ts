@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { InvalidArgumentError } from "commander";
 
+import type { ModelRegistry } from "../core/model-registry.js";
 import type { TokenUsage } from "../core/options.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import type { CLIEnvironment, TTYStream } from "./environment.js";
@@ -128,11 +129,13 @@ export class StreamProgress {
   // Cumulative stats (cumulative mode)
   private totalStartTime = Date.now();
   private totalTokens = 0;
+  private totalCost = 0;
   private iterations = 0;
 
   constructor(
     private readonly target: NodeJS.WritableStream,
     private readonly isTTY: boolean,
+    private readonly modelRegistry?: ModelRegistry,
   ) {}
 
   /**
@@ -161,6 +164,27 @@ export class StreamProgress {
     this.iterations++;
     if (usage) {
       this.totalTokens += usage.totalTokens;
+
+      // Calculate and accumulate cost if model registry is available
+      if (this.modelRegistry && this.model) {
+        try {
+          // Strip provider prefix if present (e.g., "openai:gpt-5-nano" -> "gpt-5-nano")
+          const modelName = this.model.includes(":")
+            ? this.model.split(":")[1]
+            : this.model;
+
+          const cost = this.modelRegistry.estimateCost(
+            modelName,
+            usage.inputTokens,
+            usage.outputTokens,
+          );
+          if (cost) {
+            this.totalCost += cost.totalCost;
+          }
+        } catch {
+          // Ignore errors (e.g., unknown model) - just don't add to cost
+        }
+      }
     }
     this.pause();
     this.mode = "cumulative";
@@ -238,7 +262,7 @@ export class StreamProgress {
       ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
       : this.callOutputTokens;
 
-    // Build status parts: model, out (sent), in (received), time
+    // Build status parts: model, out (sent), in (received), cost, time
     const parts: string[] = [];
     if (this.model) {
       parts.push(chalk.cyan(this.model));
@@ -251,6 +275,9 @@ export class StreamProgress {
       const prefix = this.callOutputTokensEstimated ? "~" : "";
       parts.push(chalk.dim("in:") + chalk.green(` ${prefix}${outTokens}`));
     }
+    if (this.totalCost > 0) {
+      parts.push(chalk.dim("cost:") + chalk.cyan(` $${this.formatCost(this.totalCost)}`));
+    }
     parts.push(chalk.dim(`${elapsed}s`));
 
     this.target.write(`\r${chalk.cyan(spinner)} ${parts.join(chalk.dim(" | "))}`);
@@ -259,7 +286,7 @@ export class StreamProgress {
   private renderCumulativeMode(spinner: string): void {
     const elapsed = ((Date.now() - this.totalStartTime) / 1000).toFixed(1);
 
-    // Build status parts: model, total tokens, iterations, total time
+    // Build status parts: model, total tokens, iterations, cost, total time
     const parts: string[] = [];
     if (this.model) {
       parts.push(chalk.cyan(this.model));
@@ -269,6 +296,9 @@ export class StreamProgress {
     }
     if (this.iterations > 0) {
       parts.push(chalk.dim("iter:") + chalk.blue(` ${this.iterations}`));
+    }
+    if (this.totalCost > 0) {
+      parts.push(chalk.dim("cost:") + chalk.cyan(` $${this.formatCost(this.totalCost)}`));
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
@@ -304,6 +334,13 @@ export class StreamProgress {
    */
   complete(): void {
     this.pause();
+  }
+
+  /**
+   * Returns the total accumulated cost across all calls.
+   */
+  getTotalCost(): number {
+    return this.totalCost;
   }
 
   /**
@@ -345,6 +382,9 @@ export class StreamProgress {
       if (this.iterations > 0) {
         parts.push(chalk.blue(`i${this.iterations}`));
       }
+      if (this.totalCost > 0) {
+        parts.push(chalk.cyan(`$${this.formatCost(this.totalCost)}`));
+      }
       parts.push(chalk.dim(`${elapsed}s`));
     }
 
@@ -356,6 +396,22 @@ export class StreamProgress {
    */
   private formatTokens(tokens: number): string {
     return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : `${tokens}`;
+  }
+
+  /**
+   * Formats cost compactly (0.0001234 -> "0.00012", 0.1234 -> "0.12", 1.234 -> "1.23").
+   */
+  private formatCost(cost: number): string {
+    if (cost < 0.001) {
+      return cost.toFixed(5);
+    }
+    if (cost < 0.01) {
+      return cost.toFixed(4);
+    }
+    if (cost < 1) {
+      return cost.toFixed(3);
+    }
+    return cost.toFixed(2);
   }
 }
 
@@ -423,6 +479,7 @@ export interface SummaryMetadata {
   finishReason?: string | null;
   usage?: TokenUsage;
   iterations?: number;
+  cost?: number;
 }
 
 /**
@@ -450,6 +507,21 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
         chalk.cyan(`${totalTokens}`) +
         chalk.dim(` (in: ${inputTokens}, out: ${outputTokens})`),
     );
+  }
+
+  if (metadata.cost !== undefined && metadata.cost > 0) {
+    // Format cost with appropriate precision
+    let formattedCost: string;
+    if (metadata.cost < 0.001) {
+      formattedCost = metadata.cost.toFixed(5);
+    } else if (metadata.cost < 0.01) {
+      formattedCost = metadata.cost.toFixed(4);
+    } else if (metadata.cost < 1) {
+      formattedCost = metadata.cost.toFixed(3);
+    } else {
+      formattedCost = metadata.cost.toFixed(2);
+    }
+    parts.push(chalk.dim(`cost: `) + chalk.cyan(`$${formattedCost}`));
   }
 
   if (parts.length === 0) {
