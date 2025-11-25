@@ -1,6 +1,6 @@
 {
-  "name": "@zbigniewsobiecki/llmist",
-  "version": "0.1.0",
+  "name": "llmist",
+  "version": "0.1.2",
   "description": "Universal TypeScript LLM client with streaming-first agent framework. Works with any model - no structured outputs or native tool calling required. Implements its own flexible grammar for function calling.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -42,7 +42,7 @@
     "test:e2e:watch": "bun test src/e2e --watch --timeout 60000",
     "test:all": "bun run test && bun run test:e2e",
     "clean": "rimraf dist",
-    "postinstall": "node scripts/install-hooks.js"
+    "prepare": "node scripts/install-hooks.js || true"
   },
   "bin": {
     "llmist": "dist/cli.cjs"
@@ -52,7 +52,7 @@
     "url": "https://github.com/zbigniewsobiecki/llmist.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "files": [
     "dist"
