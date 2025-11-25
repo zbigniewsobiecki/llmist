@@ -7,6 +7,8 @@
 
 > **Universal TypeScript LLM client with streaming-first tool execution and simple, extensible agent framework**
 
+> **⚠️ EARLY WORK IN PROGRESS** - This library is under active development. APIs may change without notice. Use in production at your own risk.
+
 llmist is an asynchonous, streaming-first, provider-agnostic LLM client that makes it easy to build AI agents with **any model**—no structured outputs or native tool calling required. Switch between OpenAI, Anthropic, and Gemini without changing your code, plug into any part of the Agent workflow, have tools (Gadgets) triggered while still streaming. 
 
 ---
@@ -19,7 +21,6 @@ llmist is an asynchonous, streaming-first, provider-agnostic LLM client that mak
 - **🪝 Powerful Hooks** - Monitor, customize, and control every step of execution
 - **🎨 Beautiful API** - Fluent builder pattern with model shortcuts and presets
 - **🧪 Testing-Friendly** - Built-in mocking system for zero-cost testing
-- **🤖 Soon-to-be Production-Ready** - Timeouts, error recovery, human-in-the-loop, structured logging
 
 ---
 

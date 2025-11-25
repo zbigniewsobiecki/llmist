@@ -117,9 +117,8 @@ describe("LLMMessageBuilder", () => {
       expect(messages[0]?.role).toBe("system");
       expect(messages[0]?.content).toContain("RESPOND ONLY WITH GADGET INVOCATIONS");
       expect(messages[0]?.content).toContain("DO NOT use function calling or tool calling");
-      expect(messages[0]?.content).toContain("<GADGETS>");
-      expect(messages[0]?.content).toContain("</GADGETS>");
-      expect(messages[0]?.content).toContain("<usage>");
+      expect(messages[0]?.content).toContain("AVAILABLE GADGETS");
+      expect(messages[0]?.content).toContain("HOW TO INVOKE GADGETS");
     });
 
     it("includes gadget names and instructions", () => {
@@ -129,8 +128,8 @@ describe("LLMMessageBuilder", () => {
       const messages = builder.build();
       const content = messages[0]?.content ?? "";
 
-      expect(content).toContain("<name>TestGadget</name>");
-      expect(content).toContain("<description>A test gadget that echoes parameters</description>");
+      expect(content).toContain("GADGET: TestGadget");
+      expect(content).toContain("A test gadget that echoes parameters");
     });
 
     it("uses constants for gadget markers", () => {
@@ -151,8 +150,8 @@ describe("LLMMessageBuilder", () => {
       const messages = builder.build();
       const content = messages[0]?.content ?? "";
 
-      expect(content).toContain("<examples>");
-      expect(content).toContain('<example title="Single Gadget">');
+      expect(content).toContain("EXAMPLE (Single Gadget):");
+      expect(content).toContain("EXAMPLE (Multiple Gadgets):");
       expect(content).toContain("!!!GADGET_START:translate");
       expect(content).toContain('"from": "English"');
       expect(content).toContain('"to": "Polish"');
@@ -168,8 +167,8 @@ describe("LLMMessageBuilder", () => {
       expect(messages[0]?.role).toBe("system");
       expect(messages[0]?.content).toContain("RESPOND ONLY WITH GADGET INVOCATIONS");
       expect(messages[0]?.content).toContain("DO NOT use function calling or tool calling");
-      expect(messages[0]?.content).toContain("<GADGETS>");
-      expect(messages[0]?.content).toContain("</GADGETS>");
+      expect(messages[0]?.content).toContain("AVAILABLE GADGETS");
+      expect(messages[0]?.content).toContain("HOW TO INVOKE GADGETS");
     });
 
     it("formats multiple gadgets correctly", () => {
@@ -181,8 +180,8 @@ describe("LLMMessageBuilder", () => {
       const messages = builder.build();
       const content = messages[0]?.content ?? "";
 
-      expect(content).toContain("<name>TestGadget</name>");
-      expect(content).toContain("<name>MathGadget</name>");
+      expect(content).toContain("GADGET: TestGadget");
+      expect(content).toContain("GADGET: MathGadget");
       expect(content).toContain("A test gadget");
       expect(content).toContain("Performs math operations");
     });
@@ -249,8 +248,8 @@ describe("LLMMessageBuilder", () => {
       const content = messages[0]?.content ?? "";
 
       // Both gadgets should be present
-      expect(content).toContain("<name>TestGadget</name>");
-      expect(content).toContain("<name>MathGadget</name>");
+      expect(content).toContain("GADGET: TestGadget");
+      expect(content).toContain("GADGET: MathGadget");
 
       // Both should have their schemas rendered
       // (getInstruction is called for each gadget with 'json' format)
@@ -538,9 +537,9 @@ describe("LLMMessageBuilder", () => {
       const content = messages[0]?.content ?? "";
 
       // Should contain custom rules
-      expect(content).toContain("<rule>Custom rule 1</rule>");
-      expect(content).toContain("<rule>Custom rule 2</rule>");
-      expect(content).toContain("<rule>Custom rule 3</rule>");
+      expect(content).toContain("- Custom rule 1");
+      expect(content).toContain("- Custom rule 2");
+      expect(content).toContain("- Custom rule 3");
 
       // Should NOT contain default rules
       expect(content).not.toContain("Output ONLY plain text with the exact markers");
@@ -561,8 +560,8 @@ describe("LLMMessageBuilder", () => {
       const content = messages[0]?.content ?? "";
 
       // Should contain dynamic rules
-      expect(content).toContain("<rule>You have 2 gadgets available</rule>");
-      expect(content).toContain("<rule>Always use text markers</rule>");
+      expect(content).toContain("- You have 2 gadgets available");
+      expect(content).toContain("- Always use text markers");
     });
 
     it("uses custom critical usage instruction", () => {
@@ -577,9 +576,7 @@ describe("LLMMessageBuilder", () => {
       const content = messages[0]?.content ?? "";
 
       // Should contain custom critical usage
-      expect(content).toContain(
-        "<critical>IMPORTANT: Follow the exact format shown below!</critical>",
-      );
+      expect(content).toContain("CRITICAL: IMPORTANT: Follow the exact format shown below!");
 
       // Should NOT contain default critical usage
       expect(content).not.toContain("You MUST use the exact format below to invoke gadgets");
@@ -658,13 +655,12 @@ describe("LLMMessageBuilder", () => {
     it("supports custom examples function", () => {
       const customConfig: PromptConfig = {
         customExamples: (ctx) => `
-  <examples>
-    <example title="Custom Example">
+
+CUSTOM EXAMPLE:
+
 ${ctx.startPrefix}myGadget
 param: value
-${ctx.endPrefix}
-    </example>
-  </examples>`,
+${ctx.endPrefix}`,
       };
 
       const builder = new LLMMessageBuilder(customConfig);
@@ -674,7 +670,7 @@ ${ctx.endPrefix}
       const content = messages[0]?.content ?? "";
 
       // Should contain custom example
-      expect(content).toContain('<example title="Custom Example">');
+      expect(content).toContain("CUSTOM EXAMPLE:");
       expect(content).toContain("myGadget");
       expect(content).toContain("param: value");
 
@@ -699,8 +695,8 @@ ${ctx.endPrefix}
       const content = messages[0]?.content ?? "";
 
       // Custom prefixes should be in the rules
-      expect(content).toContain("<rule>Start prefix: <<<START:</rule>");
-      expect(content).toContain("<rule>End prefix: >>>END</rule>");
+      expect(content).toContain("- Start prefix: <<<START:");
+      expect(content).toContain("- End prefix: >>>END");
 
       // And in the format section
       expect(content).toContain("Start marker: <<<START:gadget_name");
@@ -725,8 +721,8 @@ ${ctx.endPrefix}
       expect(content).toContain("Use tools via text markers:");
       expect(content).toContain("Follow the format exactly.");
       expect(content).toContain("JSON parameters");
-      expect(content).toContain("<rule>Use markers</rule>");
-      expect(content).toContain("<rule>No function calls</rule>");
+      expect(content).toContain("- Use markers");
+      expect(content).toContain("- No function calls");
 
       // Should NOT contain verbose defaults
       expect(content).not.toContain("RESPOND ONLY");

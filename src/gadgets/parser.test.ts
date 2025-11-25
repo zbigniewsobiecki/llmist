@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { collectSyncEvents } from "../testing/helpers.js";
-import { StreamParser } from "./parser.js";
+import { resetGlobalInvocationCounter, StreamParser } from "./parser.js";
 import type { StreamEvent } from "./types.js";
 
 describe("StreamParser", () => {
   let parser: StreamParser;
 
   beforeEach(() => {
+    resetGlobalInvocationCounter();
     parser = new StreamParser();
   });
 
@@ -31,7 +32,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "TestGadget",
-          invocationId: "auto_1", // Auto-generated ID
+          invocationId: "gadget_1", // Auto-generated ID
           parameters: {
             message: "Hello",
             count: 42,
@@ -73,7 +74,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "TestGadget",
-          invocationId: "auto_1",
+          invocationId: "gadget_1",
         },
       });
     });
@@ -89,7 +90,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "TestGadget",
-          invocationId: "auto_1",
+          invocationId: "gadget_1",
         },
       });
     });
@@ -140,7 +141,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "Adder",
-          invocationId: "auto_1",
+          invocationId: "gadget_1",
           parameters: { a: 5, b: 3 },
         },
       });
@@ -148,7 +149,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "Multiplier",
-          invocationId: "auto_2",
+          invocationId: "gadget_2",
           parameters: { x: 2, y: 4 },
         },
       });
@@ -219,7 +220,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "SetTodoStatus",
-          invocationId: "auto_1",
+          invocationId: "gadget_1",
           parameters: { index: 1, status: "done" },
         },
       });
@@ -227,7 +228,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "SetTodoStatus",
-          invocationId: "auto_2",
+          invocationId: "gadget_2",
           parameters: { index: 2, status: "in_progress" },
         },
       });
@@ -235,7 +236,7 @@ ${GADGET_END_PREFIX}`;
         type: "gadget_call",
         call: {
           gadgetName: "ReadSection",
-          invocationId: "auto_3",
+          invocationId: "gadget_3",
           parameters: { path: "todays-news.hacker-attack" },
         },
       });
@@ -454,7 +455,7 @@ ${GADGET_END_PREFIX}TestGadget:123`;
         type: "gadget_call",
         call: {
           gadgetName: "TestGadget",
-          invocationId: "auto_1",
+          invocationId: "gadget_1",
           parameters: {
             data: "test",
           },
@@ -472,11 +473,36 @@ ${GADGET_END_PREFIX}TestGadget:123`;
         type: "gadget_call",
         call: {
           gadgetName: "TestGadget",
-          invocationId: "auto_1",
+          invocationId: "gadget_1",
           parameters: {
             message: "Hello",
           },
         },
+      });
+    });
+
+    it("generates globally unique IDs across multiple parser instances", () => {
+      // First parser gets gadget_1
+      const parser1 = new StreamParser();
+      const input = `${GADGET_START_PREFIX}TestGadget\n{"x": 1}\n${GADGET_END_PREFIX}`;
+      const events1 = collectSyncEvents(parser1.feed(input));
+
+      // Second parser gets gadget_2 (not gadget_1 again!)
+      const parser2 = new StreamParser();
+      const events2 = collectSyncEvents(parser2.feed(input));
+
+      // Third parser gets gadget_3
+      const parser3 = new StreamParser();
+      const events3 = collectSyncEvents(parser3.feed(input));
+
+      expect(events1[0]).toMatchObject({
+        call: { invocationId: "gadget_1" },
+      });
+      expect(events2[0]).toMatchObject({
+        call: { invocationId: "gadget_2" },
+      });
+      expect(events3[0]).toMatchObject({
+        call: { invocationId: "gadget_3" },
       });
     });
   });
