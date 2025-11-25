@@ -242,13 +242,13 @@ class MyGadget extends Gadget({
 **Solution:**
 ```bash
 # Pipe from file
-cat prompt.txt | llmist chat
+cat prompt.txt | llmist complete
 
 # Pipe from command
-echo "Hello" | llmist chat
+echo "Hello" | llmist complete
 
 # Here document
-llmist chat <<< "Hello"
+llmist complete <<< "Hello"
 ```
 
 ### Gadget File Not Found
