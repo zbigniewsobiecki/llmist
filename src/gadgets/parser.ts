@@ -17,13 +17,23 @@ export interface StreamParserOptions {
   parameterFormat?: ParameterFormat;
 }
 
+// Global counter for generating unique invocation IDs across all parser instances
+let globalInvocationCounter = 0;
+
+/**
+ * Reset the global invocation counter. Only use this in tests!
+ * @internal
+ */
+export function resetGlobalInvocationCounter(): void {
+  globalInvocationCounter = 0;
+}
+
 export class StreamParser {
   private buffer = "";
   private lastReportedTextLength = 0;
   private readonly startPrefix: string;
   private readonly endPrefix: string;
   private readonly parameterFormat: ParameterFormat;
-  private invocationCounter = 0;
 
   constructor(options: StreamParserOptions = {}) {
     this.startPrefix = options.startPrefix ?? GADGET_START_PREFIX;
@@ -114,7 +124,7 @@ export class StreamParser {
       } else {
         // New format: just gadget name
         actualGadgetName = gadgetName;
-        invocationId = `auto_${++this.invocationCounter}`;
+        invocationId = `gadget_${++globalInvocationCounter}`;
       }
 
       const contentStartIndex = metadataEndIndex + 1;
@@ -199,10 +209,9 @@ export class StreamParser {
     }
   }
 
-  // Reset parser state
+  // Reset parser state (note: global invocation counter is NOT reset to ensure unique IDs)
   reset(): void {
     this.buffer = "";
     this.lastReportedTextLength = 0;
-    this.invocationCounter = 0;
   }
 }
