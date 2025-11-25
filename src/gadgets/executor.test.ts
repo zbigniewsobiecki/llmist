@@ -746,8 +746,8 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-4",
-        parametersYaml: '{"delay": 50}',
-        parameters: { delay: 50 },
+        parametersYaml: '{"delay": 150}',
+        parameters: { delay: 150 },
       };
 
       const result = await executorWithTimeout.execute(call);
@@ -756,7 +756,7 @@ describe("GadgetExecutor", () => {
       expect(result).toMatchObject({
         gadgetName: "SlowGadget",
         invocationId: "slow-4",
-        result: "Completed after 50ms",
+        result: "Completed after 150ms",
       });
       expect(result.error).toBeUndefined();
       // Allow wide margin for CI timing variance (coverage overhead can add significant time)
