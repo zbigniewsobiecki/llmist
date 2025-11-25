@@ -2,7 +2,6 @@
  * Built-in gadgets for CLI agent command.
  * These gadgets provide basic communication capabilities out-of-the-box.
  */
-import chalk from "chalk";
 import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
