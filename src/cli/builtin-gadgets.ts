@@ -44,18 +44,20 @@ export const tellUser = createGadget({
       .describe("Message type: info, success, warning, or error"),
   }),
   execute: ({ message, done, type }) => {
-    const formatters: Record<string, (msg: string) => string> = {
-      info: (msg) => chalk.blue(`ℹ️  ${msg}`),
-      success: (msg) => chalk.green(`✅ ${msg}`),
-      warning: (msg) => chalk.yellow(`⚠️  ${msg}`),
-      error: (msg) => chalk.red(`❌ ${msg}`),
+    // Format message for display, but return plain text for LLM context
+    // This prevents ANSI color codes from polluting the conversation
+    const prefixes = {
+      info: "ℹ️  ",
+      success: "✅ ",
+      warning: "⚠️  ",
+      error: "❌ ",
     };
-    const formatted = formatters[type](message);
+    const plainResult = prefixes[type] + message;
 
     if (done) {
-      throw new BreakLoopException(formatted);
+      throw new BreakLoopException(plainResult);
     }
-    return formatted;
+    return plainResult;
   },
 });
 

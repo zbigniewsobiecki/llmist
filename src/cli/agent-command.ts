@@ -124,10 +124,12 @@ function formatGadgetSummary(result: {
     return `${chalk.yellow("⏹")} ${gadgetLabel} ${chalk.yellow("finished:")} ${result.result} ${timeLabel}`;
   }
 
-  // Truncate long results for cleaner output
+  // For TellUser, show full text without truncation since it's meant for user messages
+  // For other gadgets, truncate long results for cleaner output
   const maxLen = 80;
+  const shouldTruncate = result.gadgetName !== "TellUser";
   const resultText = result.result
-    ? result.result.length > maxLen
+    ? shouldTruncate && result.result.length > maxLen
       ? `${result.result.slice(0, maxLen)}...`
       : result.result
     : "";
@@ -172,7 +174,7 @@ async function handleAgentCommand(
 
   const printer = new StreamPrinter(env.stdout);
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-  const progress = new StreamProgress(env.stderr, stderrTTY);
+  const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
 
   let finishReason: string | null | undefined;
   let usage: TokenUsage | undefined;
@@ -250,7 +252,10 @@ async function handleAgentCommand(
       printer.write(event.content);
     } else if (event.type === "gadget_result") {
       progress.pause(); // Clear progress before gadget output
-      env.stderr.write(`${formatGadgetSummary(event.result)}\n`);
+      // Only show gadget summaries if stderr is a TTY (not redirected)
+      if (stderrTTY) {
+        env.stderr.write(`${formatGadgetSummary(event.result)}\n`);
+      }
       // Note: progress.start() is called by onLLMCallStart hook
     }
     // Note: human_input_required event is not emitted - handled by callback in createHumanInputHandler
@@ -259,9 +264,17 @@ async function handleAgentCommand(
   progress.complete();
   printer.ensureNewline();
 
-  const summary = renderSummary({ finishReason, usage, iterations });
-  if (summary) {
-    env.stderr.write(`${summary}\n`);
+  // Only show summary if stderr is a TTY (not redirected)
+  if (stderrTTY) {
+    const summary = renderSummary({
+      finishReason,
+      usage,
+      iterations,
+      cost: progress.getTotalCost(),
+    });
+    if (summary) {
+      env.stderr.write(`${summary}\n`);
+    }
   }
 }
 

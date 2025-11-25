@@ -36,7 +36,7 @@ function createReadable(content: string, { isTTY = false } = {}): Readable & { i
   return stream;
 }
 
-function createWritable() {
+function createWritable(isTTY = true) {
   let data = "";
   const stream = new Writable({
     write(chunk, _encoding, callback) {
@@ -44,6 +44,8 @@ function createWritable() {
       callback();
     },
   });
+  // Cast to NodeJS.WriteStream and set isTTY property
+  (stream as NodeJS.WriteStream & { isTTY: boolean }).isTTY = isTTY;
   return { stream, read: () => data };
 }
 

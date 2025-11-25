@@ -55,7 +55,7 @@ async function handleCompleteCommand(
 
   const printer = new StreamPrinter(env.stdout);
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-  const progress = new StreamProgress(env.stderr, stderrTTY);
+  const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
 
   // Start call with model and estimate based on prompt length
   const estimatedInputTokens = Math.round(prompt.length / FALLBACK_CHARS_PER_TOKEN);
@@ -87,12 +87,16 @@ async function handleCompleteCommand(
     }
   }
 
+  progress.endCall(usage); // Calculate cost before completing
   progress.complete();
   printer.ensureNewline();
 
-  const summary = renderSummary({ finishReason, usage });
-  if (summary) {
-    env.stderr.write(`${summary}\n`);
+  // Only show summary if stderr is a TTY (not redirected)
+  if (stderrTTY) {
+    const summary = renderSummary({ finishReason, usage, cost: progress.getTotalCost() });
+    if (summary) {
+      env.stderr.write(`${summary}\n`);
+    }
   }
 }
 
