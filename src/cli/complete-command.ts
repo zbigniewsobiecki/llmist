@@ -91,9 +91,12 @@ async function handleCompleteCommand(
   progress.complete();
   printer.ensureNewline();
 
-  const summary = renderSummary({ finishReason, usage, cost: progress.getTotalCost() });
-  if (summary) {
-    env.stderr.write(`${summary}\n`);
+  // Only show summary if stderr is a TTY (not redirected)
+  if (stderrTTY) {
+    const summary = renderSummary({ finishReason, usage, cost: progress.getTotalCost() });
+    if (summary) {
+      env.stderr.write(`${summary}\n`);
+    }
   }
 }
 

@@ -250,7 +250,10 @@ async function handleAgentCommand(
       printer.write(event.content);
     } else if (event.type === "gadget_result") {
       progress.pause(); // Clear progress before gadget output
-      env.stderr.write(`${formatGadgetSummary(event.result)}\n`);
+      // Only show gadget summaries if stderr is a TTY (not redirected)
+      if (stderrTTY) {
+        env.stderr.write(`${formatGadgetSummary(event.result)}\n`);
+      }
       // Note: progress.start() is called by onLLMCallStart hook
     }
     // Note: human_input_required event is not emitted - handled by callback in createHumanInputHandler
@@ -259,14 +262,17 @@ async function handleAgentCommand(
   progress.complete();
   printer.ensureNewline();
 
-  const summary = renderSummary({
-    finishReason,
-    usage,
-    iterations,
-    cost: progress.getTotalCost(),
-  });
-  if (summary) {
-    env.stderr.write(`${summary}\n`);
+  // Only show summary if stderr is a TTY (not redirected)
+  if (stderrTTY) {
+    const summary = renderSummary({
+      finishReason,
+      usage,
+      iterations,
+      cost: progress.getTotalCost(),
+    });
+    if (summary) {
+      env.stderr.write(`${summary}\n`);
+    }
   }
 }
 
