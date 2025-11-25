@@ -172,7 +172,7 @@ async function handleAgentCommand(
 
   const printer = new StreamPrinter(env.stdout);
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-  const progress = new StreamProgress(env.stderr, stderrTTY);
+  const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
 
   let finishReason: string | null | undefined;
   let usage: TokenUsage | undefined;

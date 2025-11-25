@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { InvalidArgumentError } from "commander";
 
+import type { ModelRegistry } from "../core/model-registry.js";
 import type { TokenUsage } from "../core/options.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import type { CLIEnvironment, TTYStream } from "./environment.js";
@@ -128,11 +129,13 @@ export class StreamProgress {
   // Cumulative stats (cumulative mode)
   private totalStartTime = Date.now();
   private totalTokens = 0;
+  private totalCost = 0;
   private iterations = 0;
 
   constructor(
     private readonly target: NodeJS.WritableStream,
     private readonly isTTY: boolean,
+    private readonly modelRegistry?: ModelRegistry,
   ) {}
 
   /**
@@ -161,6 +164,22 @@ export class StreamProgress {
     this.iterations++;
     if (usage) {
       this.totalTokens += usage.totalTokens;
+
+      // Calculate and accumulate cost if model registry is available
+      if (this.modelRegistry && this.model) {
+        try {
+          const cost = this.modelRegistry.estimateCost(
+            this.model,
+            usage.inputTokens,
+            usage.outputTokens,
+          );
+          if (cost) {
+            this.totalCost += cost.totalCost;
+          }
+        } catch {
+          // Ignore errors (e.g., unknown model) - just don't add to cost
+        }
+      }
     }
     this.pause();
     this.mode = "cumulative";
@@ -259,7 +278,7 @@ export class StreamProgress {
   private renderCumulativeMode(spinner: string): void {
     const elapsed = ((Date.now() - this.totalStartTime) / 1000).toFixed(1);
 
-    // Build status parts: model, total tokens, iterations, total time
+    // Build status parts: model, total tokens, iterations, cost, total time
     const parts: string[] = [];
     if (this.model) {
       parts.push(chalk.cyan(this.model));
@@ -269,6 +288,9 @@ export class StreamProgress {
     }
     if (this.iterations > 0) {
       parts.push(chalk.dim("iter:") + chalk.blue(` ${this.iterations}`));
+    }
+    if (this.totalCost > 0) {
+      parts.push(chalk.dim("cost:") + chalk.cyan(` $${this.formatCost(this.totalCost)}`));
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
@@ -345,6 +367,9 @@ export class StreamProgress {
       if (this.iterations > 0) {
         parts.push(chalk.blue(`i${this.iterations}`));
       }
+      if (this.totalCost > 0) {
+        parts.push(chalk.cyan(`$${this.formatCost(this.totalCost)}`));
+      }
       parts.push(chalk.dim(`${elapsed}s`));
     }
 
@@ -356,6 +381,22 @@ export class StreamProgress {
    */
   private formatTokens(tokens: number): string {
     return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : `${tokens}`;
+  }
+
+  /**
+   * Formats cost compactly (0.0001234 -> "0.00012", 0.1234 -> "0.12", 1.234 -> "1.23").
+   */
+  private formatCost(cost: number): string {
+    if (cost < 0.001) {
+      return cost.toFixed(5);
+    }
+    if (cost < 0.01) {
+      return cost.toFixed(4);
+    }
+    if (cost < 1) {
+      return cost.toFixed(3);
+    }
+    return cost.toFixed(2);
   }
 }
 
