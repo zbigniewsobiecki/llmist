@@ -738,26 +738,27 @@ describe("GadgetExecutor", () => {
       // Use a very short default timeout that would definitely fail
       const executorWithTimeout = new GadgetExecutor(registry, undefined, undefined, 10);
       const slowGadget = new SlowGadget();
-      slowGadget.timeoutMs = 500; // Override with much longer timeout
+      slowGadget.timeoutMs = 2000; // Override with much longer timeout
       registry.registerByClass(slowGadget);
 
+      // Use 150ms delay to give plenty of margin for CI coverage overhead
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-4",
-        parametersYaml: '{"delay": 50}',
-        parameters: { delay: 50 },
+        parametersYaml: '{"delay": 150}',
+        parameters: { delay: 150 },
       };
 
       const result = await executorWithTimeout.execute(call);
 
-      // Should succeed because gadget's 500ms timeout overrides the 10ms default
+      // Should succeed because gadget's 2000ms timeout overrides the 10ms default
       expect(result).toMatchObject({
         gadgetName: "SlowGadget",
         invocationId: "slow-4",
-        result: "Completed after 50ms",
+        result: "Completed after 150ms",
       });
       expect(result.error).toBeUndefined();
-      expect(result.executionTimeMs).toBeGreaterThanOrEqual(50);
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(150);
     });
 
     it("gadget with timeoutMs=0 disables timeout", async () => {
