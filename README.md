@@ -1,0 +1,394 @@
+# llmist
+
+[![CI](https://github.com/zbigniewsobiecki/llmist/actions/workflows/ci.yml/badge.svg)](https://github.com/zbigniewsobiecki/llmist/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/zbigniewsobiecki/llmist/branch/main/graph/badge.svg)](https://codecov.io/gh/zbigniewsobiecki/llmist)
+[![npm version](https://badge.fury.io/js/llmist.svg)](https://www.npmjs.com/package/llmist)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+> **Universal TypeScript LLM client with streaming-first tool execution and simple, extensible agent framework**
+
+llmist is an asynchonous, streaming-first, provider-agnostic LLM client that makes it easy to build AI agents with **any model**—no structured outputs or native tool calling required. Switch between OpenAI, Anthropic, and Gemini without changing your code, plug into any part of the Agent workflow, have tools (Gadgets) triggered while still streaming. 
+
+---
+
+## 🎯 Why llmist?
+
+- **🌍 Universal** - Works with any LLM provider (OpenAI, Anthropic, Gemini, custom)
+- **📝 No Structured Outputs** - Flexible YAML/JSON grammar works with any text model
+- **⚡ Streaming-First** - Built for real-time responses and efficient error handling
+- **🪝 Powerful Hooks** - Monitor, customize, and control every step of execution
+- **🎨 Beautiful API** - Fluent builder pattern with model shortcuts and presets
+- **🧪 Testing-Friendly** - Built-in mocking system for zero-cost testing
+- **🤖 Soon-to-be Production-Ready** - Timeouts, error recovery, human-in-the-loop, structured logging
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+npm install llmist
+# or
+bun add llmist
+```
+
+---
+
+## 🖥️ Command Line Interface
+
+```bash
+# Quick chat
+bunx llmist chat "Explain TypeScript generics" --model haiku
+
+# Agent with tools
+bunx llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
+
+# Pipe input
+cat document.txt | llmist chat "Summarize" --model gpt-5-nano
+```
+
+📖 **[CLI Reference](./docs/CLI.md)** | **[CLI Gadgets Guide](./docs/CLI_GADGETS.md)**
+
+
+### Your First Agent
+
+```typescript
+import { LLMist, Gadget, z } from 'llmist';
+
+// Define a tool (called "gadget" in llmist)
+class Calculator extends Gadget({
+  description: 'Performs arithmetic operations',
+  schema: z.object({
+    operation: z.enum(['add', 'multiply', 'subtract', 'divide']),
+    a: z.number(),
+    b: z.number(),
+  }),
+}) {
+  execute(params: this['params']): string {
+    const { operation, a, b } = params; // Automatically typed!
+    switch (operation) {
+      case 'add': return `${a + b}`;
+      case 'multiply': return `${a * b}`;
+      case 'subtract': return `${a - b}`;
+      case 'divide': return `${a / b}`;
+      default: throw new Error('Unknown operation');
+    }
+  }
+}
+
+// Create and run agent with fluent API
+const answer = await LLMist.createAgent()
+  .withModel('gpt-5-nano')  // Model shortcuts: sonnet, haiku, etc.
+  .withSystem('You are a helpful math assistant')
+  .withGadgets(Calculator)
+  .askAndCollect('What is 15 times 23?');
+
+console.log(answer); // "15 times 23 equals 345"
+```
+
+**That's it!** N
+
+📖 **[Getting Started Guide](./docs/GETTING_STARTED.md)** - Learn more in 5 minutes
+
+---
+
+## ✨ Key Features
+
+### 🌐 Multi-Provider Support
+
+```typescript
+// Use model shortcuts
+.withModel('gpt-5-nano')    // OpenAI gpt-5-nano
+.withModel('sonnet')       // Claude 3.5 Sonnet
+.withModel('haiku')        // Claude 3.5 Haiku
+.withModel('flash')        // Gemini 2.0 Flash
+
+// Or full names
+.withModel('openai:gpt-5-nano')
+.withModel('anthropic:claude-3-5-sonnet-latest')
+.withModel('gemini:gemini-2.0-flash')
+```
+
+**Automatic provider discovery** - Just set API keys as env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`)
+
+📖 **[Providers Guide](./docs/PROVIDERS.md)** | **[Model Catalog](./docs/MODEL_CATALOG.md)**
+
+### 🛠️ Flexible Gadgets (Tools)
+
+Two ways to create tools:
+
+```typescript
+// 1. Class-based with type safety
+class Weather extends Gadget({
+  description: 'Get weather for a city',
+  schema: z.object({ city: z.string() }),
+}) {
+  async execute(params: this['params']) {
+    // params is auto-typed!
+    const data = await fetch(`https://api.weather.com/${params.city}`);
+    return `Weather: ${data.temp}°C`;
+  }
+}
+
+// 2. Functional for simplicity
+const calculator = createGadget({
+  description: 'Arithmetic operations',
+  schema: z.object({ operation: z.enum(['add']), a: z.number(), b: z.number() }),
+  execute: ({ operation, a, b }) => `${a + b}`,
+});
+```
+
+📖 **[Gadgets Guide](./docs/GADGETS.md)** | **[Examples](./examples/02-custom-gadgets.ts)**
+
+### 🪝 Lifecycle Hooks
+
+```typescript
+import { HookPresets } from 'llmist';
+
+// Use presets for instant monitoring
+await LLMist.createAgent()
+  .withHooks(HookPresets.monitoring())  // Logs + timing + tokens + errors
+  .ask('Your prompt');
+
+// Or combine specific presets
+.withHooks(HookPresets.merge(
+  HookPresets.timing(),
+  HookPresets.tokenTracking()
+))
+
+// Or write custom hooks
+.withHooks({
+  observers: {
+    onLLMCallComplete: async (ctx) => {
+      console.log(`Used ${ctx.usage?.totalTokens} tokens`);
+    },
+  },
+  interceptors: {
+    interceptTextChunk: (chunk) => chunk.toUpperCase(),
+  },
+})
+```
+
+📖 **[Hooks Guide](./docs/HOOKS.md)** | **[Examples](./examples/03-hooks.ts)**
+
+### 💬 Human-in-the-Loop
+
+```typescript
+class AskUser extends Gadget({
+  description: 'Ask the user a question',
+  schema: z.object({ question: z.string() }),
+}) {
+  execute(params: this['params']) {
+    throw new HumanInputException(params.question);
+  }
+}
+
+await LLMist.createAgent()
+  .withGadgets(AskUser)
+  .onHumanInput(async (question) => {
+    return await promptUser(question);
+  })
+  .ask('Help me plan my vacation');
+```
+
+📖 **[Human-in-the-Loop Guide](./docs/HUMAN_IN_LOOP.md)** | **[Examples](./examples/04-human-in-loop.ts)**
+
+### ⚡ Streaming & Event Handling
+
+```typescript
+// Collect all text
+const answer = await LLMist.createAgent()
+  .withModel('haiku')
+  .askAndCollect('Tell me a joke');
+
+// Handle specific events
+await LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(Calculator)
+  .askWith('Calculate 2 + 2', {
+    onText: (text) => console.log('LLM:', text),
+    onGadgetCall: (call) => console.log('Calling:', call.gadgetName),
+    onGadgetResult: (result) => console.log('Result:', result.result),
+  });
+
+// Manual control
+const agent = LLMist.createAgent().withModel('gpt-5-nano').ask('Question');
+for await (const event of agent.run()) {
+  if (event.type === 'text') console.log(event.content);
+}
+```
+
+📖 **[Streaming Guide](./docs/STREAMING.md)** | **[Examples](./examples/05-streaming.ts)**
+
+### 🧪 Mock Testing
+
+```typescript
+import { mockLLM, createMockClient } from 'llmist';
+
+mockLLM()
+  .forModel('gpt-5')
+  .whenMessageContains('calculate')
+  .returns('The answer is 42')
+  .register();
+
+const answer = await LLMist.createAgent()
+  .withClient(createMockClient())
+  .withModel('gpt-5')
+  .askAndCollect('Calculate 2 + 2');
+
+console.log(answer); // "The answer is 42" - no API call made!
+```
+
+📖 **[Testing Guide](./docs/TESTING.md)** | **[Examples](./examples/mock-testing-example.ts)**
+
+### 📊 Model Catalog & Cost Estimation
+
+```typescript
+const client = new LLMist();
+
+// Get model specs
+const gpt4 = client.modelRegistry.getModelSpec('openai:gpt-4');
+console.log(gpt4.contextWindow);    // 128000
+console.log(gpt4.pricing.input);    // 10.0 per 1M tokens
+
+// Estimate costs
+const cost = client.modelRegistry.estimateCost('openai:gpt-4', 10_000, 2_000);
+console.log(`$${cost.totalCost.toFixed(4)}`);
+
+// Find cheapest model
+const cheapest = client.modelRegistry.getCheapestModel(10_000, 2_000);
+```
+
+📖 **[Model Catalog Guide](./docs/MODEL_CATALOG.md)** | **[Custom Models](./docs/CUSTOM_MODELS.md)**
+
+### 🔢 Native Token Counting
+
+```typescript
+const messages = [
+  { role: 'system', content: 'You are helpful' },
+  { role: 'user', content: 'Explain quantum computing' }
+];
+
+const tokens = await client.countTokens('openai:gpt-5', messages);
+const cost = client.modelRegistry.estimateCost('openai:gpt-5', tokens, 1000);
+```
+
+Uses provider-specific methods (tiktoken for OpenAI, native APIs for Anthropic/Gemini).
+
+---
+
+## 📚 Documentation
+
+**Getting Started**
+- **[Getting Started](./docs/GETTING_STARTED.md)** - Your first agent in 5 minutes
+- **[Configuration](./docs/CONFIGURATION.md)** - All available options
+- **[Quick Methods](./docs/QUICK_METHODS.md)** - Simple APIs for basic tasks
+
+**Core Concepts**
+- **[Gadgets (Tools)](./docs/GADGETS.md)** - Creating custom functions
+- **[Hooks](./docs/HOOKS.md)** - Lifecycle monitoring and control
+- **[Streaming](./docs/STREAMING.md)** - Real-time response handling
+- **[Human-in-the-Loop](./docs/HUMAN_IN_LOOP.md)** - Interactive workflows
+
+**Advanced**
+- **[Providers](./docs/PROVIDERS.md)** - Multi-provider configuration
+- **[Model Catalog](./docs/MODEL_CATALOG.md)** - Querying models and costs
+- **[Custom Models](./docs/CUSTOM_MODELS.md)** - Register fine-tuned models
+- **[Error Handling](./docs/ERROR_HANDLING.md)** - Recovery strategies
+- **[Testing](./docs/TESTING.md)** - Mocking and test strategies
+
+**Reference**
+- **[CLI Reference](./docs/CLI.md)** - Command-line interface
+- **[Architecture](./docs/ARCHITECTURE.md)** - Technical deep-dive
+- **[Debugging](./docs/DEBUGGING.md)** - Capture raw prompts/responses
+- **[Troubleshooting](./docs/TROUBLESHOOTING.md)** - Common issues
+
+---
+
+## 🎓 Examples
+
+Comprehensive examples are available in the **[examples/](./examples/)** directory:
+
+| Example | Description |
+|---------|-------------|
+| **[01-basic-usage.ts](./examples/01-basic-usage.ts)** | Simple agent with calculator gadget |
+| **[02-custom-gadgets.ts](./examples/02-custom-gadgets.ts)** | Async gadgets, validation, loop termination |
+| **[03-hooks.ts](./examples/03-hooks.ts)** | Lifecycle hooks for monitoring |
+| **[04-human-in-loop.ts](./examples/04-human-in-loop.ts)** | Interactive conversations |
+| **[05-streaming.ts](./examples/05-streaming.ts)** | Real-time streaming |
+| **[06-model-catalog.ts](./examples/06-model-catalog.ts)** | Model queries and cost estimation |
+| **[07-logging.ts](./examples/07-logging.ts)** | Logging and debugging |
+| **[13-syntactic-sugar.ts](./examples/13-syntactic-sugar.ts)** | Fluent API showcase |
+
+**Run any example:**
+```bash
+bun install && bun run build
+bunx tsx examples/01-basic-usage.ts
+```
+
+See **[examples/README.md](./examples/README.md)** for full list and details.
+
+---
+
+## 🏗️ Architecture
+
+llmist follows **SOLID principles** with a composable architecture.
+
+**Key components:**
+- **LLMist** - Provider-agnostic streaming client
+- **Agent** - Full agent loop with automatic orchestration
+- **StreamProcessor** - Process LLM streams with custom event loops
+- **GadgetExecutor** - Execute tools with timeout and error handling
+- **GadgetRegistry** - Registry for available tools
+
+📖 **[Architecture Guide](./docs/ARCHITECTURE.md)** for detailed design documentation
+
+---
+
+## 🧪 Development
+
+```bash
+bun install
+
+# Run tests
+bun test              # All tests
+bun run test:unit     # Unit tests only
+bun run test:e2e      # E2E tests only
+
+# Build and lint
+bun run build
+bun run lint
+bun run format
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please ensure:
+
+1. ✅ All tests pass: `bun test`
+2. ✅ Code is formatted: `bun run format`
+3. ✅ Linting passes: `bun run lint`
+4. ✅ Types are properly defined
+5. ✅ Examples/docs updated for API changes
+
+---
+
+## 📄 License
+
+MIT - see [LICENSE](./LICENSE) for details.
+
+---
+
+## 🔗 Links
+
+- 📦 [npm Package](https://www.npmjs.com/package/llmist)
+- 🐙 [GitHub Repository](https://github.com/zbigniewsobiecki/llmist)
+- 📚 [Full Documentation](./docs/)
+- 🐛 [Issue Tracker](https://github.com/zbigniewsobiecki/llmist/issues)
+
+---
+
+Made with 🤪 by the llmist team

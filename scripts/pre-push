@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Pre-push hook that runs integration tests
+# This ensures all tests pass before pushing to the remote
+
+echo "Running pre-push checks..."
+
+# Run integration/E2E tests
+echo "→ Running integration tests..."
+bun run test:e2e
+TEST_EXIT=$?
+
+if [ $TEST_EXIT -ne 0 ]; then
+  echo "❌ Integration tests failed! Please fix failing tests before pushing."
+  exit 1
+fi
+
+echo "✓ Integration tests passed"
+echo "✓ All pre-push checks passed!"
+
+exit 0

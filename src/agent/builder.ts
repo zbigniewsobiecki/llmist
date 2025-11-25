@@ -1,0 +1,587 @@
+/**
+ * Fluent builder for creating agents with delightful DX.
+ *
+ * @example
+ * ```typescript
+ * const agent = await LLMist.createAgent()
+ *   .withModel("sonnet")
+ *   .withSystem("You are a helpful assistant")
+ *   .withGadgets(Calculator, Weather)
+ *   .withMaxIterations(10)
+ *   .ask("What's the weather in Paris?");
+ *
+ * for await (const event of agent.run()) {
+ *   // process events
+ * }
+ * ```
+ */
+
+import type { ILogObj, Logger } from "tslog";
+import type { LLMist } from "../core/client.js";
+import { resolveModel } from "../core/model-shortcuts.js";
+import type { PromptConfig } from "../core/prompt-config.js";
+import type { ParameterFormat } from "../gadgets/parser.js";
+import type { GadgetOrClass } from "../gadgets/registry.js";
+import { GadgetRegistry } from "../gadgets/registry.js";
+import type { TextOnlyHandler } from "../gadgets/types.js";
+import { Agent, type AgentOptions } from "./agent.js";
+import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
+import { collectText, type EventHandlers } from "./event-handlers.js";
+import type { AgentHooks } from "./hooks.js";
+
+/**
+ * Message for conversation history.
+ */
+export type HistoryMessage = { user: string } | { assistant: string } | { system: string };
+
+/**
+ * Fluent builder for creating agents.
+ *
+ * Provides a chainable API for configuring and creating agents,
+ * making the code more expressive and easier to read.
+ */
+export class AgentBuilder {
+  private client?: LLMist;
+  private model?: string;
+  private systemPrompt?: string;
+  private temperature?: number;
+  private maxIterations?: number;
+  private logger?: Logger<ILogObj>;
+  private hooks?: AgentHooks;
+  private promptConfig?: PromptConfig;
+  private gadgets: GadgetOrClass[] = [];
+  private initialMessages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [];
+  private onHumanInputRequired?: (question: string) => Promise<string>;
+  private parameterFormat?: ParameterFormat;
+  private gadgetStartPrefix?: string;
+  private gadgetEndPrefix?: string;
+  private textOnlyHandler?: TextOnlyHandler;
+  private stopOnGadgetError?: boolean;
+  private shouldContinueAfterError?: (context: {
+    error: string;
+    gadgetName: string;
+    errorType: "parse" | "validation" | "execution";
+    parameters?: Record<string, unknown>;
+  }) => boolean | Promise<boolean>;
+  private defaultGadgetTimeoutMs?: number;
+
+  constructor(client?: LLMist) {
+    this.client = client;
+  }
+
+  /**
+   * Set the model to use.
+   * Supports aliases like "gpt4", "sonnet", "flash".
+   *
+   * @param model - Model name or alias
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withModel("sonnet")           // Alias
+   * .withModel("gpt-5-nano")       // Auto-detects provider
+   * .withModel("openai:gpt-5")     // Explicit provider
+   * ```
+   */
+  withModel(model: string): this {
+    this.model = resolveModel(model);
+    return this;
+  }
+
+  /**
+   * Set the system prompt.
+   *
+   * @param prompt - System prompt
+   * @returns This builder for chaining
+   */
+  withSystem(prompt: string): this {
+    this.systemPrompt = prompt;
+    return this;
+  }
+
+  /**
+   * Set the temperature (0-1).
+   *
+   * @param temperature - Temperature value
+   * @returns This builder for chaining
+   */
+  withTemperature(temperature: number): this {
+    this.temperature = temperature;
+    return this;
+  }
+
+  /**
+   * Set maximum iterations.
+   *
+   * @param max - Maximum number of iterations
+   * @returns This builder for chaining
+   */
+  withMaxIterations(max: number): this {
+    this.maxIterations = max;
+    return this;
+  }
+
+  /**
+   * Set logger instance.
+   *
+   * @param logger - Logger instance
+   * @returns This builder for chaining
+   */
+  withLogger(logger: Logger<ILogObj>): this {
+    this.logger = logger;
+    return this;
+  }
+
+  /**
+   * Add hooks for agent lifecycle events.
+   *
+   * @param hooks - Agent hooks configuration
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * import { HookPresets } from 'llmist/hooks';
+   *
+   * .withHooks(HookPresets.logging())
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.logging(),
+   *   HookPresets.timing()
+   * ))
+   * ```
+   */
+  withHooks(hooks: AgentHooks): this {
+    this.hooks = hooks;
+    return this;
+  }
+
+  /**
+   * Configure custom prompts for gadget system messages.
+   *
+   * @param config - Prompt configuration object
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withPromptConfig({
+   *   mainInstruction: "Use the gadget markers below:",
+   *   rules: ["Always use markers", "Never use function calling"]
+   * })
+   * ```
+   */
+  withPromptConfig(config: PromptConfig): this {
+    this.promptConfig = config;
+    return this;
+  }
+
+  /**
+   * Add gadgets (classes or instances).
+   * Can be called multiple times to add more gadgets.
+   *
+   * @param gadgets - Gadget classes or instances
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withGadgets(Calculator, Weather, Email)
+   * .withGadgets(new Calculator(), new Weather())
+   * .withGadgets(createGadget({ ... }))
+   * ```
+   */
+  withGadgets(...gadgets: GadgetOrClass[]): this {
+    this.gadgets.push(...gadgets);
+    return this;
+  }
+
+  /**
+   * Add conversation history messages.
+   * Useful for continuing previous conversations.
+   *
+   * @param messages - Array of history messages
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withHistory([
+   *   { user: "Hello" },
+   *   { assistant: "Hi there!" },
+   *   { user: "How are you?" },
+   *   { assistant: "I'm doing well, thanks!" }
+   * ])
+   * ```
+   */
+  withHistory(messages: HistoryMessage[]): this {
+    for (const msg of messages) {
+      if ("user" in msg) {
+        this.initialMessages.push({ role: "user", content: msg.user });
+      } else if ("assistant" in msg) {
+        this.initialMessages.push({ role: "assistant", content: msg.assistant });
+      } else if ("system" in msg) {
+        this.initialMessages.push({ role: "system", content: msg.system });
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Add a single message to the conversation history.
+   *
+   * @param message - Single history message
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .addMessage({ user: "Hello" })
+   * .addMessage({ assistant: "Hi there!" })
+   * ```
+   */
+  addMessage(message: HistoryMessage): this {
+    return this.withHistory([message]);
+  }
+
+  /**
+   * Set the human input handler for interactive conversations.
+   *
+   * @param handler - Function to handle human input requests
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .onHumanInput(async (question) => {
+   *   return await promptUser(question);
+   * })
+   * ```
+   */
+  onHumanInput(handler: (question: string) => Promise<string>): this {
+    this.onHumanInputRequired = handler;
+    return this;
+  }
+
+  /**
+   * Set the parameter format for gadget calls.
+   *
+   * @param format - Parameter format ("json" or "xml")
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withParameterFormat("xml")
+   * ```
+   */
+  withParameterFormat(format: ParameterFormat): this {
+    this.parameterFormat = format;
+    return this;
+  }
+
+  /**
+   * Set custom gadget marker prefix.
+   *
+   * @param prefix - Custom start prefix for gadget markers
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withGadgetStartPrefix("<<GADGET_START>>")
+   * ```
+   */
+  withGadgetStartPrefix(prefix: string): this {
+    this.gadgetStartPrefix = prefix;
+    return this;
+  }
+
+  /**
+   * Set custom gadget marker suffix.
+   *
+   * @param suffix - Custom end suffix for gadget markers
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withGadgetEndPrefix("<<GADGET_END>>")
+   * ```
+   */
+  withGadgetEndPrefix(suffix: string): this {
+    this.gadgetEndPrefix = suffix;
+    return this;
+  }
+
+  /**
+   * Set the text-only handler strategy.
+   *
+   * Controls what happens when the LLM returns text without calling any gadgets:
+   * - "terminate": End the agent loop (default)
+   * - "acknowledge": Continue the loop for another iteration
+   * - "wait_for_input": Wait for human input
+   * - Custom handler: Provide a function for dynamic behavior
+   *
+   * @param handler - Text-only handler strategy or custom handler
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Simple strategy
+   * .withTextOnlyHandler("acknowledge")
+   *
+   * // Custom handler
+   * .withTextOnlyHandler({
+   *   type: "custom",
+   *   handler: async (context) => {
+   *     if (context.text.includes("?")) {
+   *       return { action: "wait_for_input", question: context.text };
+   *     }
+   *     return { action: "continue" };
+   *   }
+   * })
+   * ```
+   */
+  withTextOnlyHandler(handler: TextOnlyHandler): this {
+    this.textOnlyHandler = handler;
+    return this;
+  }
+
+  /**
+   * Set whether to stop gadget execution on first error.
+   *
+   * When true (default), if a gadget fails:
+   * - Subsequent gadgets in the same response are skipped
+   * - LLM stream is cancelled to save costs
+   * - Agent loop continues with error in context
+   *
+   * When false:
+   * - All gadgets in the response still execute
+   * - LLM stream continues to completion
+   *
+   * @param stop - Whether to stop on gadget error
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withStopOnGadgetError(false)
+   * ```
+   */
+  withStopOnGadgetError(stop: boolean): this {
+    this.stopOnGadgetError = stop;
+    return this;
+  }
+
+  /**
+   * Set custom error handling logic.
+   *
+   * Provides fine-grained control over whether to continue after different types of errors.
+   * Overrides `stopOnGadgetError` when provided.
+   *
+   * **Note:** This builder method configures the underlying `shouldContinueAfterError` option
+   * in `AgentOptions`. The method is named `withErrorHandler` for better developer experience,
+   * but maps to the `shouldContinueAfterError` property internally.
+   *
+   * @param handler - Function that decides whether to continue after an error.
+   *                  Return `true` to continue execution, `false` to stop.
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withErrorHandler((context) => {
+   *   // Stop on parse errors, continue on validation/execution errors
+   *   if (context.errorType === "parse") {
+   *     return false;
+   *   }
+   *   if (context.error.includes("CRITICAL")) {
+   *     return false;
+   *   }
+   *   return true;
+   * })
+   * ```
+   */
+  withErrorHandler(
+    handler: (context: {
+      error: string;
+      gadgetName: string;
+      errorType: "parse" | "validation" | "execution";
+      parameters?: Record<string, unknown>;
+    }) => boolean | Promise<boolean>,
+  ): this {
+    this.shouldContinueAfterError = handler;
+    return this;
+  }
+
+  /**
+   * Set default timeout for gadget execution.
+   *
+   * @param timeoutMs - Timeout in milliseconds (must be non-negative)
+   * @returns This builder for chaining
+   * @throws {Error} If timeout is negative
+   *
+   * @example
+   * ```typescript
+   * .withDefaultGadgetTimeout(5000) // 5 second timeout
+   * ```
+   */
+  withDefaultGadgetTimeout(timeoutMs: number): this {
+    if (timeoutMs < 0) {
+      throw new Error("Timeout must be a non-negative number");
+    }
+    this.defaultGadgetTimeoutMs = timeoutMs;
+    return this;
+  }
+
+  /**
+   * Build and create the agent with the given user prompt.
+   * Returns the Agent instance ready to run.
+   *
+   * @param userPrompt - User's question or request
+   * @returns Configured Agent instance
+   *
+   * @example
+   * ```typescript
+   * const agent = await LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withGadgets(Calculator)
+   *   .ask("What is 2+2?");
+   *
+   * for await (const event of agent.run()) {
+   *   // handle events
+   * }
+   * ```
+   */
+  ask(userPrompt: string): Agent {
+    // Lazy import to avoid circular dependency
+    if (!this.client) {
+      const { LLMist: LLMistClass } =
+        require("../core/client.js") as typeof import("../core/client.js");
+      this.client = new LLMistClass();
+    }
+    const registry = GadgetRegistry.from(this.gadgets);
+
+    const options: AgentOptions = {
+      client: this.client,
+      model: this.model ?? "openai:gpt-5-nano",
+      systemPrompt: this.systemPrompt,
+      userPrompt,
+      registry,
+      maxIterations: this.maxIterations,
+      temperature: this.temperature,
+      logger: this.logger,
+      hooks: this.hooks,
+      promptConfig: this.promptConfig,
+      initialMessages: this.initialMessages,
+      onHumanInputRequired: this.onHumanInputRequired,
+      parameterFormat: this.parameterFormat,
+      gadgetStartPrefix: this.gadgetStartPrefix,
+      gadgetEndPrefix: this.gadgetEndPrefix,
+      textOnlyHandler: this.textOnlyHandler,
+      stopOnGadgetError: this.stopOnGadgetError,
+      shouldContinueAfterError: this.shouldContinueAfterError,
+      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+    };
+
+    return new Agent(AGENT_INTERNAL_KEY, options);
+  }
+
+  /**
+   * Build, run, and collect only the text response.
+   * Convenient for simple queries where you just want the final answer.
+   *
+   * @param userPrompt - User's question or request
+   * @returns Promise resolving to the complete text response
+   *
+   * @example
+   * ```typescript
+   * const answer = await LLMist.createAgent()
+   *   .withModel("gpt4-mini")
+   *   .withGadgets(Calculator)
+   *   .askAndCollect("What is 42 * 7?");
+   *
+   * console.log(answer); // "294"
+   * ```
+   */
+  async askAndCollect(userPrompt: string): Promise<string> {
+    const agent = this.ask(userPrompt);
+    return collectText(agent.run());
+  }
+
+  /**
+   * Build and run with event handlers.
+   * Combines agent creation and event handling in one call.
+   *
+   * @param userPrompt - User's question or request
+   * @param handlers - Event handlers
+   *
+   * @example
+   * ```typescript
+   * await LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withGadgets(Calculator)
+   *   .askWith("What is 2+2?", {
+   *     onText: (text) => console.log("LLM:", text),
+   *     onGadgetResult: (result) => console.log("Result:", result.result),
+   *   });
+   * ```
+   */
+  async askWith(userPrompt: string, handlers: EventHandlers): Promise<void> {
+    const agent = this.ask(userPrompt);
+    await agent.runWith(handlers);
+  }
+
+  /**
+   * Build the agent without a user prompt.
+   *
+   * Returns an Agent instance that can be inspected (e.g., check registered gadgets)
+   * but cannot be run without first calling .ask(prompt).
+   *
+   * This is useful for:
+   * - Testing: Inspect the registry, configuration, etc.
+   * - Advanced use cases: Build agent configuration separately from execution
+   *
+   * @returns Configured Agent instance (without user prompt)
+   *
+   * @example
+   * ```typescript
+   * // Build agent for inspection
+   * const agent = new AgentBuilder()
+   *   .withModel("sonnet")
+   *   .withGadgets(Calculator, Weather)
+   *   .build();
+   *
+   * // Inspect registered gadgets
+   * console.log(agent.getRegistry().getNames()); // ['Calculator', 'Weather']
+   *
+   * // Note: Calling agent.run() will throw an error
+   * // Use .ask(prompt) instead if you want to run the agent
+   * ```
+   */
+  build(): Agent {
+    // Lazy import to avoid circular dependency
+    if (!this.client) {
+      const { LLMist: LLMistClass } =
+        require("../core/client.js") as typeof import("../core/client.js");
+      this.client = new LLMistClass();
+    }
+    const registry = GadgetRegistry.from(this.gadgets);
+
+    const options: AgentOptions = {
+      client: this.client,
+      model: this.model ?? "openai:gpt-5-nano",
+      systemPrompt: this.systemPrompt,
+      // No userPrompt - agent.run() will throw if called directly
+      registry,
+      maxIterations: this.maxIterations,
+      temperature: this.temperature,
+      logger: this.logger,
+      hooks: this.hooks,
+      promptConfig: this.promptConfig,
+      initialMessages: this.initialMessages,
+      onHumanInputRequired: this.onHumanInputRequired,
+      parameterFormat: this.parameterFormat,
+      gadgetStartPrefix: this.gadgetStartPrefix,
+      gadgetEndPrefix: this.gadgetEndPrefix,
+      textOnlyHandler: this.textOnlyHandler,
+      stopOnGadgetError: this.stopOnGadgetError,
+      shouldContinueAfterError: this.shouldContinueAfterError,
+      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+    };
+
+    return new Agent(AGENT_INTERNAL_KEY, options);
+  }
+}
