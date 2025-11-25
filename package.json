@@ -1,5 +1,5 @@
 {
-  "name": "llmist",
+  "name": "@zbigniewsobiecki/llmist",
   "version": "0.0.1",
   "description": "Universal TypeScript LLM client with streaming-first agent framework. Works with any model - no structured outputs or native tool calling required. Implements its own flexible grammar for function calling.",
   "type": "module",
@@ -45,7 +45,14 @@
     "postinstall": "node scripts/install-hooks.js"
   },
   "bin": {
-    "llmist": "dist/cli.js"
+    "llmist": "dist/cli.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zbigniewsobiecki/llmist.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "files": [
     "dist"
