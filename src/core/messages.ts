@@ -59,16 +59,17 @@ export class LLMMessageBuilder {
     );
     parts.push(mainInstruction);
 
-    parts.push(this.buildGadgetsXmlSection(gadgets, parameterFormat));
+    parts.push(this.buildGadgetsSection(gadgets, parameterFormat));
     parts.push(this.buildUsageSection(parameterFormat, context));
 
     this.messages.push({ role: "system", content: parts.join("") });
     return this;
   }
 
-  private buildGadgetsXmlSection(gadgets: BaseGadget[], parameterFormat: ParameterFormat): string {
+  private buildGadgetsSection(gadgets: BaseGadget[], parameterFormat: ParameterFormat): string {
     const parts: string[] = [];
-    parts.push("<GADGETS>");
+    parts.push("\n\nAVAILABLE GADGETS");
+    parts.push("\n=================\n");
 
     for (const gadget of gadgets) {
       const gadgetName = gadget.name ?? gadget.constructor.name;
@@ -85,13 +86,12 @@ export class LLMMessageBuilder {
       const schema =
         schemaIndex !== -1 ? instruction.substring(schemaIndex + schemaMarker.length).trim() : "";
 
-      parts.push("\n  <gadget>");
-      parts.push(`\n    <name>${gadgetName}</name>`);
-      parts.push(`\n    <description>${description}</description>`);
+      parts.push(`\nGADGET: ${gadgetName}`);
+      parts.push(`\n${description}`);
       if (schema) {
-        parts.push(`\n    <schema format="${parameterFormat}">\n${schema}\n    </schema>`);
+        parts.push(`\n\nPARAMETERS (${parameterFormat.toUpperCase()}):\n${schema}`);
       }
-      parts.push("\n  </gadget>");
+      parts.push("\n\n---");
     }
 
     return parts.join("");
@@ -123,7 +123,8 @@ export class LLMMessageBuilder {
             context,
           );
 
-    parts.push("<usage>");
+    parts.push("\n\nHOW TO INVOKE GADGETS");
+    parts.push("\n=====================\n");
 
     // Use configurable critical usage instruction
     const criticalUsage = resolvePromptTemplate(
@@ -131,20 +132,18 @@ export class LLMMessageBuilder {
       DEFAULT_PROMPTS.criticalUsage,
       context,
     );
-    parts.push(`\n  <critical>${criticalUsage}</critical>`);
+    parts.push(`\nCRITICAL: ${criticalUsage}\n`);
 
     // Format section
-    parts.push("\n  <format>");
-    parts.push(`\n    <step>Start marker: ${this.startPrefix}gadget_name</step>`);
-    parts.push(`\n    <step>${formatDescription}</step>`);
-    parts.push(`\n    <step>End marker: ${this.endPrefix}</step>`);
-    parts.push("\n  </format>");
+    parts.push("\nFORMAT:");
+    parts.push(`\n  1. Start marker: ${this.startPrefix}gadget_name`);
+    parts.push(`\n  2. ${formatDescription}`);
+    parts.push(`\n  3. End marker: ${this.endPrefix}`);
 
     parts.push(this.buildExamplesSection(parameterFormat, context));
     parts.push(this.buildRulesSection(context));
 
-    parts.push("\n</usage>");
-    parts.push("\n</GADGETS>\n\n");
+    parts.push("\n");
 
     return parts.join("");
   }
@@ -165,7 +164,6 @@ export class LLMMessageBuilder {
     }
 
     const parts: string[] = [];
-    parts.push("\n  <examples>");
 
     // Single gadget example
     const singleExample =
@@ -179,7 +177,7 @@ ${this.endPrefix}`
 {"from": "English", "to": "Polish", "content": "Paris is the capital of France."}
 ${this.endPrefix}`;
 
-    parts.push(`\n    <example title="Single Gadget">\n${singleExample}\n    </example>`);
+    parts.push(`\n\nEXAMPLE (Single Gadget):\n\n${singleExample}`);
 
     // Multiple gadgets example
     const multipleExample =
@@ -201,8 +199,7 @@ ${this.startPrefix}analyze
 {"type": "economic_analysis", "matter": "Polish Economy", "question": "Polish arms exports 2025."}
 ${this.endPrefix}`;
 
-    parts.push(`\n    <example title="Multiple Gadgets">\n${multipleExample}\n    </example>`);
-    parts.push("\n  </examples>");
+    parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExample}`);
 
     return parts.join("");
   }
@@ -215,16 +212,14 @@ ${this.endPrefix}`;
     gadgetNames: string[];
   }): string {
     const parts: string[] = [];
-    parts.push("\n  <rules>");
+    parts.push("\n\nRULES:");
 
     // Use configurable rules
     const rules = resolveRulesTemplate(this.promptConfig.rules, context);
 
     for (const rule of rules) {
-      parts.push(`\n    <rule>${rule}</rule>`);
+      parts.push(`\n  - ${rule}`);
     }
-
-    parts.push("\n  </rules>");
 
     return parts.join("");
   }
