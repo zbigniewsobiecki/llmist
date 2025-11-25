@@ -87,10 +87,11 @@ async function handleCompleteCommand(
     }
   }
 
+  progress.endCall(usage); // Calculate cost before completing
   progress.complete();
   printer.ensureNewline();
 
-  const summary = renderSummary({ finishReason, usage });
+  const summary = renderSummary({ finishReason, usage, cost: progress.getTotalCost() });
   if (summary) {
     env.stderr.write(`${summary}\n`);
   }

@@ -259,7 +259,12 @@ async function handleAgentCommand(
   progress.complete();
   printer.ensureNewline();
 
-  const summary = renderSummary({ finishReason, usage, iterations });
+  const summary = renderSummary({
+    finishReason,
+    usage,
+    iterations,
+    cost: progress.getTotalCost(),
+  });
   if (summary) {
     env.stderr.write(`${summary}\n`);
   }

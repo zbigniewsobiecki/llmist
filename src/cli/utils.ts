@@ -168,8 +168,13 @@ export class StreamProgress {
       // Calculate and accumulate cost if model registry is available
       if (this.modelRegistry && this.model) {
         try {
+          // Strip provider prefix if present (e.g., "openai:gpt-5-nano" -> "gpt-5-nano")
+          const modelName = this.model.includes(":")
+            ? this.model.split(":")[1]
+            : this.model;
+
           const cost = this.modelRegistry.estimateCost(
-            this.model,
+            modelName,
             usage.inputTokens,
             usage.outputTokens,
           );
@@ -257,7 +262,7 @@ export class StreamProgress {
       ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
       : this.callOutputTokens;
 
-    // Build status parts: model, out (sent), in (received), time
+    // Build status parts: model, out (sent), in (received), cost, time
     const parts: string[] = [];
     if (this.model) {
       parts.push(chalk.cyan(this.model));
@@ -269,6 +274,9 @@ export class StreamProgress {
     if (this.isStreaming || outTokens > 0) {
       const prefix = this.callOutputTokensEstimated ? "~" : "";
       parts.push(chalk.dim("in:") + chalk.green(` ${prefix}${outTokens}`));
+    }
+    if (this.totalCost > 0) {
+      parts.push(chalk.dim("cost:") + chalk.cyan(` $${this.formatCost(this.totalCost)}`));
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
@@ -326,6 +334,13 @@ export class StreamProgress {
    */
   complete(): void {
     this.pause();
+  }
+
+  /**
+   * Returns the total accumulated cost across all calls.
+   */
+  getTotalCost(): number {
+    return this.totalCost;
   }
 
   /**
@@ -464,6 +479,7 @@ export interface SummaryMetadata {
   finishReason?: string | null;
   usage?: TokenUsage;
   iterations?: number;
+  cost?: number;
 }
 
 /**
@@ -491,6 +507,21 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
         chalk.cyan(`${totalTokens}`) +
         chalk.dim(` (in: ${inputTokens}, out: ${outputTokens})`),
     );
+  }
+
+  if (metadata.cost !== undefined && metadata.cost > 0) {
+    // Format cost with appropriate precision
+    let formattedCost: string;
+    if (metadata.cost < 0.001) {
+      formattedCost = metadata.cost.toFixed(5);
+    } else if (metadata.cost < 0.01) {
+      formattedCost = metadata.cost.toFixed(4);
+    } else if (metadata.cost < 1) {
+      formattedCost = metadata.cost.toFixed(3);
+    } else {
+      formattedCost = metadata.cost.toFixed(2);
+    }
+    parts.push(chalk.dim(`cost: `) + chalk.cyan(`$${formattedCost}`));
   }
 
   if (parts.length === 0) {
