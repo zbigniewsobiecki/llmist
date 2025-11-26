@@ -76,14 +76,14 @@ jobs:
       - name: Sync dev branch
         if: ${{ success() && github.event.inputs.dry_run != 'true' }}
         run: |
-          # Fetch latest changes
-          git fetch origin main:main
+          # Fetch latest changes from remote
+          git fetch origin
 
           # Check out dev branch
           git checkout dev || git checkout -b dev origin/dev
 
-          # Merge main into dev
-          git merge main --no-edit -m "chore: sync dev with main after release [skip ci]"
+          # Merge main into dev (use origin/main to avoid conflicts)
+          git merge origin/main --no-edit -m "chore: sync dev with main after release [skip ci]"
 
           # Push changes
           git push origin dev
