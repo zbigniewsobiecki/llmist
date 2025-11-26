@@ -296,8 +296,8 @@ mockLLM()
   .returns('The answer is 42')
   .register();
 
-const answer = await LLMist.createAgent()
-  .withClient(createMockClient())
+const mockClient = createMockClient();
+const answer = await mockClient.createAgent()
   .withModel('gpt-5')
   .askAndCollect('Calculate 2 + 2');
 
@@ -312,12 +312,12 @@ console.log(answer); // "The answer is 42" - no API call made!
 const client = new LLMist();
 
 // Get model specs
-const gpt4 = client.modelRegistry.getModelSpec('openai:gpt-4');
-console.log(gpt4.contextWindow);    // 128000
-console.log(gpt4.pricing.input);    // 10.0 per 1M tokens
+const gpt5 = client.modelRegistry.getModelSpec('gpt-5');
+console.log(gpt5.contextWindow);    // 272000
+console.log(gpt5.pricing.input);    // 1.25 per 1M tokens
 
 // Estimate costs
-const cost = client.modelRegistry.estimateCost('openai:gpt-4', 10_000, 2_000);
+const cost = client.modelRegistry.estimateCost('gpt-5', 10_000, 2_000);
 console.log(`$${cost.totalCost.toFixed(4)}`);
 
 // Find cheapest model
@@ -335,7 +335,7 @@ const messages = [
 ];
 
 const tokens = await client.countTokens('openai:gpt-5', messages);
-const cost = client.modelRegistry.estimateCost('openai:gpt-5', tokens, 1000);
+const cost = client.modelRegistry.estimateCost('gpt-5', tokens, 1000);
 ```
 
 Uses provider-specific methods (tiktoken for OpenAI, native APIs for Anthropic/Gemini).
