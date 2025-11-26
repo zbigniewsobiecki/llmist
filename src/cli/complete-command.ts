@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 
 import { LLMMessageBuilder } from "../core/messages.js";
+import { resolveModel } from "../core/model-shortcuts.js";
 import type { TokenUsage } from "../core/options.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import { COMMANDS, DEFAULT_MODEL, OPTION_DESCRIPTIONS, OPTION_FLAGS } from "./constants.js";
@@ -39,6 +40,7 @@ async function handleCompleteCommand(
 ): Promise<void> {
   const prompt = await resolvePrompt(promptArg, env);
   const client = env.createClient();
+  const model = resolveModel(options.model);
 
   const builder = new LLMMessageBuilder();
   if (options.system) {
@@ -47,7 +49,7 @@ async function handleCompleteCommand(
   builder.addUser(prompt);
 
   const stream = client.stream({
-    model: options.model,
+    model,
     messages: builder.build(),
     temperature: options.temperature,
     maxTokens: options.maxTokens,
@@ -59,7 +61,7 @@ async function handleCompleteCommand(
 
   // Start call with model and estimate based on prompt length
   const estimatedInputTokens = Math.round(prompt.length / FALLBACK_CHARS_PER_TOKEN);
-  progress.startCall(options.model, estimatedInputTokens);
+  progress.startCall(model, estimatedInputTokens);
 
   let finishReason: string | null | undefined;
   let usage: TokenUsage | undefined;
