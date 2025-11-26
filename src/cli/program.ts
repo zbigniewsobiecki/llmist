@@ -4,6 +4,7 @@ import packageJson from "../../package.json";
 
 import { registerAgentCommand } from "./agent-command.js";
 import { registerCompleteCommand } from "./complete-command.js";
+import { registerModelsCommand } from "./models-command.js";
 import {
   CLI_DESCRIPTION,
   CLI_NAME,
@@ -56,6 +57,7 @@ export function createProgram(env: CLIEnvironment): Command {
 
   registerCompleteCommand(program, env);
   registerAgentCommand(program, env);
+  registerModelsCommand(program, env);
 
   return program;
 }
