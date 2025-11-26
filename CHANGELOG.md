@@ -1,3 +1,7 @@
+## <small>0.3.1 (2025-11-26)</small>
+
+* fix(ci): use fast-forward merge for dev sync to prevent commit buildup ([b414279](https://github.com/zbigniewsobiecki/llmist/commit/b414279))
+
 ## 0.3.0 (2025-11-26)
 
 * feat(cli): improve CLI showcase and fix token count display ([62e9501](https://github.com/zbigniewsobiecki/llmist/commit/62e9501))
