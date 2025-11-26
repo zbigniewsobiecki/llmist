@@ -2,6 +2,7 @@ import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import { type Command, InvalidArgumentError } from "commander";
 import { AgentBuilder } from "../agent/builder.js";
+import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import type { ParameterFormat } from "../gadgets/parser.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
@@ -25,6 +26,7 @@ import {
   StreamPrinter,
   StreamProgress,
 } from "./utils.js";
+import { formatGadgetSummary, type GadgetResult } from "./ui/formatters.js";
 
 /**
  * Configuration options for the agent command.
@@ -37,6 +39,7 @@ interface AgentCommandOptions {
   gadget?: string[];
   parameterFormat: ParameterFormat;
   builtins: boolean; // --no-builtins sets this to false
+  builtinInteraction: boolean; // --no-builtin-interaction sets this to false
 }
 
 const PARAMETER_FORMAT_VALUES: ParameterFormat[] = ["json", "yaml", "auto"];
@@ -100,46 +103,25 @@ function createHumanInputHandler(
   };
 }
 
-/**
- * Formats a gadget execution result for stderr output with colors.
- *
- * @param result - Gadget execution result with timing and output info
- * @returns Formatted summary string with ANSI colors
- */
-function formatGadgetSummary(result: {
-  gadgetName: string;
-  executionTimeMs: number;
-  error?: string;
-  result?: string;
-  breaksLoop?: boolean;
-}): string {
-  const gadgetLabel = chalk.magenta.bold(result.gadgetName);
-  const timeLabel = chalk.dim(`${Math.round(result.executionTimeMs)}ms`);
-
-  if (result.error) {
-    return `${chalk.red("✗")} ${gadgetLabel} ${chalk.red("error:")} ${result.error} ${timeLabel}`;
-  }
-
-  if (result.breaksLoop) {
-    return `${chalk.yellow("⏹")} ${gadgetLabel} ${chalk.yellow("finished:")} ${result.result} ${timeLabel}`;
-  }
-
-  // For TellUser, show full text without truncation since it's meant for user messages
-  // For other gadgets, truncate long results for cleaner output
-  const maxLen = 80;
-  const shouldTruncate = result.gadgetName !== "TellUser";
-  const resultText = result.result
-    ? shouldTruncate && result.result.length > maxLen
-      ? `${result.result.slice(0, maxLen)}...`
-      : result.result
-    : "";
-
-  return `${chalk.green("✓")} ${gadgetLabel} ${chalk.dim("→")} ${resultText} ${timeLabel}`;
-}
+// formatGadgetSummary is now imported from ./ui/formatters.js
+// This demonstrates clean code organization and reusability
 
 /**
  * Handles the agent command execution.
- * Runs the full agent loop with gadgets and streams output.
+ *
+ * SHOWCASE: This function demonstrates how to build a production-grade CLI
+ * on top of llmist's core capabilities:
+ *
+ * 1. **Dynamic gadget loading** - GadgetRegistry for plugin-like extensibility
+ * 2. **Observer hooks** - Custom progress tracking and real-time UI updates
+ * 3. **Event-driven execution** - React to agent events (text, gadget results)
+ * 4. **ModelRegistry integration** - Automatic cost estimation and tracking
+ * 5. **Streaming support** - Display LLM output as it's generated
+ * 6. **Human-in-the-loop** - Interactive prompts during agent execution
+ * 7. **Clean separation** - stdout for content, stderr for metrics/progress
+ *
+ * The implementation showcases llmist's flexibility: from simple scripts to
+ * polished CLIs with spinners, cost tracking, and real-time feedback.
  *
  * @param promptArg - User prompt from command line argument (optional if using stdin)
  * @param options - Agent command options (model, gadgets, max iterations, etc.)
@@ -153,21 +135,39 @@ async function handleAgentCommand(
   const prompt = await resolvePrompt(promptArg, env);
   const client = env.createClient();
 
+  // SHOWCASE: llmist's GadgetRegistry for dynamic tool loading
+  // This demonstrates how to build extensible CLIs with plugin-like functionality
   const registry = new GadgetRegistry();
 
-  // Register built-in gadgets by default (AskUser, TellUser)
-  // --no-builtins sets options.builtins to false
+  // Register built-in gadgets for basic agent interaction
+  // SHOWCASE: Built-in gadgets enable conversation without any custom tools
+  //
+  // AskUser: Prompts user for input during agent execution
+  // TellUser: Displays formatted messages and optionally ends the loop
+  //
+  // Flags control built-in behavior:
+  // --no-builtins: Exclude all built-in gadgets
+  // --no-builtin-interaction: Exclude only AskUser (keeps TellUser for output)
   if (options.builtins !== false) {
     for (const gadget of builtinGadgets) {
+      // Skip AskUser if --no-builtin-interaction is set
+      // Useful for non-interactive environments (CI, pipes, etc.)
+      if (options.builtinInteraction === false && gadget.name === "AskUser") {
+        continue;
+      }
       registry.registerByClass(gadget);
     }
   }
 
-  // Load and register user-provided gadgets (can override built-ins)
+  // Load user-provided gadgets from file paths
+  // SHOWCASE: Dynamic gadget loading enables custom tools without recompiling
+  // Users can provide gadgets via -g/--gadget flag, supporting any TypeScript class
   const gadgetSpecifiers = options.gadget ?? [];
   if (gadgetSpecifiers.length > 0) {
     const gadgets = await loadGadgets(gadgetSpecifiers, process.cwd());
     for (const gadget of gadgets) {
+      // Later registrations can override earlier ones
+      // This allows users to customize built-in behavior
       registry.registerByClass(gadget);
     }
   }
@@ -180,26 +180,54 @@ async function handleAgentCommand(
   let usage: TokenUsage | undefined;
   let iterations = 0;
 
-  // Estimate tokens from all messages
-  const estimateMessagesTokens = (messages: Array<{ role: string; content: string }>) => {
-    const totalChars = messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
-    return Math.round(totalChars / FALLBACK_CHARS_PER_TOKEN);
+  // Count tokens accurately using provider-specific methods
+  const countMessagesTokens = async (model: string, messages: LLMMessage[]): Promise<number> => {
+    try {
+      return await client.countTokens(model, messages);
+    } catch {
+      // Fallback to character-based estimation if counting fails
+      const totalChars = messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
+      return Math.round(totalChars / FALLBACK_CHARS_PER_TOKEN);
+    }
   };
 
+  // Build the agent with hooks for progress tracking
+  // SHOWCASE: This demonstrates llmist's observer pattern for building custom UIs
+  //
+  // For simpler use cases, use HookPresets.progressTracking() instead:
+  //   .withHooks(HookPresets.progressTracking({
+  //     modelRegistry: client.modelRegistry,
+  //     onProgress: (stats) => { /* update your UI */ }
+  //   }))
+  //
+  // The CLI uses custom hooks for fine-grained control over the spinner animation
+  // and real-time updates, showcasing llmist's flexibility for building polished UIs.
   const builder = new AgentBuilder(client)
     .withModel(options.model)
     .withLogger(env.createLogger("llmist:cli:agent"))
     .withHooks({
       observers: {
+        // onLLMCallStart: Start progress indicator for each LLM call
+        // This showcases how to react to agent lifecycle events
         onLLMCallStart: async (context) => {
-          // Start new call in streaming mode with model and estimated tokens from full messages
-          const estimate = estimateMessagesTokens(context.options.messages);
-          progress.startCall(context.options.model, estimate);
+          // Count input tokens accurately using provider-specific methods
+          // This ensures we never show ~ for input tokens
+          const inputTokens = await countMessagesTokens(
+            context.options.model,
+            context.options.messages,
+          );
+          progress.startCall(context.options.model, inputTokens);
+          // Mark input tokens as accurate (not estimated)
+          progress.setInputTokens(inputTokens, false);
         },
+        // onStreamChunk: Real-time updates as LLM generates tokens
+        // This enables responsive UIs that show progress during generation
         onStreamChunk: async (context) => {
-          // Update output token estimate from accumulated text
+          // Update estimated output tokens from accumulated text length
           progress.update(context.accumulatedText.length);
-          // Capture actual tokens when available from stream
+
+          // Use exact token counts when available from streaming response
+          // SHOWCASE: Provider responses include token usage for accurate tracking
           if (context.usage) {
             if (context.usage.inputTokens) {
               progress.setInputTokens(context.usage.inputTokens, false);
@@ -209,11 +237,27 @@ async function handleAgentCommand(
             }
           }
         },
+
+        // onLLMCallComplete: Finalize metrics after each LLM call
+        // This is where you'd typically log metrics or update dashboards
         onLLMCallComplete: async (context) => {
+          // Capture completion metadata for final summary
           finishReason = context.finishReason;
           usage = context.usage;
           iterations = Math.max(iterations, context.iteration + 1);
-          // End call and switch to cumulative mode
+
+          // Update with final exact token counts from provider
+          // SHOWCASE: llmist normalizes token usage across all providers
+          if (context.usage) {
+            if (context.usage.inputTokens) {
+              progress.setInputTokens(context.usage.inputTokens, false);
+            }
+            if (context.usage.outputTokens) {
+              progress.setOutputTokens(context.usage.outputTokens, false);
+            }
+          }
+
+          // End this call's progress tracking and switch to cumulative mode
           progress.endCall(context.usage);
         },
       },
@@ -244,21 +288,37 @@ async function handleAgentCommand(
   // Note: parameterFormat is not directly supported in AgentBuilder
   // This might need to be added to AgentBuilder API if needed
 
+  // Build and start the agent
   const agent = builder.ask(prompt);
 
+  // SHOWCASE: llmist's event-driven agent execution
+  // The agent emits events as it runs, enabling reactive UIs
+  //
+  // Event types:
+  // - "text": LLM-generated text chunks (streaming or complete)
+  // - "gadget_result": Results from gadget/tool executions
+  // - "human_input_required": Agent needs user input (handled via callback)
+  //
+  // This pattern allows building:
+  // - Real-time streaming UIs
+  // - Progress indicators during tool execution
+  // - Separation of business logic (agent) from presentation (UI)
   for await (const event of agent.run()) {
     if (event.type === "text") {
-      progress.pause(); // Must pause to avoid stderr/stdout interleaving
+      // Stream LLM output to stdout
+      // Pause progress indicator to avoid stderr/stdout interleaving
+      progress.pause();
       printer.write(event.content);
     } else if (event.type === "gadget_result") {
-      progress.pause(); // Clear progress before gadget output
-      // Only show gadget summaries if stderr is a TTY (not redirected)
+      // Show gadget execution feedback on stderr
+      // Only displayed in TTY mode (hidden when piped)
+      progress.pause();
       if (stderrTTY) {
         env.stderr.write(`${formatGadgetSummary(event.result)}\n`);
       }
-      // Note: progress.start() is called by onLLMCallStart hook
+      // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
     }
-    // Note: human_input_required event is not emitted - handled by callback in createHumanInputHandler
+    // Note: human_input_required handled by callback (see createHumanInputHandler)
   }
 
   progress.complete();
@@ -271,6 +331,7 @@ async function handleAgentCommand(
       usage,
       iterations,
       cost: progress.getTotalCost(),
+      elapsedSeconds: progress.getTotalElapsedSeconds(),
     });
     if (summary) {
       env.stderr.write(`${summary}\n`);
@@ -315,6 +376,7 @@ export function registerAgentCommand(program: Command, env: CLIEnvironment): voi
       DEFAULT_PARAMETER_FORMAT,
     )
     .option(OPTION_FLAGS.noBuiltins, OPTION_DESCRIPTIONS.noBuiltins)
+    .option(OPTION_FLAGS.noBuiltinInteraction, OPTION_DESCRIPTIONS.noBuiltinInteraction)
     .action((prompt, options) =>
       executeAction(() => handleAgentCommand(prompt, options as AgentCommandOptions, env), env),
     );

@@ -35,6 +35,7 @@ export const OPTION_FLAGS = {
   logLevel: "--log-level <level>",
   logFile: "--log-file <path>",
   noBuiltins: "--no-builtins",
+  noBuiltinInteraction: "--no-builtin-interaction",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -50,6 +51,7 @@ export const OPTION_DESCRIPTIONS = {
   logLevel: "Log level: silly, trace, debug, info, warn, error, fatal.",
   logFile: "Path to log file. When set, logs are written to file instead of stderr.",
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
+  noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
 } as const;
 
 /** Prefix for summary output written to stderr */

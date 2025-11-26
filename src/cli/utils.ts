@@ -100,6 +100,10 @@ const SPINNER_DELAY_MS = 500; // Don't show spinner for fast responses
 
 type ProgressMode = "streaming" | "cumulative";
 
+// Import formatters from centralized formatting module
+// This showcases llmist's clean code organization
+import { formatTokens, formatCost } from "./ui/formatters.js";
+
 /**
  * Progress indicator shown while waiting for LLM response.
  * Two modes:
@@ -131,6 +135,7 @@ export class StreamProgress {
   private totalTokens = 0;
   private totalCost = 0;
   private iterations = 0;
+  private currentIteration = 0;
 
   constructor(
     private readonly target: NodeJS.WritableStream,
@@ -141,12 +146,16 @@ export class StreamProgress {
   /**
    * Starts a new LLM call. Switches to streaming mode.
    * @param model - Model name being used
-   * @param estimatedInputTokens - Estimated input tokens based on prompt length
+   * @param estimatedInputTokens - Initial input token count. Should come from
+   *   client.countTokens() for accuracy (provider-specific counting), not
+   *   character-based estimation. Will be updated with provider-returned counts
+   *   via setInputTokens() during streaming if available.
    */
   startCall(model: string, estimatedInputTokens?: number): void {
     this.mode = "streaming";
     this.model = model;
     this.callStartTime = Date.now();
+    this.currentIteration++;
     this.callInputTokens = estimatedInputTokens ?? 0;
     this.callInputTokensEstimated = true;
     this.callOutputTokens = 0;
@@ -192,8 +201,10 @@ export class StreamProgress {
 
   /**
    * Sets the input token count for current call (from stream metadata).
-   * @param tokens - Token count
-   * @param estimated - If true, shown with ~ prefix until actual count arrives
+   * @param tokens - Token count from provider or client.countTokens()
+   * @param estimated - If true, this is a fallback estimate (character-based).
+   *   If false, this is an accurate count from the provider API or client.countTokens().
+   *   Display shows ~ prefix only when estimated=true.
    */
   setInputTokens(tokens: number, estimated = false): void {
     // Don't overwrite actual count with a new estimate
@@ -206,8 +217,10 @@ export class StreamProgress {
 
   /**
    * Sets the output token count for current call (from stream metadata).
-   * @param tokens - Token count
-   * @param estimated - If true, shown with ~ prefix until actual count arrives
+   * @param tokens - Token count from provider streaming response
+   * @param estimated - If true, this is a fallback estimate (character-based).
+   *   If false, this is an accurate count from the provider's streaming metadata.
+   *   Display shows ~ prefix only when estimated=true.
    */
   setOutputTokens(tokens: number, estimated = false): void {
     // Don't overwrite actual count with a new estimate
@@ -216,6 +229,15 @@ export class StreamProgress {
     }
     this.callOutputTokens = tokens;
     this.callOutputTokensEstimated = estimated;
+  }
+
+  /**
+   * Get total elapsed time in seconds since the first call started.
+   * @returns Elapsed time in seconds with 1 decimal place
+   */
+  getTotalElapsedSeconds(): number {
+    if (this.totalStartTime === 0) return 0;
+    return Number(((Date.now() - this.totalStartTime) / 1000).toFixed(1));
   }
 
   /**
@@ -262,23 +284,31 @@ export class StreamProgress {
       ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
       : this.callOutputTokens;
 
-    // Build status parts: model, out (sent), in (received), cost, time
+    // Build status parts: #N | ↑ in │ ↓ out │ time | cost
     const parts: string[] = [];
-    if (this.model) {
-      parts.push(chalk.cyan(this.model));
-    }
+
+    // #N (iteration number)
+    parts.push(chalk.cyan(`#${this.currentIteration}`));
+
+    // ↑ input tokens
     if (this.callInputTokens > 0) {
       const prefix = this.callInputTokensEstimated ? "~" : "";
-      parts.push(chalk.dim("out:") + chalk.yellow(` ${prefix}${this.callInputTokens}`));
+      parts.push(chalk.dim("↑") + chalk.yellow(` ${prefix}${formatTokens(this.callInputTokens)}`));
     }
+
+    // ↓ output tokens
     if (this.isStreaming || outTokens > 0) {
       const prefix = this.callOutputTokensEstimated ? "~" : "";
-      parts.push(chalk.dim("in:") + chalk.green(` ${prefix}${outTokens}`));
+      parts.push(chalk.dim("↓") + chalk.green(` ${prefix}${formatTokens(outTokens)}`));
     }
-    if (this.totalCost > 0) {
-      parts.push(chalk.dim("cost:") + chalk.cyan(` $${this.formatCost(this.totalCost)}`));
-    }
+
+    // Time
     parts.push(chalk.dim(`${elapsed}s`));
+
+    // Cost
+    if (this.totalCost > 0) {
+      parts.push(chalk.cyan(`$${formatCost(this.totalCost)}`));
+    }
 
     this.target.write(`\r${chalk.cyan(spinner)} ${parts.join(chalk.dim(" | "))}`);
   }
@@ -298,7 +328,7 @@ export class StreamProgress {
       parts.push(chalk.dim("iter:") + chalk.blue(` ${this.iterations}`));
     }
     if (this.totalCost > 0) {
-      parts.push(chalk.dim("cost:") + chalk.cyan(` $${this.formatCost(this.totalCost)}`));
+      parts.push(chalk.dim("cost:") + chalk.cyan(` $${formatCost(this.totalCost)}`));
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
@@ -364,12 +394,12 @@ export class StreamProgress {
       if (this.callInputTokens > 0) {
         const prefix = this.callInputTokensEstimated ? "~" : "";
         parts.push(
-          chalk.dim("out:") + chalk.yellow(` ${prefix}${this.formatTokens(this.callInputTokens)}`),
+          chalk.dim("↑") + chalk.yellow(` ${prefix}${formatTokens(this.callInputTokens)}`),
         );
       }
       if (outTokens > 0) {
         const prefix = outEstimated ? "~" : "";
-        parts.push(chalk.dim("in:") + chalk.green(` ${prefix}${this.formatTokens(outTokens)}`));
+        parts.push(chalk.dim("↓") + chalk.green(` ${prefix}${formatTokens(outTokens)}`));
       }
       parts.push(chalk.dim(`${elapsed}s`));
     } else {
@@ -377,41 +407,18 @@ export class StreamProgress {
       const elapsed = Math.round((Date.now() - this.totalStartTime) / 1000);
 
       if (this.totalTokens > 0) {
-        parts.push(chalk.magenta(this.formatTokens(this.totalTokens)));
+        parts.push(chalk.magenta(formatTokens(this.totalTokens)));
       }
       if (this.iterations > 0) {
         parts.push(chalk.blue(`i${this.iterations}`));
       }
       if (this.totalCost > 0) {
-        parts.push(chalk.cyan(`$${this.formatCost(this.totalCost)}`));
+        parts.push(chalk.cyan(`$${formatCost(this.totalCost)}`));
       }
       parts.push(chalk.dim(`${elapsed}s`));
     }
 
-    return `${parts.join(chalk.dim(" │ "))} ${chalk.green(">")} `;
-  }
-
-  /**
-   * Formats token count compactly (3625 -> "3.6k").
-   */
-  private formatTokens(tokens: number): string {
-    return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : `${tokens}`;
-  }
-
-  /**
-   * Formats cost compactly (0.0001234 -> "0.00012", 0.1234 -> "0.12", 1.234 -> "1.23").
-   */
-  private formatCost(cost: number): string {
-    if (cost < 0.001) {
-      return cost.toFixed(5);
-    }
-    if (cost < 0.01) {
-      return cost.toFixed(4);
-    }
-    if (cost < 1) {
-      return cost.toFixed(3);
-    }
-    return cost.toFixed(2);
+    return `${parts.join(chalk.dim(" | "))} ${chalk.green(">")} `;
   }
 }
 
@@ -472,64 +479,9 @@ export async function resolvePrompt(
   return pipedInput;
 }
 
-/**
- * Metadata for generating execution summaries.
- */
-export interface SummaryMetadata {
-  finishReason?: string | null;
-  usage?: TokenUsage;
-  iterations?: number;
-  cost?: number;
-}
-
-/**
- * Renders execution metadata as a formatted summary string with colors.
- * Includes iterations, finish reason, and token usage.
- *
- * @param metadata - Summary metadata to format
- * @returns Formatted summary string or null if no metadata
- */
-export function renderSummary(metadata: SummaryMetadata): string | null {
-  const parts: string[] = [];
-
-  if (metadata.iterations !== undefined) {
-    parts.push(chalk.dim(`iterations: ${metadata.iterations}`));
-  }
-
-  if (metadata.finishReason) {
-    parts.push(chalk.dim(`finish: ${metadata.finishReason}`));
-  }
-
-  if (metadata.usage) {
-    const { inputTokens, outputTokens, totalTokens } = metadata.usage;
-    parts.push(
-      chalk.dim(`tokens: `) +
-        chalk.cyan(`${totalTokens}`) +
-        chalk.dim(` (in: ${inputTokens}, out: ${outputTokens})`),
-    );
-  }
-
-  if (metadata.cost !== undefined && metadata.cost > 0) {
-    // Format cost with appropriate precision
-    let formattedCost: string;
-    if (metadata.cost < 0.001) {
-      formattedCost = metadata.cost.toFixed(5);
-    } else if (metadata.cost < 0.01) {
-      formattedCost = metadata.cost.toFixed(4);
-    } else if (metadata.cost < 1) {
-      formattedCost = metadata.cost.toFixed(3);
-    } else {
-      formattedCost = metadata.cost.toFixed(2);
-    }
-    parts.push(chalk.dim(`cost: `) + chalk.cyan(`$${formattedCost}`));
-  }
-
-  if (parts.length === 0) {
-    return null;
-  }
-
-  return parts.join(chalk.dim(" │ "));
-}
+// Re-export summary rendering from formatters module
+// This maintains backward compatibility while organizing code better
+export { renderSummary, type SummaryMetadata } from "./ui/formatters.js";
 
 /**
  * Executes a CLI action with error handling.

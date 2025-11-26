@@ -156,9 +156,10 @@ describe("runCLI", () => {
     await runCLI(env);
 
     expect(stdout.read()).toBe("Hello world\n");
-    expect(stderr.read()).toContain("finish: stop");
-    expect(stderr.read()).toContain("tokens:");
-    expect(stderr.read()).toContain("5");
+    // New compact format: ↑ 2 | ↓ 3 | stop
+    expect(stderr.read()).toContain("stop");
+    expect(stderr.read()).toContain("↑");
+    expect(stderr.read()).toContain("↓");
   });
 
   it("runs agent loop and prints summaries", async () => {
@@ -182,9 +183,10 @@ describe("runCLI", () => {
     await runCLI(env);
 
     expect(stdout.read()).toBe("Agent response\n");
-    expect(stderr.read()).toContain("iterations: 1");
-    expect(stderr.read()).toContain("tokens:");
-    expect(stderr.read()).toContain("3");
+    // New compact format: #1 | ↑ 1 | ↓ 2 | stop
+    expect(stderr.read()).toContain("#1");
+    expect(stderr.read()).toContain("↑");
+    expect(stderr.read()).toContain("↓");
   });
 
   it("handles gadget result events and errors", async () => {
@@ -269,9 +271,10 @@ describe("renderSummary", () => {
       finishReason: "stop",
       usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
     });
-    expect(summary).toContain("finish: stop");
-    expect(summary).toContain("tokens:");
-    expect(summary).toContain("3");
+    // New compact format: ↑ 1 | ↓ 2 | stop
+    expect(summary).toContain("stop");
+    expect(summary).toContain("↑");
+    expect(summary).toContain("↓");
   });
 
   it("returns null when no metadata is provided", () => {
@@ -281,7 +284,8 @@ describe("renderSummary", () => {
 
   it("includes iterations when provided", () => {
     const summary = renderSummary({ iterations: 5 });
-    expect(summary).toContain("iterations: 5");
+    // New compact format: #5
+    expect(summary).toContain("#5");
   });
 });
 
