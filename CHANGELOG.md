@@ -1,3 +1,7 @@
+## 0.3.0 (2025-11-26)
+
+* feat(cli): improve CLI showcase and fix token count display ([62e9501](https://github.com/zbigniewsobiecki/llmist/commit/62e9501))
+
 ## <small>0.2.2 (2025-11-26)</small>
 
 * Release v0.2.2 (#68) ([1fc4b34](https://github.com/zbigniewsobiecki/llmist/commit/1fc4b34)), closes [#68](https://github.com/zbigniewsobiecki/llmist/issues/68) [#11](https://github.com/zbigniewsobiecki/llmist/issues/11) [#13](https://github.com/zbigniewsobiecki/llmist/issues/13)
