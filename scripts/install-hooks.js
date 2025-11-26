@@ -33,15 +33,23 @@ const preCommitDest = join(hooksDir, "pre-commit");
 const prePushSource = join(__dirname, "pre-push");
 const prePushDest = join(hooksDir, "pre-push");
 
+// Install commit-msg hook
+const commitMsgSource = join(__dirname, "commit-msg");
+const commitMsgDest = join(hooksDir, "commit-msg");
+
 try {
   copyFileSync(preCommitSource, preCommitDest);
   chmodSync(preCommitDest, 0o755); // Make executable
+
+  copyFileSync(commitMsgSource, commitMsgDest);
+  chmodSync(commitMsgDest, 0o755); // Make executable
 
   copyFileSync(prePushSource, prePushDest);
   chmodSync(prePushDest, 0o755); // Make executable
 
   console.log("✓ Git hooks installed successfully");
   console.log("  → pre-commit hook: runs typecheck, linter and unit tests before each commit");
+  console.log("  → commit-msg hook: validates commit message format using commitlint");
   console.log("  → pre-push hook: runs integration tests before each push");
 } catch (error) {
   console.error("❌ Failed to install git hooks:", error.message);
