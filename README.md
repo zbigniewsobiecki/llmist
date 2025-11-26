@@ -153,29 +153,83 @@ const calculator = createGadget({
 
 ### 🪝 Lifecycle Hooks
 
+Monitor, transform, and control agent execution with ready-to-use presets or custom hooks:
+
+**Quick start with presets:**
+
 ```typescript
-import { HookPresets } from 'llmist';
+import { LLMist, HookPresets } from 'llmist';
 
-// Use presets for instant monitoring
+// Full monitoring suite (recommended for development)
 await LLMist.createAgent()
-  .withHooks(HookPresets.monitoring())  // Logs + timing + tokens + errors
+  .withHooks(HookPresets.monitoring())
   .ask('Your prompt');
+// Output: Logs + timing + token tracking + error logging
 
-// Or combine specific presets
-.withHooks(HookPresets.merge(
-  HookPresets.timing(),
-  HookPresets.tokenTracking()
-))
+// Combine specific presets for focused monitoring
+await LLMist.createAgent()
+  .withHooks(HookPresets.merge(
+    HookPresets.timing(),
+    HookPresets.tokenTracking()
+  ))
+  .ask('Your prompt');
+```
 
-// Or write custom hooks
+**Available presets:**
+- `logging()` / `logging({ verbose: true })` - Event logging with optional details
+- `timing()` - Execution time measurements
+- `tokenTracking()` - Cumulative token usage and cost tracking
+- `errorLogging()` - Detailed error information
+- `silent()` - No output (for testing)
+- `monitoring()` - All-in-one preset combining logging, timing, tokens, and errors
+- `merge()` - Combine multiple presets or add custom hooks
+
+**Production vs Development patterns:**
+
+```typescript
+// Environment-based configuration
+const isDev = process.env.NODE_ENV === 'development';
+const hooks = isDev
+  ? HookPresets.monitoring({ verbose: true })  // Full visibility in dev
+  : HookPresets.merge(
+      HookPresets.errorLogging(),              // Only errors in prod
+      HookPresets.tokenTracking()              // Track costs
+    );
+
+await LLMist.createAgent()
+  .withHooks(hooks)
+  .ask('Your prompt');
+```
+
+**Custom hooks for advanced control:**
+
+```typescript
+// Observers: read-only monitoring
 .withHooks({
   observers: {
     onLLMCallComplete: async (ctx) => {
       console.log(`Used ${ctx.usage?.totalTokens} tokens`);
+      await sendMetricsToDataDog(ctx);
     },
   },
+})
+
+// Interceptors: transform data in flight
+.withHooks({
   interceptors: {
     interceptTextChunk: (chunk) => chunk.toUpperCase(),
+  },
+})
+
+// Controllers: control execution flow
+.withHooks({
+  controllers: {
+    beforeLLMCall: async (ctx) => {
+      if (shouldCache(ctx)) {
+        return { action: 'skip', syntheticResponse: cachedResponse };
+      }
+      return { action: 'proceed' };
+    },
   },
 })
 ```
