@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Commit message validation hook
+# Validates commit message format using commitlint
+
+# Skip commitlint for merge commits
+if [ -f .git/MERGE_HEAD ]; then
+  exit 0
+fi
+
+# Skip commitlint for automated release commits
+if grep -q "\[skip ci\]" "$1"; then
+  exit 0
+fi
+
+# Run commitlint
+bunx commitlint --edit "$1"
