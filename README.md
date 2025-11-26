@@ -288,7 +288,7 @@ for await (const event of agent.run()) {
 ### 🧪 Mock Testing
 
 ```typescript
-import { mockLLM, createMockClient } from 'llmist';
+import { LLMist, mockLLM, createMockClient } from 'llmist';
 
 mockLLM()
   .forModel('gpt-5')
