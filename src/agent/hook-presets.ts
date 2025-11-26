@@ -1,23 +1,54 @@
 /**
- * Common hook presets for logging, timing, and monitoring.
+ * Ready-to-use hook configurations for common monitoring, logging, and debugging tasks.
+ *
+ * HookPresets provide instant observability without writing custom hooks. They're the
+ * fastest way to add monitoring to your agents during development and production.
+ *
+ * ## Available Presets
+ *
+ * - **logging(options?)** - Log LLM calls and gadget execution
+ * - **timing()** - Measure execution time for operations
+ * - **tokenTracking()** - Track cumulative token usage and costs
+ * - **errorLogging()** - Log detailed error information
+ * - **silent()** - No output (useful for testing)
+ * - **monitoring(options?)** - All-in-one preset combining logging, timing, tokens, and errors
+ * - **merge(...hookSets)** - Combine multiple hook configurations
+ *
+ * ## Quick Start
  *
  * @example
  * ```typescript
- * import { HookPresets } from 'llmist/hooks';
+ * import { LLMist, HookPresets } from 'llmist';
  *
- * const agent = LLMist.createAgent()
+ * // Basic logging
+ * await LLMist.createAgent()
  *   .withHooks(HookPresets.logging())
- *   .ask("...");
+ *   .ask("Your prompt");
  *
- * // Or combine multiple presets
- * const agent = LLMist.createAgent()
+ * // Full monitoring suite (recommended for development)
+ * await LLMist.createAgent()
+ *   .withHooks(HookPresets.monitoring({ verbose: true }))
+ *   .ask("Your prompt");
+ *
+ * // Combine multiple presets
+ * await LLMist.createAgent()
  *   .withHooks(HookPresets.merge(
- *     HookPresets.logging({ verbose: true }),
  *     HookPresets.timing(),
  *     HookPresets.tokenTracking()
  *   ))
- *   .ask("...");
+ *   .ask("Your prompt");
+ *
+ * // Environment-based configuration
+ * const hooks = process.env.NODE_ENV === 'production'
+ *   ? HookPresets.merge(HookPresets.errorLogging(), HookPresets.tokenTracking())
+ *   : HookPresets.monitoring({ verbose: true });
+ *
+ * await LLMist.createAgent()
+ *   .withHooks(hooks)
+ *   .ask("Your prompt");
  * ```
+ *
+ * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md | Full documentation}
  */
 
 import type { AgentHooks } from "./hooks.js";
@@ -35,18 +66,59 @@ export interface LoggingOptions {
  */
 export class HookPresets {
   /**
-   * Preset: Basic logging of all events.
+   * Logs LLM calls and gadget execution to console with optional verbosity.
    *
-   * Logs LLM calls and gadget executions to console.
+   * **Output (basic mode):**
+   * - LLM call start/complete events with iteration numbers
+   * - Gadget execution start/complete with gadget names
+   * - Token counts when available
+   *
+   * **Output (verbose mode):**
+   * - All basic mode output
+   * - Full gadget parameters (formatted JSON)
+   * - Full gadget results
+   * - Complete LLM response text
+   *
+   * **Use cases:**
+   * - Basic development debugging and execution flow visibility
+   * - Understanding agent decision-making and tool usage
+   * - Troubleshooting gadget invocations
+   *
+   * **Performance:** Minimal overhead. Console writes are synchronous but fast.
    *
    * @param options - Logging options
-   * @returns Hook configuration
+   * @param options.verbose - Include full parameters and results. Default: false
+   * @returns Hook configuration that can be passed to .withHooks()
    *
    * @example
    * ```typescript
-   * .withHooks(HookPresets.logging())
-   * .withHooks(HookPresets.logging({ verbose: true }))
+   * // Basic logging
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.logging())
+   *   .ask("Calculate 15 * 23");
+   * // Output: [LLM] Starting call (iteration 0)
+   * //         [GADGET] Executing Calculator
+   * //         [GADGET] Completed Calculator
+   * //         [LLM] Completed (tokens: 245)
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Verbose logging with full details
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.logging({ verbose: true }))
+   *   .ask("Calculate 15 * 23");
+   * // Output includes: parameters, results, and full responses
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Environment-based verbosity
+   * const isDev = process.env.NODE_ENV === 'development';
+   * .withHooks(HookPresets.logging({ verbose: isDev }))
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetsloggingoptions | Full documentation}
    */
   static logging(options: LoggingOptions = {}): AgentHooks {
     return {
@@ -79,16 +151,54 @@ export class HookPresets {
   }
 
   /**
-   * Preset: Performance timing for all operations.
-   *
    * Measures and logs execution time for LLM calls and gadgets.
    *
-   * @returns Hook configuration
+   * **Output:**
+   * - Duration in milliseconds with ⏱️ emoji for each operation
+   * - Separate timing for each LLM iteration
+   * - Separate timing for each gadget execution
+   *
+   * **Use cases:**
+   * - Performance profiling and optimization
+   * - Identifying slow operations (LLM calls vs gadget execution)
+   * - Monitoring response times in production
+   * - Capacity planning and SLA tracking
+   *
+   * **Performance:** Negligible overhead. Uses Date.now() for timing measurements.
+   *
+   * @returns Hook configuration that can be passed to .withHooks()
    *
    * @example
    * ```typescript
-   * .withHooks(HookPresets.timing())
+   * // Basic timing
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.timing())
+   *   .withGadgets(Weather, Database)
+   *   .ask("What's the weather in NYC?");
+   * // Output: ⏱️ LLM call took 1234ms
+   * //         ⏱️ Gadget Weather took 567ms
+   * //         ⏱️ LLM call took 890ms
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Combined with logging for full context
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.logging(),
+   *   HookPresets.timing()
+   * ))
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Correlate performance with cost
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.timing(),
+   *   HookPresets.tokenTracking()
+   * ))
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetstiming | Full documentation}
    */
   static timing(): AgentHooks {
     const timings = new Map<string, number>();
@@ -128,16 +238,57 @@ export class HookPresets {
   }
 
   /**
-   * Preset: Token usage tracking.
+   * Tracks cumulative token usage across all LLM calls.
    *
-   * Tracks and logs cumulative token usage across all LLM calls.
+   * **Output:**
+   * - Per-call token count with 📊 emoji
+   * - Cumulative total across all calls
+   * - Call count for average calculations
    *
-   * @returns Hook configuration
+   * **Use cases:**
+   * - Cost monitoring and budget tracking
+   * - Optimizing prompts to reduce token usage
+   * - Comparing token efficiency across different approaches
+   * - Real-time cost estimation
+   *
+   * **Performance:** Minimal overhead. Simple counter increments.
+   *
+   * **Note:** Token counts depend on the provider's response. Some providers
+   * may not include usage data, in which case counts won't be logged.
+   *
+   * @returns Hook configuration that can be passed to .withHooks()
    *
    * @example
    * ```typescript
-   * .withHooks(HookPresets.tokenTracking())
+   * // Basic token tracking
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.tokenTracking())
+   *   .ask("Summarize this document...");
+   * // Output: 📊 Tokens this call: 1,234
+   * //         📊 Total tokens: 1,234 (across 1 calls)
+   * //         📊 Tokens this call: 567
+   * //         📊 Total tokens: 1,801 (across 2 calls)
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Cost calculation with custom hook
+   * let totalTokens = 0;
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.tokenTracking(),
+   *   {
+   *     observers: {
+   *       onLLMCallComplete: async (ctx) => {
+   *         totalTokens += ctx.usage?.totalTokens ?? 0;
+   *         const cost = (totalTokens / 1_000_000) * 3.0; // $3 per 1M tokens
+   *         console.log(`💰 Estimated cost: $${cost.toFixed(4)}`);
+   *       },
+   *     },
+   *   }
+   * ))
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetstokentracking | Full documentation}
    */
   static tokenTracking(): AgentHooks {
     let totalTokens = 0;
@@ -158,16 +309,64 @@ export class HookPresets {
   }
 
   /**
-   * Preset: Error logging.
+   * Logs detailed error information for debugging and troubleshooting.
    *
-   * Logs detailed error information for debugging.
+   * **Output:**
+   * - LLM errors with ❌ emoji, including model and recovery status
+   * - Gadget errors with full context (parameters, error message)
+   * - Separate logging for LLM and gadget failures
    *
-   * @returns Hook configuration
+   * **Use cases:**
+   * - Troubleshooting production issues
+   * - Understanding error patterns and frequency
+   * - Debugging error recovery behavior
+   * - Collecting error metrics for monitoring
+   *
+   * **Performance:** Minimal overhead. Only logs when errors occur.
+   *
+   * @returns Hook configuration that can be passed to .withHooks()
    *
    * @example
    * ```typescript
-   * .withHooks(HookPresets.errorLogging())
+   * // Basic error logging
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.errorLogging())
+   *   .withGadgets(Database)
+   *   .ask("Fetch user data");
+   * // Output (on LLM error): ❌ LLM Error (iteration 1): Rate limit exceeded
+   * //                        Model: gpt-5-nano
+   * //                        Recovered: true
+   * // Output (on gadget error): ❌ Gadget Error: Database
+   * //                            Error: Connection timeout
+   * //                            Parameters: {...}
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Combine with monitoring for full context
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.monitoring(),  // Includes errorLogging
+   *   customErrorAnalytics
+   * ))
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Error analytics collection
+   * const errors: any[] = [];
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.errorLogging(),
+   *   {
+   *     observers: {
+   *       onLLMCallError: async (ctx) => {
+   *         errors.push({ type: 'llm', error: ctx.error, recovered: ctx.recovered });
+   *       },
+   *     },
+   *   }
+   * ))
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetserrorlogging | Full documentation}
    */
   static errorLogging(): AgentHooks {
     return {
@@ -189,49 +388,132 @@ export class HookPresets {
   }
 
   /**
-   * Preset: Silent (no output).
+   * Returns empty hook configuration for clean output without any logging.
    *
-   * Useful for testing or when you want complete control.
+   * **Output:**
+   * - None. Returns {} (empty object).
+   *
+   * **Use cases:**
+   * - Clean test output without console noise
+   * - Production environments where logging is handled externally
+   * - Baseline for custom hook development
+   * - Temporary disable of all hook output
+   *
+   * **Performance:** Zero overhead. No-op hook configuration.
    *
    * @returns Empty hook configuration
    *
    * @example
    * ```typescript
-   * .withHooks(HookPresets.silent())
+   * // Clean test output
+   * describe('Agent tests', () => {
+   *   it('should calculate correctly', async () => {
+   *     const result = await LLMist.createAgent()
+   *       .withHooks(HookPresets.silent()) // No console output
+   *       .withGadgets(Calculator)
+   *       .askAndCollect("What is 15 times 23?");
+   *
+   *     expect(result).toContain("345");
+   *   });
+   * });
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Conditional silence based on environment
+   * const isTesting = process.env.NODE_ENV === 'test';
+   * .withHooks(isTesting ? HookPresets.silent() : HookPresets.monitoring())
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetssilent | Full documentation}
    */
   static silent(): AgentHooks {
     return {};
   }
 
   /**
-   * Merge multiple hook configurations.
+   * Combines multiple hook configurations into one.
    *
-   * Combines hook presets or custom configurations into a single object.
-   * When multiple hooks target the same lifecycle event, they are composed
-   * to run sequentially (all handlers will execute).
+   * Merge allows you to compose preset and custom hooks for modular monitoring
+   * configurations. Understanding merge behavior is crucial for proper composition.
    *
-   * @param hookSets - Array of hook configurations to merge
-   * @returns Merged hook configuration with composed handlers
+   * **Merge behavior:**
+   * - **Observers:** Composed - all handlers run sequentially in order
+   * - **Interceptors:** Last one wins - only the last interceptor applies
+   * - **Controllers:** Last one wins - only the last controller applies
+   *
+   * **Why interceptors/controllers don't compose:**
+   * - Interceptors have different signatures per method, making composition impractical
+   * - Controllers return specific actions that can't be meaningfully combined
+   * - Only observers support composition because they're read-only and independent
+   *
+   * **Use cases:**
+   * - Combining multiple presets (logging + timing + tokens)
+   * - Adding custom hooks to presets
+   * - Building modular, reusable monitoring configurations
+   * - Environment-specific hook composition
+   *
+   * **Performance:** Minimal overhead for merging. Runtime performance depends on merged hooks.
+   *
+   * @param hookSets - Variable number of hook configurations to merge
+   * @returns Single merged hook configuration with composed/overridden handlers
    *
    * @example
    * ```typescript
+   * // Combine multiple presets
    * .withHooks(HookPresets.merge(
-   *   HookPresets.logging({ verbose: true }),
+   *   HookPresets.logging(),
    *   HookPresets.timing(),
-   *   HookPresets.tokenTracking(),
+   *   HookPresets.tokenTracking()
+   * ))
+   * // All observers from all three presets will run
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Add custom observer to preset (both run)
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.timing(),
    *   {
-   *     // Custom hook
    *     observers: {
    *       onLLMCallComplete: async (ctx) => {
-   *         saveToDatabase(ctx);
-   *       }
-   *     }
+   *         await saveMetrics({ tokens: ctx.usage?.totalTokens });
+   *       },
+   *     },
    *   }
    * ))
-   * // All onLLMCallComplete handlers from logging, timing, tokenTracking,
-   * // and the custom hook will execute in order
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Multiple interceptors (last wins!)
+   * .withHooks(HookPresets.merge(
+   *   {
+   *     interceptors: {
+   *       interceptTextChunk: (chunk) => chunk.toUpperCase(), // Ignored
+   *     },
+   *   },
+   *   {
+   *     interceptors: {
+   *       interceptTextChunk: (chunk) => chunk.toLowerCase(), // This wins
+   *     },
+   *   }
+   * ))
+   * // Result: text will be lowercase
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Modular environment-based configuration
+   * const baseHooks = HookPresets.errorLogging();
+   * const devHooks = HookPresets.merge(baseHooks, HookPresets.monitoring({ verbose: true }));
+   * const prodHooks = HookPresets.merge(baseHooks, HookPresets.tokenTracking());
+   *
+   * const hooks = process.env.NODE_ENV === 'production' ? prodHooks : devHooks;
+   * .withHooks(hooks)
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetsmergehooksets | Full documentation}
    */
   static merge(...hookSets: AgentHooks[]): AgentHooks {
     const merged: AgentHooks = {
@@ -275,18 +557,62 @@ export class HookPresets {
   }
 
   /**
-   * Preset: Complete monitoring suite.
+   * Composite preset combining logging, timing, tokenTracking, and errorLogging.
    *
-   * Combines logging, timing, and token tracking.
+   * This is the recommended preset for development and initial production deployments,
+   * providing comprehensive observability with a single method call.
    *
-   * @param options - Options for monitoring
-   * @returns Merged hook configuration
+   * **Includes:**
+   * - All output from `logging()` preset (with optional verbosity)
+   * - All output from `timing()` preset (execution times)
+   * - All output from `tokenTracking()` preset (token usage)
+   * - All output from `errorLogging()` preset (error details)
+   *
+   * **Output format:**
+   * - Event logging: [LLM]/[GADGET] messages
+   * - Timing: ⏱️ emoji with milliseconds
+   * - Tokens: 📊 emoji with per-call and cumulative counts
+   * - Errors: ❌ emoji with full error details
+   *
+   * **Use cases:**
+   * - Full observability during development
+   * - Comprehensive monitoring in production
+   * - One-liner for complete agent visibility
+   * - Troubleshooting and debugging with full context
+   *
+   * **Performance:** Combined overhead of all four presets, but still minimal in practice.
+   *
+   * @param options - Monitoring options
+   * @param options.verbose - Passed to logging() preset for detailed output. Default: false
+   * @returns Merged hook configuration combining all monitoring presets
    *
    * @example
    * ```typescript
-   * .withHooks(HookPresets.monitoring())
-   * .withHooks(HookPresets.monitoring({ verbose: true }))
+   * // Basic monitoring (recommended for development)
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.monitoring())
+   *   .withGadgets(Calculator, Weather)
+   *   .ask("What is 15 times 23, and what's the weather in NYC?");
+   * // Output: All events, timing, tokens, and errors in one place
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Verbose monitoring with full details
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.monitoring({ verbose: true }))
+   *   .ask("Your prompt");
+   * // Output includes: parameters, results, and complete responses
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Environment-based monitoring
+   * const isDev = process.env.NODE_ENV === 'development';
+   * .withHooks(HookPresets.monitoring({ verbose: isDev }))
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetsmonitoringoptions | Full documentation}
    */
   static monitoring(options: LoggingOptions = {}): AgentHooks {
     return HookPresets.merge(
