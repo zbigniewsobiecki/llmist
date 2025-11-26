@@ -1,3 +1,13 @@
+## <small>0.2.1 (2025-11-26)</small>
+
+* fix(ci): disable git hooks during release workflow (#65) ([f492fb6](https://github.com/zbigniewsobiecki/llmist/commit/f492fb6)), closes [#65](https://github.com/zbigniewsobiecki/llmist/issues/65)
+* fix(ci): skip git hooks in semantic-release commits (#64) ([46cda82](https://github.com/zbigniewsobiecki/llmist/commit/46cda82)), closes [#64](https://github.com/zbigniewsobiecki/llmist/issues/64)
+* fix(ci): update release workflow to use workflow_dispatch (#45) ([736898d](https://github.com/zbigniewsobiecki/llmist/commit/736898d)), closes [#45](https://github.com/zbigniewsobiecki/llmist/issues/45) [#11](https://github.com/zbigniewsobiecki/llmist/issues/11) [#13](https://github.com/zbigniewsobiecki/llmist/issues/13)
+* fix(ci): upgrade Node.js to v22 for semantic-release (#63) ([5a1b8d1](https://github.com/zbigniewsobiecki/llmist/commit/5a1b8d1)), closes [#63](https://github.com/zbigniewsobiecki/llmist/issues/63)
+* chore(release): v0.3.0 - Final attempt with proper merge (#58) ([84187a2](https://github.com/zbigniewsobiecki/llmist/commit/84187a2)), closes [#58](https://github.com/zbigniewsobiecki/llmist/issues/58) [#11](https://github.com/zbigniewsobiecki/llmist/issues/11) [#13](https://github.com/zbigniewsobiecki/llmist/issues/13)
+* chore(release): v0.3.0 (#49) ([2011a0a](https://github.com/zbigniewsobiecki/llmist/commit/2011a0a)), closes [#49](https://github.com/zbigniewsobiecki/llmist/issues/49) [#11](https://github.com/zbigniewsobiecki/llmist/issues/11) [#13](https://github.com/zbigniewsobiecki/llmist/issues/13)
+* Merge pull request #44 from zbigniewsobiecki/release/v0.2.0 ([0377d5c](https://github.com/zbigniewsobiecki/llmist/commit/0377d5c)), closes [#44](https://github.com/zbigniewsobiecki/llmist/issues/44)
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
