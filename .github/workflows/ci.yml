@@ -55,7 +55,8 @@ jobs:
 
   validate-commits:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # Skip validation for PRs from dev to main (release PRs) since dev accumulates merge commit history
+    if: github.event_name == 'pull_request' && !(github.head_ref == 'dev' && github.base_ref == 'main')
 
     steps:
       - uses: actions/checkout@v4
