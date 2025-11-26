@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Writable } from "node:stream";
 import type { ModelRegistry } from "../core/model-registry.js";
 import { StreamProgress } from "./utils.js";
+import { formatCost } from "./ui/formatters.js";
 
 /**
  * Mock writable stream that captures output for testing.
@@ -63,45 +64,25 @@ class MockModelRegistry implements Partial<ModelRegistry> {
 describe("StreamProgress", () => {
   describe("cost formatting", () => {
     test("formats very small costs with 5 decimal places", () => {
-      const stream = new MockWritableStream();
-      const progress = new StreamProgress(stream, true);
-
-      // Access private method via type assertion for testing
-      const formatCost = (progress as any).formatCost.bind(progress);
-
+      // Now testing the formatCost function from formatters.ts
       expect(formatCost(0.00001)).toBe("0.00001");
       expect(formatCost(0.0005)).toBe("0.00050");
       expect(formatCost(0.00099)).toBe("0.00099");
     });
 
     test("formats small costs with 4 decimal places", () => {
-      const stream = new MockWritableStream();
-      const progress = new StreamProgress(stream, true);
-
-      const formatCost = (progress as any).formatCost.bind(progress);
-
       expect(formatCost(0.001)).toBe("0.0010");
       expect(formatCost(0.005)).toBe("0.0050");
       expect(formatCost(0.0099)).toBe("0.0099");
     });
 
     test("formats medium costs with 3 decimal places", () => {
-      const stream = new MockWritableStream();
-      const progress = new StreamProgress(stream, true);
-
-      const formatCost = (progress as any).formatCost.bind(progress);
-
       expect(formatCost(0.01)).toBe("0.010");
       expect(formatCost(0.123)).toBe("0.123");
       expect(formatCost(0.999)).toBe("0.999");
     });
 
     test("formats large costs with 2 decimal places", () => {
-      const stream = new MockWritableStream();
-      const progress = new StreamProgress(stream, true);
-
-      const formatCost = (progress as any).formatCost.bind(progress);
-
       expect(formatCost(1.0)).toBe("1.00");
       expect(formatCost(5.5)).toBe("5.50");
       expect(formatCost(123.456)).toBe("123.46");
@@ -233,8 +214,8 @@ describe("StreamProgress", () => {
       progress.endCall({ inputTokens: 1000, outputTokens: 500, totalTokens: 1500 });
 
       const prompt = progress.formatPrompt();
-      // Cost should be displayed between separators
-      expect(prompt).toMatch(/│.*\$\d+\.\d+.*│/); // Cost between separators
+      // Cost should be displayed between separators (using | not │)
+      expect(prompt).toMatch(/\|.*\$\d+\.\d+.*\|/); // Cost between separators
       // Verify the actual cost value
       expect(prompt).toContain("$0.020");
     });
@@ -299,6 +280,34 @@ describe("StreamProgress", () => {
       // But cumulative stats should be preserved
       const totalTokens = (progress as any).totalTokens;
       expect(totalTokens).toBe(1500); // From first call
+    });
+
+    test("uses real counts when available, not estimates", () => {
+      const stream = new MockWritableStream();
+      const registry = new MockModelRegistry();
+      registry.setCost("gpt-4", 30, 60);
+
+      const progress = new StreamProgress(stream, false, registry as any);
+
+      // Start call with initial token count
+      progress.startCall("gpt-4", 1000);
+
+      // Simulate receiving real input tokens from provider (not estimated)
+      progress.setInputTokens(896, false);
+
+      // Simulate streaming output
+      progress.update(500); // 500 chars
+
+      // Simulate receiving real output tokens from provider (not estimated)
+      progress.setOutputTokens(118, false);
+
+      const prompt = progress.formatPrompt();
+
+      // Should NOT contain ~ since we have real counts
+      expect(prompt).not.toContain("~");
+      // Should contain the real token counts
+      expect(prompt).toContain("896");
+      expect(prompt).toContain("118");
     });
   });
 });
