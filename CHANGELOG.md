@@ -1,3 +1,7 @@
+## <small>0.4.1 (2025-11-26)</small>
+
+* fix(gemini): fix token counting discrepancy (#80) ([644050a](https://github.com/zbigniewsobiecki/llmist/commit/644050a)), closes [#80](https://github.com/zbigniewsobiecki/llmist/issues/80) [#11](https://github.com/zbigniewsobiecki/llmist/issues/11) [#13](https://github.com/zbigniewsobiecki/llmist/issues/13)
+
 ## 0.4.0 (2025-11-26)
 
 * feat(cli): add progress tracking with arrows and real token counts ([4095065](https://github.com/zbigniewsobiecki/llmist/commit/4095065))
