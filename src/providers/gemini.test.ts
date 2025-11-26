@@ -42,15 +42,21 @@ describe("GeminiGenerativeProvider", () => {
       expect.objectContaining({
         model: "gemini-1.5-flash",
         contents: [
+          // System messages converted to user+model exchanges
+          { role: "user", parts: [{ text: "Primary instruction" }] },
+          { role: "model", parts: [{ text: "Understood." }] },
+          { role: "user", parts: [{ text: "Gadget instructions" }] },
+          { role: "model", parts: [{ text: "Understood." }] },
+          // Regular messages
           { role: "user", parts: [{ text: "Initial request" }] },
           { role: "model", parts: [{ text: "Previous answer" }] },
-          {
-            role: "user",
-            parts: [{ text: "Follow-up system note" }, { text: "Latest question" }],
-          },
+          // Inline system converted to user+model
+          { role: "user", parts: [{ text: "Follow-up system note" }] },
+          { role: "model", parts: [{ text: "Understood." }] },
+          { role: "user", parts: [{ text: "Latest question" }] },
         ],
         config: expect.objectContaining({
-          systemInstruction: "Primary instruction\nGadget instructions",
+          // systemInstruction removed - now in contents
           maxOutputTokens: 256,
           temperature: 0.4,
           topP: 0.8,
@@ -110,13 +116,19 @@ describe("GeminiGenerativeProvider", () => {
         model: "gemini-1.5-pro",
         contents: [
           { role: "user", parts: [{ text: "Earlier user message" }] },
+          { role: "model", parts: [{ text: "Earlier assistant message" }] },
+          // Inline system messages converted to user+model exchanges
+          { role: "user", parts: [{ text: "Inline instruction" }] },
+          { role: "model", parts: [{ text: "Understood." }] },
+          { role: "user", parts: [{ text: "Additional inline instruction" }] },
+          // Consecutive model messages merged
           {
             role: "model",
-            parts: [{ text: "Earlier assistant message" }, { text: "Later assistant response" }],
+            parts: [{ text: "Understood." }, { text: "Later assistant response" }],
           },
         ],
         config: expect.objectContaining({
-          systemInstruction: "Inline instruction\nAdditional inline instruction",
+          // systemInstruction removed - now in contents
         }),
       }),
     );
@@ -233,7 +245,13 @@ describe("GeminiGenerativeProvider", () => {
 
       expect(mockCountTokens).toHaveBeenCalledWith(
         expect.objectContaining({
-          systemInstruction: "You are helpful",
+          model: "gemini-1.5-pro",
+          contents: [
+            // System message converted to user+model exchange
+            { role: "user", parts: [{ text: "You are helpful" }] },
+            { role: "model", parts: [{ text: "Understood." }] },
+            { role: "user", parts: [{ text: "Hello" }] },
+          ],
         }),
       );
     });
@@ -333,10 +351,20 @@ describe("GeminiGenerativeProvider", () => {
         { provider: "gemini", name: "gemini-1.5-pro" },
       );
 
-      // System message should be extracted regardless of position
+      // System message should be converted to user+model exchange in place
       expect(mockCountTokens).toHaveBeenCalledWith(
         expect.objectContaining({
-          systemInstruction: "System instruction",
+          model: "gemini-1.5-pro",
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: "First user message" }, { text: "System instruction" }],
+            },
+            {
+              role: "model",
+              parts: [{ text: "Understood." }, { text: "Response" }],
+            },
+          ],
         }),
       );
     });
