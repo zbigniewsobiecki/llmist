@@ -1,3 +1,7 @@
+## 0.4.0 (2025-11-26)
+
+* feat(cli): add progress tracking with arrows and real token counts ([4095065](https://github.com/zbigniewsobiecki/llmist/commit/4095065))
+
 ## <small>0.3.1 (2025-11-26)</small>
 
 * fix(ci): use fast-forward merge for dev sync to prevent commit buildup ([b414279](https://github.com/zbigniewsobiecki/llmist/commit/b414279))
