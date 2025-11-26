@@ -110,13 +110,13 @@ console.log(answer); // "15 times 23 equals 345"
 ```typescript
 // Use model shortcuts
 .withModel('gpt-5-nano')    // OpenAI gpt-5-nano
-.withModel('sonnet')       // Claude 3.5 Sonnet
-.withModel('haiku')        // Claude 3.5 Haiku
+.withModel('sonnet')       // Claude Sonnet 4.5
+.withModel('haiku')        // Claude Haiku 4.5
 .withModel('flash')        // Gemini 2.0 Flash
 
 // Or full names
 .withModel('openai:gpt-5-nano')
-.withModel('anthropic:claude-3-5-sonnet-latest')
+.withModel('anthropic:claude-sonnet-4-5')
 .withModel('gemini:gemini-2.0-flash')
 ```
 
@@ -288,7 +288,7 @@ for await (const event of agent.run()) {
 ### 🧪 Mock Testing
 
 ```typescript
-import { mockLLM, createMockClient } from 'llmist';
+import { LLMist, mockLLM, createMockClient } from 'llmist';
 
 mockLLM()
   .forModel('gpt-5')

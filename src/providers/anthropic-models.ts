@@ -10,31 +10,6 @@ import type { ModelSpec } from "../core/model-catalog.js";
 export const ANTHROPIC_MODELS: ModelSpec[] = [
   {
     provider: "anthropic",
-    modelId: "claude-opus-4-5-20251124",
-    displayName: "Claude Opus 4.5",
-    contextWindow: 200_000,
-    maxOutputTokens: 64_000,
-    pricing: {
-      input: 5.0,
-      output: 25.0,
-      cachedInput: 0.5,
-    },
-    knowledgeCutoff: "2025-03",
-    features: {
-      streaming: true,
-      functionCalling: true,
-      vision: true,
-      reasoning: true,
-    },
-    metadata: {
-      family: "Claude 4",
-      releaseDate: "2025-11-24",
-      notes:
-        "Most powerful model. 80.9% SWE-bench Verified, 66.3% OSWorld. Best for coding and computer use.",
-    },
-  },
-  {
-    provider: "anthropic",
     modelId: "claude-sonnet-4-5-20250929",
     displayName: "Claude Sonnet 4.5",
     contextWindow: 200_000,
@@ -221,6 +196,79 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       family: "Claude 3",
       releaseDate: "2024-03-07",
       notes: "Legacy model - upgrade to Haiku 4.5 for better performance",
+    },
+  },
+  // Modern aliases (recommended by Anthropic)
+  {
+    provider: "anthropic",
+    modelId: "claude-haiku-4-5",
+    displayName: "Claude Haiku 4.5",
+    contextWindow: 200_000,
+    maxOutputTokens: 64_000,
+    pricing: {
+      input: 1.0,
+      output: 5.0,
+      cachedInput: 0.1,
+    },
+    knowledgeCutoff: "2025-02",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+    },
+    metadata: {
+      family: "Claude 4",
+      releaseDate: "2025-10-01",
+      notes: "Alias for claude-haiku-4-5-20251001. Fastest model with near-frontier intelligence.",
+    },
+  },
+  {
+    provider: "anthropic",
+    modelId: "claude-sonnet-4-5",
+    displayName: "Claude Sonnet 4.5",
+    contextWindow: 200_000,
+    maxOutputTokens: 64_000,
+    pricing: {
+      input: 3.0,
+      output: 15.0,
+      cachedInput: 0.3,
+    },
+    knowledgeCutoff: "2025-01",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+    },
+    metadata: {
+      family: "Claude 4",
+      releaseDate: "2025-09-29",
+      notes: "Alias for claude-sonnet-4-5-20250929. Smartest model for complex agents and coding.",
+    },
+  },
+  {
+    provider: "anthropic",
+    modelId: "claude-opus-4-5",
+    displayName: "Claude Opus 4.5",
+    contextWindow: 200_000,
+    maxOutputTokens: 64_000,
+    pricing: {
+      input: 5.0,
+      output: 25.0,
+      cachedInput: 0.5,
+    },
+    knowledgeCutoff: "2025-03",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+    },
+    metadata: {
+      family: "Claude 4",
+      releaseDate: "2025-11-24",
+      notes: "Alias for claude-opus-4-5-20251124. Most powerful model for coding and computer use.",
     },
   },
 ];

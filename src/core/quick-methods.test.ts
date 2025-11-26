@@ -55,7 +55,7 @@ describe("Quick Methods", () => {
 
       expect(client.stream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: "anthropic:claude-3-5-sonnet-latest",
+          model: "anthropic:claude-sonnet-4-5",
         }),
       );
     });
@@ -201,7 +201,7 @@ describe("Quick Methods", () => {
       await complete(client, "test", options);
 
       expect(client.stream).toHaveBeenCalledWith({
-        model: "anthropic:claude-3-5-sonnet-latest",
+        model: "anthropic:claude-sonnet-4-5",
         messages: [
           { role: "system", content: "Be helpful" },
           { role: "user", content: "test" },
@@ -265,7 +265,7 @@ describe("Quick Methods", () => {
 
       expect(client.stream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: "anthropic:claude-3-5-haiku-latest",
+          model: "anthropic:claude-haiku-4-5",
         }),
       );
     });
@@ -488,12 +488,12 @@ describe("Quick Methods", () => {
 
       expect(client1.stream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: "anthropic:claude-3-5-sonnet-latest",
+          model: "anthropic:claude-sonnet-4-5",
         }),
       );
       expect(client2.stream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: "anthropic:claude-3-5-sonnet-latest",
+          model: "anthropic:claude-sonnet-4-5",
         }),
       );
     });

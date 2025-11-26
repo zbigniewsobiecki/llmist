@@ -29,18 +29,18 @@ export const MODEL_ALIASES: Record<string, string> = {
   "gpt5-nano": "openai:gpt-5-nano",
 
   // Anthropic aliases
-  sonnet: "anthropic:claude-3-5-sonnet-latest",
-  "claude-sonnet": "anthropic:claude-3-5-sonnet-latest",
-  haiku: "anthropic:claude-3-5-haiku-latest",
-  "claude-haiku": "anthropic:claude-3-5-haiku-latest",
-  opus: "anthropic:claude-3-opus-latest",
-  "claude-opus": "anthropic:claude-3-opus-latest",
+  sonnet: "anthropic:claude-sonnet-4-5",
+  "claude-sonnet": "anthropic:claude-sonnet-4-5",
+  haiku: "anthropic:claude-haiku-4-5",
+  "claude-haiku": "anthropic:claude-haiku-4-5",
+  opus: "anthropic:claude-opus-4-5",
+  "claude-opus": "anthropic:claude-opus-4-5",
 
   // Gemini aliases
   flash: "gemini:gemini-2.0-flash",
   "gemini-flash": "gemini:gemini-2.0-flash",
-  "gemini-pro": "gemini:gemini-2.0-pro",
-  pro: "gemini:gemini-2.0-pro",
+  "gemini-pro": "gemini:gemini-2.5-pro",
+  pro: "gemini:gemini-2.5-pro",
 };
 
 /**
@@ -110,7 +110,7 @@ function isKnownModelPattern(model: string): boolean {
  * @example
  * ```typescript
  * resolveModel('gpt5')              // → 'openai:gpt-5'
- * resolveModel('sonnet')            // → 'anthropic:claude-3-5-sonnet-latest'
+ * resolveModel('sonnet')            // → 'anthropic:claude-sonnet-4-5'
  * resolveModel('gpt-5-nano')        // → 'openai:gpt-5-nano'
  * resolveModel('openai:gpt-5')      // → 'openai:gpt-5' (passthrough)
  * resolveModel('claude-3-5-sonnet') // → 'anthropic:claude-3-5-sonnet'
