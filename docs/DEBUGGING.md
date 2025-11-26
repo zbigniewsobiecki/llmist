@@ -4,11 +4,78 @@ Capture raw prompts, responses, and troubleshoot issues.
 
 ## Quick Debug with Hooks
 
+HookPresets provide instant debugging visibility without writing custom hooks:
+
 ```typescript
 import { HookPresets } from 'llmist';
 
-// Verbose logging shows everything
-.withHooks(HookPresets.logging({ verbose: true }))
+// Full monitoring suite (recommended starting point)
+.withHooks(HookPresets.monitoring({ verbose: true }))
+// Output: Logs + timing + tokens + errors with full details
+
+// Or use specific presets for focused debugging
+.withHooks(HookPresets.logging({ verbose: true }))  // Just logging
+.withHooks(HookPresets.errorLogging())              // Only errors
+```
+
+**Preset Selection Guide:**
+
+| Symptom | Recommended Preset | Why |
+|---------|-------------------|-----|
+| Agent not responding | `monitoring()` | See full execution flow + timing |
+| Unexpected behavior | `logging({ verbose: true })` | See all parameters and results |
+| High costs | `tokenTracking()` | Monitor token usage |
+| Errors/crashes | `errorLogging()` | Capture error details |
+| Slow performance | `timing()` | Identify bottlenecks |
+| General debugging | `monitoring({ verbose: true })` | Everything in one place |
+
+**Progressive Debugging Strategy:**
+
+Start simple and add detail as needed:
+
+```typescript
+// 1. Start with basic logging
+.withHooks(HookPresets.logging())
+
+// 2. Add timing if performance is an issue
+.withHooks(HookPresets.merge(
+  HookPresets.logging(),
+  HookPresets.timing()
+))
+
+// 3. Add verbose mode for full details
+.withHooks(HookPresets.merge(
+  HookPresets.logging({ verbose: true }),
+  HookPresets.timing()
+))
+
+// 4. Use full monitoring for comprehensive view
+.withHooks(HookPresets.monitoring({ verbose: true }))
+```
+
+**Scenario-Specific Patterns:**
+
+```typescript
+// Agent stuck or slow - timing + token tracking
+.withHooks(HookPresets.merge(
+  HookPresets.timing(),
+  HookPresets.tokenTracking()
+))
+
+// Unexpected token costs - verbose logging + token tracking
+.withHooks(HookPresets.merge(
+  HookPresets.logging({ verbose: true }),
+  HookPresets.tokenTracking()
+))
+
+// Gadget failures - verbose logging + error logging
+.withHooks(HookPresets.merge(
+  HookPresets.logging({ verbose: true }),
+  HookPresets.errorLogging()
+))
+
+// Silent failures - full monitoring catches everything
+.withHooks(HookPresets.monitoring({ verbose: true }))
 ```
 
 ## Capture Raw Requests/Responses

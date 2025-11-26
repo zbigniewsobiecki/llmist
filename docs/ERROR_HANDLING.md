@@ -115,25 +115,134 @@ Use controllers for advanced error handling:
 
 ## Error Logging Hook
 
+Quick start with HookPresets for instant error visibility:
+
 ```typescript
 import { HookPresets } from 'llmist';
 
-// Built-in error logging
+// Built-in error logging preset
 .withHooks(HookPresets.errorLogging())
 
-// Or custom
+// Or combine with other monitoring
+.withHooks(HookPresets.merge(
+  HookPresets.errorLogging(),
+  HookPresets.logging({ verbose: true })
+))
+
+// Full monitoring includes error logging
+.withHooks(HookPresets.monitoring())
+```
+
+**Output format:**
+
+```
+❌ LLM Error (iteration 1): Rate limit exceeded
+   Model: gpt-5-nano
+   Recovered: true
+
+❌ Gadget Error: Database
+   Error: Connection timeout
+   Parameters: {"query": "SELECT * FROM users"}
+```
+
+**Pattern 1: Error Logging + Analytics**
+
+Send errors to external monitoring service:
+
+```typescript
+async function sendErrorToMonitoring(error: any) {
+  await fetch('https://monitoring.example.com/errors', {
+    method: 'POST',
+    body: JSON.stringify(error),
+  });
+}
+
+.withHooks(HookPresets.merge(
+  HookPresets.errorLogging(),
+  {
+    observers: {
+      onLLMCallError: async (ctx) => {
+        await sendErrorToMonitoring({
+          type: 'llm_error',
+          message: ctx.error.message,
+          model: ctx.options.model,
+          recovered: ctx.recovered,
+          timestamp: new Date().toISOString(),
+        });
+      },
+      onGadgetExecutionComplete: async (ctx) => {
+        if (ctx.error) {
+          await sendErrorToMonitoring({
+            type: 'gadget_error',
+            gadget: ctx.gadgetName,
+            error: ctx.error,
+            parameters: ctx.parameters,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      },
+    },
+  }
+))
+```
+
+**Pattern 2: Error Alerting**
+
+Real-time notifications for critical errors:
+
+```typescript
 .withHooks({
   observers: {
     onLLMCallError: async (ctx) => {
-      console.error(`LLM Error: ${ctx.error.message}`);
-      console.error(`Model: ${ctx.options.model}`);
-      console.error(`Recovered: ${ctx.recovered}`);
+      // Alert on unrecovered errors
+      if (!ctx.recovered) {
+        await sendAlert({
+          severity: 'critical',
+          message: `LLM call failed: ${ctx.error.message}`,
+          model: ctx.options.model,
+        });
+      }
     },
     onGadgetExecutionComplete: async (ctx) => {
       if (ctx.error) {
-        console.error(`Gadget Error: ${ctx.gadgetName}`);
-        console.error(`Parameters: ${JSON.stringify(ctx.parameters)}`);
-        console.error(`Error: ${ctx.error}`);
+        await sendAlert({
+          severity: 'high',
+          message: `Gadget ${ctx.gadgetName} failed`,
+          error: ctx.error,
+        });
+      }
+    },
+  },
+})
+```
+
+**Pattern 3: Error Rate Tracking (Circuit Breaker)**
+
+Track error frequency and implement circuit breaker:
+
+```typescript
+const errorWindow = {
+  errors: [] as number[],
+  windowMs: 60000, // 1 minute
+  threshold: 5, // Max 5 errors per minute
+};
+
+function recordError() {
+  const now = Date.now();
+  errorWindow.errors = errorWindow.errors.filter(t => now - t < errorWindow.windowMs);
+  errorWindow.errors.push(now);
+  return errorWindow.errors.length;
+}
+
+.withHooks({
+  observers: {
+    onLLMCallError: async (ctx) => {
+      const errorCount = recordError();
+      ctx.logger.error(`Error rate: ${errorCount}/${errorWindow.threshold} in last minute`);
+
+      if (errorCount >= errorWindow.threshold) {
+        ctx.logger.fatal('Circuit breaker tripped - too many errors!');
+        // Could throw to stop execution or implement backoff
       }
     },
   },
