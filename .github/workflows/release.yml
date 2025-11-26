@@ -82,8 +82,15 @@ jobs:
           # Check out dev branch
           git checkout dev || git checkout -b dev origin/dev
 
-          # Merge main into dev (use origin/main to avoid conflicts)
-          git merge origin/main --no-edit -m "chore: sync dev with main after release [skip ci]"
+          # Fast-forward dev to match main (no merge commits)
+          # This works because all changes flow through feature branches -> dev -> main
+          # After a release, dev should always be able to fast-forward to main
+          git merge origin/main --ff-only --no-edit -m "chore: sync dev with main after release [skip ci]" || {
+            echo "⚠️  Warning: Could not fast-forward dev to main. Dev has diverged."
+            echo "This usually means there are commits on dev that aren't on main."
+            echo "Falling back to regular merge to keep branches in sync."
+            git merge origin/main --no-edit -m "chore: sync dev with main after release [skip ci]"
+          }
 
           # Push changes
           git push origin dev
