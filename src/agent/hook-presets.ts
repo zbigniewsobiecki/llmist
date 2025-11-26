@@ -9,6 +9,7 @@
  * - **logging(options?)** - Log LLM calls and gadget execution
  * - **timing()** - Measure execution time for operations
  * - **tokenTracking()** - Track cumulative token usage and costs
+ * - **progressTracking(options?)** - Track progress with iterations, tokens, cost, and timing (SHOWCASE)
  * - **errorLogging()** - Log detailed error information
  * - **silent()** - No output (useful for testing)
  * - **monitoring(options?)** - All-in-one preset combining logging, timing, tokens, and errors
@@ -52,6 +53,7 @@
  */
 
 import type { AgentHooks } from "./hooks.js";
+import type { ModelRegistry } from "../core/model-registry.js";
 
 /**
  * Options for logging preset.
@@ -59,6 +61,99 @@ import type { AgentHooks } from "./hooks.js";
 export interface LoggingOptions {
   /** Include verbose details like parameters and results */
   verbose?: boolean;
+}
+
+/**
+ * Progress statistics reported by progressTracking preset.
+ *
+ * Contains cumulative metrics across all LLM calls in the agent session,
+ * useful for building progress UI, cost monitoring, and performance tracking.
+ */
+export interface ProgressStats {
+  /** Current iteration number (increments on each LLM call start) */
+  currentIteration: number;
+
+  /** Total number of completed LLM calls */
+  totalCalls: number;
+
+  /** Cumulative input tokens across all calls */
+  totalInputTokens: number;
+
+  /** Cumulative output tokens across all calls */
+  totalOutputTokens: number;
+
+  /** Total tokens (input + output) */
+  totalTokens: number;
+
+  /** Cumulative cost in USD (requires modelRegistry) */
+  totalCost: number;
+
+  /** Elapsed time in seconds since first call */
+  elapsedSeconds: number;
+}
+
+/**
+ * Options for progressTracking preset.
+ *
+ * Controls how progress data is tracked and reported during agent execution.
+ */
+export interface ProgressTrackingOptions {
+  /**
+   * Model registry for cost calculation.
+   *
+   * If provided, enables automatic cost estimation based on token usage
+   * and model pricing data. Without it, totalCost will always be 0.
+   *
+   * @example
+   * ```typescript
+   * import { LLMist, HookPresets } from 'llmist';
+   *
+   * const client = LLMist.create();
+   * const hooks = HookPresets.progressTracking({
+   *   modelRegistry: client.modelRegistry  // Enable cost tracking
+   * });
+   * ```
+   */
+  modelRegistry?: ModelRegistry;
+
+  /**
+   * Callback invoked after each LLM call completion with cumulative stats.
+   *
+   * Use this to update progress UI, log metrics, or track budgets in real-time.
+   *
+   * @example
+   * ```typescript
+   * HookPresets.progressTracking({
+   *   modelRegistry: client.modelRegistry,
+   *   onProgress: (stats) => {
+   *     console.log(`Iteration #${stats.currentIteration}`);
+   *     console.log(`Cost so far: $${stats.totalCost.toFixed(4)}`);
+   *     console.log(`Elapsed: ${stats.elapsedSeconds}s`);
+   *   }
+   * })
+   * ```
+   */
+  onProgress?: (stats: ProgressStats) => void;
+
+  /**
+   * Whether to log progress to console after each LLM call.
+   *
+   * When enabled, prints a summary line with tokens, cost, and elapsed time.
+   * Useful for quick debugging without implementing a custom callback.
+   *
+   * Default: false
+   *
+   * @example
+   * ```typescript
+   * // Quick console-based progress tracking
+   * HookPresets.progressTracking({
+   *   modelRegistry: client.modelRegistry,
+   *   logProgress: true  // Log to console
+   * })
+   * // Output: 📊 Progress: Iteration #2 | 1,234 tokens | $0.0056 | 12.3s
+   * ```
+   */
+  logProgress?: boolean;
 }
 
 /**
@@ -302,6 +397,220 @@ export class HookPresets {
             totalTokens += ctx.usage.totalTokens;
             console.log(`📊 Tokens this call: ${ctx.usage.totalTokens}`);
             console.log(`📊 Total tokens: ${totalTokens} (across ${totalCalls} calls)`);
+          }
+        },
+      },
+    };
+  }
+
+  /**
+   * Tracks comprehensive progress metrics including iterations, tokens, cost, and timing.
+   *
+   * **This preset showcases llmist's core capabilities by demonstrating:**
+   * - Observer pattern for non-intrusive monitoring
+   * - Integration with ModelRegistry for cost estimation
+   * - Callback-based architecture for flexible UI updates
+   * - Provider-agnostic token and cost tracking
+   *
+   * Unlike `tokenTracking()` which only logs to console, this preset provides
+   * structured data through callbacks, making it perfect for building custom UIs,
+   * dashboards, or progress indicators (like the llmist CLI).
+   *
+   * **Output (when logProgress: true):**
+   * - Iteration number and call count
+   * - Cumulative token usage (input + output)
+   * - Cumulative cost in USD (requires modelRegistry)
+   * - Elapsed time in seconds
+   *
+   * **Use cases:**
+   * - Building CLI progress indicators with live updates
+   * - Creating web dashboards with real-time metrics
+   * - Budget monitoring and cost alerts
+   * - Performance tracking and optimization
+   * - Custom logging to external systems (Datadog, CloudWatch, etc.)
+   *
+   * **Performance:** Minimal overhead. Uses Date.now() for timing and optional
+   * ModelRegistry.estimateCost() which is O(1) lookup. Callback invocation is
+   * synchronous and fast.
+   *
+   * @param options - Progress tracking options
+   * @param options.modelRegistry - ModelRegistry for cost estimation (optional)
+   * @param options.onProgress - Callback invoked after each LLM call (optional)
+   * @param options.logProgress - Log progress to console (default: false)
+   * @returns Hook configuration with progress tracking observers
+   *
+   * @example
+   * ```typescript
+   * // Basic usage with callback (RECOMMENDED - used by llmist CLI)
+   * import { LLMist, HookPresets } from 'llmist';
+   *
+   * const client = LLMist.create();
+   *
+   * await client.agent()
+   *   .withHooks(HookPresets.progressTracking({
+   *     modelRegistry: client.modelRegistry,
+   *     onProgress: (stats) => {
+   *       // Update your UI with stats
+   *       console.log(`#${stats.currentIteration} | ${stats.totalTokens} tokens | $${stats.totalCost.toFixed(4)}`);
+   *     }
+   *   }))
+   *   .withGadgets(Calculator)
+   *   .ask("Calculate 15 * 23");
+   * // Output: #1 | 245 tokens | $0.0012
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Console logging mode (quick debugging)
+   * await client.agent()
+   *   .withHooks(HookPresets.progressTracking({
+   *     modelRegistry: client.modelRegistry,
+   *     logProgress: true  // Simple console output
+   *   }))
+   *   .ask("Your prompt");
+   * // Output: 📊 Progress: Iteration #1 | 245 tokens | $0.0012 | 1.2s
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Budget monitoring with alerts
+   * const BUDGET_USD = 0.10;
+   *
+   * await client.agent()
+   *   .withHooks(HookPresets.progressTracking({
+   *     modelRegistry: client.modelRegistry,
+   *     onProgress: (stats) => {
+   *       if (stats.totalCost > BUDGET_USD) {
+   *         throw new Error(`Budget exceeded: $${stats.totalCost.toFixed(4)}`);
+   *       }
+   *     }
+   *   }))
+   *   .ask("Long running task...");
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Web dashboard integration
+   * let progressBar: HTMLElement;
+   *
+   * await client.agent()
+   *   .withHooks(HookPresets.progressTracking({
+   *     modelRegistry: client.modelRegistry,
+   *     onProgress: (stats) => {
+   *       // Update web UI in real-time
+   *       progressBar.textContent = `Iteration ${stats.currentIteration}`;
+   *       progressBar.dataset.cost = stats.totalCost.toFixed(4);
+   *       progressBar.dataset.tokens = stats.totalTokens.toString();
+   *     }
+   *   }))
+   *   .ask("Your prompt");
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // External logging (Datadog, CloudWatch, etc.)
+   * await client.agent()
+   *   .withHooks(HookPresets.progressTracking({
+   *     modelRegistry: client.modelRegistry,
+   *     onProgress: async (stats) => {
+   *       await metrics.gauge('llm.iteration', stats.currentIteration);
+   *       await metrics.gauge('llm.cost', stats.totalCost);
+   *       await metrics.gauge('llm.tokens', stats.totalTokens);
+   *     }
+   *   }))
+   *   .ask("Your prompt");
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetsprogresstrackingoptions | Full documentation}
+   * @see {@link ProgressTrackingOptions} for detailed options
+   * @see {@link ProgressStats} for the callback data structure
+   */
+  static progressTracking(options?: ProgressTrackingOptions): AgentHooks {
+    const { modelRegistry, onProgress, logProgress = false } = options ?? {};
+
+    // State tracking - follows same pattern as tokenTracking()
+    let totalCalls = 0;
+    let currentIteration = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCost = 0;
+    const startTime = Date.now();
+
+    return {
+      observers: {
+        // Track iteration on each LLM call start
+        onLLMCallStart: async (ctx) => {
+          currentIteration++;
+        },
+
+        // Accumulate metrics and report progress on each LLM call completion
+        onLLMCallComplete: async (ctx) => {
+          totalCalls++;
+
+          // Track token usage from provider response
+          if (ctx.usage) {
+            totalInputTokens += ctx.usage.inputTokens;
+            totalOutputTokens += ctx.usage.outputTokens;
+
+            // Calculate cost using ModelRegistry (core llmist feature)
+            // This showcases integration with llmist's pricing catalog
+            if (modelRegistry) {
+              try {
+                // Extract model name from provider:model format
+                // Example: "openai:gpt-4o" -> "gpt-4o"
+                const modelName = ctx.options.model.includes(":")
+                  ? ctx.options.model.split(":")[1]
+                  : ctx.options.model;
+
+                // Use core's estimateCost() for accurate pricing
+                const costEstimate = modelRegistry.estimateCost(
+                  modelName,
+                  ctx.usage.inputTokens,
+                  ctx.usage.outputTokens,
+                );
+
+                if (costEstimate) {
+                  totalCost += costEstimate.totalCost;
+                }
+              } catch (error) {
+                // Graceful degradation - log error but don't crash
+                // This follows llmist's principle of non-intrusive monitoring
+                if (logProgress) {
+                  console.warn(`⚠️  Cost estimation failed:`, error);
+                }
+              }
+            }
+          }
+
+          // Build comprehensive progress stats
+          const stats: ProgressStats = {
+            currentIteration,
+            totalCalls,
+            totalInputTokens,
+            totalOutputTokens,
+            totalTokens: totalInputTokens + totalOutputTokens,
+            totalCost,
+            elapsedSeconds: Number(((Date.now() - startTime) / 1000).toFixed(1)),
+          };
+
+          // Invoke callback if provided (used by CLI and custom UIs)
+          if (onProgress) {
+            onProgress(stats);
+          }
+
+          // Optional console logging for quick debugging
+          if (logProgress) {
+            const formattedTokens = stats.totalTokens >= 1000
+              ? `${(stats.totalTokens / 1000).toFixed(1)}k`
+              : `${stats.totalTokens}`;
+
+            const formattedCost = stats.totalCost > 0
+              ? `$${stats.totalCost.toFixed(4)}`
+              : "$0";
+
+            console.log(
+              `📊 Progress: Iteration #${stats.currentIteration} | ${formattedTokens} tokens | ${formattedCost} | ${stats.elapsedSeconds}s`,
+            );
           }
         },
       },

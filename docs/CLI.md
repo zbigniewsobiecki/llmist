@@ -95,7 +95,8 @@ llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 | `--max-iterations <n>` | `-i` | Max agent iterations | 10 |
 | `--gadget <path>` | `-g` | Gadget file (repeatable) | none |
 | `--parameter-format <fmt>` | | `json`, `yaml`, or `auto` | `json` |
-| `--no-builtins` | | Disable built-in gadgets | false |
+| `--no-builtins` | | Disable all built-in gadgets | false |
+| `--no-builtin-interaction` | | Disable interactive gadgets (AskUser) | false |
 
 #### Built-in Gadgets
 
@@ -118,11 +119,24 @@ llmist agent "Help me plan a trip"
 # - End conversation: "Trip planning complete!" (done=true)
 ```
 
-Use `--no-builtins` to disable them:
+**Controlling built-in gadgets:**
+
+Use `--no-builtins` to disable all built-in gadgets:
 
 ```bash
-# Only use custom gadgets
+# Only use custom gadgets - no AskUser or TellUser
 llmist agent "Task" --no-builtins -g ./my-gadgets.ts
+```
+
+Use `--no-builtin-interaction` to disable only interactive prompts while keeping TellUser:
+
+```bash
+# Agent can use TellUser for formatted output, but can't prompt the user
+llmist agent "Analyze this file" --no-builtin-interaction -g ./filesystem.ts
+
+# Useful for non-interactive environments or when you want output formatting
+# but don't want the agent asking questions
+cat input.txt | llmist agent --no-builtin-interaction -g ./tools.ts
 ```
 
 **Examples:**
