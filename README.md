@@ -1,8 +1,8 @@
 # llmist
 
 [![CI](https://github.com/zbigniewsobiecki/llmist/actions/workflows/ci.yml/badge.svg)](https://github.com/zbigniewsobiecki/llmist/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/zbigniewsobiecki/llmist/branch/main/graph/badge.svg)](https://codecov.io/gh/zbigniewsobiecki/llmist)
-[![npm version](https://badge.fury.io/js/llmist.svg)](https://www.npmjs.com/package/llmist)
+[![codecov](https://codecov.io/gh/zbigniewsobiecki/llmist/graph/badge.svg)](https://codecov.io/gh/zbigniewsobiecki/llmist)
+[![npm version](https://img.shields.io/npm/v/llmist.svg)](https://www.npmjs.com/package/llmist)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 > **Universal TypeScript LLM client with streaming-first tool execution and simple, extensible agent framework**
