@@ -10,6 +10,7 @@ export const CLI_DESCRIPTION = "Command line utilities for llmist agents and dir
 export const COMMANDS = {
   complete: "complete",
   agent: "agent",
+  models: "models",
 } as const;
 
 /** Valid log level names */
@@ -38,7 +39,7 @@ export const OPTION_FLAGS = {
 
 /** Human-readable descriptions for command-line options */
 export const OPTION_DESCRIPTIONS = {
-  model: "Model identifier, e.g. openai:gpt-5-nano or anthropic:claude-3-5-sonnet-latest.",
+  model: "Model identifier, e.g. openai:gpt-5-nano or anthropic:claude-sonnet-4-5.",
   systemPrompt: "Optional system prompt prepended to the conversation.",
   temperature: "Sampling temperature between 0 and 2.",
   maxTokens: "Maximum number of output tokens requested from the model.",

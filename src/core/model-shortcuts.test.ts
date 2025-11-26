@@ -26,8 +26,8 @@ describe("Model Shortcuts", () => {
 
     it("should map to correct full model IDs", () => {
       expect(MODEL_ALIASES["gpt4"]).toBe("openai:gpt-4o");
-      expect(MODEL_ALIASES["sonnet"]).toBe("anthropic:claude-3-5-sonnet-latest");
-      expect(MODEL_ALIASES["haiku"]).toBe("anthropic:claude-3-5-haiku-latest");
+      expect(MODEL_ALIASES["sonnet"]).toBe("anthropic:claude-sonnet-4-5");
+      expect(MODEL_ALIASES["haiku"]).toBe("anthropic:claude-haiku-4-5");
       expect(MODEL_ALIASES["flash"]).toBe("gemini:gemini-2.0-flash");
     });
   });
@@ -43,15 +43,15 @@ describe("Model Shortcuts", () => {
       });
 
       it("should resolve sonnet alias", () => {
-        expect(resolveModel("sonnet")).toBe("anthropic:claude-3-5-sonnet-latest");
+        expect(resolveModel("sonnet")).toBe("anthropic:claude-sonnet-4-5");
       });
 
       it("should resolve haiku alias", () => {
-        expect(resolveModel("haiku")).toBe("anthropic:claude-3-5-haiku-latest");
+        expect(resolveModel("haiku")).toBe("anthropic:claude-haiku-4-5");
       });
 
       it("should resolve opus alias", () => {
-        expect(resolveModel("opus")).toBe("anthropic:claude-3-opus-latest");
+        expect(resolveModel("opus")).toBe("anthropic:claude-opus-4-5");
       });
 
       it("should resolve flash alias", () => {
@@ -60,7 +60,7 @@ describe("Model Shortcuts", () => {
 
       it("should be case-insensitive for aliases", () => {
         expect(resolveModel("GPT4")).toBe("openai:gpt-4o");
-        expect(resolveModel("SONNET")).toBe("anthropic:claude-3-5-sonnet-latest");
+        expect(resolveModel("SONNET")).toBe("anthropic:claude-sonnet-4-5");
         expect(resolveModel("Flash")).toBe("gemini:gemini-2.0-flash");
       });
     });
@@ -272,7 +272,7 @@ describe("Model Shortcuts", () => {
       const resolved2 = resolveModel(model2);
       expect(hasProviderPrefix(resolved2)).toBe(true);
       expect(getProvider(resolved2)).toBe("anthropic");
-      expect(getModelId(resolved2)).toBe("claude-3-5-sonnet-latest");
+      expect(getModelId(resolved2)).toBe("claude-sonnet-4-5");
     });
 
     it("should handle roundtrip for already prefixed models", () => {
