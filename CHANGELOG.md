@@ -1,3 +1,8 @@
+## <small>0.2.2 (2025-11-26)</small>
+
+* Release v0.2.2 (#68) ([1fc4b34](https://github.com/zbigniewsobiecki/llmist/commit/1fc4b34)), closes [#68](https://github.com/zbigniewsobiecki/llmist/issues/68) [#11](https://github.com/zbigniewsobiecki/llmist/issues/11) [#13](https://github.com/zbigniewsobiecki/llmist/issues/13)
+* fix(ci): fix dev branch sync after release (#66) ([bdf85ff](https://github.com/zbigniewsobiecki/llmist/commit/bdf85ff)), closes [#66](https://github.com/zbigniewsobiecki/llmist/issues/66)
+
 ## <small>0.2.1 (2025-11-26)</small>
 
 * fix(ci): disable git hooks during release workflow (#65) ([f492fb6](https://github.com/zbigniewsobiecki/llmist/commit/f492fb6)), closes [#65](https://github.com/zbigniewsobiecki/llmist/issues/65)
