@@ -528,7 +528,7 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
     return null;
   }
 
-  return `${chalk.dim("─".repeat(40))}\n${parts.join(chalk.dim(" │ "))}`;
+  return parts.join(chalk.dim(" │ "));
 }
 
 /**
