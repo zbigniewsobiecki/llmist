@@ -26,7 +26,7 @@ import {
   StreamPrinter,
   StreamProgress,
 } from "./utils.js";
-import { formatGadgetSummary, renderMarkdown, type GadgetResult } from "./ui/formatters.js";
+import { formatGadgetSummary, renderMarkdown, renderOverallSummary } from "./ui/formatters.js";
 
 /**
  * Configuration options for the agent command.
@@ -198,7 +198,6 @@ async function handleAgentCommand(
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
   const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
 
-  let finishReason: string | null | undefined;
   let usage: TokenUsage | undefined;
   let iterations = 0;
 
@@ -277,7 +276,6 @@ async function handleAgentCommand(
         // This is where you'd typically log metrics or update dashboards
         onLLMCallComplete: async (context) => {
           // Capture completion metadata for final summary
-          finishReason = context.finishReason;
           usage = context.usage;
           iterations = Math.max(iterations, context.iteration + 1);
 
@@ -292,8 +290,44 @@ async function handleAgentCommand(
             }
           }
 
+          // Calculate per-call cost for the summary
+          let callCost: number | undefined;
+          if (context.usage && client.modelRegistry) {
+            try {
+              const modelName = options.model.includes(":")
+                ? options.model.split(":")[1]
+                : options.model;
+              const costResult = client.modelRegistry.estimateCost(
+                modelName,
+                context.usage.inputTokens,
+                context.usage.outputTokens,
+              );
+              if (costResult) callCost = costResult.totalCost;
+            } catch {
+              // Ignore cost calculation errors
+            }
+          }
+
+          // Get per-call elapsed time before endCall resets it
+          const callElapsed = progress.getCallElapsedSeconds();
+
           // End this call's progress tracking and switch to cumulative mode
           progress.endCall(context.usage);
+
+          // SHOWCASE: Print per-call summary after each LLM call
+          // This gives users visibility into each iteration's metrics
+          if (stderrTTY) {
+            const summary = renderSummary({
+              iterations: context.iteration + 1,
+              usage: context.usage,
+              elapsedSeconds: callElapsed,
+              cost: callCost,
+              finishReason: context.finishReason,
+            });
+            if (summary) {
+              env.stderr.write(`${summary}\n`);
+            }
+          }
         },
       },
 
@@ -410,14 +444,17 @@ async function handleAgentCommand(
   progress.complete();
   printer.ensureNewline();
 
-  // Only show summary if stderr is a TTY (not redirected)
-  if (stderrTTY) {
-    const summary = renderSummary({
-      finishReason,
-      usage,
+  // SHOWCASE: Show overall summary only if there were multiple iterations
+  // Single-iteration runs already showed per-call summary, no need to repeat
+  if (stderrTTY && iterations > 1) {
+    // Separator line to distinguish from per-call summaries
+    env.stderr.write(`${chalk.dim("─".repeat(40))}\n`);
+
+    const summary = renderOverallSummary({
+      totalTokens: usage?.totalTokens,
       iterations,
-      cost: progress.getTotalCost(),
       elapsedSeconds: progress.getTotalElapsedSeconds(),
+      cost: progress.getTotalCost(),
     });
     if (summary) {
       env.stderr.write(`${summary}\n`);

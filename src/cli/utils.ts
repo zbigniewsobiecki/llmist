@@ -241,6 +241,14 @@ export class StreamProgress {
   }
 
   /**
+   * Get elapsed time in seconds for the current call.
+   * @returns Elapsed time in seconds with 1 decimal place
+   */
+  getCallElapsedSeconds(): number {
+    return Number(((Date.now() - this.callStartTime) / 1000).toFixed(1));
+  }
+
+  /**
    * Starts the progress indicator animation after a brief delay.
    */
   start(): void {

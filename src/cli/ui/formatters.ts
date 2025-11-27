@@ -262,6 +262,77 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
 }
 
 /**
+ * Metadata for generating overall execution summaries.
+ *
+ * Used for the final accumulated summary at the end of agent execution.
+ */
+export interface OverallSummaryMetadata {
+  /** Total tokens across all calls */
+  totalTokens?: number;
+
+  /** Number of agent iterations (LLM calls) */
+  iterations?: number;
+
+  /** Total elapsed time in seconds */
+  elapsedSeconds?: number;
+
+  /** Total cost in USD */
+  cost?: number;
+}
+
+/**
+ * Renders overall accumulated execution summary as a distinct styled line.
+ *
+ * This is displayed at the end of agent execution to show total metrics.
+ * Uses a "total:" prefix to distinguish from per-call summaries.
+ *
+ * **Format:** `total: 3.5k | #2 | 19s | $0.0021`
+ *
+ * @param metadata - Overall summary metadata
+ * @returns Formatted summary string, or null if no fields are populated
+ *
+ * @example
+ * ```typescript
+ * renderOverallSummary({
+ *   totalTokens: 3500,
+ *   iterations: 2,
+ *   elapsedSeconds: 19,
+ *   cost: 0.0021
+ * });
+ * // Output: "total: 3.5k | #2 | 19s | $0.0021"
+ * ```
+ */
+export function renderOverallSummary(metadata: OverallSummaryMetadata): string | null {
+  const parts: string[] = [];
+
+  // Total tokens - primary metric for overall summary
+  if (metadata.totalTokens !== undefined && metadata.totalTokens > 0) {
+    parts.push(chalk.dim("total:") + chalk.magenta(` ${formatTokens(metadata.totalTokens)}`));
+  }
+
+  // Iteration count (#N)
+  if (metadata.iterations !== undefined && metadata.iterations > 0) {
+    parts.push(chalk.cyan(`#${metadata.iterations}`));
+  }
+
+  // Total elapsed time
+  if (metadata.elapsedSeconds !== undefined && metadata.elapsedSeconds > 0) {
+    parts.push(chalk.dim(`${metadata.elapsedSeconds}s`));
+  }
+
+  // Total cost
+  if (metadata.cost !== undefined && metadata.cost > 0) {
+    parts.push(chalk.cyan(`$${formatCost(metadata.cost)}`));
+  }
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return parts.join(chalk.dim(" | "));
+}
+
+/**
  * Gadget execution result for formatting.
  *
  * Contains metadata about a single gadget invocation during agent execution.
