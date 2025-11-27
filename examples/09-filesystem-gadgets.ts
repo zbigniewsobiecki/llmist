@@ -2,7 +2,7 @@
 /**
  * Example: Using File System Gadgets
  *
- * Demonstrates ReadFile and ListDirectory gadgets with path sandboxing.
+ * Demonstrates ReadFile, WriteFile, and ListDirectory gadgets with path sandboxing.
  * These gadgets ensure all file operations are restricted to the current
  * working directory and its subdirectories.
  *
@@ -11,7 +11,7 @@
  */
 
 import { LLMist } from "../src/index.js";
-import { readFile, listDirectory } from "./gadgets/filesystem/index.js";
+import { readFile, writeFile, listDirectory } from "./gadgets/filesystem/index.js";
 
 async function main() {
   console.log("=== File System Gadgets Example ===\n");
@@ -19,7 +19,7 @@ async function main() {
   // Create an agent with file system gadgets
   const agent = LLMist.createAgent()
     .withModel("gpt-4o-mini")
-    .withGadgets(readFile, listDirectory);
+    .withGadgets(readFile, writeFile, listDirectory);
 
   // Example 1: Read a file
   console.log("Example 1: Reading package.json");
@@ -43,15 +43,26 @@ async function main() {
   console.log("Response:", result2.text);
   console.log();
 
-  // Example 3: Security - attempt to access outside CWD (will fail)
-  console.log("\nExample 3: Testing path sandboxing");
-  console.log("Prompt: Try to read /etc/passwd (should be rejected)\n");
+  // Example 3: Write a file
+  console.log("\nExample 3: Writing a file");
+  console.log("Prompt: Write 'Hello from LLMist!' to temp/greeting.txt\n");
 
   const result3 = await agent.ask(
-    "Try to read the file /etc/passwd and tell me what happens"
+    "Write the text 'Hello from LLMist!' to a file called temp/greeting.txt"
   );
 
   console.log("Response:", result3.text);
+  console.log();
+
+  // Example 4: Security - attempt to access outside CWD (will fail)
+  console.log("\nExample 4: Testing path sandboxing");
+  console.log("Prompt: Try to read /etc/passwd (should be rejected)\n");
+
+  const result4 = await agent.ask(
+    "Try to read the file /etc/passwd and tell me what happens"
+  );
+
+  console.log("Response:", result4.text);
   console.log("\n=== Example Complete ===");
 }
 

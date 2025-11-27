@@ -1,6 +1,6 @@
 # File System Gadgets
 
-Two example gadgets that provide secure file system operations with local directory sandboxing.
+Three example gadgets that provide secure file system operations with local directory sandboxing.
 
 ## Gadgets
 
@@ -15,12 +15,24 @@ Reads the entire content of a file and returns it as text.
 bun run src/cli.ts agent "Read the package.json file" --gadget ./examples/gadgets/filesystem.ts
 ```
 
+### WriteFile
+Writes content to a file. Creates parent directories if needed. Overwrites existing files.
+
+**Parameters:**
+- `filePath` (string): Path to the file to write (relative or absolute)
+- `content` (string): Content to write to the file
+
+**Example:**
+```bash
+bun run src/cli.ts agent "Write 'Hello World' to output.txt" --gadget ./examples/gadgets/filesystem.ts
+```
+
 ### ListDirectory
 Lists files and directories with full metadata (type, name, size, modification date).
 
 **Parameters:**
 - `directoryPath` (string, default: "."): Path to the directory to list
-- `recursive` (boolean, default: false): Whether to recursively list subdirectories
+- `maxDepth` (number, 1-10, default: 1): Maximum depth to recurse (1 = immediate children only)
 
 **Example:**
 ```bash
@@ -29,7 +41,7 @@ bun run src/cli.ts agent "List the src directory recursively" --gadget ./example
 
 ## Security: Path Sandboxing
 
-Both gadgets implement strict path validation to ensure all file operations are restricted to the current working directory and its subdirectories:
+All three gadgets implement strict path validation to ensure all file operations are restricted to the current working directory and its subdirectories:
 
 - ✓ Prevents directory traversal attacks (`../../../etc/passwd`)
 - ✓ Blocks access to absolute paths outside CWD (`/etc/passwd`)
@@ -49,6 +61,7 @@ bun run src/cli.ts agent "Read /etc/passwd" --gadget ./examples/gadgets/filesyst
 ### Files
 - `filesystem/utils.ts` - Path validation utility and `PathSandboxException` class
 - `filesystem/read-file.ts` - ReadFile gadget implementation
+- `filesystem/write-file.ts` - WriteFile gadget implementation
 - `filesystem/list-directory.ts` - ListDirectory gadget implementation
 - `filesystem/index.ts` - Re-exports all gadgets
 
@@ -60,13 +73,24 @@ The `validatePathIsWithinCwd()` function:
 4. Throws `PathSandboxException` if validation fails
 
 ### Output Format (ListDirectory)
+Uses a compact pipe-separated DSL optimized for LLM token efficiency:
 ```
-Type       | Name              | Size         | Modified
------------+-------------------+--------------+----------------------------
-directory  | src               | -            | 2025-11-26T14:28:15.000Z
-file       | package.json      | 2841         | 2025-11-26T10:15:30.000Z
-file       | README.md         | 1713         | 2025-11-26T10:35:10.910Z
-symlink    | link-to-config    | -            | 2025-11-26T14:20:00.000Z
+path=. maxDepth=1
+
+#T|N|S|A
+D|src|0|2h
+D|tests|0|1d
+F|package.json|2841|3h
+F|README.md|1713|5m
+L|link-to-config|0|1d
+```
+Header: `#T|N|S|A` = Type, Name, Size, Age. Types: `D`=directory, `F`=file, `L`=symlink.
+
+### Output Format (ReadFile/WriteFile)
+```
+path=package.json
+
+{ "name": "my-project", ... }
 ```
 
 ## Usage in Code
@@ -75,11 +99,11 @@ See `examples/09-filesystem-gadgets.ts` for a complete example:
 
 ```typescript
 import { LLMist } from "../src/index.js";
-import { readFile, listDirectory } from "./gadgets/filesystem/index.js";
+import { readFile, writeFile, listDirectory } from "./gadgets/filesystem/index.js";
 
 const agent = LLMist.createAgent()
   .withModel("gpt-4o-mini")
-  .withGadgets(readFile, listDirectory);
+  .withGadgets(readFile, writeFile, listDirectory);
 
 const result = await agent.ask(
   "Read package.json and tell me the version"

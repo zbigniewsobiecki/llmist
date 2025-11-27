@@ -6,5 +6,6 @@
  */
 
 export { readFile } from "./read-file.js";
+export { writeFile } from "./write-file.js";
 export { listDirectory } from "./list-directory.js";
 export { PathSandboxException, validatePathIsWithinCwd } from "./utils.js";
