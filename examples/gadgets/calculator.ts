@@ -9,6 +9,18 @@ export const calculator = createGadget({
     a: z.number().describe("First number"),
     b: z.number().describe("Second number"),
   }),
+  examples: [
+    {
+      params: { operation: "add", a: 15, b: 23 },
+      output: "38",
+      comment: "Add two numbers",
+    },
+    {
+      params: { operation: "divide", a: 100, b: 4 },
+      output: "25",
+      comment: "Divide numbers",
+    },
+  ],
   execute: ({ operation, a, b }) => {
     switch (operation) {
       case "add":

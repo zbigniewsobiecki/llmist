@@ -4,6 +4,7 @@ import type { ZodTypeAny } from "zod";
 import type { ParameterFormat } from "./parser.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
+import type { GadgetExample } from "./types.js";
 
 /**
  * Internal base class for gadgets. Most users should use the `Gadget` class
@@ -38,6 +39,15 @@ export abstract class BaseGadget {
    * Set to 0 or undefined to disable timeout for this gadget.
    */
   timeoutMs?: number;
+
+  /**
+   * Optional usage examples to help LLMs understand proper invocation.
+   * Examples are rendered in getInstruction() alongside the schema.
+   *
+   * Note: Uses broader `unknown` type to allow typed examples from subclasses
+   * while maintaining runtime compatibility.
+   */
+  examples?: GadgetExample<unknown>[];
 
   /**
    * Execute the gadget with the given parameters.
@@ -87,6 +97,37 @@ export abstract class BaseGadget {
         parts.push("\n\nInput Schema (YAML):");
         parts.push(yamlSchema);
       }
+    }
+
+    // Render examples if present
+    if (this.examples && this.examples.length > 0) {
+      parts.push("\n\nExamples:");
+
+      this.examples.forEach((example, index) => {
+        // Add blank line between examples (but not before the first one)
+        if (index > 0) {
+          parts.push("");
+        }
+
+        // Add comment if provided
+        if (example.comment) {
+          parts.push(`# ${example.comment}`);
+        }
+
+        // Render params in the appropriate format
+        parts.push("Input:");
+        if (format === "json" || format === "auto") {
+          parts.push(JSON.stringify(example.params, null, 2));
+        } else {
+          parts.push(yaml.dump(example.params).trimEnd());
+        }
+
+        // Render output if provided
+        if (example.output !== undefined) {
+          parts.push("Output:");
+          parts.push(example.output);
+        }
+      });
     }
 
     return parts.join("\n");

@@ -170,4 +170,50 @@ describe("createGadget", () => {
     expect(instruction).toContain("Gets weather information");
     expect(instruction).toContain("location");
   });
+
+  it("should support examples in configuration", () => {
+    const gadget = createGadget({
+      description: "Calculator",
+      schema: z.object({
+        a: z.number(),
+        b: z.number(),
+      }),
+      examples: [{ params: { a: 5, b: 3 }, output: "8", comment: "Addition" }],
+      execute: ({ a, b }) => String(a + b),
+    });
+
+    expect(gadget.examples).toHaveLength(1);
+    expect(gadget.examples![0].params).toEqual({ a: 5, b: 3 });
+    expect(gadget.examples![0].output).toBe("8");
+    expect(gadget.examples![0].comment).toBe("Addition");
+
+    const instruction = gadget.getInstruction("json");
+    expect(instruction).toContain("Examples:");
+    expect(instruction).toContain("# Addition");
+    expect(instruction).toContain('"a": 5');
+    expect(instruction).toContain("Output:");
+    expect(instruction).toContain("8");
+  });
+
+  it("should support multiple examples", () => {
+    const gadget = createGadget({
+      description: "Math operations",
+      schema: z.object({
+        op: z.enum(["add", "sub"]),
+        a: z.number(),
+        b: z.number(),
+      }),
+      examples: [
+        { params: { op: "add", a: 10, b: 5 }, output: "15", comment: "Addition" },
+        { params: { op: "sub", a: 10, b: 3 }, output: "7", comment: "Subtraction" },
+      ],
+      execute: ({ op, a, b }) => String(op === "add" ? a + b : a - b),
+    });
+
+    expect(gadget.examples).toHaveLength(2);
+
+    const instruction = gadget.getInstruction("json");
+    expect(instruction).toContain("# Addition");
+    expect(instruction).toContain("# Subtraction");
+  });
 });

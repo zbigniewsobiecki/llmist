@@ -178,6 +178,72 @@ Without descriptions, the LLM only sees parameter names and types. With descript
 - What units to use (`'Temperature in Celsius'`)
 - What format to follow (`'Date in YYYY-MM-DD format'`)
 
+## Examples
+
+Provide usage examples to help LLMs understand how to call your gadget correctly. Examples are rendered alongside the schema in the instruction text:
+
+### Basic Example
+
+```typescript
+const calculator = createGadget({
+  description: 'Performs arithmetic operations',
+  schema: z.object({
+    operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
+    a: z.number().describe('First number'),
+    b: z.number().describe('Second number'),
+  }),
+  examples: [
+    {
+      params: { operation: 'add', a: 15, b: 23 },
+      output: '38',
+      comment: 'Add two numbers'
+    }
+  ],
+  execute: ({ operation, a, b }) => { /* ... */ },
+});
+```
+
+### Multiple Examples
+
+```typescript
+class StringProcessor extends Gadget({
+  description: 'Processes strings',
+  schema: z.object({
+    text: z.string(),
+    operation: z.enum(['reverse', 'uppercase', 'lowercase']),
+  }),
+  examples: [
+    {
+      params: { text: 'Hello', operation: 'reverse' },
+      output: 'olleH',
+      comment: 'Reverse a string'
+    },
+    {
+      params: { text: 'hello', operation: 'uppercase' },
+      output: 'HELLO',
+      comment: 'Convert to uppercase'
+    },
+  ],
+}) {
+  execute(params: this['params']): string { /* ... */ }
+}
+```
+
+### Example Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `params` | `TParams` | Yes | Example parameters (typed to match schema) |
+| `output` | `string` | No | Expected result from the gadget |
+| `comment` | `string` | No | Description of what this example demonstrates |
+
+### Best Practices
+
+- **Include at least one example** for complex gadgets with multiple parameters
+- **Show edge cases** like optional parameters or different operation modes
+- **Keep examples realistic** - use values an LLM might actually provide
+- **Add comments** to explain non-obvious usage patterns
+
 ## Async Gadgets
 
 ```typescript
@@ -256,6 +322,7 @@ await LLMist.createAgent()
 | `schema` | `ZodType` | required | Parameter schema |
 | `name` | `string` | class name | Custom gadget name |
 | `timeoutMs` | `number` | none | Execution timeout |
+| `examples` | `GadgetExample[]` | none | Usage examples for LLMs |
 
 ## Testing Gadgets
 

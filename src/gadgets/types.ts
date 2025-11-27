@@ -1,3 +1,33 @@
+/**
+ * Example of gadget usage to help LLMs understand proper invocation.
+ *
+ * Examples are rendered alongside the schema in `getInstruction()` to provide
+ * concrete usage patterns for the LLM.
+ *
+ * @template TParams - Inferred parameter type from Zod schema (defaults to Record<string, unknown>)
+ *
+ * @example
+ * ```typescript
+ * const calculator = createGadget({
+ *   schema: z.object({ a: z.number(), b: z.number() }),
+ *   examples: [
+ *     { params: { a: 5, b: 3 }, output: "8", comment: "Addition example" }
+ *   ],
+ *   // ...
+ * });
+ * ```
+ */
+export interface GadgetExample<TParams = Record<string, unknown>> {
+  /** Example parameter values (typed to match schema) */
+  params: TParams;
+
+  /** Optional expected output/result string */
+  output?: string;
+
+  /** Optional description explaining what this example demonstrates */
+  comment?: string;
+}
+
 // Result of gadget execution
 export interface GadgetExecutionResult {
   gadgetName: string;
