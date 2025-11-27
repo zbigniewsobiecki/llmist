@@ -7,6 +7,79 @@ import { validateGadgetSchema } from "./schema-validator.js";
 import type { GadgetExample } from "./types.js";
 
 /**
+ * Format a value for YAML output, using pipe multiline syntax for strings.
+ * This teaches LLMs to use proper multiline syntax which avoids YAML parsing issues
+ * when strings contain characters like `-` at line starts (list items) or `:` (mappings).
+ */
+function formatYamlValue(value: unknown, indent: string = ""): string {
+  if (typeof value === "string") {
+    // Always use pipe multiline syntax for strings to teach LLMs the correct pattern
+    const lines = value.split("\n");
+    if (lines.length === 1 && !value.includes(":") && !value.startsWith("-")) {
+      // Simple single-line string without special chars - can use plain style
+      return value;
+    }
+    // Use pipe (literal block) style for multiline or strings with special chars
+    const indentedLines = lines.map((line) => `${indent}  ${line}`).join("\n");
+    return `|\n${indentedLines}`;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (value === null || value === undefined) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    const items = value.map((item) => `${indent}- ${formatYamlValue(item, indent + "  ")}`);
+    return "\n" + items.join("\n");
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value);
+    if (entries.length === 0) return "{}";
+    const lines = entries.map(([k, v]) => {
+      const formattedValue = formatYamlValue(v, indent + "  ");
+      // If value starts with newline (arrays/objects), don't add space after colon
+      if (formattedValue.startsWith("\n") || formattedValue.startsWith("|")) {
+        return `${indent}${k}: ${formattedValue}`;
+      }
+      return `${indent}${k}: ${formattedValue}`;
+    });
+    return "\n" + lines.join("\n");
+  }
+
+  // Fallback to yaml.dump for complex types
+  return yaml.dump(value).trimEnd();
+}
+
+/**
+ * Format parameters object as YAML with pipe multiline syntax for all string values.
+ * This ensures examples teach LLMs to use the correct pattern.
+ */
+function formatParamsAsYaml(params: Record<string, unknown>): string {
+  const lines: string[] = [];
+
+  for (const [key, value] of Object.entries(params)) {
+    const formattedValue = formatYamlValue(value, "");
+    if (formattedValue.startsWith("\n")) {
+      // Object or array - value on next lines
+      lines.push(`${key}:${formattedValue}`);
+    } else if (formattedValue.startsWith("|")) {
+      // Pipe multiline - needs space before pipe
+      lines.push(`${key}: ${formattedValue}`);
+    } else {
+      lines.push(`${key}: ${formattedValue}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
  * Internal base class for gadgets. Most users should use the `Gadget` class
  * (formerly TypedGadget) or `createGadget()` function instead, as they provide
  * better type safety and simpler APIs.
@@ -119,7 +192,8 @@ export abstract class BaseGadget {
         if (format === "json" || format === "auto") {
           parts.push(JSON.stringify(example.params, null, 2));
         } else {
-          parts.push(yaml.dump(example.params).trimEnd());
+          // Use custom formatter that applies pipe multiline syntax for strings
+          parts.push(formatParamsAsYaml(example.params as Record<string, unknown>));
         }
 
         // Render output if provided
