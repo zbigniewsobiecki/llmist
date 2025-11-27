@@ -23,6 +23,16 @@ export class LLMMessageBuilder {
     this.promptConfig = promptConfig ?? {};
   }
 
+  /**
+   * Set custom prefixes for gadget markers.
+   * Used to configure history builder to match system prompt markers.
+   */
+  withPrefixes(startPrefix: string, endPrefix: string): this {
+    this.startPrefix = startPrefix;
+    this.endPrefix = endPrefix;
+    return this;
+  }
+
   addSystem(content: string, metadata?: Record<string, unknown>): this {
     this.messages.push({ role: "system", content, metadata });
     return this;

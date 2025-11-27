@@ -11,6 +11,218 @@ bunx llmist
 npx llmist
 ```
 
+## Configuration File
+
+The CLI loads configuration from `~/.llmist/cli.toml` if it exists. This allows you to:
+
+- Set default options for built-in commands (`complete`, `agent`)
+- Define custom commands with preset configurations
+
+### Basic Example
+
+```toml
+# ~/.llmist/cli.toml
+
+# Default settings for the 'complete' command
+[complete]
+model = "anthropic:claude-sonnet-4-5"
+temperature = 0.7
+
+# Default settings for the 'agent' command
+[agent]
+model = "anthropic:claude-sonnet-4-5"
+max-iterations = 15
+gadget = ["~/gadgets/common-tools.ts"]
+```
+
+With this config, running `llmist complete "Hello"` will use Claude Sonnet instead of the default GPT-5-nano.
+
+### Custom Commands
+
+Any section other than `complete` and `agent` creates a new CLI command:
+
+```toml
+[code-review]
+type = "agent"
+description = "Review code for bugs and best practices."
+model = "anthropic:claude-sonnet-4-5"
+system = "You are a senior code reviewer. Analyze code for bugs, security issues, style problems, and suggest improvements."
+gadget = ["~/gadgets/code-tools.ts"]
+max-iterations = 5
+```
+
+This creates a new command `llmist code-review` that you can use:
+
+```bash
+cat myfile.ts | llmist code-review
+llmist code-review "Review this function: $(cat utils.ts)"
+```
+
+### Complete Config Reference
+
+```toml
+# ~/.llmist/cli.toml
+# Extensive example showing all available options
+
+#──────────────────────────────────────────────────────────────────────────────
+# GLOBAL OPTIONS
+# These apply to all commands and override environment variables
+#──────────────────────────────────────────────────────────────────────────────
+[global]
+log-level = "info"                       # silly, trace, debug, info, warn, error, fatal
+log-file = "/tmp/llmist.log"             # Log file path (enables JSON logging)
+
+#──────────────────────────────────────────────────────────────────────────────
+# COMPLETE COMMAND DEFAULTS
+#──────────────────────────────────────────────────────────────────────────────
+[complete]
+model = "anthropic:claude-sonnet-4-5"   # Model identifier (provider:model or alias)
+system = "You are a helpful assistant." # System prompt
+temperature = 0.7                        # Sampling temperature (0-2)
+max-tokens = 4096                        # Maximum output tokens
+
+#──────────────────────────────────────────────────────────────────────────────
+# AGENT COMMAND DEFAULTS
+#──────────────────────────────────────────────────────────────────────────────
+[agent]
+model = "anthropic:claude-sonnet-4-5"
+system = "You are a helpful assistant with access to tools."
+temperature = 0.5
+max-iterations = 20                      # Max agent loop iterations
+gadget = [                               # Default gadgets to load
+  "~/gadgets/filesystem.ts",
+  "~/gadgets/calculator.ts",
+]
+parameter-format = "toml"                # Gadget parameter format: json, yaml, toml, auto
+builtins = true                          # Enable built-in gadgets (AskUser, TellUser)
+builtin-interaction = true               # Enable AskUser (set false for non-interactive)
+
+#──────────────────────────────────────────────────────────────────────────────
+# CUSTOM COMMANDS
+#──────────────────────────────────────────────────────────────────────────────
+
+# Code review command with specialized system prompt
+[code-review]
+type = "agent"                           # "agent" (default) or "complete"
+description = "Review code for bugs, security issues, and best practices."
+model = "anthropic:claude-sonnet-4-5"
+system = """
+You are a senior code reviewer. For each piece of code:
+1. Identify bugs and logic errors
+2. Check for security vulnerabilities (injection, XSS, etc.)
+3. Suggest performance improvements
+4. Note style issues and best practices
+Be constructive and explain your reasoning.
+"""
+max-iterations = 5
+gadget = ["~/gadgets/code-analysis.ts"]
+
+# Quick translation command (uses complete, not agent)
+[translate]
+type = "complete"
+description = "Translate text to English."
+model = "openai:gpt-4o"
+system = "Translate the following text to English. Preserve formatting and tone."
+temperature = 0.3
+max-tokens = 2000
+
+# Research assistant with web search gadget
+[research]
+type = "agent"
+description = "Research assistant with web search capabilities."
+model = "anthropic:claude-sonnet-4-5"
+system = "You are a research assistant. Use available tools to find and synthesize information."
+gadget = [
+  "~/gadgets/web-search.ts",
+  "~/gadgets/summarizer.ts",
+]
+max-iterations = 10
+
+# Shell helper for system administration
+[shell-help]
+type = "agent"
+description = "Get help with shell commands and scripts."
+model = "anthropic:claude-sonnet-4-5"
+system = """
+You are a Unix/Linux shell expert. Help users with:
+- Writing shell commands and scripts
+- Explaining command output
+- Debugging shell issues
+Always explain what commands do before running them.
+"""
+builtin-interaction = false              # Non-interactive mode
+
+# Creative writing assistant
+[write]
+type = "agent"
+description = "Creative writing assistant."
+model = "anthropic:claude-sonnet-4-5"
+system = "You are a creative writing assistant. Help with stories, poems, and other creative content."
+temperature = 0.9                        # Higher temperature for creativity
+max-iterations = 3
+```
+
+### Config Option Reference
+
+#### Options for `[global]` section
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `log-level` | string | Log level: silly, trace, debug, info, warn, error, fatal |
+| `log-file` | string | Path to log file. Enables JSON logging to file |
+
+#### Options for `[complete]` section
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `model` | string | Model identifier (e.g., `anthropic:claude-sonnet-4-5`, `sonnet`) |
+| `system` | string | System prompt |
+| `temperature` | number | Sampling temperature (0-2) |
+| `max-tokens` | integer | Maximum output tokens |
+
+#### Options for `[agent]` section
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `model` | string | Model identifier |
+| `system` | string | System prompt |
+| `temperature` | number | Sampling temperature (0-2) |
+| `max-iterations` | integer | Max agent loop iterations |
+| `gadget` | string[] | Array of gadget file paths to load |
+| `parameter-format` | string | `json`, `yaml`, `toml`, or `auto` |
+| `builtins` | boolean | Enable built-in gadgets (AskUser, TellUser) |
+| `builtin-interaction` | boolean | Enable AskUser gadget |
+
+#### Options for custom command sections
+
+All options from `[agent]` plus:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `type` | string | `agent` (default) or `complete` |
+| `description` | string | Help text shown in `llmist --help` |
+
+If `type = "complete"`, options from `[complete]` apply instead.
+
+### Error Handling
+
+If the config file has invalid syntax or unknown fields, the CLI will fail with a clear error:
+
+```bash
+$ llmist complete "Hello"
+[llmist] Error: /Users/you/.llmist/cli.toml: [agent].unknown-option is not a valid option
+```
+
+### CLI Overrides Config
+
+Command-line flags always override config file values:
+
+```bash
+# Config sets model = "anthropic:claude-sonnet-4-5"
+# This command uses haiku instead
+llmist complete "Hello" --model haiku
+```
+
 ## Global Options
 
 These options apply to all commands:
@@ -94,7 +306,7 @@ llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 | `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
 | `--max-iterations <n>` | `-i` | Max agent iterations | 10 |
 | `--gadget <path>` | `-g` | Gadget file (repeatable) | none |
-| `--parameter-format <fmt>` | | `json`, `yaml`, or `auto` | `json` |
+| `--parameter-format <fmt>` | | `json`, `yaml`, `toml`, or `auto` | `toml` |
 | `--no-builtins` | | Disable all built-in gadgets | false |
 | `--no-builtin-interaction` | | Disable interactive gadgets (AskUser) | false |
 
@@ -255,5 +467,6 @@ cat prompt.txt | llmist agent
 ## See Also
 
 - **[CLI Gadgets](./CLI_GADGETS.md)** - Writing gadgets for CLI
+- **[Configuration](./CONFIGURATION.md)** - Library configuration options
 - **[Getting Started](./GETTING_STARTED.md)** - Library usage
 - **[Providers Guide](./PROVIDERS.md)** - Provider setup

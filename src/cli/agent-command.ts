@@ -1,25 +1,20 @@
 import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
-import { type Command, InvalidArgumentError } from "commander";
+import type { Command } from "commander";
 import { AgentBuilder } from "../agent/builder.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
-import type { ParameterFormat } from "../gadgets/parser.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
-import {
-  COMMANDS,
-  DEFAULT_MODEL,
-  DEFAULT_PARAMETER_FORMAT,
-  OPTION_DESCRIPTIONS,
-  OPTION_FLAGS,
-} from "./constants.js";
+import type { AgentConfig } from "./config.js";
+import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { loadGadgets } from "./gadgets.js";
+import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
-  createNumericParser,
   executeAction,
+  generateMarkers,
   isInteractive,
   renderSummary,
   resolvePrompt,
@@ -27,37 +22,6 @@ import {
   StreamProgress,
 } from "./utils.js";
 import { formatGadgetSummary, renderMarkdown, renderOverallSummary } from "./ui/formatters.js";
-
-/**
- * Configuration options for the agent command.
- */
-interface AgentCommandOptions {
-  model: string;
-  system?: string;
-  temperature?: number;
-  maxIterations?: number;
-  gadget?: string[];
-  parameterFormat: ParameterFormat;
-  builtins: boolean; // --no-builtins sets this to false
-  builtinInteraction: boolean; // --no-builtin-interaction sets this to false
-}
-
-const PARAMETER_FORMAT_VALUES: ParameterFormat[] = ["json", "yaml", "auto"];
-
-/**
- * Parses and validates the parameter format option value.
- *
- * @param value - User-provided parameter format string
- * @returns Validated parameter format
- * @throws InvalidArgumentError if format is not one of: json, yaml, auto
- */
-function parseParameterFormat(value: string): ParameterFormat {
-  const normalized = value.toLowerCase() as ParameterFormat;
-  if (!PARAMETER_FORMAT_VALUES.includes(normalized)) {
-    throw new InvalidArgumentError("Parameter format must be one of 'json', 'yaml', or 'auto'.");
-  }
-  return normalized;
-}
 
 /**
  * Prompts the user for a simple yes/no approval.
@@ -129,7 +93,7 @@ function createHumanInputHandler(
 // This demonstrates clean code organization and reusability
 
 /**
- * Handles the agent command execution.
+ * Executes the agent command.
  *
  * SHOWCASE: This function demonstrates how to build a production-grade CLI
  * on top of llmist's core capabilities:
@@ -149,7 +113,7 @@ function createHumanInputHandler(
  * @param options - Agent command options (model, gadgets, max iterations, etc.)
  * @param env - CLI environment for I/O operations
  */
-async function handleAgentCommand(
+export async function executeAgent(
   promptArg: string | undefined,
   options: AgentCommandOptions,
   env: CLIEnvironment,
@@ -407,6 +371,12 @@ async function handleAgentCommand(
   // Set the parameter format for gadget invocations
   builder.withParameterFormat(options.parameterFormat);
 
+  // Generate unique emoji markers for this session
+  // Each CLI invocation gets random markers to avoid collisions with user content
+  const markers = generateMarkers();
+  builder.withGadgetStartPrefix(markers.startPrefix);
+  builder.withGadgetEndPrefix(markers.endPrefix);
+
   // Build and start the agent
   const agent = builder.ask(prompt);
 
@@ -469,39 +439,21 @@ async function handleAgentCommand(
  *
  * @param program - Commander program to register the command with
  * @param env - CLI environment for dependencies and I/O
+ * @param config - Optional configuration defaults from config file
  */
-export function registerAgentCommand(program: Command, env: CLIEnvironment): void {
-  program
+export function registerAgentCommand(
+  program: Command,
+  env: CLIEnvironment,
+  config?: AgentConfig,
+): void {
+  const cmd = program
     .command(COMMANDS.agent)
     .description("Run the llmist agent loop with optional gadgets.")
-    .argument("[prompt]", "Prompt for the agent loop. Falls back to stdin when available.")
-    .option(OPTION_FLAGS.model, OPTION_DESCRIPTIONS.model, DEFAULT_MODEL)
-    .option(OPTION_FLAGS.systemPrompt, OPTION_DESCRIPTIONS.systemPrompt)
-    .option(
-      OPTION_FLAGS.temperature,
-      OPTION_DESCRIPTIONS.temperature,
-      createNumericParser({ label: "Temperature", min: 0, max: 2 }),
-    )
-    .option(
-      OPTION_FLAGS.maxIterations,
-      OPTION_DESCRIPTIONS.maxIterations,
-      createNumericParser({ label: "Max iterations", integer: true, min: 1 }),
-    )
-    .option(
-      OPTION_FLAGS.gadgetModule,
-      OPTION_DESCRIPTIONS.gadgetModule,
-      (value: string, previous: string[] = []) => [...previous, value],
-      [] as string[],
-    )
-    .option(
-      OPTION_FLAGS.parameterFormat,
-      OPTION_DESCRIPTIONS.parameterFormat,
-      parseParameterFormat,
-      DEFAULT_PARAMETER_FORMAT,
-    )
-    .option(OPTION_FLAGS.noBuiltins, OPTION_DESCRIPTIONS.noBuiltins)
-    .option(OPTION_FLAGS.noBuiltinInteraction, OPTION_DESCRIPTIONS.noBuiltinInteraction)
-    .action((prompt, options) =>
-      executeAction(() => handleAgentCommand(prompt, options as AgentCommandOptions, env), env),
-    );
+    .argument("[prompt]", "Prompt for the agent loop. Falls back to stdin when available.");
+
+  addAgentOptions(cmd, config);
+
+  cmd.action((prompt, options) =>
+    executeAction(() => executeAgent(prompt, options as AgentCommandOptions, env), env),
+  );
 }

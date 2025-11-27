@@ -189,11 +189,11 @@ export class Agent {
       content: message.content,
     }));
 
-    this.conversation = new ConversationManager(
-      baseMessages,
-      initialMessages,
-      this.parameterFormat,
-    );
+    this.conversation = new ConversationManager(baseMessages, initialMessages, {
+      parameterFormat: this.parameterFormat,
+      startPrefix: options.gadgetStartPrefix,
+      endPrefix: options.gadgetEndPrefix,
+    });
     this.userPromptProvided = !!options.userPrompt;
     if (options.userPrompt) {
       this.conversation.addUserMessage(options.userPrompt);

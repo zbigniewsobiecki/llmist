@@ -4,7 +4,14 @@ import packageJson from "../../package.json";
 
 import { registerAgentCommand } from "./agent-command.js";
 import { registerCompleteCommand } from "./complete-command.js";
+import {
+  type CLIConfig,
+  type CustomCommandConfig,
+  getCustomCommandNames,
+  loadConfig,
+} from "./config.js";
 import { registerModelsCommand } from "./models-command.js";
+import { registerCustomCommand } from "./custom-command.js";
 import {
   CLI_DESCRIPTION,
   CLI_NAME,
@@ -39,9 +46,10 @@ interface GlobalOptions {
  * Creates and configures the CLI program with complete and agent commands.
  *
  * @param env - CLI environment configuration for I/O and dependencies
+ * @param config - Optional CLI configuration loaded from config file
  * @returns Configured Commander program ready for parsing
  */
-export function createProgram(env: CLIEnvironment): Command {
+export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command {
   const program = new Command();
 
   program
@@ -55,20 +63,53 @@ export function createProgram(env: CLIEnvironment): Command {
       writeErr: (str) => env.stderr.write(str),
     });
 
-  registerCompleteCommand(program, env);
-  registerAgentCommand(program, env);
+  // Register built-in commands with config defaults
+  registerCompleteCommand(program, env, config?.complete);
+  registerAgentCommand(program, env, config?.agent);
   registerModelsCommand(program, env);
 
+  // Register custom commands from config
+  if (config) {
+    const customNames = getCustomCommandNames(config);
+    for (const name of customNames) {
+      const cmdConfig = config[name] as CustomCommandConfig;
+      registerCustomCommand(program, name, cmdConfig, env);
+    }
+  }
+
   return program;
+}
+
+/**
+ * Options for runCLI function.
+ */
+export interface RunCLIOptions {
+  /** Environment overrides for testing or customization */
+  env?: Partial<CLIEnvironment>;
+  /** Config override - if provided, skips loading from file. Use {} to disable config. */
+  config?: CLIConfig;
 }
 
 /**
  * Main entry point for running the CLI.
  * Creates environment, parses arguments, and executes the appropriate command.
  *
- * @param overrides - Optional environment overrides for testing or customization
+ * @param overrides - Optional environment overrides or options object
  */
-export async function runCLI(overrides: Partial<CLIEnvironment> = {}): Promise<void> {
+export async function runCLI(
+  overrides: Partial<CLIEnvironment> | RunCLIOptions = {},
+): Promise<void> {
+  // Handle both old signature (Partial<CLIEnvironment>) and new signature (RunCLIOptions)
+  const opts: RunCLIOptions =
+    "env" in overrides || "config" in overrides
+      ? (overrides as RunCLIOptions)
+      : { env: overrides as Partial<CLIEnvironment> };
+
+  // Load config early (before program creation) - errors here should fail fast
+  // If config is provided in options, use it instead of loading from file
+  const config = opts.config !== undefined ? opts.config : loadConfig();
+  const envOverrides = opts.env ?? {};
+
   // First pass: parse global options only (skip if help requested)
   const preParser = new Command();
   preParser
@@ -82,13 +123,14 @@ export async function runCLI(overrides: Partial<CLIEnvironment> = {}): Promise<v
   const globalOpts = preParser.opts<GlobalOptions>();
 
   // Create environment with logger config from global options
+  // Priority: CLI flags > config file > defaults
   const loggerConfig: CLILoggerConfig = {
-    logLevel: globalOpts.logLevel,
-    logFile: globalOpts.logFile,
+    logLevel: globalOpts.logLevel ?? config.global?.["log-level"],
+    logFile: globalOpts.logFile ?? config.global?.["log-file"],
   };
 
   const defaultEnv = createDefaultEnvironment(loggerConfig);
-  const env: CLIEnvironment = { ...defaultEnv, ...overrides };
-  const program = createProgram(env);
+  const env: CLIEnvironment = { ...defaultEnv, ...envOverrides };
+  const program = createProgram(env, config);
   await program.parseAsync(env.argv);
 }

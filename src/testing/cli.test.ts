@@ -15,7 +15,6 @@ import {
   StreamPrinter,
 } from "../cli/utils.js";
 import type { LLMist } from "../core/client.js";
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import { createLogger } from "../logging/logger.js";
@@ -153,7 +152,7 @@ describe("runCLI", () => {
         ]),
     });
 
-    await runCLI(env);
+    await runCLI({ env, config: {} });
 
     expect(stdout.read()).toBe("Hello world\n");
     // New compact format: ↑ 2 | ↓ 3 | stop
@@ -180,7 +179,7 @@ describe("runCLI", () => {
         ]),
     });
 
-    await runCLI(env);
+    await runCLI({ env, config: {} });
 
     expect(stdout.read()).toBe("Agent response\n");
     // New compact format: #1 | ↑ 1 | ↓ 2 | stop
@@ -189,27 +188,29 @@ describe("runCLI", () => {
     expect(stderr.read()).toContain("↓");
   });
 
-  it("handles gadget result events and errors", async () => {
+  it("handles agent with no gadget calls", async () => {
     const stdout = createWritable();
     const stderr = createWritable();
+    const usage: TokenUsage = { inputTokens: 5, outputTokens: 10, totalTokens: 15 };
     const env = createEnv({
       argv: ["node", "llmist", "agent", "--model", "test:model", "Test"],
       stdout: stdout.stream,
       stderr: stderr.stream,
       createClient: () =>
         createTestClient([
-          chunk(
-            `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
-          ),
-          chunk("", { finishReason: "stop" }),
+          chunk("Agent completed task without using any tools.", {
+            finishReason: "stop",
+            usage,
+          }),
         ]),
     });
 
-    await runCLI(env);
+    await runCLI({ env, config: {} });
 
-    // Gadget won't be found since each CLI invocation creates a new registry, so we expect an error
-    expect(stderr.read()).toContain("TestGadget");
-    expect(stderr.read()).toContain("error:");
+    // Agent output goes to stdout
+    expect(stdout.read()).toBe("Agent completed task without using any tools.\n");
+    // Summary goes to stderr
+    expect(stderr.read()).toContain("stop");
   });
 });
 
