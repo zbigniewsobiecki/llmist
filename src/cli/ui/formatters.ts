@@ -14,7 +14,44 @@
  */
 
 import chalk from "chalk";
+import { marked, type MarkedExtension } from "marked";
+import { markedTerminal } from "marked-terminal";
 import type { TokenUsage } from "../../core/options.js";
+
+/**
+ * Configure marked for terminal output.
+ *
+ * Uses marked-terminal to convert markdown to ANSI-styled terminal output.
+ * This enables rich formatting in TellUser messages and AskUser questions.
+ *
+ * Note: Type assertion needed due to @types/marked-terminal lag behind the runtime API.
+ */
+marked.use(markedTerminal() as unknown as MarkedExtension);
+
+/**
+ * Renders markdown text as styled terminal output.
+ *
+ * Converts markdown syntax to ANSI escape codes for terminal display:
+ * - **bold** and *italic* text
+ * - `inline code` and code blocks
+ * - Lists (bulleted and numbered)
+ * - Headers
+ * - Links (clickable in supported terminals)
+ *
+ * @param text - Markdown text to render
+ * @returns ANSI-styled string for terminal output
+ *
+ * @example
+ * ```typescript
+ * renderMarkdown("**Important:** Check the `config.json` file");
+ * // Returns styled text with bold "Important:" and code-styled "config.json"
+ * ```
+ */
+export function renderMarkdown(text: string): string {
+  const rendered = marked.parse(text) as string;
+  // Remove trailing newlines that marked adds
+  return rendered.trimEnd();
+}
 
 /**
  * Formats token count with 'k' suffix for thousands.
@@ -313,10 +350,11 @@ export function formatGadgetSummary(result: GadgetResult): string {
   const icon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
   const summaryLine = `${icon} ${gadgetLabel}${paramsLabel} ${chalk.dim("→")} ${outputLabel} ${timeLabel}`;
 
-  // TellUser gadget: display full message content below the summary
+  // TellUser gadget: display full message content below the summary (with markdown)
   if (result.gadgetName === "TellUser" && result.parameters?.message) {
     const message = String(result.parameters.message);
-    return `${summaryLine}\n${message}`;
+    const rendered = renderMarkdown(message);
+    return `${summaryLine}\n${rendered}`;
   }
 
   return summaryLine;

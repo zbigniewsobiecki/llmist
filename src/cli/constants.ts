@@ -21,7 +21,7 @@ export type LogLevelName = (typeof LOG_LEVELS)[number];
 export const DEFAULT_MODEL = "openai:gpt-5-nano";
 
 /** Default parameter format for gadgets */
-export const DEFAULT_PARAMETER_FORMAT: ParameterFormat = "json";
+export const DEFAULT_PARAMETER_FORMAT: ParameterFormat = "yaml";
 
 /** Command-line option flags */
 export const OPTION_FLAGS = {
