@@ -66,12 +66,10 @@ function formatParamsAsYaml(params: Record<string, unknown>): string {
   for (const [key, value] of Object.entries(params)) {
     const formattedValue = formatYamlValue(value, "");
     if (formattedValue.startsWith("\n")) {
-      // Object or array - value on next lines
+      // Object or array - value on next lines (no space before newline)
       lines.push(`${key}:${formattedValue}`);
-    } else if (formattedValue.startsWith("|")) {
-      // Pipe multiline - needs space before pipe
-      lines.push(`${key}: ${formattedValue}`);
     } else {
+      // Simple value or pipe multiline - space before value
       lines.push(`${key}: ${formattedValue}`);
     }
   }

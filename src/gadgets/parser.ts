@@ -174,6 +174,20 @@ export class StreamParser {
   }
 
   /**
+   * Parse gadget name, handling both old format (name:invocationId) and new format (just name).
+   * For new format, generates a unique invocation ID.
+   */
+  private parseGadgetName(gadgetName: string): { actualName: string; invocationId: string } {
+    if (gadgetName.includes(":")) {
+      // Old format: gadgetName:invocationId - support for backward compatibility
+      const parts = gadgetName.split(":");
+      return { actualName: parts[0], invocationId: parts[1] };
+    }
+    // New format: just gadget name, generate unique ID
+    return { actualName: gadgetName, invocationId: `gadget_${++globalInvocationCounter}` };
+  }
+
+  /**
    * Parse parameter string according to configured format
    */
   private parseParameters(raw: string): {
@@ -232,21 +246,7 @@ export class StreamParser {
       if (metadataEndIndex === -1) break; // Wait for more data
 
       const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
-
-      // Check if this is old format (contains colon for invocation ID)
-      let invocationId: string;
-      let actualGadgetName: string;
-
-      if (gadgetName.includes(":")) {
-        // Old format: gadgetName:invocationId - support for backward compatibility
-        const parts = gadgetName.split(":");
-        actualGadgetName = parts[0];
-        invocationId = parts[1];
-      } else {
-        // New format: just gadget name
-        actualGadgetName = gadgetName;
-        invocationId = `gadget_${++globalInvocationCounter}`;
-      }
+      const { actualName: actualGadgetName, invocationId } = this.parseGadgetName(gadgetName);
 
       const contentStartIndex = metadataEndIndex + 1;
 
@@ -356,19 +356,8 @@ export class StreamParser {
 
       if (metadataEndIndex !== -1) {
         const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
+        const { actualName: actualGadgetName, invocationId } = this.parseGadgetName(gadgetName);
         const contentStartIndex = metadataEndIndex + 1;
-
-        // Parse name (handle old format with colon)
-        let actualGadgetName: string;
-        let invocationId: string;
-        if (gadgetName.includes(":")) {
-          const parts = gadgetName.split(":");
-          actualGadgetName = parts[0];
-          invocationId = parts[1];
-        } else {
-          actualGadgetName = gadgetName;
-          invocationId = `gadget_${++globalInvocationCounter}`;
-        }
 
         // Extract parameters (everything after the newline to end of buffer)
         const parametersRaw = this.buffer.substring(contentStartIndex).trim();
