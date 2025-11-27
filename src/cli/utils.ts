@@ -292,11 +292,16 @@ export class StreamProgress {
       ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
       : this.callOutputTokens;
 
-    // Build status parts: #N | ↑ in │ ↓ out │ time | cost
+    // Build status parts: #N model | ↑ in │ ↓ out │ time | cost
     const parts: string[] = [];
 
-    // #N (iteration number)
-    parts.push(chalk.cyan(`#${this.currentIteration}`));
+    // #N model (iteration number + model name)
+    const iterPart = chalk.cyan(`#${this.currentIteration}`);
+    if (this.model) {
+      parts.push(`${iterPart} ${chalk.magenta(this.model)}`);
+    } else {
+      parts.push(iterPart);
+    }
 
     // ↑ input tokens
     if (this.callInputTokens > 0) {

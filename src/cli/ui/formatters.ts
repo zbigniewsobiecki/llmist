@@ -179,6 +179,9 @@ export interface SummaryMetadata {
   /** Number of agent iterations (LLM calls) */
   iterations?: number;
 
+  /** Model name/ID being used */
+  model?: string;
+
   /** Total cost in USD (calculated via ModelRegistry) */
   cost?: number;
 
@@ -225,9 +228,17 @@ export interface SummaryMetadata {
 export function renderSummary(metadata: SummaryMetadata): string | null {
   const parts: string[] = [];
 
-  // Iteration number (#N) - shown first for context
+  // Iteration number and model (#N modelname) - shown first for context
   if (metadata.iterations !== undefined) {
-    parts.push(chalk.cyan(`#${metadata.iterations}`));
+    const iterPart = chalk.cyan(`#${metadata.iterations}`);
+    if (metadata.model) {
+      parts.push(`${iterPart} ${chalk.magenta(metadata.model)}`);
+    } else {
+      parts.push(iterPart);
+    }
+  } else if (metadata.model) {
+    // Model without iteration number
+    parts.push(chalk.magenta(metadata.model));
   }
 
   // Token usage (↑ input │ ↓ output) - core metrics

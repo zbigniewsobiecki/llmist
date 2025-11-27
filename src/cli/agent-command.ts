@@ -319,6 +319,7 @@ async function handleAgentCommand(
           if (stderrTTY) {
             const summary = renderSummary({
               iterations: context.iteration + 1,
+              model: options.model,
               usage: context.usage,
               elapsedSeconds: callElapsed,
               cost: callCost,
