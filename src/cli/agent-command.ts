@@ -191,6 +191,19 @@ async function handleAgentCommand(
     }
   };
 
+  // Count tokens for gadget output text
+  const countGadgetOutputTokens = async (output: string | undefined): Promise<number | undefined> => {
+    if (!output) return undefined;
+    try {
+      // Wrap gadget output as assistant message for accurate token counting
+      const messages: LLMMessage[] = [{ role: "assistant", content: output }];
+      return await client.countTokens(options.model, messages);
+    } catch {
+      // Fallback: return undefined to trigger byte count fallback in formatter
+      return undefined;
+    }
+  };
+
   // Build the agent with hooks for progress tracking
   // SHOWCASE: This demonstrates llmist's observer pattern for building custom UIs
   //
@@ -314,7 +327,9 @@ async function handleAgentCommand(
       // Only displayed in TTY mode (hidden when piped)
       progress.pause();
       if (stderrTTY) {
-        env.stderr.write(`${formatGadgetSummary(event.result)}\n`);
+        // Count tokens for output using provider-specific API
+        const tokenCount = await countGadgetOutputTokens(event.result.result);
+        env.stderr.write(`${formatGadgetSummary({ ...event.result, tokenCount })}\n`);
       }
       // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
     }
