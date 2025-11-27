@@ -1,8 +1,9 @@
 import * as yaml from "js-yaml";
+import { load as parseToml } from "js-toml";
 import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type { StreamEvent } from "./types.js";
 
-export type ParameterFormat = "json" | "yaml" | "auto";
+export type ParameterFormat = "json" | "yaml" | "toml" | "auto";
 
 /**
  * Preprocess YAML to handle common LLM output issues.
@@ -262,16 +263,29 @@ export class StreamParser {
       }
     }
 
-    // Auto-detect: try JSON first, then YAML
+    if (this.parameterFormat === "toml") {
+      try {
+        return { parameters: parseToml(raw) as Record<string, unknown> };
+      } catch (error) {
+        return { parseError: error instanceof Error ? error.message : "Failed to parse TOML" };
+      }
+    }
+
+    // Auto-detect: try JSON first, then TOML, then YAML
     try {
       return { parameters: JSON.parse(raw) as Record<string, unknown> };
     } catch {
       try {
-        return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
-      } catch (error) {
-        return {
-          parseError: error instanceof Error ? error.message : "Failed to parse as JSON or YAML",
-        };
+        return { parameters: parseToml(raw) as Record<string, unknown> };
+      } catch {
+        try {
+          return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
+        } catch (error) {
+          return {
+            parseError:
+              error instanceof Error ? error.message : "Failed to parse as JSON, TOML, or YAML",
+          };
+        }
       }
     }
   }

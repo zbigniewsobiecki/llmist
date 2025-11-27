@@ -21,7 +21,7 @@ export type LogLevelName = (typeof LOG_LEVELS)[number];
 export const DEFAULT_MODEL = "openai:gpt-5-nano";
 
 /** Default parameter format for gadgets */
-export const DEFAULT_PARAMETER_FORMAT: ParameterFormat = "yaml";
+export const DEFAULT_PARAMETER_FORMAT: ParameterFormat = "toml";
 
 /** Command-line option flags */
 export const OPTION_FLAGS = {
@@ -47,7 +47,7 @@ export const OPTION_DESCRIPTIONS = {
   maxIterations: "Maximum number of agent loop iterations before exiting.",
   gadgetModule:
     "Path or module specifier for a gadget export. Repeat to register multiple gadgets.",
-  parameterFormat: "Format for gadget parameter schemas: 'json', 'yaml', or 'auto'.",
+  parameterFormat: "Format for gadget parameter schemas: 'json', 'yaml', 'toml', or 'auto'.",
   logLevel: "Log level: silly, trace, debug, info, warn, error, fatal.",
   logFile: "Path to log file. When set, logs are written to file instead of stderr.",
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",

@@ -16,7 +16,7 @@ llmist is an asynchonous, streaming-first, provider-agnostic LLM client that mak
 ## 🎯 Why llmist?
 
 - **🌍 Universal** - Works with any LLM provider (OpenAI, Anthropic, Gemini, custom)
-- **📝 No Structured Outputs** - Flexible YAML/JSON grammar works with any text model
+- **📝 No Structured Outputs** - Flexible TOML/YAML/JSON grammar works with any text model
 - **⚡ Streaming-First** - Built for real-time responses and efficient error handling
 - **🪝 Powerful Hooks** - Monitor, customize, and control every step of execution
 - **🎨 Beautiful API** - Fluent builder pattern with model shortcuts and presets
@@ -56,6 +56,9 @@ cat document.txt | llmist complete "Summarize" --model gpt-5-nano
 ```bash
 # Disable built-in gadgets
 bunx llmist agent "Task" --no-builtins -g ./my-tools.ts
+
+# Override parameter format (default: toml, options: toml, yaml, json, auto)
+bunx llmist agent "Task" --parameter-format yaml -g ./my-tools.ts
 ```
 
 📖 **[CLI Reference](./docs/CLI.md)** | **[CLI Gadgets Guide](./docs/CLI_GADGETS.md)**

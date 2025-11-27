@@ -78,6 +78,54 @@ function formatParamsAsYaml(params: Record<string, unknown>): string {
 }
 
 /**
+ * Format a value for TOML output, using triple-quoted strings for multiline content.
+ */
+function formatTomlValue(value: unknown): string {
+  if (typeof value === "string") {
+    if (value.includes("\n")) {
+      // Multiline: use triple-quoted string
+      return `"""\n${value}\n"""`;
+    }
+    // Single line: use regular quoted string
+    return JSON.stringify(value);
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (value === null || value === undefined) {
+    // TOML doesn't have null, use empty string
+    return '""';
+  }
+
+  if (Array.isArray(value)) {
+    // TOML arrays use brackets
+    return JSON.stringify(value);
+  }
+
+  if (typeof value === "object") {
+    // For nested objects, use inline table syntax
+    return JSON.stringify(value);
+  }
+
+  return JSON.stringify(value);
+}
+
+/**
+ * Format parameters object as TOML.
+ */
+function formatParamsAsToml(params: Record<string, unknown>): string {
+  const lines: string[] = [];
+
+  for (const [key, value] of Object.entries(params)) {
+    lines.push(`${key} = ${formatTomlValue(value)}`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
  * Internal base class for gadgets. Most users should use the `Gadget` class
  * (formerly TypedGadget) or `createGadget()` function instead, as they provide
  * better type safety and simpler APIs.
@@ -142,7 +190,7 @@ export abstract class BaseGadget {
    * Generate instruction text for the LLM with format-specific schema.
    * Combines name, description, and parameter schema into a formatted instruction.
    *
-   * @param format - Format for the schema representation ('json' | 'yaml' | 'auto')
+   * @param format - Format for the schema representation ('json' | 'yaml' | 'toml' | 'auto')
    * @returns Formatted instruction string
    */
   getInstruction(format: ParameterFormat = "json"): string {
@@ -162,6 +210,10 @@ export abstract class BaseGadget {
 
       if (format === "json" || format === "auto") {
         parts.push("\n\nInput Schema (JSON):");
+        parts.push(JSON.stringify(jsonSchema, null, 2));
+      } else if (format === "toml") {
+        // TOML uses JSON-like schema representation since TOML doesn't have a native schema format
+        parts.push("\n\nInput Schema (TOML):");
         parts.push(JSON.stringify(jsonSchema, null, 2));
       } else {
         const yamlSchema = yaml.dump(jsonSchema).trimEnd();
@@ -189,6 +241,8 @@ export abstract class BaseGadget {
         parts.push("Input:");
         if (format === "json" || format === "auto") {
           parts.push(JSON.stringify(example.params, null, 2));
+        } else if (format === "toml") {
+          parts.push(formatParamsAsToml(example.params as Record<string, unknown>));
         } else {
           // Use custom formatter that applies pipe multiline syntax for strings
           parts.push(formatParamsAsYaml(example.params as Record<string, unknown>));
