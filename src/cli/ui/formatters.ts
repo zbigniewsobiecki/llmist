@@ -187,77 +187,137 @@ export interface GadgetResult {
 
   /** Whether this gadget execution ended the agent loop */
   breaksLoop?: boolean;
+
+  /** Parameters passed to the gadget */
+  parameters?: Record<string, unknown>;
+
+  /** Token count for output (calculated via provider API) */
+  tokenCount?: number;
 }
 
 /**
- * Formats a gadget execution result for stderr output with color-coded status.
+ * Formats a gadget execution result as a compact one-liner for stderr output.
  *
  * Provides visual feedback for gadget execution during agent runs. Different
  * icons and colors indicate success, error, or completion states.
  *
  * **Format:**
- * - Success: `✓ GadgetName → result 123ms`
- * - Error: `✗ GadgetName error: message 123ms`
- * - Completion: `⏹ GadgetName finished: result 123ms`
+ * - Success: `✓ GadgetName(param=value, ...) → 248 tokens 123ms`
+ * - Error: `✗ GadgetName(param=value) error: message 123ms`
+ * - Completion: `⏹ GadgetName(param=value) → 2.5k tokens 123ms`
  *
- * **Special handling:**
- * - TellUser gadget shows full result (user-facing messages)
- * - Other gadgets truncate long results to 80 chars (keep output clean)
+ * **Design:**
+ * - All parameters shown inline (truncated if too long)
+ * - Output shown as token count (via provider API) or bytes as fallback
+ * - Execution time always shown at the end
  *
  * @param result - Gadget execution result with timing and output info
- * @returns Formatted summary string with ANSI colors
+ * @returns Formatted one-liner string with ANSI colors
  *
  * @example
  * ```typescript
- * // Successful gadget execution
+ * // Successful gadget execution with token count
  * formatGadgetSummary({
- *   gadgetName: "Calculator",
- *   executionTimeMs: 45,
- *   result: "345"
+ *   gadgetName: "ListDirectory",
+ *   executionTimeMs: 4,
+ *   parameters: { path: ".", recursive: true },
+ *   result: "Type | Name | Size...",
+ *   tokenCount: 248
  * });
- * // Output: "✓ Calculator → 345 45ms" (with colors)
+ * // Output: "✓ ListDirectory(path=., recursive=true) → 248 tokens 4ms"
  *
  * // Error case
  * formatGadgetSummary({
- *   gadgetName: "Database",
- *   executionTimeMs: 123,
- *   error: "Connection timeout"
+ *   gadgetName: "ReadFile",
+ *   executionTimeMs: 2,
+ *   parameters: { path: "/missing.txt" },
+ *   error: "File not found"
  * });
- * // Output: "✗ Database error: Connection timeout 123ms" (with red colors)
- *
- * // Loop-breaking gadget (TellUser with done=true)
- * formatGadgetSummary({
- *   gadgetName: "TellUser",
- *   executionTimeMs: 12,
- *   result: "Task completed successfully!",
- *   breaksLoop: true
- * });
- * // Output: "⏹ TellUser finished: Task completed successfully! 12ms" (with yellow)
+ * // Output: "✗ ReadFile(path=/missing.txt) error: File not found 2ms"
  * ```
  */
+/**
+ * Formats parameters as a compact inline string with color-coded keys and values.
+ *
+ * @param params - Parameter key-value pairs
+ * @returns Formatted string with dim keys and cyan values, e.g., "path=., recursive=true"
+ */
+function formatParametersInline(params: Record<string, unknown> | undefined): string {
+  if (!params || Object.keys(params).length === 0) {
+    return "";
+  }
+
+  return Object.entries(params)
+    .map(([key, value]) => {
+      // Format value compactly
+      let formatted: string;
+      if (typeof value === "string") {
+        // Truncate long strings
+        formatted = value.length > 30 ? `${value.slice(0, 30)}…` : value;
+      } else if (typeof value === "boolean" || typeof value === "number") {
+        formatted = String(value);
+      } else {
+        // For arrays/objects, show compact JSON
+        const json = JSON.stringify(value);
+        formatted = json.length > 30 ? `${json.slice(0, 30)}…` : json;
+      }
+      // Color: dim key, = sign, cyan value
+      return `${chalk.dim(key)}${chalk.dim("=")}${chalk.cyan(formatted)}`;
+    })
+    .join(chalk.dim(", "));
+}
+
+/**
+ * Formats byte count in human-readable form.
+ *
+ * @param bytes - Number of bytes
+ * @returns Formatted string like "245 bytes" or "1.2 KB"
+ */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} bytes`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function formatGadgetSummary(result: GadgetResult): string {
   // Format gadget name and execution time
   const gadgetLabel = chalk.magenta.bold(result.gadgetName);
   const timeLabel = chalk.dim(`${Math.round(result.executionTimeMs)}ms`);
 
-  // Error case - show error message in red
+  // Format parameters inline (parentheses are dim, content is color-coded)
+  const paramsStr = formatParametersInline(result.parameters);
+  const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
+
+  // Error case - show error message in red (one-liner)
   if (result.error) {
-    return `${chalk.red("✗")} ${gadgetLabel} ${chalk.red("error:")} ${result.error} ${timeLabel}`;
+    const errorMsg = result.error.length > 50 ? `${result.error.slice(0, 50)}…` : result.error;
+    return `${chalk.red("✗")} ${gadgetLabel}${paramsLabel} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
   }
 
-  // Loop-breaking case - indicate completion in yellow
-  if (result.breaksLoop) {
-    return `${chalk.yellow("⏹")} ${gadgetLabel} ${chalk.yellow("finished:")} ${result.result} ${timeLabel}`;
+  // Format output size: prefer token count if available, fallback to bytes
+  let outputLabel: string;
+  if (result.tokenCount !== undefined && result.tokenCount > 0) {
+    outputLabel = chalk.green(`${formatTokens(result.tokenCount)} tokens`);
+  } else if (result.result) {
+    const outputBytes = Buffer.byteLength(result.result, "utf-8");
+    outputLabel = outputBytes > 0 ? chalk.green(formatBytes(outputBytes)) : chalk.dim("no output");
+  } else {
+    outputLabel = chalk.dim("no output");
   }
 
-  // Success case - format result with optional truncation
-  const maxLen = 80;
-  const shouldTruncate = result.gadgetName !== "TellUser";
-  const resultText = result.result
-    ? shouldTruncate && result.result.length > maxLen
-      ? `${result.result.slice(0, maxLen)}...`
-      : result.result
-    : "";
+  // Build the summary line
+  const icon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
+  const summaryLine = `${icon} ${gadgetLabel}${paramsLabel} ${chalk.dim("→")} ${outputLabel} ${timeLabel}`;
 
-  return `${chalk.green("✓")} ${gadgetLabel} ${chalk.dim("→")} ${resultText} ${timeLabel}`;
+  // TellUser gadget: display full message content below the summary
+  if (result.gadgetName === "TellUser" && result.parameters?.message) {
+    const message = String(result.parameters.message);
+    return `${summaryLine}\n${message}`;
+  }
+
+  return summaryLine;
 }
