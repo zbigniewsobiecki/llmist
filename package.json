@@ -86,7 +86,7 @@
     "commander": "^12.1.0",
     "js-toml": "^1.0.2",
     "js-yaml": "^4.1.0",
-    "marked": "^17.0.1",
+    "marked": "^15.0.12",
     "marked-terminal": "^7.3.0",
     "openai": "^6.0.0",
     "tiktoken": "^1.0.22",
