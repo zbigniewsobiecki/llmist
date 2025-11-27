@@ -935,4 +935,69 @@ name: test`;
       expect(parsed.items).toEqual(["first", "second", "third"]);
     });
   });
+
+  describe("pipe block indentation normalization", () => {
+    it("normalizes inconsistent indentation in pipe blocks", async () => {
+      const yaml = await import("js-yaml");
+
+      // LLM output with inconsistent indentation in pipe block
+      const input = `question: |
+    I found 25 files. Which file would you like me to inspect first
+  opportunities?
+    Options: types.ts, useAgentMutations.ts`;
+
+      const preprocessed = preprocessYaml(input);
+
+      // Should parse without error
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.question).toContain("I found 25 files");
+      expect(parsed.question).toContain("opportunities?");
+      expect(parsed.question).toContain("Options:");
+    });
+
+    it("preserves correctly formatted pipe blocks", async () => {
+      const yaml = await import("js-yaml");
+
+      const input = `content: |
+  line one
+  line two
+  line three`;
+
+      const preprocessed = preprocessYaml(input);
+
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.content).toBe("line one\nline two\nline three\n");
+    });
+
+    it("handles nested pipe blocks correctly", async () => {
+      const yaml = await import("js-yaml");
+
+      const input = `outer:
+  inner: |
+    nested content
+    more content
+  other: value`;
+
+      const preprocessed = preprocessYaml(input);
+
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect((parsed.outer as Record<string, unknown>).inner).toContain("nested content");
+      expect((parsed.outer as Record<string, unknown>).other).toBe("value");
+    });
+
+    it("handles empty lines within pipe blocks", async () => {
+      const yaml = await import("js-yaml");
+
+      const input = `message: |
+  first paragraph
+
+  second paragraph`;
+
+      const preprocessed = preprocessYaml(input);
+
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.message).toContain("first paragraph");
+      expect(parsed.message).toContain("second paragraph");
+    });
+  });
 });

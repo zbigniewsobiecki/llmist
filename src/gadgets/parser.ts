@@ -7,7 +7,7 @@ export type ParameterFormat = "json" | "yaml" | "auto";
 /**
  * Preprocess YAML to handle common LLM output issues.
  *
- * Handles two patterns:
+ * Handles three patterns:
  * 1. Single-line values with colons: `key: value with: colon` → `key: "value with: colon"`
  * 2. Multi-line continuations where LLM writes:
  *    ```
@@ -22,6 +22,13 @@ export type ParameterFormat = "json" | "yaml" | "auto";
  *      - list item 1
  *      - list item 2
  *    ```
+ * 3. Pipe blocks with inconsistent indentation:
+ *    ```
+ *    key: |
+ *        first line (4 spaces)
+ *      second line (2 spaces - wrong!)
+ *    ```
+ *    Normalizes to consistent indentation based on minimum indent.
  *
  * @internal Exported for testing only
  */
@@ -40,14 +47,59 @@ export function preprocessYaml(yamlStr: string): string {
     if (match) {
       const [, indent, key, value] = match;
 
-      // Skip if already quoted, is a pipe/block indicator, or is a boolean/number
+      // Handle pipe/block indicators - need to check for inconsistent indentation
+      if (value === "|" || value === ">" || value === "|-" || value === ">-") {
+        result.push(line);
+        i++;
+
+        // Collect all block content lines
+        const keyIndentLen = indent.length;
+        const blockLines: { content: string; originalIndent: number }[] = [];
+        let minContentIndent = Infinity;
+
+        while (i < lines.length) {
+          const blockLine = lines[i];
+          const blockIndentMatch = blockLine.match(/^(\s*)/);
+          const blockIndentLen = blockIndentMatch ? blockIndentMatch[1].length : 0;
+
+          // Empty lines are part of the block
+          if (blockLine.trim() === "") {
+            blockLines.push({ content: "", originalIndent: 0 });
+            i++;
+            continue;
+          }
+
+          // Lines must be more indented than the key to be part of block
+          if (blockIndentLen > keyIndentLen) {
+            const content = blockLine.substring(blockIndentLen);
+            blockLines.push({ content, originalIndent: blockIndentLen });
+            if (content.trim().length > 0) {
+              minContentIndent = Math.min(minContentIndent, blockIndentLen);
+            }
+            i++;
+          } else {
+            // End of block
+            break;
+          }
+        }
+
+        // Normalize indentation: use minimum indent found as the base
+        const targetIndent = keyIndentLen + 2; // Standard 2-space indent from key
+        for (const blockLine of blockLines) {
+          if (blockLine.content === "") {
+            result.push("");
+          } else {
+            // All content gets the same base indentation
+            result.push(" ".repeat(targetIndent) + blockLine.content);
+          }
+        }
+        continue;
+      }
+
+      // Skip if already quoted or is a boolean/number
       if (
         value.startsWith('"') ||
         value.startsWith("'") ||
-        value === "|" ||
-        value === ">" ||
-        value === "|-" ||
-        value === ">-" ||
         value === "true" ||
         value === "false" ||
         /^-?\d+(\.\d+)?$/.test(value)
