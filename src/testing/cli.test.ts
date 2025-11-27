@@ -153,7 +153,7 @@ describe("runCLI", () => {
         ]),
     });
 
-    await runCLI(env);
+    await runCLI({ env, config: {} });
 
     expect(stdout.read()).toBe("Hello world\n");
     // New compact format: ↑ 2 | ↓ 3 | stop
@@ -180,7 +180,7 @@ describe("runCLI", () => {
         ]),
     });
 
-    await runCLI(env);
+    await runCLI({ env, config: {} });
 
     expect(stdout.read()).toBe("Agent response\n");
     // New compact format: #1 | ↑ 1 | ↓ 2 | stop
@@ -205,7 +205,7 @@ describe("runCLI", () => {
         ]),
     });
 
-    await runCLI(env);
+    await runCLI({ env, config: {} });
 
     // Gadget won't be found since each CLI invocation creates a new registry, so we expect an error
     expect(stderr.read()).toContain("TestGadget");

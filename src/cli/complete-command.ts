@@ -4,10 +4,14 @@ import { LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { TokenUsage } from "../core/options.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
-import { COMMANDS, DEFAULT_MODEL, OPTION_DESCRIPTIONS, OPTION_FLAGS } from "./constants.js";
+import type { CompleteConfig } from "./config.js";
+import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import {
-  createNumericParser,
+  addCompleteOptions,
+  type CompleteCommandOptions,
+} from "./option-helpers.js";
+import {
   executeAction,
   renderSummary,
   resolvePrompt,
@@ -16,24 +20,14 @@ import {
 } from "./utils.js";
 
 /**
- * Configuration options for the complete command.
- */
-interface CompleteCommandOptions {
-  model: string;
-  system?: string;
-  temperature?: number;
-  maxTokens?: number;
-}
-
-/**
- * Handles the complete command execution.
+ * Executes the complete command.
  * Streams a single LLM response without agent loop or gadgets.
  *
  * @param promptArg - User prompt from command line argument (optional if using stdin)
  * @param options - Complete command options (model, system prompt, temperature, etc.)
  * @param env - CLI environment for I/O operations
  */
-async function handleCompleteCommand(
+export async function executeComplete(
   promptArg: string | undefined,
   options: CompleteCommandOptions,
   env: CLIEnvironment,
@@ -108,28 +102,21 @@ async function handleCompleteCommand(
  *
  * @param program - Commander program to register the command with
  * @param env - CLI environment for dependencies and I/O
+ * @param config - Optional configuration defaults from config file
  */
-export function registerCompleteCommand(program: Command, env: CLIEnvironment): void {
-  program
+export function registerCompleteCommand(
+  program: Command,
+  env: CLIEnvironment,
+  config?: CompleteConfig,
+): void {
+  const cmd = program
     .command(COMMANDS.complete)
     .description("Stream a single completion from a specified model.")
-    .argument("[prompt]", "Prompt to send to the LLM. If omitted, stdin is used when available.")
-    .option(OPTION_FLAGS.model, OPTION_DESCRIPTIONS.model, DEFAULT_MODEL)
-    .option(OPTION_FLAGS.systemPrompt, OPTION_DESCRIPTIONS.systemPrompt)
-    .option(
-      OPTION_FLAGS.temperature,
-      OPTION_DESCRIPTIONS.temperature,
-      createNumericParser({ label: "Temperature", min: 0, max: 2 }),
-    )
-    .option(
-      OPTION_FLAGS.maxTokens,
-      OPTION_DESCRIPTIONS.maxTokens,
-      createNumericParser({ label: "Max tokens", integer: true, min: 1 }),
-    )
-    .action((prompt, options) =>
-      executeAction(
-        () => handleCompleteCommand(prompt, options as CompleteCommandOptions, env),
-        env,
-      ),
-    );
+    .argument("[prompt]", "Prompt to send to the LLM. If omitted, stdin is used when available.");
+
+  addCompleteOptions(cmd, config);
+
+  cmd.action((prompt, options) =>
+    executeAction(() => executeComplete(prompt, options as CompleteCommandOptions, env), env),
+  );
 }
