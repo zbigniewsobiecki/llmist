@@ -13,13 +13,16 @@ export type ParameterFormat = "json" | "yaml" | "auto";
  * @example
  * Input:  "question: What is this: a test?"
  * Output: 'question: "What is this: a test?"'
+ *
+ * @internal Exported for testing only
  */
-function preprocessYaml(yamlStr: string): string {
+export function preprocessYaml(yamlStr: string): string {
   return yamlStr
     .split("\n")
     .map((line) => {
       // Match lines like "key: value with: colon" where value isn't quoted or using pipe
-      const match = line.match(/^(\s*)(\w+):\s+(.+)$/);
+      // Support keys with hyphens/underscores (e.g., my-key, my_key)
+      const match = line.match(/^(\s*)([\w-]+):\s+(.+)$/);
       if (match) {
         const [, indent, key, value] = match;
         // Skip if already quoted, is a pipe/block indicator, or is a boolean/number
@@ -34,8 +37,10 @@ function preprocessYaml(yamlStr: string): string {
         ) {
           return line;
         }
-        // If value contains colon followed by space (YAML key-value pattern), quote it
-        if (value.includes(": ")) {
+        // Quote if value contains problematic colon patterns:
+        // - ": " (colon followed by space - YAML key-value pattern)
+        // - Trailing colon at end of value (e.g., "Choose one:")
+        if (value.includes(": ") || value.endsWith(":")) {
           const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
           return `${indent}${key}: "${escaped}"`;
         }
