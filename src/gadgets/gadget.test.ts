@@ -179,3 +179,149 @@ describe("BaseGadget", () => {
     }
   });
 });
+
+describe("BaseGadget examples", () => {
+  it("renders single example with comment and output in JSON format", () => {
+    class ExampleGadget extends Gadget({
+      description: "Test gadget with example",
+      schema: z.object({
+        value: z.number(),
+      }),
+      examples: [{ params: { value: 42 }, output: "Result: 42", comment: "Basic usage" }],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new ExampleGadget();
+    const instruction = gadget.getInstruction("json");
+
+    expect(instruction).toContain("Examples:");
+    expect(instruction).toContain("# Basic usage");
+    expect(instruction).toContain("Input:");
+    expect(instruction).toContain('"value": 42');
+    expect(instruction).toContain("Output:");
+    expect(instruction).toContain("Result: 42");
+  });
+
+  it("renders single example in YAML format", () => {
+    class YamlExampleGadget extends Gadget({
+      description: "Test",
+      schema: z.object({ name: z.string() }),
+      examples: [{ params: { name: "test" }, output: "hello", comment: "YAML example" }],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new YamlExampleGadget();
+    const instruction = gadget.getInstruction("yaml");
+
+    expect(instruction).toContain("Examples:");
+    expect(instruction).toContain("# YAML example");
+    expect(instruction).toContain("name: test");
+    expect(instruction).toContain("Output:");
+    expect(instruction).toContain("hello");
+  });
+
+  it("renders multiple examples with blank line separation", () => {
+    class MultiExampleGadget extends Gadget({
+      description: "Test gadget",
+      schema: z.object({ op: z.string() }),
+      examples: [
+        { params: { op: "first" }, comment: "First example" },
+        { params: { op: "second" }, comment: "Second example" },
+      ],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new MultiExampleGadget();
+    const instruction = gadget.getInstruction("json");
+
+    expect(instruction).toContain("# First example");
+    expect(instruction).toContain("# Second example");
+    // Verify blank line between examples (multiple newlines)
+    expect(instruction).toMatch(/first"[\s\S]*?\n\n# Second/);
+  });
+
+  it("omits Examples section when no examples provided", () => {
+    class NoExamplesGadget extends Gadget({
+      description: "Test",
+      schema: z.object({ x: z.number() }),
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new NoExamplesGadget();
+    const instruction = gadget.getInstruction("json");
+
+    expect(instruction).not.toContain("Examples:");
+  });
+
+  it("omits Examples section when examples array is empty", () => {
+    class EmptyExamplesGadget extends Gadget({
+      description: "Test",
+      schema: z.object({ x: z.number() }),
+      examples: [],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new EmptyExamplesGadget();
+    const instruction = gadget.getInstruction("json");
+
+    expect(instruction).not.toContain("Examples:");
+  });
+
+  it("renders example without output", () => {
+    class NoOutputGadget extends Gadget({
+      description: "Test",
+      schema: z.object({ x: z.number() }),
+      examples: [{ params: { x: 1 }, comment: "Just input" }],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new NoOutputGadget();
+    const instruction = gadget.getInstruction("json");
+
+    expect(instruction).toContain("Examples:");
+    expect(instruction).toContain("# Just input");
+    expect(instruction).toContain("Input:");
+    expect(instruction).not.toContain("Output:");
+  });
+
+  it("renders example without comment", () => {
+    class NoCommentGadget extends Gadget({
+      description: "Test",
+      schema: z.object({ x: z.number() }),
+      examples: [{ params: { x: 5 }, output: "five" }],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new NoCommentGadget();
+    const instruction = gadget.getInstruction("json");
+
+    expect(instruction).toContain("Examples:");
+    expect(instruction).toContain("Input:");
+    expect(instruction).toContain('"x": 5');
+    expect(instruction).toContain("Output:");
+    expect(instruction).toContain("five");
+    // Should not have a # line since no comment
+    expect(instruction).not.toMatch(/Examples:\n#/);
+  });
+});

@@ -4,6 +4,78 @@ import type { ZodTypeAny } from "zod";
 import type { ParameterFormat } from "./parser.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
+import type { GadgetExample } from "./types.js";
+
+/**
+ * Format a value for YAML output, using pipe multiline syntax for strings.
+ * This teaches LLMs to use proper multiline syntax which avoids YAML parsing issues
+ * when strings contain characters like `-` at line starts (list items) or `:` (mappings).
+ */
+function formatYamlValue(value: unknown, indent: string = ""): string {
+  if (typeof value === "string") {
+    // Always use pipe multiline syntax for strings to teach LLMs the correct pattern
+    const lines = value.split("\n");
+    if (lines.length === 1 && !value.includes(":") && !value.startsWith("-")) {
+      // Simple single-line string without special chars - can use plain style
+      return value;
+    }
+    // Use pipe (literal block) style for multiline or strings with special chars
+    const indentedLines = lines.map((line) => `${indent}  ${line}`).join("\n");
+    return `|\n${indentedLines}`;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (value === null || value === undefined) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    const items = value.map((item) => `${indent}- ${formatYamlValue(item, indent + "  ")}`);
+    return "\n" + items.join("\n");
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value);
+    if (entries.length === 0) return "{}";
+    const lines = entries.map(([k, v]) => {
+      const formattedValue = formatYamlValue(v, indent + "  ");
+      // If value starts with newline (arrays/objects), don't add space after colon
+      if (formattedValue.startsWith("\n") || formattedValue.startsWith("|")) {
+        return `${indent}${k}: ${formattedValue}`;
+      }
+      return `${indent}${k}: ${formattedValue}`;
+    });
+    return "\n" + lines.join("\n");
+  }
+
+  // Fallback to yaml.dump for complex types
+  return yaml.dump(value).trimEnd();
+}
+
+/**
+ * Format parameters object as YAML with pipe multiline syntax for all string values.
+ * This ensures examples teach LLMs to use the correct pattern.
+ */
+function formatParamsAsYaml(params: Record<string, unknown>): string {
+  const lines: string[] = [];
+
+  for (const [key, value] of Object.entries(params)) {
+    const formattedValue = formatYamlValue(value, "");
+    if (formattedValue.startsWith("\n")) {
+      // Object or array - value on next lines (no space before newline)
+      lines.push(`${key}:${formattedValue}`);
+    } else {
+      // Simple value or pipe multiline - space before value
+      lines.push(`${key}: ${formattedValue}`);
+    }
+  }
+
+  return lines.join("\n");
+}
 
 /**
  * Internal base class for gadgets. Most users should use the `Gadget` class
@@ -38,6 +110,15 @@ export abstract class BaseGadget {
    * Set to 0 or undefined to disable timeout for this gadget.
    */
   timeoutMs?: number;
+
+  /**
+   * Optional usage examples to help LLMs understand proper invocation.
+   * Examples are rendered in getInstruction() alongside the schema.
+   *
+   * Note: Uses broader `unknown` type to allow typed examples from subclasses
+   * while maintaining runtime compatibility.
+   */
+  examples?: GadgetExample<unknown>[];
 
   /**
    * Execute the gadget with the given parameters.
@@ -87,6 +168,38 @@ export abstract class BaseGadget {
         parts.push("\n\nInput Schema (YAML):");
         parts.push(yamlSchema);
       }
+    }
+
+    // Render examples if present
+    if (this.examples && this.examples.length > 0) {
+      parts.push("\n\nExamples:");
+
+      this.examples.forEach((example, index) => {
+        // Add blank line between examples (but not before the first one)
+        if (index > 0) {
+          parts.push("");
+        }
+
+        // Add comment if provided
+        if (example.comment) {
+          parts.push(`# ${example.comment}`);
+        }
+
+        // Render params in the appropriate format
+        parts.push("Input:");
+        if (format === "json" || format === "auto") {
+          parts.push(JSON.stringify(example.params, null, 2));
+        } else {
+          // Use custom formatter that applies pipe multiline syntax for strings
+          parts.push(formatParamsAsYaml(example.params as Record<string, unknown>));
+        }
+
+        // Render output if provided
+        if (example.output !== undefined) {
+          parts.push("Output:");
+          parts.push(example.output);
+        }
+      });
     }
 
     return parts.join("\n");

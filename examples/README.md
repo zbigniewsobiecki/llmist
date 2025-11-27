@@ -31,6 +31,7 @@ bunx tsx examples/01-basic-usage.ts
 | [06-model-catalog.ts](./06-model-catalog.ts) | Model queries, cost estimation |
 | [07-logging.ts](./07-logging.ts) | Verbose logging, debugging |
 | [08-hook-presets-advanced.ts](./08-hook-presets-advanced.ts) | Advanced preset patterns, cost tracking, analytics |
+| [09-filesystem-gadgets.ts](./09-filesystem-gadgets.ts) | Secure file system operations with path sandboxing |
 | [13-syntactic-sugar.ts](./13-syntactic-sugar.ts) | Fluent API showcase |
 
 ## Quick Reference

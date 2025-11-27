@@ -506,6 +506,124 @@ ${GADGET_END_PREFIX}TestGadget:123`;
       });
     });
   });
+
+  describe("robust gadget termination", () => {
+    it("parses gadget when stream ends without end marker", () => {
+      const yamlParser = new StreamParser({ parameterFormat: "yaml" });
+      const events = collectSyncEvents(
+        yamlParser.feed(`${GADGET_START_PREFIX}Test\nkey: value\n`),
+      );
+      // During feed(), no events yet since we're waiting for more data
+      expect(events).toEqual([]);
+
+      // On finalize, the incomplete gadget should be parsed
+      const finalEvents = collectSyncEvents(yamlParser.finalize());
+      expect(finalEvents).toHaveLength(1);
+      expect(finalEvents[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "Test",
+          parameters: { key: "value" },
+        },
+      });
+    });
+
+    it("ends gadget when next gadget starts without end marker", () => {
+      const yamlParser = new StreamParser({ parameterFormat: "yaml" });
+      const events = collectSyncEvents(
+        yamlParser.feed(
+          `${GADGET_START_PREFIX}First\na: 1\n${GADGET_START_PREFIX}Second\nb: 2\n${GADGET_END_PREFIX}`,
+        ),
+      );
+
+      // Should parse both gadgets - first one ends implicitly when second starts
+      expect(events).toHaveLength(2);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "First",
+          parameters: { a: 1 },
+        },
+      });
+      expect(events[1]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "Second",
+          parameters: { b: 2 },
+        },
+      });
+    });
+
+    it("handles text before incomplete gadget at stream end", () => {
+      const yamlParser = new StreamParser({ parameterFormat: "yaml" });
+      const events = collectSyncEvents(
+        yamlParser.feed(`Some text\n${GADGET_START_PREFIX}Test\nkey: value`),
+      );
+      // During feed(), only the text is yielded
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: "text", content: "Some text\n" });
+
+      // On finalize, the incomplete gadget should be parsed
+      const finalEvents = collectSyncEvents(yamlParser.finalize());
+      expect(finalEvents).toHaveLength(1);
+      expect(finalEvents[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "Test",
+          parameters: { key: "value" },
+        },
+      });
+    });
+
+    it("handles gadget with malformed end marker (e.g., just !!!) at stream end", () => {
+      // This tests the case where LLM outputs !!! instead of !!!GADGET_END
+      const yamlParser = new StreamParser({ parameterFormat: "yaml" });
+      const events = collectSyncEvents(
+        yamlParser.feed(`${GADGET_START_PREFIX}AskUser\nquestion: Which file?\n!!!\n`),
+      );
+
+      // During feed(), no events since !!! is not a valid end marker
+      expect(events).toEqual([]);
+
+      // On finalize, should parse the gadget (the !!! becomes part of params and may cause parse error)
+      const finalEvents = collectSyncEvents(yamlParser.finalize());
+      expect(finalEvents).toHaveLength(1);
+      expect(finalEvents[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "AskUser",
+        },
+      });
+    });
+
+    it("handles three consecutive gadgets without any end markers", () => {
+      const yamlParser = new StreamParser({ parameterFormat: "yaml" });
+      const events = collectSyncEvents(
+        yamlParser.feed(
+          `${GADGET_START_PREFIX}First\na: 1\n${GADGET_START_PREFIX}Second\nb: 2\n${GADGET_START_PREFIX}Third\nc: 3\n`,
+        ),
+      );
+
+      // First two should be parsed (each ends when next starts)
+      expect(events).toHaveLength(2);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: { gadgetName: "First", parameters: { a: 1 } },
+      });
+      expect(events[1]).toMatchObject({
+        type: "gadget_call",
+        call: { gadgetName: "Second", parameters: { b: 2 } },
+      });
+
+      // Third gadget parsed on finalize
+      const finalEvents = collectSyncEvents(yamlParser.finalize());
+      expect(finalEvents).toHaveLength(1);
+      expect(finalEvents[0]).toMatchObject({
+        type: "gadget_call",
+        call: { gadgetName: "Third", parameters: { c: 3 } },
+      });
+    });
+  });
 });
 
 describe("preprocessYaml", () => {
@@ -658,6 +776,228 @@ count: 42`);
       const input = "path: C:\\Users: test";
       const result = preprocessYaml(input);
       expect(result).toBe('path: "C:\\\\Users: test"');
+    });
+  });
+
+  describe("multiline continuation handling", () => {
+    it("converts value with trailing colon followed by indented list items to pipe multiline", () => {
+      const input = `question: I suggest these as priority:
+  - packages/sdk/src/index.ts
+  - packages/sdk/src/niuClient.ts
+  - packages/sdk/src/trpc.ts`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`question: |
+  I suggest these as priority:
+  - packages/sdk/src/index.ts
+  - packages/sdk/src/niuClient.ts
+  - packages/sdk/src/trpc.ts`);
+    });
+
+    it("converts continuation lines with nested colons", () => {
+      const input = `message: Choose an option:
+  - Option A: fast processing
+  - Option B: thorough analysis`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`message: |
+  Choose an option:
+  - Option A: fast processing
+  - Option B: thorough analysis`);
+    });
+
+    it("handles continuation with regular text (not just list items)", () => {
+      const input = `content: Start of text
+  continuation line one
+  continuation line two`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`content: |
+  Start of text
+  continuation line one
+  continuation line two`);
+    });
+
+    it("stops continuation at less-indented line", () => {
+      const input = `question: Pick one:
+  - Option A
+  - Option B
+otherKey: value`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`question: |
+  Pick one:
+  - Option A
+  - Option B
+otherKey: value`);
+    });
+
+    it("handles multiple keys with continuation", () => {
+      const input = `first: Some options:
+  - A
+  - B
+second: More choices:
+  - X
+  - Y`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`first: |
+  Some options:
+  - A
+  - B
+second: |
+  More choices:
+  - X
+  - Y`);
+    });
+
+    it("does not convert when no continuation lines follow", () => {
+      const input = "question: Choose one:";
+      const result = preprocessYaml(input);
+      // Falls back to quoting since no continuation
+      expect(result).toBe('question: "Choose one:"');
+    });
+
+    it("handles empty lines in continuation", () => {
+      const input = `message: List:
+  - Item 1
+
+  - Item 2`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`message: |
+  List:
+  - Item 1
+
+  - Item 2`);
+    });
+
+    it("normalizes varying indentation in continuation", () => {
+      const input = `question: Options:
+    - Deeply indented
+  - Less indented`;
+      const result = preprocessYaml(input);
+      // Both lines should be normalized to 2-space indent
+      expect(result).toBe(`question: |
+  Options:
+  - Deeply indented
+  - Less indented`);
+    });
+
+    it("produces valid YAML that parses correctly (integration test)", async () => {
+      const yaml = await import("js-yaml");
+
+      // This is the exact pattern that caused the "bad indentation of a mapping entry" error
+      const input = `question: I can read the core SDK files. Which files should I start with? I suggest these as priority:
+  - packages/sdk/src/index.ts
+  - packages/sdk/src/niuClient.ts
+  - packages/sdk/src/trpc.ts
+  You can also specify other files.`;
+
+      const preprocessed = preprocessYaml(input);
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+
+      expect(parsed).toBeDefined();
+      expect(parsed.question).toContain("I can read the core SDK");
+      expect(parsed.question).toContain("packages/sdk/src/index.ts");
+      expect(parsed.question).toContain("packages/sdk/src/niuClient.ts");
+      expect(parsed.question).toContain("You can also specify other files");
+    });
+
+    it("does NOT transform valid nested YAML structures", async () => {
+      const yaml = await import("js-yaml");
+
+      // Valid YAML with nested objects - should NOT be transformed
+      const input = `config:
+  timeout: 30
+  retries: 3
+name: test`;
+
+      const preprocessed = preprocessYaml(input);
+      // Should be unchanged
+      expect(preprocessed).toBe(input);
+
+      // Should parse correctly as nested object
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.config).toEqual({ timeout: 30, retries: 3 });
+      expect(parsed.name).toBe("test");
+    });
+
+    it("does NOT transform valid YAML arrays", async () => {
+      const yaml = await import("js-yaml");
+
+      // Valid YAML array - should NOT be transformed
+      const input = `items:
+  - first
+  - second
+  - third`;
+
+      const preprocessed = preprocessYaml(input);
+      // Should be unchanged
+      expect(preprocessed).toBe(input);
+
+      // Should parse correctly as array
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.items).toEqual(["first", "second", "third"]);
+    });
+  });
+
+  describe("pipe block indentation normalization", () => {
+    it("normalizes inconsistent indentation in pipe blocks", async () => {
+      const yaml = await import("js-yaml");
+
+      // LLM output with inconsistent indentation in pipe block
+      const input = `question: |
+    I found 25 files. Which file would you like me to inspect first
+  opportunities?
+    Options: types.ts, useAgentMutations.ts`;
+
+      const preprocessed = preprocessYaml(input);
+
+      // Should parse without error
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.question).toContain("I found 25 files");
+      expect(parsed.question).toContain("opportunities?");
+      expect(parsed.question).toContain("Options:");
+    });
+
+    it("preserves correctly formatted pipe blocks", async () => {
+      const yaml = await import("js-yaml");
+
+      const input = `content: |
+  line one
+  line two
+  line three`;
+
+      const preprocessed = preprocessYaml(input);
+
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.content).toBe("line one\nline two\nline three\n");
+    });
+
+    it("handles nested pipe blocks correctly", async () => {
+      const yaml = await import("js-yaml");
+
+      const input = `outer:
+  inner: |
+    nested content
+    more content
+  other: value`;
+
+      const preprocessed = preprocessYaml(input);
+
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect((parsed.outer as Record<string, unknown>).inner).toContain("nested content");
+      expect((parsed.outer as Record<string, unknown>).other).toBe("value");
+    });
+
+    it("handles empty lines within pipe blocks", async () => {
+      const yaml = await import("js-yaml");
+
+      const input = `message: |
+  first paragraph
+
+  second paragraph`;
+
+      const preprocessed = preprocessYaml(input);
+
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+      expect(parsed.message).toContain("first paragraph");
+      expect(parsed.message).toContain("second paragraph");
     });
   });
 });

@@ -23,6 +23,7 @@
 
 import type { ZodType } from "zod";
 import { BaseGadget } from "./gadget.js";
+import type { GadgetExample } from "./types.js";
 
 /**
  * Infer the TypeScript type from a Zod schema.
@@ -47,6 +48,9 @@ export interface CreateGadgetConfig<TSchema extends ZodType> {
 
   /** Optional timeout in milliseconds */
   timeoutMs?: number;
+
+  /** Optional usage examples to help LLMs understand proper invocation */
+  examples?: GadgetExample<InferSchema<TSchema>>[];
 }
 
 /**
@@ -117,6 +121,7 @@ export function createGadget<TSchema extends ZodType>(
     description = config.description;
     parameterSchema = config.schema;
     timeoutMs = config.timeoutMs;
+    examples = config.examples;
 
     execute(params: Record<string, unknown>): string | Promise<string> {
       // Cast to inferred type and call user's function

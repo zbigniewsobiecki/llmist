@@ -1,33 +1,8 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { z } from "zod";
-import { createGadget } from "../../src/index.js";
-import { validatePathIsWithinCwd } from "./fs-utils.js";
-
-/**
- * ReadFile gadget - Reads the entire content of a file and returns it as text.
- * All file paths are validated to be within the current working directory.
- */
-export const readFile = createGadget({
-  name: "ReadFile",
-  description:
-    "Read the entire content of a file and return it as text. The file path must be within the current working directory or its subdirectories.",
-  schema: z.object({
-    filePath: z
-      .string()
-      .describe("Path to the file to read (relative or absolute)"),
-  }),
-  execute: ({ filePath }) => {
-    // Validate path is within CWD
-    const validatedPath = validatePathIsWithinCwd(filePath);
-
-    // Read and return file content
-    const content = fs.readFileSync(validatedPath, "utf-8");
-
-    // Show params on first line, content follows
-    return `path=${filePath}\n\n${content}`;
-  },
-});
+import { createGadget } from "../../../src/index.js";
+import { validatePathIsWithinCwd } from "./utils.js";
 
 /**
  * Represents metadata for a file system entry
@@ -100,12 +75,11 @@ function listFiles(
             // Skip directories outside CWD or inaccessible
           }
         }
-      } catch (error) {
+      } catch {
         // Skip entries that can't be accessed (permission denied, etc.)
-        continue;
       }
     }
-  } catch (error) {
+  } catch {
     // If we can't read the directory, return empty array
     return [];
   }
@@ -168,14 +142,12 @@ function formatEntriesAsString(entries: FileEntry[]): string {
   };
 
   // URL-encode special chars that would break parsing
-  const encodeName = (name: string) =>
-    name.replace(/\|/g, "%7C").replace(/\n/g, "%0A");
+  const encodeName = (name: string) => name.replace(/\|/g, "%7C").replace(/\n/g, "%0A");
 
   // Build compact output
   const header = "#T|N|S|A";
   const rows = sortedEntries.map(
-    (e) =>
-      `${typeCode[e.type]}|${encodeName(e.relativePath)}|${e.size}|${formatAge(e.modified)}`
+    (e) => `${typeCode[e.type]}|${encodeName(e.relativePath)}|${e.size}|${formatAge(e.modified)}`
   );
 
   return [header, ...rows].join("\n");
@@ -190,10 +162,7 @@ export const listDirectory = createGadget({
   description:
     "List files and directories in a directory with full details (names, types, sizes, modification dates). Use maxDepth to explore subdirectories recursively. The directory path must be within the current working directory or its subdirectories.",
   schema: z.object({
-    directoryPath: z
-      .string()
-      .default(".")
-      .describe("Path to the directory to list"),
+    directoryPath: z.string().default(".").describe("Path to the directory to list"),
     maxDepth: z
       .number()
       .int()
@@ -204,6 +173,19 @@ export const listDirectory = createGadget({
         "Maximum depth to recurse (1 = immediate children only, 2 = include grandchildren, etc.)"
       ),
   }),
+  examples: [
+    {
+      params: { directoryPath: "." },
+      output: "path=. maxDepth=1\n\n#T|N|S|A\nD|src|0|2h\nD|tests|0|1d\nF|package.json|2841|3h",
+      comment: "List current directory",
+    },
+    {
+      params: { directoryPath: "src", maxDepth: 2 },
+      output:
+        "path=src maxDepth=2\n\n#T|N|S|A\nD|components|0|1d\nD|utils|0|2d\nF|index.ts|512|1h\nF|components/Button.tsx|1024|3h",
+      comment: "List src directory recursively",
+    },
+  ],
   execute: ({ directoryPath, maxDepth }) => {
     // Validate path is within CWD
     const validatedPath = validatePathIsWithinCwd(directoryPath);

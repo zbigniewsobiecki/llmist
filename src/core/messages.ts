@@ -204,6 +204,28 @@ ${this.endPrefix}`;
 
     parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExample}`);
 
+    // Add YAML multiline syntax guide for YAML format
+    if (parameterFormat === "yaml") {
+      parts.push(`
+
+YAML MULTILINE SYNTAX:
+For string values with special characters (colons, dashes, quotes) or multiple lines,
+use the pipe (|) syntax. ALL content lines MUST be indented with 2 spaces:
+
+CORRECT - all lines indented:
+question: |
+  Which option do you prefer?
+  - Option A: fast processing
+  - Option B: thorough analysis
+  Please choose one.
+
+WRONG - inconsistent indentation breaks YAML:
+question: |
+  Which option do you prefer?
+  - Option A: fast
+Please choose one.    <-- ERROR: not indented, breaks out of the block`);
+    }
+
     return parts.join("");
   }
 

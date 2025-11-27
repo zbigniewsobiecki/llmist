@@ -10,6 +10,18 @@ export const stringProcessor = createGadget({
       .enum(["reverse", "uppercase", "lowercase", "length", "wordcount"])
       .describe("Operation to apply"),
   }),
+  examples: [
+    {
+      params: { text: "Hello World", operation: "reverse" },
+      output: "dlroW olleH",
+      comment: "Reverse a string",
+    },
+    {
+      params: { text: "The quick brown fox", operation: "wordcount" },
+      output: "4",
+      comment: "Count words in text",
+    },
+  ],
   execute: ({ text, operation }) => {
     switch (operation) {
       case "reverse":

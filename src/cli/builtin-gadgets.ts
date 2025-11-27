@@ -24,6 +24,19 @@ export const askUser = createGadget({
       .string()
       .describe("The question to ask the user in plain-text or Markdown"),
   }),
+  examples: [
+    {
+      comment: "Ask for clarification about the task",
+      params: { question: "Which file would you like me to modify?" },
+    },
+    {
+      comment: "Ask user to choose between options",
+      params: {
+        question:
+          "I found multiple matches. Which one should I use?\n- src/utils/helper.ts\n- src/lib/helper.ts",
+      },
+    },
+  ],
   execute: ({ question }) => {
     throw new HumanInputException(question);
   },
@@ -52,6 +65,24 @@ export const tellUser = createGadget({
       .default("info")
       .describe("Message type: info, success, warning, or error"),
   }),
+  examples: [
+    {
+      comment: "Report successful completion and end the conversation",
+      params: {
+        message: "I've completed the refactoring. All tests pass.",
+        done: true,
+        type: "success",
+      },
+    },
+    {
+      comment: "Warn the user about something without ending",
+      params: {
+        message: "Found 3 files with potential issues. Continuing analysis...",
+        done: false,
+        type: "warning",
+      },
+    },
+  ],
   execute: ({ message, done, type }) => {
     // Format message for display, but return plain text for LLM context
     // This prevents ANSI color codes from polluting the conversation
