@@ -165,38 +165,41 @@ export class LLMMessageBuilder {
 
     const parts: string[] = [];
 
-    // Single gadget example
+    // Single gadget example - demonstrates quoted strings for values with colons
     const singleExample =
       parameterFormat === "yaml"
         ? `${this.startPrefix}translate
 from: English
 to: Polish
-content: Paris is the capital of France.
+content: "Paris is the capital of France: a beautiful city."
 ${this.endPrefix}`
         : `${this.startPrefix}translate
-{"from": "English", "to": "Polish", "content": "Paris is the capital of France."}
+{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
 ${this.endPrefix}`;
 
     parts.push(`\n\nEXAMPLE (Single Gadget):\n\n${singleExample}`);
 
-    // Multiple gadgets example
+    // Multiple gadgets example - demonstrates pipe syntax for multiline values
     const multipleExample =
       parameterFormat === "yaml"
         ? `${this.startPrefix}translate
 from: English
 to: Polish
-content: Paris is the capital of France.
+content: "Paris is the capital of France: a beautiful city."
 ${this.endPrefix}
 ${this.startPrefix}analyze
 type: economic_analysis
 matter: "Polish Economy"
-question: Polish arms exports 2025.
+question: |
+  Analyze the following:
+  - Polish arms exports 2025
+  - Economic implications
 ${this.endPrefix}`
         : `${this.startPrefix}translate
-{"from": "English", "to": "Polish", "content": "Paris is the capital of France."}
+{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
 ${this.endPrefix}
 ${this.startPrefix}analyze
-{"type": "economic_analysis", "matter": "Polish Economy", "question": "Polish arms exports 2025."}
+{"type": "economic_analysis", "matter": "Polish Economy", "question": "Analyze the following: Polish arms exports 2025, economic implications"}
 ${this.endPrefix}`;
 
     parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExample}`);
