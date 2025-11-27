@@ -179,6 +179,9 @@ export interface SummaryMetadata {
   /** Number of agent iterations (LLM calls) */
   iterations?: number;
 
+  /** Model name/ID being used */
+  model?: string;
+
   /** Total cost in USD (calculated via ModelRegistry) */
   cost?: number;
 
@@ -225,9 +228,17 @@ export interface SummaryMetadata {
 export function renderSummary(metadata: SummaryMetadata): string | null {
   const parts: string[] = [];
 
-  // Iteration number (#N) - shown first for context
+  // Iteration number and model (#N modelname) - shown first for context
   if (metadata.iterations !== undefined) {
-    parts.push(chalk.cyan(`#${metadata.iterations}`));
+    const iterPart = chalk.cyan(`#${metadata.iterations}`);
+    if (metadata.model) {
+      parts.push(`${iterPart} ${chalk.magenta(metadata.model)}`);
+    } else {
+      parts.push(iterPart);
+    }
+  } else if (metadata.model) {
+    // Model without iteration number
+    parts.push(chalk.magenta(metadata.model));
   }
 
   // Token usage (↑ input │ ↓ output) - core metrics
@@ -258,6 +269,77 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
   }
 
   // Join with " | " separator for visual clarity
+  return parts.join(chalk.dim(" | "));
+}
+
+/**
+ * Metadata for generating overall execution summaries.
+ *
+ * Used for the final accumulated summary at the end of agent execution.
+ */
+export interface OverallSummaryMetadata {
+  /** Total tokens across all calls */
+  totalTokens?: number;
+
+  /** Number of agent iterations (LLM calls) */
+  iterations?: number;
+
+  /** Total elapsed time in seconds */
+  elapsedSeconds?: number;
+
+  /** Total cost in USD */
+  cost?: number;
+}
+
+/**
+ * Renders overall accumulated execution summary as a distinct styled line.
+ *
+ * This is displayed at the end of agent execution to show total metrics.
+ * Uses a "total:" prefix to distinguish from per-call summaries.
+ *
+ * **Format:** `total: 3.5k | #2 | 19s | $0.0021`
+ *
+ * @param metadata - Overall summary metadata
+ * @returns Formatted summary string, or null if no fields are populated
+ *
+ * @example
+ * ```typescript
+ * renderOverallSummary({
+ *   totalTokens: 3500,
+ *   iterations: 2,
+ *   elapsedSeconds: 19,
+ *   cost: 0.0021
+ * });
+ * // Output: "total: 3.5k | #2 | 19s | $0.0021"
+ * ```
+ */
+export function renderOverallSummary(metadata: OverallSummaryMetadata): string | null {
+  const parts: string[] = [];
+
+  // Total tokens - primary metric for overall summary
+  if (metadata.totalTokens !== undefined && metadata.totalTokens > 0) {
+    parts.push(chalk.dim("total:") + chalk.magenta(` ${formatTokens(metadata.totalTokens)}`));
+  }
+
+  // Iteration count (#N)
+  if (metadata.iterations !== undefined && metadata.iterations > 0) {
+    parts.push(chalk.cyan(`#${metadata.iterations}`));
+  }
+
+  // Total elapsed time
+  if (metadata.elapsedSeconds !== undefined && metadata.elapsedSeconds > 0) {
+    parts.push(chalk.dim(`${metadata.elapsedSeconds}s`));
+  }
+
+  // Total cost
+  if (metadata.cost !== undefined && metadata.cost > 0) {
+    parts.push(chalk.cyan(`$${formatCost(metadata.cost)}`));
+  }
+
+  if (parts.length === 0) {
+    return null;
+  }
+
   return parts.join(chalk.dim(" | "));
 }
 

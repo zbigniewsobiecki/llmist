@@ -241,6 +241,14 @@ export class StreamProgress {
   }
 
   /**
+   * Get elapsed time in seconds for the current call.
+   * @returns Elapsed time in seconds with 1 decimal place
+   */
+  getCallElapsedSeconds(): number {
+    return Number(((Date.now() - this.callStartTime) / 1000).toFixed(1));
+  }
+
+  /**
    * Starts the progress indicator animation after a brief delay.
    */
   start(): void {
@@ -284,11 +292,16 @@ export class StreamProgress {
       ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
       : this.callOutputTokens;
 
-    // Build status parts: #N | ↑ in │ ↓ out │ time | cost
+    // Build status parts: #N model | ↑ in │ ↓ out │ time | cost
     const parts: string[] = [];
 
-    // #N (iteration number)
-    parts.push(chalk.cyan(`#${this.currentIteration}`));
+    // #N model (iteration number + model name)
+    const iterPart = chalk.cyan(`#${this.currentIteration}`);
+    if (this.model) {
+      parts.push(`${iterPart} ${chalk.magenta(this.model)}`);
+    } else {
+      parts.push(iterPart);
+    }
 
     // ↑ input tokens
     if (this.callInputTokens > 0) {
@@ -310,7 +323,7 @@ export class StreamProgress {
       parts.push(chalk.cyan(`$${formatCost(this.totalCost)}`));
     }
 
-    this.target.write(`\r${chalk.cyan(spinner)} ${parts.join(chalk.dim(" | "))}`);
+    this.target.write(`\r${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`);
   }
 
   private renderCumulativeMode(spinner: string): void {
@@ -332,7 +345,7 @@ export class StreamProgress {
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
-    this.target.write(`\r${chalk.cyan(spinner)} ${parts.join(chalk.dim(" | "))}`);
+    this.target.write(`\r${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`);
   }
 
   /**
