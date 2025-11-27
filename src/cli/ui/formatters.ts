@@ -34,11 +34,39 @@ let markedConfigured = false;
  * Uses marked-terminal to convert markdown to ANSI-styled terminal output.
  * This enables rich formatting in TellUser messages and AskUser questions.
  *
+ * We override marked-terminal's style functions with our own chalk instance
+ * because marked-terminal bundles its own chalk that detects colors at module
+ * load time. Bun's broken TTY detection causes that bundled chalk to detect
+ * level 0 (no colors). See: https://github.com/oven-sh/bun/issues/1322
+ *
+ * By forcing `chalk.level = 3` on our imported chalk and passing custom style
+ * functions, we ensure colors work regardless of TTY detection.
+ *
+ * Respects the NO_COLOR environment variable for accessibility.
+ *
  * Note: Type assertion needed due to @types/marked-terminal lag behind the runtime API.
  */
 function ensureMarkedConfigured(): void {
   if (!markedConfigured) {
-    marked.use(markedTerminal() as unknown as MarkedExtension);
+    // Respect NO_COLOR env var, otherwise force truecolor (level 3)
+    chalk.level = process.env.NO_COLOR ? 0 : 3;
+
+    // Override marked-terminal's style functions with our chalk instance
+    // to work around Bun's broken TTY detection
+    marked.use(
+      markedTerminal({
+        strong: chalk.bold,
+        em: chalk.italic,
+        code: chalk.yellow,
+        codespan: chalk.yellow,
+        heading: chalk.green.bold,
+        firstHeading: chalk.magenta.underline.bold,
+        link: chalk.blue,
+        href: chalk.blue.underline,
+        blockquote: chalk.gray.italic,
+        del: chalk.dim.gray.strikethrough,
+      }) as unknown as MarkedExtension,
+    );
     markedConfigured = true;
   }
 }

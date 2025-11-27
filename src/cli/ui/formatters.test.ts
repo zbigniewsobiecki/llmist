@@ -3,9 +3,13 @@ import { renderMarkdown } from "./formatters.js";
 
 describe("renderMarkdown", () => {
   describe("basic text transformation", () => {
-    it("renders plain text unchanged", () => {
+    it("renders plain text with reset codes", () => {
       const result = renderMarkdown("Hello, world!");
-      expect(result).toBe("Hello, world!");
+      // marked-terminal wraps output with ANSI reset codes
+      expect(result).toContain("Hello, world!");
+      // Verify it has ANSI codes (reset codes at minimum)
+      // Using includes instead of regex to avoid biome's noControlCharactersInRegex
+      expect(result.includes("\x1b[")).toBe(true);
     });
 
     it("removes trailing newlines", () => {
