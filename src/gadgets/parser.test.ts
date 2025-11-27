@@ -626,6 +626,217 @@ ${GADGET_END_PREFIX}TestGadget:123`;
   });
 });
 
+describe("TOML parameter format", () => {
+  beforeEach(() => {
+    resetGlobalInvocationCounter();
+  });
+
+  describe("basic TOML parsing", () => {
+    it("parses simple TOML parameters", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+from = "English"
+to = "Polish"
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "TestGadget",
+          invocationId: "gadget_1",
+          parameters: {
+            from: "English",
+            to: "Polish",
+          },
+        },
+      });
+    });
+
+    it("parses TOML with triple-quoted multiline strings", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}WriteFile
+filePath = "README.md"
+content = """
+# Project Title
+
+This is markdown content with:
+- List items
+- Special characters: # : -
+"""
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event?.type).toBe("gadget_call");
+
+      if (event?.type === "gadget_call") {
+        expect(event.call.gadgetName).toBe("WriteFile");
+        expect(event.call.parameters?.filePath).toBe("README.md");
+
+        // Verify the content preserves markdown formatting
+        const content = event.call.parameters?.content as string;
+        expect(content).toContain("# Project Title");
+        expect(content).toContain("- List items");
+        expect(content).toContain("- Special characters: # : -");
+      }
+    });
+
+    it("parses TOML with numbers and booleans", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}Config
+count = 42
+ratio = 3.14
+enabled = true
+disabled = false
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "Config",
+          parameters: {
+            count: 42,
+            ratio: 3.14,
+            enabled: true,
+            disabled: false,
+          },
+        },
+      });
+    });
+
+    it("parses TOML arrays", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}ArrayTest
+tags = ["typescript", "toml", "parsing"]
+numbers = [1, 2, 3]
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "ArrayTest",
+          parameters: {
+            tags: ["typescript", "toml", "parsing"],
+            numbers: [1, 2, 3],
+          },
+        },
+      });
+    });
+
+    it("handles invalid TOML gracefully", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}BadToml
+invalid toml [content
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "BadToml",
+          parseError: expect.any(String),
+          parameters: undefined,
+        },
+      });
+    });
+  });
+
+  describe("TOML vs YAML markdown handling", () => {
+    it("TOML handles markdown content that breaks YAML", () => {
+      // This is the exact pattern that breaks YAML parsing
+      const markdownContent = `# Typing Debt Reduction Plan
+
+Phase 1 — Baseline hardening
+- Enable targeted lint rules:
+  - no-explicit-any
+## Phase 2`;
+
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}WriteFile
+filePath = "PLAN.md"
+content = """
+${markdownContent}
+"""
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event?.type).toBe("gadget_call");
+
+      if (event?.type === "gadget_call") {
+        expect(event.call.gadgetName).toBe("WriteFile");
+        expect(event.call.parameters?.filePath).toBe("PLAN.md");
+
+        // Verify content was preserved correctly
+        const content = event.call.parameters?.content as string;
+        expect(content).toContain("# Typing Debt Reduction Plan");
+        expect(content).toContain("- Enable targeted lint rules:");
+        expect(content).toContain("## Phase 2");
+      }
+    });
+  });
+
+  describe("auto format with TOML", () => {
+    it("auto mode parses TOML when JSON fails", () => {
+      const parser = new StreamParser({ parameterFormat: "auto" });
+      const input = `${GADGET_START_PREFIX}AutoTest
+name = "test"
+value = 123
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "AutoTest",
+          parameters: {
+            name: "test",
+            value: 123,
+          },
+        },
+      });
+    });
+
+    it("auto mode prefers JSON over TOML", () => {
+      const parser = new StreamParser({ parameterFormat: "auto" });
+      const input = `${GADGET_START_PREFIX}AutoTest
+{"name": "json", "value": 456}
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "AutoTest",
+          parameters: {
+            name: "json",
+            value: 456,
+          },
+        },
+      });
+    });
+  });
+});
+
 describe("preprocessYaml", () => {
   // Import directly for unit testing
   let preprocessYaml: (yaml: string) => string;

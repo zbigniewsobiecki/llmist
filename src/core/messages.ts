@@ -1,7 +1,7 @@
 import type { BaseGadget } from "../gadgets/gadget.js";
 import type { ParameterFormat } from "../gadgets/parser.js";
 import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
-import type { PromptConfig } from "./prompt-config.js";
+import type { PromptConfig, PromptTemplate } from "./prompt-config.js";
 import { DEFAULT_PROMPTS, resolvePromptTemplate, resolveRulesTemplate } from "./prompt-config.js";
 
 export type LLMRole = "system" | "user" | "assistant";
@@ -76,8 +76,13 @@ export class LLMMessageBuilder {
       const instruction = gadget.getInstruction(parameterFormat);
 
       // Parse instruction to separate description and schema
-      const schemaMarker =
-        parameterFormat === "yaml" ? "\n\nInput Schema (YAML):" : "\n\nInput Schema (JSON):";
+      const schemaMarkers: Record<ParameterFormat, string> = {
+        yaml: "\n\nInput Schema (YAML):",
+        json: "\n\nInput Schema (JSON):",
+        toml: "\n\nInput Schema (TOML):",
+        auto: "\n\nInput Schema (JSON):", // auto defaults to JSON schema display
+      };
+      const schemaMarker = schemaMarkers[parameterFormat];
       const schemaIndex = instruction.indexOf(schemaMarker);
 
       const description = (
@@ -110,18 +115,29 @@ export class LLMMessageBuilder {
     const parts: string[] = [];
 
     // Use configurable format description
-    const formatDescription =
-      parameterFormat === "yaml"
-        ? resolvePromptTemplate(
-            this.promptConfig.formatDescriptionYaml,
-            DEFAULT_PROMPTS.formatDescriptionYaml,
-            context,
-          )
-        : resolvePromptTemplate(
-            this.promptConfig.formatDescriptionJson,
-            DEFAULT_PROMPTS.formatDescriptionJson,
-            context,
-          );
+    const formatDescriptionMap: Record<
+      ParameterFormat,
+      { config?: PromptTemplate; defaultValue: PromptTemplate }
+    > = {
+      yaml: {
+        config: this.promptConfig.formatDescriptionYaml,
+        defaultValue: DEFAULT_PROMPTS.formatDescriptionYaml,
+      },
+      json: {
+        config: this.promptConfig.formatDescriptionJson,
+        defaultValue: DEFAULT_PROMPTS.formatDescriptionJson,
+      },
+      toml: {
+        config: this.promptConfig.formatDescriptionToml,
+        defaultValue: DEFAULT_PROMPTS.formatDescriptionToml,
+      },
+      auto: {
+        config: this.promptConfig.formatDescriptionJson,
+        defaultValue: DEFAULT_PROMPTS.formatDescriptionJson,
+      },
+    };
+    const { config, defaultValue } = formatDescriptionMap[parameterFormat];
+    const formatDescription = resolvePromptTemplate(config, defaultValue, context);
 
     parts.push("\n\nHOW TO INVOKE GADGETS");
     parts.push("\n=====================\n");
@@ -165,24 +181,31 @@ export class LLMMessageBuilder {
 
     const parts: string[] = [];
 
-    // Single gadget example - demonstrates quoted strings for values with colons
-    const singleExample =
-      parameterFormat === "yaml"
-        ? `${this.startPrefix}translate
+    // Format-specific single gadget examples
+    const singleExamples: Record<ParameterFormat, string> = {
+      yaml: `${this.startPrefix}translate
 from: English
 to: Polish
 content: "Paris is the capital of France: a beautiful city."
-${this.endPrefix}`
-        : `${this.startPrefix}translate
+${this.endPrefix}`,
+      json: `${this.startPrefix}translate
 {"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
-${this.endPrefix}`;
+${this.endPrefix}`,
+      toml: `${this.startPrefix}translate
+from = "English"
+to = "Polish"
+content = "Paris is the capital of France: a beautiful city."
+${this.endPrefix}`,
+      auto: `${this.startPrefix}translate
+{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
+${this.endPrefix}`,
+    };
 
-    parts.push(`\n\nEXAMPLE (Single Gadget):\n\n${singleExample}`);
+    parts.push(`\n\nEXAMPLE (Single Gadget):\n\n${singleExamples[parameterFormat]}`);
 
-    // Multiple gadgets example - demonstrates pipe syntax for multiline values
-    const multipleExample =
-      parameterFormat === "yaml"
-        ? `${this.startPrefix}translate
+    // Format-specific multiple gadget examples (with multiline content)
+    const multipleExamples: Record<ParameterFormat, string> = {
+      yaml: `${this.startPrefix}translate
 from: English
 to: Polish
 content: "Paris is the capital of France: a beautiful city."
@@ -194,17 +217,38 @@ question: |
   Analyze the following:
   - Polish arms exports 2025
   - Economic implications
-${this.endPrefix}`
-        : `${this.startPrefix}translate
+${this.endPrefix}`,
+      json: `${this.startPrefix}translate
 {"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
 ${this.endPrefix}
 ${this.startPrefix}analyze
 {"type": "economic_analysis", "matter": "Polish Economy", "question": "Analyze the following: Polish arms exports 2025, economic implications"}
-${this.endPrefix}`;
+${this.endPrefix}`,
+      toml: `${this.startPrefix}translate
+from = "English"
+to = "Polish"
+content = "Paris is the capital of France: a beautiful city."
+${this.endPrefix}
+${this.startPrefix}analyze
+type = "economic_analysis"
+matter = "Polish Economy"
+question = """
+Analyze the following:
+- Polish arms exports 2025
+- Economic implications
+"""
+${this.endPrefix}`,
+      auto: `${this.startPrefix}translate
+{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
+${this.endPrefix}
+${this.startPrefix}analyze
+{"type": "economic_analysis", "matter": "Polish Economy", "question": "Analyze the following: Polish arms exports 2025, economic implications"}
+${this.endPrefix}`,
+    };
 
-    parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExample}`);
+    parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExamples[parameterFormat]}`);
 
-    // Add YAML multiline syntax guide for YAML format
+    // Add format-specific syntax guides
     if (parameterFormat === "yaml") {
       parts.push(`
 
@@ -224,6 +268,21 @@ question: |
   Which option do you prefer?
   - Option A: fast
 Please choose one.    <-- ERROR: not indented, breaks out of the block`);
+    } else if (parameterFormat === "toml") {
+      parts.push(`
+
+TOML MULTILINE SYNTAX:
+For string values with multiple lines or special characters, use triple-quotes ("""):
+
+filePath = "README.md"
+content = """
+# Project Title
+
+This content can contain:
+- Markdown lists
+- Special characters: # : -
+- Multiple paragraphs
+"""`);
     }
 
     return parts.join("");
@@ -290,6 +349,16 @@ Please choose one.    <-- ERROR: not indented, breaks out of the block`);
             return `${key}: ${value}`;
           }
           return `${key}: ${JSON.stringify(value)}`;
+        })
+        .join("\n");
+    }
+    if (format === "toml") {
+      return Object.entries(parameters)
+        .map(([key, value]) => {
+          if (typeof value === "string" && value.includes("\n")) {
+            return `${key} = """\n${value}\n"""`;
+          }
+          return `${key} = ${JSON.stringify(value)}`;
         })
         .join("\n");
     }
