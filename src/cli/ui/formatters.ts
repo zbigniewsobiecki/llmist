@@ -19,14 +19,29 @@ import { markedTerminal } from "marked-terminal";
 import type { TokenUsage } from "../../core/options.js";
 
 /**
- * Configure marked for terminal output.
+ * Lazy-initialized flag for marked-terminal configuration.
+ *
+ * We defer `marked.use(markedTerminal())` until first render because:
+ * - markedTerminal() captures chalk's color level at call time
+ * - At module import time, TTY detection may not be complete
+ * - Lazy init ensures colors work in interactive terminals
+ */
+let markedConfigured = false;
+
+/**
+ * Configure marked for terminal output (lazy initialization).
  *
  * Uses marked-terminal to convert markdown to ANSI-styled terminal output.
  * This enables rich formatting in TellUser messages and AskUser questions.
  *
  * Note: Type assertion needed due to @types/marked-terminal lag behind the runtime API.
  */
-marked.use(markedTerminal() as unknown as MarkedExtension);
+function ensureMarkedConfigured(): void {
+  if (!markedConfigured) {
+    marked.use(markedTerminal() as unknown as MarkedExtension);
+    markedConfigured = true;
+  }
+}
 
 /**
  * Renders markdown text as styled terminal output.
@@ -48,6 +63,7 @@ marked.use(markedTerminal() as unknown as MarkedExtension);
  * ```
  */
 export function renderMarkdown(text: string): string {
+  ensureMarkedConfigured();
   const rendered = marked.parse(text) as string;
   // Remove trailing newlines that marked adds
   return rendered.trimEnd();
