@@ -50,7 +50,7 @@ describe("Agent Architecture", () => {
       const baseMessages = [{ role: "system" as const, content: "You are helpful" }];
       const initialMessages = [{ role: "user" as const, content: "Hello" }];
 
-      const manager = new ConversationManager(baseMessages, initialMessages, "json");
+      const manager = new ConversationManager(baseMessages, initialMessages, { parameterFormat: "json" });
 
       manager.addUserMessage("What is 1+1?");
       manager.addAssistantMessage("Let me calculate that.");
@@ -94,7 +94,7 @@ describe("Agent Architecture", () => {
   describe("Architecture Benefits", () => {
     it("should demonstrate separation of concerns", () => {
       // ConversationManager handles history
-      const conversationManager = new ConversationManager([], [], "json");
+      const conversationManager = new ConversationManager([], [], { parameterFormat: "json" });
       expect(typeof conversationManager.addUserMessage).toBe("function");
       expect(typeof conversationManager.getMessages).toBe("function");
 

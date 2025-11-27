@@ -8,6 +8,17 @@ import type { ParameterFormat } from "../gadgets/parser.js";
 import type { IConversationManager } from "./interfaces.js";
 
 /**
+ * Options for ConversationManager constructor.
+ */
+export interface ConversationManagerOptions {
+  parameterFormat?: ParameterFormat;
+  /** Custom gadget start marker prefix */
+  startPrefix?: string;
+  /** Custom gadget end marker prefix */
+  endPrefix?: string;
+}
+
+/**
  * Default implementation of IConversationManager.
  * Manages conversation history by building on top of base messages (system prompt, gadget instructions).
  */
@@ -20,12 +31,17 @@ export class ConversationManager implements IConversationManager {
   constructor(
     baseMessages: LLMMessage[],
     initialMessages: LLMMessage[],
-    parameterFormat: ParameterFormat = "json",
+    options: ConversationManagerOptions = {},
   ) {
     this.baseMessages = baseMessages;
     this.initialMessages = initialMessages;
-    this.parameterFormat = parameterFormat;
+    this.parameterFormat = options.parameterFormat ?? "json";
     this.historyBuilder = new LLMMessageBuilder();
+
+    // Apply custom prefixes if provided (must match system prompt markers)
+    if (options.startPrefix && options.endPrefix) {
+      this.historyBuilder.withPrefixes(options.startPrefix, options.endPrefix);
+    }
   }
 
   addUserMessage(content: string): void {
