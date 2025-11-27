@@ -14,6 +14,7 @@ import { loadGadgets } from "./gadgets.js";
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
   executeAction,
+  generateMarkers,
   isInteractive,
   renderSummary,
   resolvePrompt,
@@ -369,6 +370,12 @@ export async function executeAgent(
 
   // Set the parameter format for gadget invocations
   builder.withParameterFormat(options.parameterFormat);
+
+  // Generate unique emoji markers for this session
+  // Each CLI invocation gets random markers to avoid collisions with user content
+  const markers = generateMarkers();
+  builder.withGadgetStartPrefix(markers.startPrefix);
+  builder.withGadgetEndPrefix(markers.endPrefix);
 
   // Build and start the agent
   const agent = builder.ask(prompt);
