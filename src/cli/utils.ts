@@ -318,7 +318,7 @@ export class StreamProgress {
       parts.push(chalk.cyan(`$${formatCost(this.totalCost)}`));
     }
 
-    this.target.write(`\r${chalk.cyan(spinner)} ${parts.join(chalk.dim(" | "))}`);
+    this.target.write(`\r${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`);
   }
 
   private renderCumulativeMode(spinner: string): void {
@@ -340,7 +340,7 @@ export class StreamProgress {
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
-    this.target.write(`\r${chalk.cyan(spinner)} ${parts.join(chalk.dim(" | "))}`);
+    this.target.write(`\r${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`);
   }
 
   /**
