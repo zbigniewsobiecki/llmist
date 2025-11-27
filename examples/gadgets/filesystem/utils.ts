@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Exception thrown when a path validation fails due to sandbox constraints.
@@ -45,10 +45,7 @@ export function validatePathIsWithinCwd(inputPath: string): string {
   // Use path.sep to prevent matching partial directory names
   const cwdWithSep = cwd + path.sep;
   if (!finalPath.startsWith(cwdWithSep) && finalPath !== cwd) {
-    throw new PathSandboxException(
-      inputPath,
-      "Path is outside the current working directory"
-    );
+    throw new PathSandboxException(inputPath, "Path is outside the current working directory");
   }
 
   return finalPath;
