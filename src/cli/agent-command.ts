@@ -60,6 +60,28 @@ function parseParameterFormat(value: string): ParameterFormat {
 }
 
 /**
+ * Prompts the user for a simple yes/no approval.
+ * Used by the gating controller to approve dangerous gadget executions.
+ *
+ * SHOWCASE: This demonstrates how to build approval workflows using llmist's
+ * controller hooks. The CLI gates RunCommand executions, but the pattern
+ * can be applied to any gadget that needs user approval.
+ *
+ * @param env - CLI environment for I/O operations
+ * @param prompt - The prompt to display to the user
+ * @returns true if user approved (answered y/yes), false otherwise
+ */
+async function promptApproval(env: CLIEnvironment, prompt: string): Promise<boolean> {
+  const rl = createInterface({ input: env.stdin, output: env.stderr });
+  try {
+    const answer = await rl.question(prompt);
+    return answer.toLowerCase().startsWith("y");
+  } finally {
+    rl.close();
+  }
+}
+
+/**
  * Creates a human input handler for interactive mode.
  * Only returns a handler if stdin is a TTY (terminal), not a pipe.
  *
@@ -272,6 +294,55 @@ async function handleAgentCommand(
 
           // End this call's progress tracking and switch to cumulative mode
           progress.endCall(context.usage);
+        },
+      },
+
+      // SHOWCASE: Controller-based approval gating for dangerous gadgets
+      //
+      // This demonstrates how to add safety layers WITHOUT modifying gadgets.
+      // The RunCommand gadget is simple - it just executes commands. The CLI
+      // adds the approval flow externally via beforeGadgetExecution controller.
+      //
+      // This pattern is composable: you can apply the same gating logic to
+      // any gadget (DeleteFile, SendEmail, etc.) without changing the gadgets.
+      controllers: {
+        beforeGadgetExecution: async (ctx) => {
+          // Only gate RunCommand - let other gadgets through
+          if (ctx.gadgetName !== "RunCommand") {
+            return { action: "proceed" };
+          }
+
+          // Only prompt for approval in interactive mode
+          const stdinTTY = isInteractive(env.stdin);
+          const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
+          if (!stdinTTY || !stderrTTY) {
+            // Non-interactive mode: deny by default for safety
+            return {
+              action: "skip",
+              syntheticResult:
+                "status=denied\n\nRunCommand requires interactive approval. Run in a terminal to approve commands.",
+            };
+          }
+
+          const command = ctx.parameters.command as string;
+
+          // Pause progress indicator and prompt for approval
+          progress.pause();
+          env.stderr.write(`\n${chalk.yellow("🔒 Execute:")} ${command}\n`);
+
+          const approved = await promptApproval(env, "   Approve? [y/n] ");
+
+          if (!approved) {
+            env.stderr.write(`   ${chalk.red("✗ Denied")}\n\n`);
+            return {
+              action: "skip",
+              syntheticResult:
+                "status=denied\n\nCommand denied by user. Ask what they'd like to do instead.",
+            };
+          }
+
+          env.stderr.write(`   ${chalk.green("✓ Approved")}\n`);
+          return { action: "proceed" };
         },
       },
     });
