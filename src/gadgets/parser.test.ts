@@ -507,3 +507,157 @@ ${GADGET_END_PREFIX}TestGadget:123`;
     });
   });
 });
+
+describe("preprocessYaml", () => {
+  // Import directly for unit testing
+  let preprocessYaml: (yaml: string) => string;
+
+  beforeEach(async () => {
+    const module = await import("./parser.js");
+    preprocessYaml = module.preprocessYaml;
+  });
+
+  describe("colon handling", () => {
+    it("quotes values containing colon followed by space", () => {
+      const input = "question: What is this: a test?";
+      const result = preprocessYaml(input);
+      expect(result).toBe('question: "What is this: a test?"');
+    });
+
+    it("quotes values with trailing colon", () => {
+      const input = "question: Choose one:";
+      const result = preprocessYaml(input);
+      expect(result).toBe('question: "Choose one:"');
+    });
+
+    it("handles multiple colons in value", () => {
+      const input = "message: Error: Connection failed: timeout";
+      const result = preprocessYaml(input);
+      expect(result).toBe('message: "Error: Connection failed: timeout"');
+    });
+
+    it("does not quote simple values without colons", () => {
+      const input = "name: John Smith";
+      const result = preprocessYaml(input);
+      expect(result).toBe("name: John Smith");
+    });
+
+    it("does not quote URLs (no space after protocol colon)", () => {
+      const input = "url: https://example.com";
+      const result = preprocessYaml(input);
+      expect(result).toBe("url: https://example.com");
+    });
+  });
+
+  describe("preserves special values", () => {
+    it("preserves already double-quoted values", () => {
+      const input = 'message: "Already: quoted"';
+      const result = preprocessYaml(input);
+      expect(result).toBe('message: "Already: quoted"');
+    });
+
+    it("preserves already single-quoted values", () => {
+      const input = "message: 'Already: quoted'";
+      const result = preprocessYaml(input);
+      expect(result).toBe("message: 'Already: quoted'");
+    });
+
+    it("preserves pipe block indicator", () => {
+      const input = "content: |";
+      const result = preprocessYaml(input);
+      expect(result).toBe("content: |");
+    });
+
+    it("preserves folded block indicator", () => {
+      const input = "content: >";
+      const result = preprocessYaml(input);
+      expect(result).toBe("content: >");
+    });
+
+    it("preserves boolean true", () => {
+      const input = "enabled: true";
+      const result = preprocessYaml(input);
+      expect(result).toBe("enabled: true");
+    });
+
+    it("preserves boolean false", () => {
+      const input = "enabled: false";
+      const result = preprocessYaml(input);
+      expect(result).toBe("enabled: false");
+    });
+
+    it("preserves integers", () => {
+      const input = "count: 42";
+      const result = preprocessYaml(input);
+      expect(result).toBe("count: 42");
+    });
+
+    it("preserves negative numbers", () => {
+      const input = "offset: -10";
+      const result = preprocessYaml(input);
+      expect(result).toBe("offset: -10");
+    });
+
+    it("preserves floats", () => {
+      const input = "ratio: 3.14";
+      const result = preprocessYaml(input);
+      expect(result).toBe("ratio: 3.14");
+    });
+  });
+
+  describe("key variations", () => {
+    it("handles keys with hyphens", () => {
+      const input = "my-key: value with: colon";
+      const result = preprocessYaml(input);
+      expect(result).toBe('my-key: "value with: colon"');
+    });
+
+    it("handles keys with underscores", () => {
+      const input = "my_key: value with: colon";
+      const result = preprocessYaml(input);
+      expect(result).toBe('my_key: "value with: colon"');
+    });
+
+    it("handles indented keys", () => {
+      const input = "  nested: value with: colon";
+      const result = preprocessYaml(input);
+      expect(result).toBe('  nested: "value with: colon"');
+    });
+  });
+
+  describe("multiline YAML", () => {
+    it("processes each line independently", () => {
+      const input = `name: John
+question: What is this: a test?
+count: 42`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`name: John
+question: "What is this: a test?"
+count: 42`);
+    });
+
+    it("preserves lines that are not key-value pairs", () => {
+      const input = `content: |
+  This is a multiline
+  block of text`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`content: |
+  This is a multiline
+  block of text`);
+    });
+  });
+
+  describe("escaping", () => {
+    it("escapes double quotes in values", () => {
+      const input = 'question: Say "hello": world';
+      const result = preprocessYaml(input);
+      expect(result).toBe('question: "Say \\"hello\\": world"');
+    });
+
+    it("escapes backslashes in values", () => {
+      const input = "path: C:\\Users: test";
+      const result = preprocessYaml(input);
+      expect(result).toBe('path: "C:\\\\Users: test"');
+    });
+  });
+});

@@ -26,7 +26,7 @@ import {
   StreamPrinter,
   StreamProgress,
 } from "./utils.js";
-import { formatGadgetSummary, type GadgetResult } from "./ui/formatters.js";
+import { formatGadgetSummary, renderMarkdown, type GadgetResult } from "./ui/formatters.js";
 
 /**
  * Configuration options for the agent command.
@@ -80,8 +80,8 @@ function createHumanInputHandler(
     progress.pause(); // Pause progress indicator during human input
     const rl = createInterface({ input: env.stdin, output: env.stdout });
     try {
-      // Display question on first prompt only
-      const questionLine = question.trim() ? `\n${question.trim()}` : "";
+      // Display question on first prompt only (with markdown rendering)
+      const questionLine = question.trim() ? `\n${renderMarkdown(question.trim())}` : "";
       let isFirst = true;
 
       // Loop until non-empty input (like a REPL)
@@ -298,8 +298,8 @@ async function handleAgentCommand(
     builder.withGadgets(...gadgets);
   }
 
-  // Note: parameterFormat is not directly supported in AgentBuilder
-  // This might need to be added to AgentBuilder API if needed
+  // Set the parameter format for gadget invocations
+  builder.withParameterFormat(options.parameterFormat);
 
   // Build and start the agent
   const agent = builder.ask(prompt);

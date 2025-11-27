@@ -14,7 +14,101 @@
  */
 
 import chalk from "chalk";
+import { marked, type MarkedExtension } from "marked";
+import { markedTerminal } from "marked-terminal";
 import type { TokenUsage } from "../../core/options.js";
+
+/**
+ * Lazy-initialized flag for marked-terminal configuration.
+ *
+ * We defer `marked.use(markedTerminal())` until first render because:
+ * - markedTerminal() captures chalk's color level at call time
+ * - At module import time, TTY detection may not be complete
+ * - Lazy init ensures colors work in interactive terminals
+ */
+let markedConfigured = false;
+
+/**
+ * Configure marked for terminal output (lazy initialization).
+ *
+ * Uses marked-terminal to convert markdown to ANSI-styled terminal output.
+ * This enables rich formatting in TellUser messages and AskUser questions.
+ *
+ * We override marked-terminal's style functions with our own chalk instance
+ * because marked-terminal bundles its own chalk that detects colors at module
+ * load time. Bun's broken TTY detection causes that bundled chalk to detect
+ * level 0 (no colors). See: https://github.com/oven-sh/bun/issues/1322
+ *
+ * By forcing `chalk.level = 3` on our imported chalk and passing custom style
+ * functions, we ensure colors work regardless of TTY detection.
+ *
+ * Respects the NO_COLOR environment variable for accessibility.
+ *
+ * Note: Type assertion needed due to @types/marked-terminal lag behind the runtime API.
+ */
+function ensureMarkedConfigured(): void {
+  if (!markedConfigured) {
+    // Respect NO_COLOR env var, otherwise force truecolor (level 3)
+    chalk.level = process.env.NO_COLOR ? 0 : 3;
+
+    // Override marked-terminal's style functions with our chalk instance
+    // to work around Bun's broken TTY detection
+    marked.use(
+      markedTerminal({
+        // Text styling
+        strong: chalk.bold,
+        em: chalk.italic,
+        del: chalk.dim.gray.strikethrough,
+
+        // Code styling
+        code: chalk.yellow,
+        codespan: chalk.yellow,
+
+        // Headings
+        heading: chalk.green.bold,
+        firstHeading: chalk.magenta.underline.bold,
+
+        // Links
+        link: chalk.blue,
+        href: chalk.blue.underline,
+
+        // Block elements
+        blockquote: chalk.gray.italic,
+
+        // List formatting - reduce indentation and add bullet styling
+        tab: 2, // Reduce from default 4 to 2 spaces
+        listitem: chalk.reset, // Keep items readable (no dim)
+      }) as unknown as MarkedExtension,
+    );
+    markedConfigured = true;
+  }
+}
+
+/**
+ * Renders markdown text as styled terminal output.
+ *
+ * Converts markdown syntax to ANSI escape codes for terminal display:
+ * - **bold** and *italic* text
+ * - `inline code` and code blocks
+ * - Lists (bulleted and numbered)
+ * - Headers
+ * - Links (clickable in supported terminals)
+ *
+ * @param text - Markdown text to render
+ * @returns ANSI-styled string for terminal output
+ *
+ * @example
+ * ```typescript
+ * renderMarkdown("**Important:** Check the `config.json` file");
+ * // Returns styled text with bold "Important:" and code-styled "config.json"
+ * ```
+ */
+export function renderMarkdown(text: string): string {
+  ensureMarkedConfigured();
+  const rendered = marked.parse(text) as string;
+  // Remove trailing newlines that marked adds
+  return rendered.trimEnd();
+}
 
 /**
  * Formats token count with 'k' suffix for thousands.
@@ -313,10 +407,11 @@ export function formatGadgetSummary(result: GadgetResult): string {
   const icon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
   const summaryLine = `${icon} ${gadgetLabel}${paramsLabel} ${chalk.dim("→")} ${outputLabel} ${timeLabel}`;
 
-  // TellUser gadget: display full message content below the summary
+  // TellUser gadget: display full message content below the summary (with markdown)
   if (result.gadgetName === "TellUser" && result.parameters?.message) {
     const message = String(result.parameters.message);
-    return `${summaryLine}\n${message}`;
+    const rendered = renderMarkdown(message);
+    return `${summaryLine}\n${rendered}`;
   }
 
   return summaryLine;

@@ -4,6 +4,52 @@ import type { StreamEvent } from "./types.js";
 
 export type ParameterFormat = "json" | "yaml" | "auto";
 
+/**
+ * Preprocess YAML to handle common LLM output issues.
+ *
+ * Auto-quotes unquoted string values that contain colons, which would otherwise
+ * be misinterpreted as nested YAML mappings.
+ *
+ * @example
+ * Input:  "question: What is this: a test?"
+ * Output: 'question: "What is this: a test?"'
+ *
+ * @internal Exported for testing only
+ */
+export function preprocessYaml(yamlStr: string): string {
+  return yamlStr
+    .split("\n")
+    .map((line) => {
+      // Match lines like "key: value with: colon" where value isn't quoted or using pipe
+      // Support keys with hyphens/underscores (e.g., my-key, my_key)
+      const match = line.match(/^(\s*)([\w-]+):\s+(.+)$/);
+      if (match) {
+        const [, indent, key, value] = match;
+        // Skip if already quoted, is a pipe/block indicator, or is a boolean/number
+        if (
+          value.startsWith('"') ||
+          value.startsWith("'") ||
+          value === "|" ||
+          value === ">" ||
+          value === "true" ||
+          value === "false" ||
+          /^-?\d+(\.\d+)?$/.test(value)
+        ) {
+          return line;
+        }
+        // Quote if value contains problematic colon patterns:
+        // - ": " (colon followed by space - YAML key-value pattern)
+        // - Trailing colon at end of value (e.g., "Choose one:")
+        if (value.includes(": ") || value.endsWith(":")) {
+          const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+          return `${indent}${key}: "${escaped}"`;
+        }
+      }
+      return line;
+    })
+    .join("\n");
+}
+
 export interface StreamParserOptions {
   startPrefix?: string;
   endPrefix?: string;
@@ -69,7 +115,7 @@ export class StreamParser {
 
     if (this.parameterFormat === "yaml") {
       try {
-        return { parameters: yaml.load(raw) as Record<string, unknown> };
+        return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
       } catch (error) {
         return { parseError: error instanceof Error ? error.message : "Failed to parse YAML" };
       }
@@ -80,7 +126,7 @@ export class StreamParser {
       return { parameters: JSON.parse(raw) as Record<string, unknown> };
     } catch {
       try {
-        return { parameters: yaml.load(raw) as Record<string, unknown> };
+        return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
       } catch (error) {
         return {
           parseError: error instanceof Error ? error.message : "Failed to parse as JSON or YAML",
