@@ -1,3 +1,7 @@
+## <small>0.5.1 (2025-11-27)</small>
+
+* fix(deps): downgrade marked to 15.x for marked-terminal compatibility (#89) ([be5d76d](https://github.com/zbigniewsobiecki/llmist/commit/be5d76d)), closes [#89](https://github.com/zbigniewsobiecki/llmist/issues/89)
+
 ## 0.5.0 (2025-11-27)
 
 * feat(ci): enforce dev-to-main workflow with source branch validation (#79) ([e656e89](https://github.com/zbigniewsobiecki/llmist/commit/e656e89)), closes [#79](https://github.com/zbigniewsobiecki/llmist/issues/79)
