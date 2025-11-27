@@ -55,16 +55,29 @@ function ensureMarkedConfigured(): void {
     // to work around Bun's broken TTY detection
     marked.use(
       markedTerminal({
+        // Text styling
         strong: chalk.bold,
         em: chalk.italic,
+        del: chalk.dim.gray.strikethrough,
+
+        // Code styling
         code: chalk.yellow,
         codespan: chalk.yellow,
+
+        // Headings
         heading: chalk.green.bold,
         firstHeading: chalk.magenta.underline.bold,
+
+        // Links
         link: chalk.blue,
         href: chalk.blue.underline,
+
+        // Block elements
         blockquote: chalk.gray.italic,
-        del: chalk.dim.gray.strikethrough,
+
+        // List formatting - reduce indentation and add bullet styling
+        tab: 2, // Reduce from default 4 to 2 spaces
+        listitem: chalk.reset, // Keep items readable (no dim)
       }) as unknown as MarkedExtension,
     );
     markedConfigured = true;
