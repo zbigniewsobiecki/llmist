@@ -1,6 +1,6 @@
 # File System Gadgets
 
-Three example gadgets that provide secure file system operations with local directory sandboxing.
+Four example gadgets that provide secure file system operations with local directory sandboxing.
 
 ## Gadgets
 
@@ -26,6 +26,28 @@ Writes content to a file. Creates parent directories if needed. Overwrites exist
 ```bash
 bun run src/cli.ts agent "Write 'Hello World' to output.txt" --gadget ./examples/gadgets/filesystem.ts
 ```
+
+### EditFile
+Edit files using ed commands. Ed is a line-oriented text editor that accepts commands via stdin.
+
+**Parameters:**
+- `filePath` (string): Path to the file to edit (relative or absolute)
+- `commands` (string): Ed commands to execute, one per line
+
+**Common ed commands:**
+- `1,$p` - Print all lines
+- `1,$s/old/new/g` - Replace all occurrences
+- `3d` - Delete line 3
+- `$a` + text + `.` - Append after last line
+- `w` - Write (save)
+- `q` - Quit
+
+**Example:**
+```bash
+bun run src/cli.ts agent "Replace all TODO with DONE in notes.txt" --gadget ./examples/gadgets/filesystem.ts
+```
+
+**Security:** Shell escape commands (`!`) are filtered to prevent arbitrary command execution.
 
 ### ListDirectory
 Lists files and directories with full metadata (type, name, size, modification date).
@@ -62,6 +84,7 @@ bun run src/cli.ts agent "Read /etc/passwd" --gadget ./examples/gadgets/filesyst
 - `filesystem/utils.ts` - Path validation utility and `PathSandboxException` class
 - `filesystem/read-file.ts` - ReadFile gadget implementation
 - `filesystem/write-file.ts` - WriteFile gadget implementation
+- `filesystem/edit-file.ts` - EditFile gadget implementation
 - `filesystem/list-directory.ts` - ListDirectory gadget implementation
 - `filesystem/index.ts` - Re-exports all gadgets
 
@@ -99,11 +122,11 @@ See `examples/09-filesystem-gadgets.ts` for a complete example:
 
 ```typescript
 import { LLMist } from "../src/index.js";
-import { readFile, writeFile, listDirectory } from "./gadgets/filesystem/index.js";
+import { readFile, writeFile, editFile, listDirectory } from "./gadgets/filesystem/index.js";
 
 const agent = LLMist.createAgent()
   .withModel("gpt-4o-mini")
-  .withGadgets(readFile, writeFile, listDirectory);
+  .withGadgets(readFile, writeFile, editFile, listDirectory);
 
 const result = await agent.ask(
   "Read package.json and tell me the version"
