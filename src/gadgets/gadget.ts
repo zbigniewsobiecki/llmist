@@ -7,21 +7,53 @@ import { validateGadgetSchema } from "./schema-validator.js";
 import type { GadgetExample } from "./types.js";
 
 /**
- * Format a value for YAML output, using pipe multiline syntax for strings.
- * This teaches LLMs to use proper multiline syntax which avoids YAML parsing issues
- * when strings contain characters like `-` at line starts (list items) or `:` (mappings).
+ * Common heredoc delimiter names, in order of preference.
+ * We try these until we find one that doesn't appear in the content.
+ */
+const HEREDOC_DELIMITERS = ["EOF", "END", "DOC", "CONTENT", "TEXT", "HEREDOC", "DATA", "BLOCK"];
+
+/**
+ * Find a safe heredoc delimiter that doesn't appear alone on a line in the content.
+ */
+function findSafeDelimiter(content: string): string {
+  const lines = content.split("\n");
+  for (const delimiter of HEREDOC_DELIMITERS) {
+    // Check if this delimiter appears alone on any line
+    const regex = new RegExp(`^${delimiter}\\s*$`);
+    const isUsed = lines.some((line) => regex.test(line));
+    if (!isUsed) {
+      return delimiter;
+    }
+  }
+  // Fallback: generate a unique delimiter with a number suffix
+  let counter = 1;
+  while (counter < 1000) {
+    const delimiter = `HEREDOC_${counter}`;
+    const regex = new RegExp(`^${delimiter}\\s*$`);
+    const isUsed = lines.some((line) => regex.test(line));
+    if (!isUsed) {
+      return delimiter;
+    }
+    counter++;
+  }
+  // Last resort (should never happen)
+  return "HEREDOC_FALLBACK";
+}
+
+/**
+ * Format a value for YAML output, using heredoc syntax for multiline strings.
+ * This teaches LLMs to use heredoc syntax which is cleaner and doesn't require indentation.
  */
 function formatYamlValue(value: unknown, indent: string = ""): string {
   if (typeof value === "string") {
-    // Always use pipe multiline syntax for strings to teach LLMs the correct pattern
     const lines = value.split("\n");
     if (lines.length === 1 && !value.includes(":") && !value.startsWith("-")) {
       // Simple single-line string without special chars - can use plain style
       return value;
     }
-    // Use pipe (literal block) style for multiline or strings with special chars
-    const indentedLines = lines.map((line) => `${indent}  ${line}`).join("\n");
-    return `|\n${indentedLines}`;
+    // Use heredoc syntax for multiline or strings with special chars
+    const delimiter = findSafeDelimiter(value);
+    return `<<<${delimiter}\n${value}\n${delimiter}`;
   }
 
   if (typeof value === "number" || typeof value === "boolean") {
@@ -78,13 +110,15 @@ function formatParamsAsYaml(params: Record<string, unknown>): string {
 }
 
 /**
- * Format a value for TOML output, using triple-quoted strings for multiline content.
+ * Format a value for TOML output, using heredoc syntax for multiline content.
+ * This teaches LLMs to use the heredoc syntax which is cleaner for multi-line strings.
  */
 function formatTomlValue(value: unknown): string {
   if (typeof value === "string") {
     if (value.includes("\n")) {
-      // Multiline: use triple-quoted string
-      return `"""\n${value}\n"""`;
+      // Multiline: use heredoc syntax
+      const delimiter = findSafeDelimiter(value);
+      return `<<<${delimiter}\n${value}\n${delimiter}`;
     }
     // Single line: use regular quoted string
     return JSON.stringify(value);
