@@ -55,6 +55,7 @@ export const tellUser = createGadget({
   schema: z.object({
     message: z
       .string()
+      .optional()
       .describe("The message to display to the user in Markdown"),
     done: z
       .boolean()
@@ -93,6 +94,12 @@ export const tellUser = createGadget({
     },
   ],
   execute: ({ message, done, type }) => {
+    // Handle empty or missing message gracefully
+    // This happens when LLM sends malformed parameters that fail to parse the message field
+    if (!message || message.trim() === "") {
+      return "⚠️  TellUser was called without a message. Please provide content in the 'message' field.";
+    }
+
     // Format message for display, but return plain text for LLM context
     // This prevents ANSI color codes from polluting the conversation
     const prefixes = {
