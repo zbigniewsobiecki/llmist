@@ -1,3 +1,7 @@
+## <small>0.6.2 (2025-11-29)</small>
+
+* fix(toml): TOML heredoc parsing fixes for code with regex patterns (#95) ([582aca8](https://github.com/zbigniewsobiecki/llmist/commit/582aca8)), closes [#95](https://github.com/zbigniewsobiecki/llmist/issues/95)
+
 ## <small>0.6.1 (2025-11-29)</small>
 
 * Merge pull request #94 from zbigniewsobiecki/dev ([dfaf97d](https://github.com/zbigniewsobiecki/llmist/commit/dfaf97d)), closes [#94](https://github.com/zbigniewsobiecki/llmist/issues/94)
