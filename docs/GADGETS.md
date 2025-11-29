@@ -350,6 +350,81 @@ if (result.success) {
 
 See **[Testing Guide](./TESTING.md#gadget-testing-utilities)** for full documentation.
 
+## Gadget Output Limiting
+
+When gadgets return large outputs (e.g., file searches, database queries), they can consume significant context window space. llmist automatically limits gadget output and provides tools to browse large results.
+
+### How It Works
+
+1. **Automatic limiting** - Enabled by default, limits output to 15% of the model's context window
+2. **Output storage** - Large outputs are stored in memory with a unique ID
+3. **Selective browsing** - Use `GadgetOutputViewer` to filter and view stored outputs
+
+When a gadget exceeds the limit, the LLM sees:
+```
+[Gadget "Search" returned too much data: 31,337 bytes, 4,200 lines. Use GadgetOutputViewer with id "Search_d34db33f" to read it]
+```
+
+### GadgetOutputViewer
+
+The `GadgetOutputViewer` gadget is automatically registered when output limiting is enabled. It provides grep-like filtering:
+
+```typescript
+// The LLM can call GadgetOutputViewer to browse stored output
+<gadget:GadgetOutputViewer>
+id = "Search_d34db33f"
+[[patterns]]
+regex = "TODO.*HIGH"
+include = true
+before = 2
+after = 2
+limit = "100-"
+</gadget>
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | ID from the truncation message |
+| `patterns` | array | Filter patterns (applied in order, like piping through grep) |
+| `patterns[].regex` | string | Regular expression to match |
+| `patterns[].include` | boolean | `true` = keep matches, `false` = exclude matches |
+| `patterns[].before` | number | Context lines before match (like `grep -B`) |
+| `patterns[].after` | number | Context lines after match (like `grep -A`) |
+| `limit` | string | Line range: `"100-"` (first 100), `"-25"` (last 25), `"50-100"` (range) |
+
+**Order of operations:**
+1. Apply all patterns in sequence (each filters the result of the previous)
+2. Apply the `limit` to the final filtered result
+
+### Configuration
+
+```typescript
+// Disable output limiting
+await LLMist.createAgent()
+  .withModel("sonnet")
+  .withGadgetOutputLimit(false)
+  .ask("...");
+
+// Custom percentage (25% of context window)
+await LLMist.createAgent()
+  .withModel("sonnet")
+  .withGadgetOutputLimitPercent(25)
+  .ask("...");
+```
+
+### Calculation
+
+The limit is calculated as:
+```
+charLimit = contextWindow × (percent / 100) × 4 chars/token
+```
+
+For Claude Sonnet (200K context) with default 15%:
+- Token limit: 30,000 tokens
+- Character limit: ~120,000 characters
+
 ## See Also
 
 - **[Testing Guide](./TESTING.md)** - Test gadgets and mock utilities
