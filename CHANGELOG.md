@@ -1,3 +1,11 @@
+## 0.6.0 (2025-11-29)
+
+* Merge pull request #93 from zbigniewsobiecki/dev ([2fefc1c](https://github.com/zbigniewsobiecki/llmist/commit/2fefc1c)), closes [#93](https://github.com/zbigniewsobiecki/llmist/issues/93)
+* feat(agent): add gadget output limiting to prevent context overflow (#92) ([66db2e4](https://github.com/zbigniewsobiecki/llmist/commit/66db2e4)), closes [#92](https://github.com/zbigniewsobiecki/llmist/issues/92)
+* feat(cli): add log-reset option and improve RunCommand approval UX ([7d4b7af](https://github.com/zbigniewsobiecki/llmist/commit/7d4b7af))
+* feat(gadgets): add EditFile gadget for ed-based file editing (#91) ([ffe9ff5](https://github.com/zbigniewsobiecki/llmist/commit/ffe9ff5)), closes [#91](https://github.com/zbigniewsobiecki/llmist/issues/91)
+* feat(gadgets): add heredoc syntax support for YAML and TOML parameters (#90) ([ac3ec3f](https://github.com/zbigniewsobiecki/llmist/commit/ac3ec3f)), closes [#90](https://github.com/zbigniewsobiecki/llmist/issues/90)
+
 ## <small>0.5.1 (2025-11-27)</small>
 
 * fix(deps): downgrade marked to 15.x for marked-terminal compatibility (#89) ([be5d76d](https://github.com/zbigniewsobiecki/llmist/commit/be5d76d)), closes [#89](https://github.com/zbigniewsobiecki/llmist/issues/89)
