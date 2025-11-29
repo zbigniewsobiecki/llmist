@@ -433,8 +433,17 @@ export class Agent {
             }
           }
         } else {
-          // No gadgets executed - add final message to conversation
-          this.conversation.addAssistantMessage(finalMessage);
+          // No gadgets executed - wrap text as synthetic TellUser result
+          // This keeps conversation history consistent (gadget-oriented) and
+          // helps LLMs stay in the "gadget invocation" mindset
+          if (finalMessage.trim()) {
+            this.conversation.addGadgetCall(
+              "TellUser",
+              { message: finalMessage, done: false, type: "info" },
+              `ℹ️  ${finalMessage}`,
+            );
+          }
+          // Empty responses: don't add anything, just check if we should continue
 
           // Handle text-only responses
           const shouldBreak = await this.handleTextOnlyResponse(finalMessage);
