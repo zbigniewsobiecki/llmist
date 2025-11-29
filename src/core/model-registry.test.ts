@@ -14,6 +14,7 @@ describe("ModelRegistry", () => {
     inputPrice = 5.0,
     outputPrice = 15.0,
     cachedInputPrice?: number,
+    cacheWriteInputPrice?: number,
   ): ModelSpec => ({
     modelId,
     provider,
@@ -23,6 +24,7 @@ describe("ModelRegistry", () => {
       input: inputPrice,
       output: outputPrice,
       cachedInput: cachedInputPrice,
+      cacheWriteInput: cacheWriteInputPrice,
     },
     features: {
       streaming: true,
@@ -198,16 +200,35 @@ describe("ModelRegistry", () => {
       expect(cost?.inputCost).toBe(0.03); // (1000 / 1M) * 30
       expect(cost?.outputCost).toBe(0.03); // (500 / 1M) * 60
       expect(cost?.totalCost).toBe(0.06);
+      expect(cost?.cacheCreationCost).toBe(0);
       expect(cost?.currency).toBe("USD");
     });
 
-    it("should use cached input pricing when requested", () => {
-      const cost = registry.estimateCost("gpt-4", 1000, 500, true);
+    it("should use cached input pricing when cached tokens provided", () => {
+      // 1000 input tokens, 800 of which are cached
+      const cost = registry.estimateCost("gpt-4", 1000, 500, 800);
 
       expect(cost).toBeDefined();
-      expect(cost?.inputCost).toBe(0.015); // (1000 / 1M) * 15 (cached)
+      // Uncached: (200 / 1M) * 30 = 0.006
+      // Cached: (800 / 1M) * 15 = 0.012
+      // Total input: 0.018
+      expect(cost?.inputCost).toBeCloseTo(0.018);
+      expect(cost?.cachedInputCost).toBeCloseTo(0.012);
+      expect(cost?.cacheCreationCost).toBe(0);
       expect(cost?.outputCost).toBe(0.03);
-      expect(cost?.totalCost).toBe(0.045);
+      expect(cost?.totalCost).toBeCloseTo(0.048);
+    });
+
+    it("should use all tokens as cached when cachedInputTokens equals inputTokens", () => {
+      // All 1000 tokens are cached
+      const cost = registry.estimateCost("gpt-4", 1000, 500, 1000);
+
+      expect(cost).toBeDefined();
+      expect(cost?.inputCost).toBeCloseTo(0.015); // (1000 / 1M) * 15 (all cached)
+      expect(cost?.cachedInputCost).toBeCloseTo(0.015);
+      expect(cost?.cacheCreationCost).toBe(0);
+      expect(cost?.outputCost).toBe(0.03);
+      expect(cost?.totalCost).toBeCloseTo(0.045);
     });
 
     it("should fall back to regular input pricing when cached pricing unavailable", () => {
@@ -215,10 +236,13 @@ describe("ModelRegistry", () => {
       const provider = createMockProvider("anthropic", [spec]);
       registry.registerProvider(provider);
 
-      const cost = registry.estimateCost("claude-3", 1000, 500, true);
+      // Even with cached tokens, should use regular rate since no cachedInput price defined
+      const cost = registry.estimateCost("claude-3", 1000, 500, 800);
 
       expect(cost).toBeDefined();
-      expect(cost?.inputCost).toBe(0.003); // Uses regular input price
+      // Without cachedInput price, cached tokens use regular input rate
+      // So inputCost = (1000 / 1M) * 3 = 0.003
+      expect(cost?.inputCost).toBeCloseTo(0.003);
     });
 
     it("should return undefined for non-existent model", () => {
@@ -232,8 +256,59 @@ describe("ModelRegistry", () => {
 
       expect(cost).toBeDefined();
       expect(cost?.inputCost).toBe(0);
+      expect(cost?.cachedInputCost).toBe(0);
+      expect(cost?.cacheCreationCost).toBe(0);
       expect(cost?.outputCost).toBe(0);
       expect(cost?.totalCost).toBe(0);
+    });
+
+    it("should use cache write pricing when cache creation tokens provided (Anthropic)", () => {
+      // Model with cache write pricing (Anthropic style: 1.25x input)
+      const spec = createModelSpec(
+        "claude-sonnet",
+        "anthropic",
+        8192,
+        4096,
+        3.0,
+        15.0,
+        0.3, // cachedInput: 0.1x input
+        3.75, // cacheWriteInput: 1.25x input
+      );
+      const provider = createMockProvider("anthropic", [spec]);
+      registry.registerProvider(provider);
+
+      // 1000 input tokens: 200 uncached, 500 cached read, 300 cache write
+      const cost = registry.estimateCost("claude-sonnet", 1000, 500, 500, 300);
+
+      expect(cost).toBeDefined();
+      // Uncached: (200 / 1M) * 3 = 0.0006
+      // Cached read: (500 / 1M) * 0.3 = 0.00015
+      // Cache write: (300 / 1M) * 3.75 = 0.001125
+      // Total input: 0.001875
+      expect(cost?.inputCost).toBeCloseTo(0.001875);
+      expect(cost?.cachedInputCost).toBeCloseTo(0.00015);
+      expect(cost?.cacheCreationCost).toBeCloseTo(0.001125);
+      expect(cost?.outputCost).toBeCloseTo(0.0075); // (500 / 1M) * 15
+      expect(cost?.totalCost).toBeCloseTo(0.009375);
+    });
+
+    it("should fall back to regular input pricing when cache write pricing unavailable", () => {
+      // Model without cache write pricing
+      const spec = createModelSpec("gpt-4-no-cache-write", "openai", 8192, 4096, 30.0, 60.0, 15.0);
+      const provider = createMockProvider("openai", [spec]);
+      registry.registerProvider(provider);
+
+      // Even with cache write tokens, should use regular rate since no cacheWriteInput defined
+      const cost = registry.estimateCost("gpt-4-no-cache-write", 1000, 500, 500, 300);
+
+      expect(cost).toBeDefined();
+      // Without cacheWriteInput price, cache write tokens use regular input rate
+      // Uncached: (200 / 1M) * 30 = 0.006
+      // Cached read: (500 / 1M) * 15 = 0.0075
+      // Cache write: (300 / 1M) * 30 = 0.009 (uses regular rate)
+      // Total input: 0.0225
+      expect(cost?.inputCost).toBeCloseTo(0.0225);
+      expect(cost?.cacheCreationCost).toBeCloseTo(0.009);
     });
   });
 

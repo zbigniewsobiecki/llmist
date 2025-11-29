@@ -232,6 +232,11 @@ export async function executeAgent(
             if (context.usage.outputTokens) {
               progress.setOutputTokens(context.usage.outputTokens, false);
             }
+            // Update cached token counts for live cost estimation
+            progress.setCachedTokens(
+              context.usage.cachedInputTokens ?? 0,
+              context.usage.cacheCreationInputTokens ?? 0,
+            );
           }
         },
 
@@ -253,17 +258,21 @@ export async function executeAgent(
             }
           }
 
-          // Calculate per-call cost for the summary
+          // Calculate per-call cost for the summary (accounting for cached tokens)
+          // Use context.options.model (resolved) instead of options.model (raw CLI input)
+          // This ensures aliases like "sonnet" are resolved to "claude-sonnet-4-5"
           let callCost: number | undefined;
           if (context.usage && client.modelRegistry) {
             try {
-              const modelName = options.model.includes(":")
-                ? options.model.split(":")[1]
-                : options.model;
+              const modelName = context.options.model.includes(":")
+                ? context.options.model.split(":")[1]
+                : context.options.model;
               const costResult = client.modelRegistry.estimateCost(
                 modelName,
                 context.usage.inputTokens,
                 context.usage.outputTokens,
+                context.usage.cachedInputTokens ?? 0,
+                context.usage.cacheCreationInputTokens ?? 0,
               );
               if (costResult) callCost = costResult.totalCost;
             } catch {

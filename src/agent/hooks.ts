@@ -120,7 +120,7 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMMessage } from "../core/messages.js";
-import type { LLMGenerationOptions } from "../core/options.js";
+import type { LLMGenerationOptions, TokenUsage } from "../core/options.js";
 
 // ============================================================================
 // OBSERVERS (Read-Only, Side-Effects Only)
@@ -144,11 +144,8 @@ export interface ObserveLLMCompleteContext {
   iteration: number;
   options: Readonly<LLMGenerationOptions>;
   finishReason: string | null;
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
+  /** Token usage including cached token counts when available */
+  usage?: TokenUsage;
   /** The complete raw response text */
   rawResponse: string;
   /** The final message that will be added to history (after interceptors) */
@@ -211,12 +208,8 @@ export interface ObserveChunkContext {
   rawChunk: string;
   /** Accumulated text so far */
   accumulatedText: string;
-  /** Token usage if available (Anthropic sends input tokens at stream start) */
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
+  /** Token usage if available (providers send usage at stream start/end) */
+  usage?: TokenUsage;
   logger: Logger<ILogObj>;
 }
 
@@ -381,11 +374,8 @@ export interface AfterLLMCallControllerContext {
   iteration: number;
   options: Readonly<LLMGenerationOptions>;
   finishReason: string | null;
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
+  /** Token usage including cached token counts when available */
+  usage?: TokenUsage;
   /** The final message (after interceptors) that will be added to history */
   finalMessage: string;
   logger: Logger<ILogObj>;

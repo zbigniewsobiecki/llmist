@@ -148,32 +148,40 @@ export class ModelRegistry {
   /**
    * Estimate API cost for a given model and token usage
    * @param modelId - Full model identifier
-   * @param inputTokens - Number of input tokens
+   * @param inputTokens - Number of input tokens (total, including cached and cache creation)
    * @param outputTokens - Number of output tokens
-   * @param useCachedInput - Whether to use cached input pricing (if supported by provider)
+   * @param cachedInputTokens - Number of cached input tokens (subset of inputTokens)
+   * @param cacheCreationInputTokens - Number of cache creation tokens (subset of inputTokens, Anthropic only)
    * @returns CostEstimate if model found, undefined otherwise
    */
   estimateCost(
     modelId: string,
     inputTokens: number,
     outputTokens: number,
-    useCachedInput = false,
+    cachedInputTokens = 0,
+    cacheCreationInputTokens = 0,
   ): CostEstimate | undefined {
     const spec = this.getModelSpec(modelId);
     if (!spec) return undefined;
 
     // Pricing is per 1M tokens, so convert to actual cost
-    const inputRate =
-      useCachedInput && spec.pricing.cachedInput !== undefined
-        ? spec.pricing.cachedInput
-        : spec.pricing.input;
+    // Cached tokens are charged at a lower rate (or same rate if no cached pricing)
+    // Cache creation tokens are charged at a higher rate (Anthropic: 1.25x input)
+    const cachedRate = spec.pricing.cachedInput ?? spec.pricing.input;
+    const cacheWriteRate = spec.pricing.cacheWriteInput ?? spec.pricing.input;
+    const uncachedInputTokens = inputTokens - cachedInputTokens - cacheCreationInputTokens;
 
-    const inputCost = (inputTokens / 1_000_000) * inputRate;
+    const uncachedInputCost = (uncachedInputTokens / 1_000_000) * spec.pricing.input;
+    const cachedInputCost = (cachedInputTokens / 1_000_000) * cachedRate;
+    const cacheCreationCost = (cacheCreationInputTokens / 1_000_000) * cacheWriteRate;
+    const inputCost = uncachedInputCost + cachedInputCost + cacheCreationCost;
     const outputCost = (outputTokens / 1_000_000) * spec.pricing.output;
     const totalCost = inputCost + outputCost;
 
     return {
       inputCost,
+      cachedInputCost,
+      cacheCreationCost,
       outputCost,
       totalCost,
       currency: "USD",
