@@ -55,6 +55,7 @@ export const tellUser = createGadget({
   schema: z.object({
     message: z
       .string()
+      .optional()
       .describe("The message to display to the user in Markdown"),
     done: z
       .boolean()
@@ -82,8 +83,23 @@ export const tellUser = createGadget({
         type: "warning",
       },
     },
+    {
+      comment: "Share detailed analysis with bullet points (use heredoc for multiline)",
+      params: {
+        message:
+          "Here's what I found in the codebase:\n\n1. **Main entry point**: `src/index.ts` exports all public APIs\n2. **Core logic**: Located in `src/core/` with 5 modules\n3. **Tests**: Good coverage in `src/__tests__/`\n\nI'll continue exploring the core modules.",
+        done: false,
+        type: "info",
+      },
+    },
   ],
   execute: ({ message, done, type }) => {
+    // Handle empty or missing message gracefully
+    // This happens when LLM sends malformed parameters that fail to parse the message field
+    if (!message || message.trim() === "") {
+      return "⚠️  TellUser was called without a message. Please provide content in the 'message' field.";
+    }
+
     // Format message for display, but return plain text for LLM context
     // This prevents ANSI color codes from polluting the conversation
     const prefixes = {

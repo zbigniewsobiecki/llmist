@@ -14,7 +14,6 @@ import { loadGadgets } from "./gadgets.js";
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
   executeAction,
-  generateMarkers,
   isInteractive,
   renderSummary,
   resolvePrompt,
@@ -373,11 +372,39 @@ export async function executeAgent(
   // Set the parameter format for gadget invocations
   builder.withParameterFormat(options.parameterFormat);
 
-  // Generate unique emoji markers for this session
-  // Each CLI invocation gets random markers to avoid collisions with user content
-  const markers = generateMarkers();
-  builder.withGadgetStartPrefix(markers.startPrefix);
-  builder.withGadgetEndPrefix(markers.endPrefix);
+  // Set custom gadget markers if configured, otherwise use library defaults
+  if (options.gadgetStartPrefix) {
+    builder.withGadgetStartPrefix(options.gadgetStartPrefix);
+  }
+  if (options.gadgetEndPrefix) {
+    builder.withGadgetEndPrefix(options.gadgetEndPrefix);
+  }
+
+  // Inject synthetic heredoc example for in-context learning
+  // This teaches the LLM to use heredoc syntax (<<<EOF...EOF) for multiline strings
+  // by showing what "past self" did correctly. LLMs mimic patterns in conversation history.
+  builder.withSyntheticGadgetCall(
+    "TellUser",
+    {
+      message:
+        "👋 Hello! I'm ready to help.\n\nHere's what I can do:\n- Analyze your codebase\n- Execute commands\n- Answer questions\n\nWhat would you like me to work on?",
+      done: false,
+      type: "info",
+    },
+    "ℹ️  👋 Hello! I'm ready to help.\n\nHere's what I can do:\n- Analyze your codebase\n- Execute commands\n- Answer questions\n\nWhat would you like me to work on?",
+  );
+
+  // Continue looping when LLM responds with just text (no gadget calls)
+  // This allows multi-turn conversations where the LLM may explain before acting
+  builder.withTextOnlyHandler("acknowledge");
+
+  // Wrap text that accompanies gadget calls as TellUser gadget calls
+  // This keeps conversation history consistent and gadget-oriented
+  builder.withTextWithGadgetsHandler({
+    gadgetName: "TellUser",
+    parameterMapping: (text) => ({ message: text, done: false, type: "info" }),
+    resultMapping: (text) => `ℹ️  ${text}`,
+  });
 
   // Build and start the agent
   const agent = builder.ask(prompt);

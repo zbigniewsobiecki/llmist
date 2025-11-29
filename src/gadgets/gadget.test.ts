@@ -324,4 +324,87 @@ describe("BaseGadget examples", () => {
     // Should not have a # line since no comment
     expect(instruction).not.toMatch(/Examples:\n#/);
   });
+
+  it("renders TOML examples with proper inline table syntax for arrays of objects", () => {
+    // This test ensures we use TOML syntax { key = value } NOT JSON syntax {"key": value}
+    // The LLM copies examples from the prompt, so incorrect syntax here causes parse errors
+    class TomlArrayGadget extends Gadget({
+      description: "Test TOML array of objects",
+      schema: z.object({
+        patterns: z.array(
+          z.object({
+            regex: z.string(),
+            include: z.boolean(),
+          }),
+        ),
+      }),
+      examples: [
+        {
+          params: {
+            patterns: [
+              { regex: "error", include: true },
+              { regex: "debug", include: false },
+            ],
+          },
+          comment: "Filter patterns",
+        },
+      ],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new TomlArrayGadget();
+    const instruction = gadget.getInstruction("toml");
+
+    // Extract the examples section only (schema uses JSON syntax which is fine)
+    const examplesSection = instruction.split("Examples:")[1] || "";
+
+    // Verify TOML syntax is used in examples (key = value), NOT JSON syntax ("key": value)
+    expect(examplesSection).toContain("patterns = [");
+    expect(examplesSection).toContain("regex = ");
+    expect(examplesSection).toContain("include = ");
+
+    // Verify JSON syntax is NOT used in examples
+    expect(examplesSection).not.toContain('"regex":');
+    expect(examplesSection).not.toContain('"include":');
+
+    // Verify the full pattern looks correct
+    expect(examplesSection).toMatch(/\{ regex = "error", include = true \}/);
+    expect(examplesSection).toMatch(/\{ regex = "debug", include = false \}/);
+  });
+
+  it("renders TOML examples with nested objects using inline table syntax", () => {
+    class TomlNestedGadget extends Gadget({
+      description: "Test TOML nested objects",
+      schema: z.object({
+        config: z.object({
+          name: z.string(),
+          enabled: z.boolean(),
+        }),
+      }),
+      examples: [
+        {
+          params: {
+            config: { name: "test", enabled: true },
+          },
+        },
+      ],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new TomlNestedGadget();
+    const instruction = gadget.getInstruction("toml");
+
+    // Extract the examples section only (schema uses JSON syntax which is fine)
+    const examplesSection = instruction.split("Examples:")[1] || "";
+
+    // Verify TOML inline table syntax in examples
+    expect(examplesSection).toContain("config = { name = ");
+    expect(examplesSection).not.toContain('"name":');
+  });
 });

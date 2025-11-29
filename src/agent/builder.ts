@@ -18,6 +18,7 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
+import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptConfig } from "../core/prompt-config.js";
 import type { ParameterFormat } from "../gadgets/parser.js";
@@ -59,6 +60,11 @@ export class AgentBuilder {
   private gadgetStartPrefix?: string;
   private gadgetEndPrefix?: string;
   private textOnlyHandler?: TextOnlyHandler;
+  private textWithGadgetsHandler?: {
+    gadgetName: string;
+    parameterMapping: (text: string) => Record<string, unknown>;
+    resultMapping?: (text: string) => string;
+  };
   private stopOnGadgetError?: boolean;
   private shouldContinueAfterError?: (context: {
     error: string;
@@ -344,6 +350,35 @@ export class AgentBuilder {
   }
 
   /**
+   * Set the handler for text content that appears alongside gadget calls.
+   *
+   * When set, text accompanying gadget responses will be wrapped as a
+   * synthetic gadget call before the actual gadget results in the
+   * conversation history.
+   *
+   * @param handler - Configuration for wrapping text
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Wrap text as TellUser gadget
+   * .withTextWithGadgetsHandler({
+   *   gadgetName: "TellUser",
+   *   parameterMapping: (text) => ({ message: text, done: false, type: "info" }),
+   *   resultMapping: (text) => `ℹ️  ${text}`,
+   * })
+   * ```
+   */
+  withTextWithGadgetsHandler(handler: {
+    gadgetName: string;
+    parameterMapping: (text: string) => Record<string, unknown>;
+    resultMapping?: (text: string) => string;
+  }): this {
+    this.textWithGadgetsHandler = handler;
+    return this;
+  }
+
+  /**
    * Set whether to stop gadget execution on first error.
    *
    * When true (default), if a gadget fails:
@@ -470,6 +505,87 @@ export class AgentBuilder {
   }
 
   /**
+   * Add a synthetic gadget call to the conversation history.
+   *
+   * This is useful for in-context learning - showing the LLM what "past self"
+   * did correctly so it mimics the pattern. The call is formatted with proper
+   * markers and parameter format.
+   *
+   * @param gadgetName - Name of the gadget
+   * @param parameters - Parameters passed to the gadget
+   * @param result - Result returned by the gadget
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withSyntheticGadgetCall(
+   *   'TellUser',
+   *   {
+   *     message: '👋 Hello!\n\nHere\'s what I can do:\n- Analyze code\n- Run commands',
+   *     done: false,
+   *     type: 'info'
+   *   },
+   *   'ℹ️  👋 Hello!\n\nHere\'s what I can do:\n- Analyze code\n- Run commands'
+   * )
+   * ```
+   */
+  withSyntheticGadgetCall(
+    gadgetName: string,
+    parameters: Record<string, unknown>,
+    result: string,
+  ): this {
+    const startPrefix = this.gadgetStartPrefix ?? GADGET_START_PREFIX;
+    const endPrefix = this.gadgetEndPrefix ?? GADGET_END_PREFIX;
+    const format = this.parameterFormat ?? "yaml";
+
+    const paramStr = this.formatSyntheticParameters(parameters, format);
+
+    // Assistant message with gadget call
+    this.initialMessages.push({
+      role: "assistant",
+      content: `${startPrefix}${gadgetName}\n${paramStr}\n${endPrefix}`,
+    });
+
+    // User message with result
+    this.initialMessages.push({
+      role: "user",
+      content: `Result: ${result}`,
+    });
+
+    return this;
+  }
+
+  /**
+   * Format parameters for synthetic gadget calls.
+   * Uses heredoc for multiline string values.
+   */
+  private formatSyntheticParameters(
+    parameters: Record<string, unknown>,
+    format: ParameterFormat,
+  ): string {
+    if (format === "json" || format === "auto") {
+      return JSON.stringify(parameters);
+    }
+
+    // YAML or TOML - use heredoc for multiline strings
+    return Object.entries(parameters)
+      .map(([key, value]) => {
+        if (typeof value === "string" && value.includes("\n")) {
+          // Use heredoc syntax for multiline
+          const separator = format === "yaml" ? ":" : " =";
+          return `${key}${separator} <<<EOF\n${value}\nEOF`;
+        }
+        // Simple values
+        if (format === "yaml") {
+          return typeof value === "string" ? `${key}: ${value}` : `${key}: ${JSON.stringify(value)}`;
+        }
+        // TOML
+        return `${key} = ${JSON.stringify(value)}`;
+      })
+      .join("\n");
+  }
+
+  /**
    * Build and create the agent with the given user prompt.
    * Returns the Agent instance ready to run.
    *
@@ -514,6 +630,7 @@ export class AgentBuilder {
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
       textOnlyHandler: this.textOnlyHandler,
+      textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,
       shouldContinueAfterError: this.shouldContinueAfterError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
@@ -622,6 +739,7 @@ export class AgentBuilder {
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
       textOnlyHandler: this.textOnlyHandler,
+      textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,
       shouldContinueAfterError: this.shouldContinueAfterError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,

@@ -95,6 +95,19 @@ export interface AgentOptions {
   /** Text-only handler */
   textOnlyHandler?: TextOnlyHandler;
 
+  /**
+   * Handler for text content that appears alongside gadget calls.
+   * When set, text accompanying gadgets will be wrapped as a synthetic gadget call.
+   */
+  textWithGadgetsHandler?: {
+    /** Name of the gadget to use for wrapping text */
+    gadgetName: string;
+    /** Maps text content to gadget parameters */
+    parameterMapping: (text: string) => Record<string, unknown>;
+    /** Maps text content to the result string (optional, defaults to text) */
+    resultMapping?: (text: string) => string;
+  };
+
   /** Stop on gadget error */
   stopOnGadgetError?: boolean;
 
@@ -148,6 +161,11 @@ export class Agent {
   private readonly gadgetEndPrefix?: string;
   private readonly onHumanInputRequired?: (question: string) => Promise<string>;
   private readonly textOnlyHandler: TextOnlyHandler;
+  private readonly textWithGadgetsHandler?: {
+    gadgetName: string;
+    parameterMapping: (text: string) => Record<string, unknown>;
+    resultMapping?: (text: string) => string;
+  };
   private readonly stopOnGadgetError: boolean;
   private readonly shouldContinueAfterError?: (context: {
     error: string;
@@ -186,6 +204,7 @@ export class Agent {
     this.gadgetEndPrefix = options.gadgetEndPrefix;
     this.onHumanInputRequired = options.onHumanInputRequired;
     this.textOnlyHandler = options.textOnlyHandler ?? "terminate";
+    this.textWithGadgetsHandler = options.textWithGadgetsHandler;
     this.stopOnGadgetError = options.stopOnGadgetError ?? true;
     this.shouldContinueAfterError = options.shouldContinueAfterError;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
@@ -421,6 +440,23 @@ export class Agent {
 
         // Add gadget results to conversation (if any were executed)
         if (result.didExecuteGadgets) {
+          // If configured, wrap accompanying text as a synthetic gadget call (before actual gadgets)
+          if (this.textWithGadgetsHandler) {
+            const textContent = result.outputs
+              .filter((output): output is { type: "text"; content: string } => output.type === "text")
+              .map((output) => output.content)
+              .join("");
+
+            if (textContent.trim()) {
+              const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
+              this.conversation.addGadgetCall(
+                gadgetName,
+                parameterMapping(textContent),
+                resultMapping ? resultMapping(textContent) : textContent,
+              );
+            }
+          }
+
           // Extract and add all gadget results to conversation
           for (const output of result.outputs) {
             if (output.type === "gadget_result") {
@@ -433,8 +469,17 @@ export class Agent {
             }
           }
         } else {
-          // No gadgets executed - add final message to conversation
-          this.conversation.addAssistantMessage(finalMessage);
+          // No gadgets executed - wrap text as synthetic TellUser result
+          // This keeps conversation history consistent (gadget-oriented) and
+          // helps LLMs stay in the "gadget invocation" mindset
+          if (finalMessage.trim()) {
+            this.conversation.addGadgetCall(
+              "TellUser",
+              { message: finalMessage, done: false, type: "info" },
+              `ℹ️  ${finalMessage}`,
+            );
+          }
+          // Empty responses: don't add anything, just check if we should continue
 
           // Handle text-only responses
           const shouldBreak = await this.handleTextOnlyResponse(finalMessage);
