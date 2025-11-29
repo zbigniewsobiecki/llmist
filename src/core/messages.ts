@@ -295,7 +295,8 @@ This content can contain:
 EOF
 
 The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.
-IMPORTANT: Content inside heredoc is LITERAL - do NOT escape backticks, dollar signs, or any characters.`);
+IMPORTANT: Content inside heredoc is LITERAL - do NOT escape backticks, dollar signs, or any characters.
+NEVER use TOML triple-quote strings ("""). ALWAYS use heredoc syntax (<<<EOF...EOF) for multiline content.`);
     }
 
     return parts.join("");
@@ -369,7 +370,8 @@ IMPORTANT: Content inside heredoc is LITERAL - do NOT escape backticks, dollar s
       return Object.entries(parameters)
         .map(([key, value]) => {
           if (typeof value === "string" && value.includes("\n")) {
-            return `${key} = """\n${value}\n"""`;
+            // Use heredoc syntax to avoid teaching model to use triple-quotes
+            return `${key} = <<<EOF\n${value}\nEOF`;
           }
           return `${key} = ${JSON.stringify(value)}`;
         })

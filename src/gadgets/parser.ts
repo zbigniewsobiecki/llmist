@@ -204,6 +204,21 @@ export function preprocessYaml(yamlStr: string): string {
 }
 
 /**
+ * Remove unnecessary escape sequences from heredoc content.
+ * LLMs often escape characters like backticks and dollar signs even when told not to.
+ * This function un-escapes common patterns to make the content valid for TOML multiline strings.
+ *
+ * @internal Exported for testing only
+ */
+export function unescapeHeredocContent(content: string): string {
+  return content
+    .replace(/\\`/g, "`") // \` -> `
+    .replace(/\\\$/g, "$") // \$ -> $
+    .replace(/\\{/g, "{") // \{ -> {
+    .replace(/\\}/g, "}"); // \} -> }
+}
+
+/**
  * Preprocess TOML to convert heredoc syntax to standard multiline strings.
  *
  * Supports basic heredoc: `key = <<<DELIMITER...DELIMITER`
@@ -275,12 +290,13 @@ export function preprocessTomlHeredoc(tomlStr: string): string {
         // Non-empty heredoc - use triple quotes
         // IMPORTANT: Put closing """ on the same line as last content to avoid trailing newline
         // TOML adds a newline when """ is on its own line
+        // Also un-escape common LLM escaping mistakes (like \` and \$)
         result.push(`${indent}${key} = """`);
         for (let j = 0; j < bodyLines.length - 1; j++) {
-          result.push(bodyLines[j]);
+          result.push(unescapeHeredocContent(bodyLines[j]));
         }
         // Last line includes the closing quotes
-        result.push(`${bodyLines[bodyLines.length - 1]}"""`);
+        result.push(`${unescapeHeredocContent(bodyLines[bodyLines.length - 1])}"""`);
       }
 
       if (!foundClosing) {
@@ -362,6 +378,22 @@ export class StreamParser {
   }
 
   /**
+   * Truncate verbose parse errors to avoid context overflow.
+   * Keeps first meaningful line and limits total length.
+   */
+  private truncateParseError(error: unknown, format: string): string {
+    const message = error instanceof Error ? error.message : String(error);
+    // Take first line only (most TOML errors have useful info there)
+    const firstLine = message.split("\n")[0];
+    // Truncate to max 200 chars
+    const maxLen = 200;
+    if (firstLine.length <= maxLen) {
+      return firstLine;
+    }
+    return `${firstLine.slice(0, maxLen)}... (${message.length} chars total)`;
+  }
+
+  /**
    * Parse parameter string according to configured format
    */
   private parseParameters(raw: string): {
@@ -372,7 +404,7 @@ export class StreamParser {
       try {
         return { parameters: JSON.parse(raw) as Record<string, unknown> };
       } catch (error) {
-        return { parseError: error instanceof Error ? error.message : "Failed to parse JSON" };
+        return { parseError: this.truncateParseError(error, "JSON") };
       }
     }
 
@@ -380,7 +412,7 @@ export class StreamParser {
       try {
         return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
       } catch (error) {
-        return { parseError: error instanceof Error ? error.message : "Failed to parse YAML" };
+        return { parseError: this.truncateParseError(error, "YAML") };
       }
     }
 
@@ -388,7 +420,7 @@ export class StreamParser {
       try {
         return { parameters: parseToml(preprocessTomlHeredoc(raw)) as Record<string, unknown> };
       } catch (error) {
-        return { parseError: error instanceof Error ? error.message : "Failed to parse TOML" };
+        return { parseError: this.truncateParseError(error, "TOML") };
       }
     }
 
@@ -402,10 +434,7 @@ export class StreamParser {
         try {
           return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
         } catch (error) {
-          return {
-            parseError:
-              error instanceof Error ? error.message : "Failed to parse as JSON, TOML, or YAML",
-          };
+          return { parseError: this.truncateParseError(error, "auto") };
         }
       }
     }
