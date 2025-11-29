@@ -1,3 +1,13 @@
+## 0.8.0 (2025-11-29)
+
+* Merge pull request #107 from zbigniewsobiecki/dev ([7e51257](https://github.com/zbigniewsobiecki/llmist/commit/7e51257)), closes [#107](https://github.com/zbigniewsobiecki/llmist/issues/107)
+* chore: remove stale planning documents (#106) ([44417f7](https://github.com/zbigniewsobiecki/llmist/commit/44417f7)), closes [#106](https://github.com/zbigniewsobiecki/llmist/issues/106)
+* feat(cli): add config inheritance, quiet mode, and improve gadget loading (#103) ([cd0fe16](https://github.com/zbigniewsobiecki/llmist/commit/cd0fe16)), closes [#103](https://github.com/zbigniewsobiecki/llmist/issues/103)
+* feat(cli): add prompt templates with Eta.js for reusable prompt composition (#105) ([1e738a1](https://github.com/zbigniewsobiecki/llmist/commit/1e738a1)), closes [#105](https://github.com/zbigniewsobiecki/llmist/issues/105)
+* feat(providers): add prompt caching support for all providers (#102) ([f937c46](https://github.com/zbigniewsobiecki/llmist/commit/f937c46)), closes [#102](https://github.com/zbigniewsobiecki/llmist/issues/102)
+* docs(cookbook): add todo gadgets recipe for agent task planning (#104) ([a7aaa0d](https://github.com/zbigniewsobiecki/llmist/commit/a7aaa0d)), closes [#104](https://github.com/zbigniewsobiecki/llmist/issues/104)
+* fix(gadgets): use unique heredoc delimiters to avoid shell conflicts (#101) ([52efaab](https://github.com/zbigniewsobiecki/llmist/commit/52efaab)), closes [#101](https://github.com/zbigniewsobiecki/llmist/issues/101)
+
 ## 0.7.0 (2025-11-29)
 
 * Merge pull request #100 from zbigniewsobiecki/dev ([eb68f6d](https://github.com/zbigniewsobiecki/llmist/commit/eb68f6d)), closes [#100](https://github.com/zbigniewsobiecki/llmist/issues/100)
