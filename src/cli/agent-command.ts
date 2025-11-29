@@ -380,6 +380,20 @@ export async function executeAgent(
     builder.withGadgetEndPrefix(options.gadgetEndPrefix);
   }
 
+  // Inject synthetic heredoc example for in-context learning
+  // This teaches the LLM to use heredoc syntax (<<<EOF...EOF) for multiline strings
+  // by showing what "past self" did correctly. LLMs mimic patterns in conversation history.
+  builder.withSyntheticGadgetCall(
+    "TellUser",
+    {
+      message:
+        "👋 Hello! I'm ready to help.\n\nHere's what I can do:\n- Analyze your codebase\n- Execute commands\n- Answer questions\n\nWhat would you like me to work on?",
+      done: false,
+      type: "info",
+    },
+    "ℹ️  👋 Hello! I'm ready to help.\n\nHere's what I can do:\n- Analyze your codebase\n- Execute commands\n- Answer questions\n\nWhat would you like me to work on?",
+  );
+
   // Continue looping when LLM responds with just text (no gadget calls)
   // This allows multi-turn conversations where the LLM may explain before acting
   builder.withTextOnlyHandler("acknowledge");
