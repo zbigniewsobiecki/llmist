@@ -24,9 +24,14 @@ export const writeFile = createGadget({
       comment: "Write a simple text file",
     },
     {
-      params: { filePath: "data/config.json", content: '{"enabled": true}' },
-      output: "path=data/config.json\n\nWrote 17 bytes (created directory: data)",
-      comment: "Write file with auto-created directory",
+      params: {
+        filePath: "src/utils.ts",
+        content: `export function add(a: number, b: number): number {
+  return a + b;
+}`,
+      },
+      output: "path=src/utils.ts\n\nWrote 65 bytes (created directory: src)",
+      comment: "Write code file (ALWAYS use heredoc for multiline: content = <<<EOF...EOF)",
     },
   ],
   execute: ({ filePath, content }) => {
