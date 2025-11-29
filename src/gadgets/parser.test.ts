@@ -1114,6 +1114,351 @@ ${GADGET_END_PREFIX}`;
   });
 });
 
+describe("TOML heredoc syntax", () => {
+  beforeEach(() => {
+    resetGlobalInvocationCounter();
+  });
+
+  describe("basic heredoc parsing", () => {
+    it("parses simple heredoc string", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+message = <<<EOF
+Hello, World!
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "TestGadget",
+          parameters: {
+            message: "Hello, World!",
+          },
+        },
+      });
+    });
+
+    it("parses multiline heredoc content", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}WriteFile
+filePath = "README.md"
+content = <<<EOF
+# Project Title
+
+This is markdown content with:
+- List items
+- Special characters: # : -
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event?.type).toBe("gadget_call");
+
+      if (event?.type === "gadget_call") {
+        expect(event.call.gadgetName).toBe("WriteFile");
+        expect(event.call.parameters?.filePath).toBe("README.md");
+
+        const content = event.call.parameters?.content as string;
+        expect(content).toContain("# Project Title");
+        expect(content).toContain("- List items");
+        expect(content).toContain("- Special characters: # : -");
+      }
+    });
+
+    it("parses heredoc with custom delimiter", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+script = <<<SCRIPT
+echo "Hello"
+echo "World"
+SCRIPT
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event?.type === "gadget_call") {
+        const script = event.call.parameters?.script as string;
+        expect(script).toContain('echo "Hello"');
+        expect(script).toContain('echo "World"');
+      }
+    });
+
+    it("handles trailing whitespace on closing delimiter (lenient)", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+message = <<<EOF
+Hello
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "TestGadget",
+          parameters: {
+            message: "Hello",
+          },
+        },
+      });
+    });
+
+    it("parses multiple heredocs in one input", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}MultiHeredoc
+title = <<<TITLE
+My Document
+TITLE
+body = <<<BODY
+This is the body
+with multiple lines.
+BODY
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event?.type === "gadget_call") {
+        expect(event.call.parameters?.title).toBe("My Document");
+        expect(event.call.parameters?.body).toContain("This is the body");
+        expect(event.call.parameters?.body).toContain("with multiple lines.");
+      }
+    });
+
+    it("handles empty heredoc body", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+message = <<<EOF
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "TestGadget",
+          parameters: {
+            message: "",
+          },
+        },
+      });
+    });
+
+    it("preserves delimiter-like content in body (not closing)", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      // The content contains "EOF" but not alone on a line
+      const input = `${GADGET_START_PREFIX}TestGadget
+message = <<<EOF
+This mentions EOF in the middle
+And even has EOF at the end of a line - EOF
+But only a line with just EOF closes it
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event?.type === "gadget_call") {
+        const message = event.call.parameters?.message as string;
+        expect(message).toContain("This mentions EOF in the middle");
+        expect(message).toContain("And even has EOF at the end");
+      }
+    });
+
+    it("mixes heredoc with regular TOML values", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}MixedGadget
+name = "test"
+count = 42
+content = <<<EOF
+Heredoc content here
+EOF
+enabled = true
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "MixedGadget",
+          parameters: {
+            name: "test",
+            count: 42,
+            content: "Heredoc content here",
+            enabled: true,
+          },
+        },
+      });
+    });
+
+    it("handles heredoc with special characters", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+code = <<<CODE
+function test() {
+    console.log("Hello");
+    return { key: "value" };
+}
+CODE
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event?.type === "gadget_call") {
+        const code = event.call.parameters?.code as string;
+        expect(code).toContain("function test()");
+        expect(code).toContain('console.log("Hello")');
+        expect(code).toContain('{ key: "value" }');
+      }
+    });
+  });
+
+  describe("heredoc with keys containing hyphens/underscores", () => {
+    it("parses heredoc with hyphenated key", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+file-content = <<<EOF
+Hello
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event?.type === "gadget_call") {
+        expect(event.call.parameters?.["file-content"]).toBe("Hello");
+      }
+    });
+
+    it("parses heredoc with underscored key", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+file_content = <<<EOF
+World
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event?.type === "gadget_call") {
+        expect(event.call.parameters?.["file_content"]).toBe("World");
+      }
+    });
+  });
+});
+
+describe("preprocessTomlHeredoc", () => {
+  let preprocessTomlHeredoc: (toml: string) => string;
+
+  beforeEach(async () => {
+    const module = await import("./parser.js");
+    preprocessTomlHeredoc = module.preprocessTomlHeredoc;
+  });
+
+  it("converts simple heredoc to triple-quoted string", () => {
+    const input = `message = <<<EOF
+Hello
+EOF`;
+    const result = preprocessTomlHeredoc(input);
+    // Closing """ is on same line to avoid trailing newline in TOML
+    expect(result).toBe(`message = """
+Hello"""`);
+  });
+
+  it("preserves non-heredoc lines", () => {
+    const input = `name = "test"
+count = 42`;
+    const result = preprocessTomlHeredoc(input);
+    expect(result).toBe(input);
+  });
+
+  it("handles multiple heredocs", () => {
+    const input = `a = <<<A
+content a
+A
+b = <<<B
+content b
+B`;
+    const result = preprocessTomlHeredoc(input);
+    expect(result).toContain('a = """');
+    expect(result).toContain('b = """');
+    expect(result).toContain("content a");
+    expect(result).toContain("content b");
+  });
+
+  it("handles empty heredoc", () => {
+    const input = `message = <<<EOF
+EOF`;
+    const result = preprocessTomlHeredoc(input);
+    expect(result).toBe(`message = """"""`);
+  });
+
+  it("allows trailing whitespace on closing delimiter", () => {
+    const input = `message = <<<EOF
+Hello
+EOF   `;
+    const result = preprocessTomlHeredoc(input);
+    // Closing """ is on same line to avoid trailing newline in TOML
+    expect(result).toBe(`message = """
+Hello"""`);
+  });
+
+  it("validates delimiter starts with letter or underscore", () => {
+    // Valid delimiters
+    const validInput1 = `a = <<<EOF
+test
+EOF`;
+    const validInput2 = `a = <<<_EOF
+test
+_EOF`;
+    const validInput3 = `a = <<<MyDelimiter123
+test
+MyDelimiter123`;
+
+    expect(preprocessTomlHeredoc(validInput1)).toContain('"""');
+    expect(preprocessTomlHeredoc(validInput2)).toContain('"""');
+    expect(preprocessTomlHeredoc(validInput3)).toContain('"""');
+
+    // Invalid delimiter (starts with number) - should not be recognized as heredoc
+    const invalidInput = `a = <<<123EOF
+test
+123EOF`;
+    expect(preprocessTomlHeredoc(invalidInput)).toBe(invalidInput);
+  });
+
+  it("preserves indentation in heredoc body", () => {
+    const input = `script = <<<EOF
+function foo() {
+    return bar;
+}
+EOF`;
+    const result = preprocessTomlHeredoc(input);
+    expect(result).toContain("    return bar;");
+  });
+});
+
 describe("preprocessYaml", () => {
   // Import directly for unit testing
   let preprocessYaml: (yaml: string) => string;
@@ -1486,6 +1831,241 @@ name: test`;
       const parsed = yaml.load(preprocessed) as Record<string, unknown>;
       expect(parsed.message).toContain("first paragraph");
       expect(parsed.message).toContain("second paragraph");
+    });
+  });
+
+  describe("heredoc syntax", () => {
+    it("converts heredoc to pipe block", () => {
+      const input = `message: <<<EOF
+Hello World
+EOF`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`message: |
+  Hello World`);
+    });
+
+    it("handles multiline heredoc content", () => {
+      const input = `content: <<<EOF
+Line 1
+Line 2
+Line 3
+EOF`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`content: |
+  Line 1
+  Line 2
+  Line 3`);
+    });
+
+    it("handles custom delimiter names", () => {
+      const input = `script: <<<SCRIPT
+echo "Hello"
+SCRIPT`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`script: |
+  echo "Hello"`);
+    });
+
+    it("handles trailing whitespace on closing delimiter (lenient)", () => {
+      const input = `message: <<<EOF
+Hello
+EOF   `;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`message: |
+  Hello`);
+    });
+
+    it("handles multiple heredocs in one input", () => {
+      const input = `title: <<<TITLE
+My Title
+TITLE
+body: <<<BODY
+My Body
+BODY`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`title: |
+  My Title
+body: |
+  My Body`);
+    });
+
+    it("handles empty heredoc body", () => {
+      const input = `message: <<<EOF
+EOF`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`message: |`);
+    });
+
+    it("mixes heredoc with regular YAML values", () => {
+      const input = `name: test
+count: 42
+content: <<<EOF
+Heredoc content
+EOF
+enabled: true`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`name: test
+count: 42
+content: |
+  Heredoc content
+enabled: true`);
+    });
+
+    it("handles heredoc with special characters", () => {
+      const input = `code: <<<CODE
+function test() {
+    return { key: "value" };
+}
+CODE`;
+      const result = preprocessYaml(input);
+      expect(result).toContain("code: |");
+      expect(result).toContain("  function test()");
+    });
+
+    it("handles hyphenated keys with heredoc", () => {
+      const input = `file-content: <<<EOF
+Hello
+EOF`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`file-content: |
+  Hello`);
+    });
+
+    it("handles underscored keys with heredoc", () => {
+      const input = `file_content: <<<EOF
+World
+EOF`;
+      const result = preprocessYaml(input);
+      expect(result).toBe(`file_content: |
+  World`);
+    });
+
+    it("parses heredoc correctly in end-to-end YAML flow", async () => {
+      const yaml = await import("js-yaml");
+
+      const input = `name: test
+content: <<<EOF
+# Markdown content
+- List item 1
+- List item 2
+EOF
+count: 42`;
+
+      const preprocessed = preprocessYaml(input);
+      const parsed = yaml.load(preprocessed) as Record<string, unknown>;
+
+      expect(parsed.name).toBe("test");
+      expect(parsed.content).toContain("# Markdown content");
+      expect(parsed.content).toContain("- List item 1");
+      expect(parsed.count).toBe(42);
+    });
+  });
+});
+
+describe("YAML heredoc syntax", () => {
+  beforeEach(() => {
+    resetGlobalInvocationCounter();
+  });
+
+  describe("basic YAML heredoc parsing", () => {
+    it("parses simple heredoc string", () => {
+      const parser = new StreamParser({ parameterFormat: "yaml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+message: <<<EOF
+Hello, World!
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "TestGadget",
+          parameters: {
+            message: "Hello, World!\n",
+          },
+        },
+      });
+    });
+
+    it("parses multiline heredoc content", () => {
+      const parser = new StreamParser({ parameterFormat: "yaml" });
+      const input = `${GADGET_START_PREFIX}WriteFile
+filePath: "README.md"
+content: <<<EOF
+# Project Title
+
+This is markdown content with:
+- List items
+- Special characters: # : -
+EOF
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event?.type).toBe("gadget_call");
+
+      if (event?.type === "gadget_call") {
+        expect(event.call.gadgetName).toBe("WriteFile");
+        expect(event.call.parameters?.filePath).toBe("README.md");
+
+        const content = event.call.parameters?.content as string;
+        expect(content).toContain("# Project Title");
+        expect(content).toContain("- List items");
+        expect(content).toContain("- Special characters: # : -");
+      }
+    });
+
+    it("parses heredoc with custom delimiter", () => {
+      const parser = new StreamParser({ parameterFormat: "yaml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+script: <<<SCRIPT
+echo "Hello"
+echo "World"
+SCRIPT
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event?.type === "gadget_call") {
+        const script = event.call.parameters?.script as string;
+        expect(script).toContain('echo "Hello"');
+        expect(script).toContain('echo "World"');
+      }
+    });
+
+    it("mixes heredoc with regular YAML values", () => {
+      const parser = new StreamParser({ parameterFormat: "yaml" });
+      const input = `${GADGET_START_PREFIX}MixedGadget
+name: test
+count: 42
+content: <<<EOF
+Heredoc content here
+EOF
+enabled: true
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "MixedGadget",
+          parameters: {
+            name: "test",
+            count: 42,
+            content: "Heredoc content here\n",
+            enabled: true,
+          },
+        },
+      });
     });
   });
 });
