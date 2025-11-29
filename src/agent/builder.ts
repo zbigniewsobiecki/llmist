@@ -59,6 +59,11 @@ export class AgentBuilder {
   private gadgetStartPrefix?: string;
   private gadgetEndPrefix?: string;
   private textOnlyHandler?: TextOnlyHandler;
+  private textWithGadgetsHandler?: {
+    gadgetName: string;
+    parameterMapping: (text: string) => Record<string, unknown>;
+    resultMapping?: (text: string) => string;
+  };
   private stopOnGadgetError?: boolean;
   private shouldContinueAfterError?: (context: {
     error: string;
@@ -344,6 +349,35 @@ export class AgentBuilder {
   }
 
   /**
+   * Set the handler for text content that appears alongside gadget calls.
+   *
+   * When set, text accompanying gadget responses will be wrapped as a
+   * synthetic gadget call before the actual gadget results in the
+   * conversation history.
+   *
+   * @param handler - Configuration for wrapping text
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Wrap text as TellUser gadget
+   * .withTextWithGadgetsHandler({
+   *   gadgetName: "TellUser",
+   *   parameterMapping: (text) => ({ message: text, done: false, type: "info" }),
+   *   resultMapping: (text) => `ℹ️  ${text}`,
+   * })
+   * ```
+   */
+  withTextWithGadgetsHandler(handler: {
+    gadgetName: string;
+    parameterMapping: (text: string) => Record<string, unknown>;
+    resultMapping?: (text: string) => string;
+  }): this {
+    this.textWithGadgetsHandler = handler;
+    return this;
+  }
+
+  /**
    * Set whether to stop gadget execution on first error.
    *
    * When true (default), if a gadget fails:
@@ -514,6 +548,7 @@ export class AgentBuilder {
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
       textOnlyHandler: this.textOnlyHandler,
+      textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,
       shouldContinueAfterError: this.shouldContinueAfterError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
@@ -622,6 +657,7 @@ export class AgentBuilder {
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
       textOnlyHandler: this.textOnlyHandler,
+      textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,
       shouldContinueAfterError: this.shouldContinueAfterError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,

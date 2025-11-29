@@ -384,6 +384,14 @@ export async function executeAgent(
   // This allows multi-turn conversations where the LLM may explain before acting
   builder.withTextOnlyHandler("acknowledge");
 
+  // Wrap text that accompanies gadget calls as TellUser gadget calls
+  // This keeps conversation history consistent and gadget-oriented
+  builder.withTextWithGadgetsHandler({
+    gadgetName: "TellUser",
+    parameterMapping: (text) => ({ message: text, done: false, type: "info" }),
+    resultMapping: (text) => `ℹ️  ${text}`,
+  });
+
   // Build and start the agent
   const agent = builder.ask(prompt);
 
