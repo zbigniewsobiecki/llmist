@@ -15,6 +15,7 @@ export type LogLevel = "silly" | "trace" | "debug" | "info" | "warn" | "error" |
 export interface GlobalConfig {
   "log-level"?: LogLevel;
   "log-file"?: string;
+  "log-reset"?: boolean;
 }
 
 /**
@@ -52,10 +53,14 @@ export type CommandType = "agent" | "complete";
 /**
  * Custom command configuration from config file.
  * Extends both agent and complete configs, with type determining behavior.
+ * Also supports per-command logging configuration.
  */
 export interface CustomCommandConfig extends AgentConfig, CompleteConfig {
   type?: CommandType;
   description?: string;
+  "log-level"?: LogLevel;
+  "log-file"?: string;
+  "log-reset"?: boolean;
 }
 
 /**
@@ -69,7 +74,7 @@ export interface CLIConfig {
 }
 
 /** Valid keys for global config */
-const GLOBAL_CONFIG_KEYS = new Set(["log-level", "log-file"]);
+const GLOBAL_CONFIG_KEYS = new Set(["log-level", "log-file", "log-reset"]);
 
 /** Valid log levels */
 const VALID_LOG_LEVELS: LogLevel[] = ["silly", "trace", "debug", "info", "warn", "error", "fatal"];
@@ -89,12 +94,15 @@ const AGENT_CONFIG_KEYS = new Set([
   "builtin-interaction",
 ]);
 
-/** Valid keys for custom command config (union of complete + agent + type + description) */
+/** Valid keys for custom command config (union of complete + agent + type + description + logging) */
 const CUSTOM_CONFIG_KEYS = new Set([
   ...COMPLETE_CONFIG_KEYS,
   ...AGENT_CONFIG_KEYS,
   "type",
   "description",
+  "log-level",
+  "log-file",
+  "log-reset",
 ]);
 
 /** Valid parameter format values */
@@ -234,6 +242,9 @@ function validateGlobalConfig(raw: unknown, section: string): GlobalConfig {
   }
   if ("log-file" in rawObj) {
     result["log-file"] = validateString(rawObj["log-file"], "log-file", section);
+  }
+  if ("log-reset" in rawObj) {
+    result["log-reset"] = validateBoolean(rawObj["log-reset"], "log-reset", section);
   }
 
   return result;
@@ -392,6 +403,23 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
       integer: true,
       min: 1,
     });
+  }
+
+  // Logging options (per-command override)
+  if ("log-level" in rawObj) {
+    const level = validateString(rawObj["log-level"], "log-level", section);
+    if (!VALID_LOG_LEVELS.includes(level as LogLevel)) {
+      throw new ConfigError(
+        `[${section}].log-level must be one of: ${VALID_LOG_LEVELS.join(", ")}`,
+      );
+    }
+    result["log-level"] = level as LogLevel;
+  }
+  if ("log-file" in rawObj) {
+    result["log-file"] = validateString(rawObj["log-file"], "log-file", section);
+  }
+  if ("log-reset" in rawObj) {
+    result["log-reset"] = validateBoolean(rawObj["log-reset"], "log-reset", section);
   }
 
   return result;

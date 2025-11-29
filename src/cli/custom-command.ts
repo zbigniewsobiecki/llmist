@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { executeAgent } from "./agent-command.js";
 import { executeComplete } from "./complete-command.js";
 import type { CustomCommandConfig } from "./config.js";
-import type { CLIEnvironment } from "./environment.js";
+import { createDefaultEnvironment, type CLIEnvironment, type CLILoggerConfig } from "./environment.js";
 import {
   addAgentOptions,
   addCompleteOptions,
@@ -12,6 +12,35 @@ import {
   configToCompleteOptions,
 } from "./option-helpers.js";
 import { executeAction } from "./utils.js";
+
+/**
+ * Creates an environment with per-command logging config merged in.
+ * If the command has logging options, creates a new environment; otherwise returns the original.
+ */
+function createCommandEnvironment(
+  baseEnv: CLIEnvironment,
+  config: CustomCommandConfig,
+): CLIEnvironment {
+  // Check if command has any logging overrides
+  const hasLoggingConfig =
+    config["log-level"] !== undefined ||
+    config["log-file"] !== undefined ||
+    config["log-reset"] !== undefined;
+
+  if (!hasLoggingConfig) {
+    return baseEnv;
+  }
+
+  // Merge per-command logging config with base environment's config
+  const loggerConfig: CLILoggerConfig = {
+    logLevel: config["log-level"] ?? baseEnv.loggerConfig?.logLevel,
+    logFile: config["log-file"] ?? baseEnv.loggerConfig?.logFile,
+    logReset: config["log-reset"] ?? baseEnv.loggerConfig?.logReset,
+  };
+
+  // Create new environment with merged logging config
+  return createDefaultEnvironment(loggerConfig);
+}
 
 /**
  * Registers a custom command from config file.
@@ -43,31 +72,35 @@ export function registerCustomCommand(
     // Complete type command
     addCompleteOptions(cmd, config);
 
-    cmd.action((prompt, cliOptions) =>
-      executeAction(async () => {
+    cmd.action((prompt, cliOptions) => {
+      // Create environment with per-command logging config
+      const cmdEnv = createCommandEnvironment(env, config);
+      return executeAction(async () => {
         // Config values are base, CLI options override
         const configDefaults = configToCompleteOptions(config);
         const options: CompleteCommandOptions = {
           ...configDefaults,
           ...(cliOptions as Partial<CompleteCommandOptions>),
         } as CompleteCommandOptions;
-        await executeComplete(prompt, options, env);
-      }, env),
-    );
+        await executeComplete(prompt, options, cmdEnv);
+      }, cmdEnv);
+    });
   } else {
     // Agent type command (default)
     addAgentOptions(cmd, config);
 
-    cmd.action((prompt, cliOptions) =>
-      executeAction(async () => {
+    cmd.action((prompt, cliOptions) => {
+      // Create environment with per-command logging config
+      const cmdEnv = createCommandEnvironment(env, config);
+      return executeAction(async () => {
         // Config values are base, CLI options override
         const configDefaults = configToAgentOptions(config);
         const options: AgentCommandOptions = {
           ...configDefaults,
           ...(cliOptions as Partial<AgentCommandOptions>),
         } as AgentCommandOptions;
-        await executeAgent(prompt, options, env);
-      }, env),
-    );
+        await executeAgent(prompt, options, cmdEnv);
+      }, cmdEnv);
+    });
   }
 }

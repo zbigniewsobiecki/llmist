@@ -24,7 +24,7 @@ import {
 import { formatGadgetSummary, renderMarkdown, renderOverallSummary } from "./ui/formatters.js";
 
 /**
- * Prompts the user for a simple yes/no approval.
+ * Prompts the user for approval with optional rejection feedback.
  * Used by the gating controller to approve dangerous gadget executions.
  *
  * SHOWCASE: This demonstrates how to build approval workflows using llmist's
@@ -33,13 +33,13 @@ import { formatGadgetSummary, renderMarkdown, renderOverallSummary } from "./ui/
  *
  * @param env - CLI environment for I/O operations
  * @param prompt - The prompt to display to the user
- * @returns true if user approved (answered y/yes), false otherwise
+ * @returns The user's input (empty string or "y" = approved, anything else = rejection reason)
  */
-async function promptApproval(env: CLIEnvironment, prompt: string): Promise<boolean> {
+async function promptApproval(env: CLIEnvironment, prompt: string): Promise<string> {
   const rl = createInterface({ input: env.stdin, output: env.stderr });
   try {
     const answer = await rl.question(prompt);
-    return answer.toLowerCase().startsWith("y");
+    return answer.trim();
   } finally {
     rl.close();
   }
@@ -327,16 +327,18 @@ export async function executeAgent(
 
           // Pause progress indicator and prompt for approval
           progress.pause();
-          env.stderr.write(`\n${chalk.yellow("🔒 Execute:")} ${command}\n`);
+          env.stderr.write(`\n🔒 Execute: ${chalk.cyan(command)}\n`);
 
-          const approved = await promptApproval(env, "   Approve? [y/n] ");
+          const response = await promptApproval(env, "   ⏎ approve, or type to reject: ");
 
-          if (!approved) {
+          // Empty input or "y"/"Y" = approved
+          const isApproved = response === "" || response.toLowerCase() === "y";
+
+          if (!isApproved) {
             env.stderr.write(`   ${chalk.red("✗ Denied")}\n\n`);
             return {
               action: "skip",
-              syntheticResult:
-                "status=denied\n\nCommand denied by user. Ask what they'd like to do instead.",
+              syntheticResult: `status=denied\n\nCommand rejected by user with message: "${response}"`,
             };
           }
 

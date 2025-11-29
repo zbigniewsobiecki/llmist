@@ -16,6 +16,7 @@ export type TTYStream = NodeJS.ReadableStream & { isTTY?: boolean };
 export interface CLILoggerConfig {
   logLevel?: string;
   logFile?: string;
+  logReset?: boolean;
 }
 
 /**
@@ -61,6 +62,11 @@ function createLoggerFactory(config?: CLILoggerConfig): (name: string) => Logger
       if (level in LOG_LEVEL_MAP) {
         options.minLevel = LOG_LEVEL_MAP[level];
       }
+    }
+
+    // CLI --log-reset takes priority over LLMIST_LOG_RESET env var
+    if (config?.logReset !== undefined) {
+      options.logReset = config.logReset;
     }
 
     // CLI --log-file takes priority over LLMIST_LOG_FILE env var

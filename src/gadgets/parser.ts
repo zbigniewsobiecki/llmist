@@ -41,6 +41,31 @@ export function preprocessYaml(yamlStr: string): string {
   while (i < lines.length) {
     const line = lines[i];
 
+    // Check for heredoc syntax: key: <<<DELIMITER
+    const heredocMatch = line.match(/^(\s*)([\w-]+):\s*<<<([A-Za-z_][A-Za-z0-9_]*)\s*$/);
+    if (heredocMatch) {
+      const [, indent, key, delimiter] = heredocMatch;
+      const bodyLines: string[] = [];
+      i++; // Move past heredoc start line
+
+      // Collect body until closing delimiter (lenient - allows trailing whitespace)
+      const closingRegex = new RegExp(`^${delimiter}\\s*$`);
+      while (i < lines.length && !closingRegex.test(lines[i])) {
+        bodyLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) {
+        i++; // Move past closing delimiter
+      }
+
+      // Convert to YAML pipe block with proper indentation
+      result.push(`${indent}${key}: |`);
+      for (const bodyLine of bodyLines) {
+        result.push(`${indent}  ${bodyLine}`);
+      }
+      continue;
+    }
+
     // Match lines like "key: value" where value isn't quoted or using pipe
     // Support keys with hyphens/underscores (e.g., my-key, my_key)
     const match = line.match(/^(\s*)([\w-]+):\s+(.+)$/);
@@ -178,6 +203,102 @@ export function preprocessYaml(yamlStr: string): string {
   return result.join("\n");
 }
 
+/**
+ * Preprocess TOML to convert heredoc syntax to standard multiline strings.
+ *
+ * Supports basic heredoc: `key = <<<DELIMITER...DELIMITER`
+ * - Delimiter: ASCII letters, digits, or _, starting with letter or _
+ * - Closing delimiter: alone on line (trailing whitespace allowed for LLM friendliness)
+ * - Escape sequences are preserved and processed by js-toml as standard basic strings
+ *
+ * Example:
+ * ```toml
+ * message = <<<EOF
+ * Hello "world"
+ * Line 2
+ * EOF
+ * ```
+ * Transforms to:
+ * ```toml
+ * message = """
+ * Hello "world"
+ * Line 2
+ * """
+ * ```
+ *
+ * @internal Exported for testing only
+ */
+export function preprocessTomlHeredoc(tomlStr: string): string {
+  const lines = tomlStr.split("\n");
+  const result: string[] = [];
+  let i = 0;
+
+  // Regex to match heredoc start: key = <<<DELIMITER or key = <<<DELIMITER (with optional trailing content)
+  // Also supports keys with hyphens/underscores
+  const heredocStartRegex = /^(\s*)([\w-]+)\s*=\s*<<<([A-Za-z_][A-Za-z0-9_]*)\s*$/;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const match = line.match(heredocStartRegex);
+
+    if (match) {
+      const [, indent, key, delimiter] = match;
+
+      // Start collecting heredoc body
+      const bodyLines: string[] = [];
+      i++; // Move past the heredoc start line
+
+      // Create lenient closing delimiter regex (allows trailing whitespace)
+      const closingRegex = new RegExp(`^${delimiter}\\s*$`);
+
+      let foundClosing = false;
+      while (i < lines.length) {
+        const bodyLine = lines[i];
+
+        // Check if this is the closing delimiter
+        if (closingRegex.test(bodyLine)) {
+          foundClosing = true;
+          i++; // Move past the closing delimiter
+          break;
+        }
+
+        bodyLines.push(bodyLine);
+        i++;
+      }
+
+      // Convert to standard TOML multiline string
+      // If no closing delimiter found, include remaining content (will likely cause TOML parse error)
+      if (bodyLines.length === 0) {
+        // Empty heredoc
+        result.push(`${indent}${key} = """"""`);
+      } else {
+        // Non-empty heredoc - use triple quotes
+        // IMPORTANT: Put closing """ on the same line as last content to avoid trailing newline
+        // TOML adds a newline when """ is on its own line
+        result.push(`${indent}${key} = """`);
+        for (let j = 0; j < bodyLines.length - 1; j++) {
+          result.push(bodyLines[j]);
+        }
+        // Last line includes the closing quotes
+        result.push(`${bodyLines[bodyLines.length - 1]}"""`);
+      }
+
+      if (!foundClosing) {
+        // If we didn't find a closing delimiter, the TOML will be malformed
+        // but let js-toml handle the error
+      }
+
+      continue;
+    }
+
+    // Not a heredoc line, pass through unchanged
+    result.push(line);
+    i++;
+  }
+
+  return result.join("\n");
+}
+
 export interface StreamParserOptions {
   startPrefix?: string;
   endPrefix?: string;
@@ -265,7 +386,7 @@ export class StreamParser {
 
     if (this.parameterFormat === "toml") {
       try {
-        return { parameters: parseToml(raw) as Record<string, unknown> };
+        return { parameters: parseToml(preprocessTomlHeredoc(raw)) as Record<string, unknown> };
       } catch (error) {
         return { parseError: error instanceof Error ? error.message : "Failed to parse TOML" };
       }
@@ -276,7 +397,7 @@ export class StreamParser {
       return { parameters: JSON.parse(raw) as Record<string, unknown> };
     } catch {
       try {
-        return { parameters: parseToml(raw) as Record<string, unknown> };
+        return { parameters: parseToml(preprocessTomlHeredoc(raw)) as Record<string, unknown> };
       } catch {
         try {
           return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };

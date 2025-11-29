@@ -67,6 +67,8 @@ export class AgentBuilder {
     parameters?: Record<string, unknown>;
   }) => boolean | Promise<boolean>;
   private defaultGadgetTimeoutMs?: number;
+  private gadgetOutputLimit?: boolean;
+  private gadgetOutputLimitPercent?: number;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -427,6 +429,47 @@ export class AgentBuilder {
   }
 
   /**
+   * Enable or disable gadget output limiting.
+   *
+   * When enabled, gadget outputs exceeding the configured limit are stored
+   * and can be browsed using the GadgetOutputViewer gadget.
+   *
+   * @param enabled - Whether to enable output limiting (default: true)
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withGadgetOutputLimit(false) // Disable output limiting
+   * ```
+   */
+  withGadgetOutputLimit(enabled: boolean): this {
+    this.gadgetOutputLimit = enabled;
+    return this;
+  }
+
+  /**
+   * Set the maximum gadget output as a percentage of the model's context window.
+   *
+   * Outputs exceeding this limit are stored for later browsing with GadgetOutputViewer.
+   *
+   * @param percent - Percentage of context window (1-100, default: 15)
+   * @returns This builder for chaining
+   * @throws {Error} If percent is not between 1 and 100
+   *
+   * @example
+   * ```typescript
+   * .withGadgetOutputLimitPercent(25) // 25% of context window
+   * ```
+   */
+  withGadgetOutputLimitPercent(percent: number): this {
+    if (percent < 1 || percent > 100) {
+      throw new Error("Output limit percent must be between 1 and 100");
+    }
+    this.gadgetOutputLimitPercent = percent;
+    return this;
+  }
+
+  /**
    * Build and create the agent with the given user prompt.
    * Returns the Agent instance ready to run.
    *
@@ -474,6 +517,8 @@ export class AgentBuilder {
       stopOnGadgetError: this.stopOnGadgetError,
       shouldContinueAfterError: this.shouldContinueAfterError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+      gadgetOutputLimit: this.gadgetOutputLimit,
+      gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);
@@ -580,6 +625,8 @@ export class AgentBuilder {
       stopOnGadgetError: this.stopOnGadgetError,
       shouldContinueAfterError: this.shouldContinueAfterError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+      gadgetOutputLimit: this.gadgetOutputLimit,
+      gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

@@ -7,6 +7,12 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
+import {
+  CHARS_PER_TOKEN,
+  DEFAULT_GADGET_OUTPUT_LIMIT,
+  DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT,
+  FALLBACK_CONTEXT_WINDOW,
+} from "../core/constants.js";
 import { LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions } from "../core/options.js";
@@ -14,7 +20,10 @@ import type { PromptConfig } from "../core/prompt-config.js";
 import type { ParameterFormat } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type { StreamEvent, TextOnlyHandler } from "../gadgets/types.js";
+import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import { createLogger } from "../logging/logger.js";
+import { GadgetOutputStore } from "./gadget-output-store.js";
+import type { GadgetResultInterceptorContext } from "./hooks.js";
 import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.js";
 import { ConversationManager } from "./conversation-manager.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
@@ -102,6 +111,12 @@ export interface AgentOptions {
 
   /** Custom prompt configuration for gadget system prompts */
   promptConfig?: PromptConfig;
+
+  /** Enable gadget output limiting (default: true) */
+  gadgetOutputLimit?: boolean;
+
+  /** Max gadget output as % of model context window (default: 15) */
+  gadgetOutputLimitPercent?: number;
 }
 
 /**
@@ -144,6 +159,11 @@ export class Agent {
   private readonly defaultMaxTokens?: number;
   private userPromptProvided: boolean;
 
+  // Gadget output limiting
+  private readonly outputStore: GadgetOutputStore;
+  private readonly outputLimitEnabled: boolean;
+  private readonly outputLimitCharLimit: number;
+
   /**
    * Creates a new Agent instance.
    * @internal This constructor is private. Use LLMist.createAgent() or AgentBuilder instead.
@@ -160,7 +180,6 @@ export class Agent {
     this.maxIterations = options.maxIterations ?? 10;
     this.temperature = options.temperature;
     this.logger = options.logger ?? createLogger({ name: "llmist:agent" });
-    this.hooks = options.hooks ?? {};
     this.registry = options.registry;
     this.parameterFormat = options.parameterFormat ?? "json";
     this.gadgetStartPrefix = options.gadgetStartPrefix;
@@ -171,6 +190,24 @@ export class Agent {
     this.shouldContinueAfterError = options.shouldContinueAfterError;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
+
+    // Initialize gadget output limiting
+    this.outputLimitEnabled = options.gadgetOutputLimit ?? DEFAULT_GADGET_OUTPUT_LIMIT;
+    this.outputStore = new GadgetOutputStore();
+
+    // Calculate character limit from model context window
+    const limitPercent = options.gadgetOutputLimitPercent ?? DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT;
+    const limits = this.client.modelRegistry.getModelLimits(this.model);
+    const contextWindow = limits?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
+    this.outputLimitCharLimit = Math.floor(contextWindow * (limitPercent / 100) * CHARS_PER_TOKEN);
+
+    // Auto-register GadgetOutputViewer when limiting is enabled
+    if (this.outputLimitEnabled) {
+      this.registry.register("GadgetOutputViewer", createGadgetOutputViewer(this.outputStore));
+    }
+
+    // Merge output limiter interceptor into hooks
+    this.hooks = this.mergeOutputLimiterHook(options.hooks);
 
     // Build conversation
     const baseBuilder = new LLMMessageBuilder(options.promptConfig);
@@ -542,6 +579,63 @@ export class Agent {
     }
 
     return this.client.modelRegistry.getModelLimits(unprefixedModelId)?.maxOutputTokens;
+  }
+
+  /**
+   * Merge the output limiter interceptor into user-provided hooks.
+   * The limiter runs first, then chains to any user interceptor.
+   */
+  private mergeOutputLimiterHook(userHooks?: AgentHooks): AgentHooks {
+    if (!this.outputLimitEnabled) {
+      return userHooks ?? {};
+    }
+
+    const limiterInterceptor = (
+      result: string,
+      ctx: GadgetResultInterceptorContext,
+    ): string => {
+      // Skip limiting for GadgetOutputViewer itself to avoid recursion
+      if (ctx.gadgetName === "GadgetOutputViewer") {
+        return result;
+      }
+
+      if (result.length > this.outputLimitCharLimit) {
+        const id = this.outputStore.store(ctx.gadgetName, result);
+        const lines = result.split("\n").length;
+        const bytes = new TextEncoder().encode(result).length;
+
+        this.logger.info("Gadget output exceeded limit, stored for browsing", {
+          gadgetName: ctx.gadgetName,
+          outputId: id,
+          bytes,
+          lines,
+          charLimit: this.outputLimitCharLimit,
+        });
+
+        return (
+          `[Gadget "${ctx.gadgetName}" returned too much data: ` +
+          `${bytes.toLocaleString()} bytes, ${lines.toLocaleString()} lines. ` +
+          `Use GadgetOutputViewer with id "${id}" to read it]`
+        );
+      }
+
+      return result;
+    };
+
+    // Chain with any user-provided interceptor (limiter runs first)
+    const userInterceptor = userHooks?.interceptors?.interceptGadgetResult;
+    const chainedInterceptor = userInterceptor
+      ? (result: string, ctx: GadgetResultInterceptorContext) =>
+          userInterceptor(limiterInterceptor(result, ctx), ctx)
+      : limiterInterceptor;
+
+    return {
+      ...userHooks,
+      interceptors: {
+        ...userHooks?.interceptors,
+        interceptGadgetResult: chainedInterceptor,
+      },
+    };
   }
 
   /**

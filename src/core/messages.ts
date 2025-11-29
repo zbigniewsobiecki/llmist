@@ -223,10 +223,11 @@ ${this.endPrefix}
 ${this.startPrefix}analyze
 type: economic_analysis
 matter: "Polish Economy"
-question: |
-  Analyze the following:
-  - Polish arms exports 2025
-  - Economic implications
+question: <<<EOF
+Analyze the following:
+- Polish arms exports 2025
+- Economic implications
+EOF
 ${this.endPrefix}`,
       json: `${this.startPrefix}translate
 {"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
@@ -242,11 +243,11 @@ ${this.endPrefix}
 ${this.startPrefix}analyze
 type = "economic_analysis"
 matter = "Polish Economy"
-question = """
+question = <<<EOF
 Analyze the following:
 - Polish arms exports 2025
 - Economic implications
-"""
+EOF
 ${this.endPrefix}`,
       auto: `${this.startPrefix}translate
 {"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
@@ -262,37 +263,38 @@ ${this.endPrefix}`,
     if (parameterFormat === "yaml") {
       parts.push(`
 
-YAML MULTILINE SYNTAX:
-For string values with special characters (colons, dashes, quotes) or multiple lines,
-use the pipe (|) syntax. ALL content lines MUST be indented with 2 spaces:
+YAML HEREDOC SYNTAX:
+For string values with multiple lines, use heredoc syntax (<<<DELIMITER...DELIMITER):
 
-CORRECT - all lines indented:
-question: |
-  Which option do you prefer?
-  - Option A: fast processing
-  - Option B: thorough analysis
-  Please choose one.
-
-WRONG - inconsistent indentation breaks YAML:
-question: |
-  Which option do you prefer?
-  - Option A: fast
-Please choose one.    <-- ERROR: not indented, breaks out of the block`);
-    } else if (parameterFormat === "toml") {
-      parts.push(`
-
-TOML MULTILINE SYNTAX:
-For string values with multiple lines or special characters, use triple-quotes ("""):
-
-filePath = "README.md"
-content = """
+filePath: "README.md"
+content: <<<EOF
 # Project Title
 
 This content can contain:
 - Markdown lists
 - Special characters: # : -
 - Multiple paragraphs
-"""`);
+EOF
+
+The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.
+No indentation is required for the content.`);
+    } else if (parameterFormat === "toml") {
+      parts.push(`
+
+TOML HEREDOC SYNTAX:
+For string values with multiple lines, use heredoc syntax (<<<DELIMITER...DELIMITER):
+
+filePath = "README.md"
+content = <<<EOF
+# Project Title
+
+This content can contain:
+- Markdown lists
+- Special characters: # : -
+- Multiple paragraphs
+EOF
+
+The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.`);
     }
 
     return parts.join("");

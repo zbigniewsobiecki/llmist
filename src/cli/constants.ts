@@ -34,6 +34,7 @@ export const OPTION_FLAGS = {
   parameterFormat: "--parameter-format <format>",
   logLevel: "--log-level <level>",
   logFile: "--log-file <path>",
+  logReset: "--log-reset",
   noBuiltins: "--no-builtins",
   noBuiltinInteraction: "--no-builtin-interaction",
 } as const;
@@ -50,6 +51,7 @@ export const OPTION_DESCRIPTIONS = {
   parameterFormat: "Format for gadget parameter schemas: 'json', 'yaml', 'toml', or 'auto'.",
   logLevel: "Log level: silly, trace, debug, info, warn, error, fatal.",
   logFile: "Path to log file. When set, logs are written to file instead of stderr.",
+  logReset: "Reset (truncate) the log file at session start instead of appending.",
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
   noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
 } as const;
