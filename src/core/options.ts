@@ -16,6 +16,10 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /** Number of input tokens served from cache (subset of inputTokens) */
+  cachedInputTokens?: number;
+  /** Number of input tokens written to cache (subset of inputTokens, Anthropic only) */
+  cacheCreationInputTokens?: number;
 }
 
 export interface LLMStreamChunk {

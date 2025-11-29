@@ -29,23 +29,47 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     messages: LLMMessage[],
   ): MessageCreateParamsStreaming {
     const systemMessages = messages.filter((message) => message.role === "system");
-    const system =
-      systemMessages.length > 0 ? systemMessages.map((m) => m.content).join("\n\n") : undefined;
 
-    const conversation = messages
-      .filter(
-        (message): message is LLMMessage & { role: "user" | "assistant" } =>
-          message.role !== "system",
-      )
-      .map((message) => ({
-        role: message.role,
-        content: [
-          {
+    // System message as array of text blocks with cache_control on last block
+    // This enables Anthropic's prompt caching for the system prompt
+    const system =
+      systemMessages.length > 0
+        ? systemMessages.map((m, index) => ({
             type: "text" as const,
-            text: message.content,
-          },
-        ],
-      }));
+            text: m.content,
+            // Add cache_control to the LAST system message block
+            ...(index === systemMessages.length - 1
+              ? { cache_control: { type: "ephemeral" as const } }
+              : {}),
+          }))
+        : undefined;
+
+    const nonSystemMessages = messages.filter(
+      (message): message is LLMMessage & { role: "user" | "assistant" } =>
+        message.role !== "system",
+    );
+
+    // Find index of last user message for cache breakpoint
+    const lastUserIndex = nonSystemMessages.reduce(
+      (lastIdx, msg, idx) => (msg.role === "user" ? idx : lastIdx),
+      -1,
+    );
+
+    // Build conversation with cache_control on the last user message
+    // This caches the conversation history prefix for multi-turn efficiency
+    const conversation = nonSystemMessages.map((message, index) => ({
+      role: message.role,
+      content: [
+        {
+          type: "text" as const,
+          text: message.content,
+          // Add cache_control to the LAST user message
+          ...(message.role === "user" && index === lastUserIndex
+            ? { cache_control: { type: "ephemeral" as const } }
+            : {}),
+        },
+      ],
+    }));
 
     // Anthropic requires max_tokens, so use a smart default if not specified
     // Use model's max from the passed spec, or fall back to the default constant
@@ -77,11 +101,22 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
   protected async *wrapStream(iterable: AsyncIterable<unknown>): LLMStream {
     const stream = iterable as AsyncIterable<MessageStreamEvent>;
     let inputTokens = 0;
+    let cachedInputTokens = 0;
+    let cacheCreationInputTokens = 0;
 
     for await (const event of stream) {
       // Track and yield input tokens from message_start event
+      // Anthropic returns cache_read_input_tokens and cache_creation_input_tokens
       if (event.type === "message_start") {
-        inputTokens = event.message.usage.input_tokens;
+        const usage = event.message.usage as {
+          input_tokens: number;
+          cache_read_input_tokens?: number;
+          cache_creation_input_tokens?: number;
+        };
+        // Total input tokens includes uncached + cached reads + cache writes
+        cachedInputTokens = usage.cache_read_input_tokens ?? 0;
+        cacheCreationInputTokens = usage.cache_creation_input_tokens ?? 0;
+        inputTokens = usage.input_tokens + cachedInputTokens + cacheCreationInputTokens;
         // Yield early so hooks can access input tokens before text streams
         yield {
           text: "",
@@ -89,6 +124,8 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
             inputTokens,
             outputTokens: 0,
             totalTokens: inputTokens,
+            cachedInputTokens,
+            cacheCreationInputTokens,
           },
           rawEvent: event,
         };
@@ -106,6 +143,8 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
               inputTokens,
               outputTokens: event.usage.output_tokens,
               totalTokens: inputTokens + event.usage.output_tokens,
+              cachedInputTokens,
+              cacheCreationInputTokens,
             }
           : undefined;
 

@@ -129,6 +129,9 @@ export class StreamProgress {
   private callOutputTokensEstimated = true;
   private callOutputChars = 0;
   private isStreaming = false;
+  // Cache token tracking for live cost estimation during streaming
+  private callCachedInputTokens = 0;
+  private callCacheCreationInputTokens = 0;
 
   // Cumulative stats (cumulative mode)
   private totalStartTime = Date.now();
@@ -162,14 +165,17 @@ export class StreamProgress {
     this.callOutputTokensEstimated = true;
     this.callOutputChars = 0;
     this.isStreaming = false;
+    // Reset cache tracking for new call
+    this.callCachedInputTokens = 0;
+    this.callCacheCreationInputTokens = 0;
     this.start();
   }
 
   /**
    * Ends the current LLM call. Updates cumulative stats and switches to cumulative mode.
-   * @param usage - Final token usage from the call
+   * @param usage - Final token usage from the call (including cached tokens if available)
    */
-  endCall(usage?: { inputTokens: number; outputTokens: number; totalTokens: number }): void {
+  endCall(usage?: TokenUsage): void {
     this.iterations++;
     if (usage) {
       this.totalTokens += usage.totalTokens;
@@ -186,6 +192,8 @@ export class StreamProgress {
             modelName,
             usage.inputTokens,
             usage.outputTokens,
+            usage.cachedInputTokens ?? 0,
+            usage.cacheCreationInputTokens ?? 0,
           );
           if (cost) {
             this.totalCost += cost.totalCost;
@@ -229,6 +237,17 @@ export class StreamProgress {
     }
     this.callOutputTokens = tokens;
     this.callOutputTokensEstimated = estimated;
+  }
+
+  /**
+   * Sets cached token counts for the current call (from stream metadata).
+   * Used for live cost estimation during streaming.
+   * @param cachedInputTokens - Number of tokens read from cache (cheaper)
+   * @param cacheCreationInputTokens - Number of tokens written to cache (more expensive)
+   */
+  setCachedTokens(cachedInputTokens: number, cacheCreationInputTokens: number): void {
+    this.callCachedInputTokens = cachedInputTokens;
+    this.callCacheCreationInputTokens = cacheCreationInputTokens;
   }
 
   /**
@@ -318,12 +337,38 @@ export class StreamProgress {
     // Time
     parts.push(chalk.dim(`${elapsed}s`));
 
-    // Cost
-    if (this.totalCost > 0) {
-      parts.push(chalk.cyan(`$${formatCost(this.totalCost)}`));
+    // Live cost estimate for current call (updates as tokens stream in)
+    const callCost = this.calculateCurrentCallCost(outTokens);
+    if (callCost > 0) {
+      parts.push(chalk.cyan(`$${formatCost(callCost)}`));
     }
 
     this.target.write(`\r${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`);
+  }
+
+  /**
+   * Calculates live cost estimate for the current streaming call.
+   * Uses current input/output tokens and cached token counts.
+   */
+  private calculateCurrentCallCost(outputTokens: number): number {
+    if (!this.modelRegistry || !this.model) return 0;
+
+    try {
+      // Strip provider prefix if present (e.g., "anthropic:claude-sonnet-4-5" -> "claude-sonnet-4-5")
+      const modelName = this.model.includes(":") ? this.model.split(":")[1] : this.model;
+
+      const cost = this.modelRegistry.estimateCost(
+        modelName,
+        this.callInputTokens,
+        outputTokens,
+        this.callCachedInputTokens,
+        this.callCacheCreationInputTokens,
+      );
+
+      return cost?.totalCost ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   private renderCumulativeMode(spinner: string): void {

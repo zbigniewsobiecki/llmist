@@ -18,6 +18,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 3.0,
       output: 15.0,
       cachedInput: 0.3,
+      cacheWriteInput: 3.75,
     },
     knowledgeCutoff: "2025-01",
     features: {
@@ -42,6 +43,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 1.0,
       output: 5.0,
       cachedInput: 0.1,
+      cacheWriteInput: 1.25,
     },
     knowledgeCutoff: "2025-02",
     features: {
@@ -67,6 +69,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 3.0,
       output: 15.0,
       cachedInput: 0.3,
+      cacheWriteInput: 3.75,
     },
     knowledgeCutoff: "2025-03",
     features: {
@@ -91,6 +94,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 3.0,
       output: 15.0,
       cachedInput: 0.3,
+      cacheWriteInput: 3.75,
     },
     knowledgeCutoff: "2024-11",
     features: {
@@ -115,6 +119,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 15.0,
       output: 75.0,
       cachedInput: 1.5,
+      cacheWriteInput: 18.75,
     },
     knowledgeCutoff: "2025-01",
     features: {
@@ -139,6 +144,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 15.0,
       output: 75.0,
       cachedInput: 1.5,
+      cacheWriteInput: 18.75,
     },
     knowledgeCutoff: "2025-03",
     features: {
@@ -162,6 +168,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 0.8,
       output: 4.0,
       cachedInput: 0.08,
+      cacheWriteInput: 1.0,
     },
     knowledgeCutoff: "2024-07",
     features: {
@@ -185,6 +192,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 0.25,
       output: 1.25,
       cachedInput: 0.025,
+      cacheWriteInput: 0.3125,
     },
     knowledgeCutoff: "2023-08",
     features: {
@@ -209,6 +217,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 1.0,
       output: 5.0,
       cachedInput: 0.1,
+      cacheWriteInput: 1.25,
     },
     knowledgeCutoff: "2025-02",
     features: {
@@ -233,6 +242,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 3.0,
       output: 15.0,
       cachedInput: 0.3,
+      cacheWriteInput: 3.75,
     },
     knowledgeCutoff: "2025-01",
     features: {
@@ -257,6 +267,7 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       input: 5.0,
       output: 25.0,
       cachedInput: 0.5,
+      cacheWriteInput: 6.25,
     },
     knowledgeCutoff: "2025-03",
     features: {

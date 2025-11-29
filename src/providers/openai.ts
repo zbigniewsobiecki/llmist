@@ -100,11 +100,15 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
       const finishReason = chunk.choices.find((choice) => choice.finish_reason)?.finish_reason;
 
       // Extract token usage if available (typically in the final chunk)
+      // OpenAI returns cached token count in prompt_tokens_details.cached_tokens
       const usage = chunk.usage
         ? {
             inputTokens: chunk.usage.prompt_tokens,
             outputTokens: chunk.usage.completion_tokens,
             totalTokens: chunk.usage.total_tokens,
+            cachedInputTokens:
+              (chunk.usage as { prompt_tokens_details?: { cached_tokens?: number } })
+                .prompt_tokens_details?.cached_tokens ?? 0,
           }
         : undefined;
 
