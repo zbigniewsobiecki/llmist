@@ -43,8 +43,10 @@ export type {
   Observers,
   StreamProcessingResult,
   StreamProcessorOptions,
+  // Gadget output limiting
+  StoredOutput,
 } from "./agent/index.js";
-export { ConversationManager, StreamProcessor } from "./agent/index.js";
+export { ConversationManager, GadgetOutputStore, StreamProcessor } from "./agent/index.js";
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
 export type { LLMMessage, LLMRole } from "./core/messages.js";
@@ -86,6 +88,8 @@ export type { QuickOptions } from "./core/quick-methods.js";
 export { complete, stream } from "./core/quick-methods.js";
 export type { CreateGadgetConfig } from "./gadgets/create-gadget.js";
 export { createGadget } from "./gadgets/create-gadget.js";
+// Gadget output viewer (for custom output store integration)
+export { createGadgetOutputViewer } from "./gadgets/output-viewer.js";
 // Gadget infrastructure
 export { BreakLoopException, HumanInputException } from "./gadgets/exceptions.js";
 export { GadgetExecutor } from "./gadgets/executor.js";

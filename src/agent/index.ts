@@ -43,3 +43,7 @@ export {
   StreamProcessor,
   type StreamProcessorOptions,
 } from "./stream-processor.js";
+
+// Gadget output limiting
+export type { StoredOutput } from "./gadget-output-store.js";
+export { GadgetOutputStore } from "./gadget-output-store.js";

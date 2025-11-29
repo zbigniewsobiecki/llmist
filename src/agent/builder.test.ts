@@ -584,7 +584,11 @@ describe("AgentBuilder", () => {
     });
 
     it("provides access to the gadget registry via getRegistry()", () => {
-      const agent = new AgentBuilder().withModel("sonnet").withGadgets(Calculator, Weather).build();
+      const agent = new AgentBuilder()
+        .withModel("sonnet")
+        .withGadgets(Calculator, Weather)
+        .withGadgetOutputLimit(false) // Disable to avoid auto-registered GadgetOutputViewer
+        .build();
 
       const registry = agent.getRegistry();
       const names = registry.getNames();
