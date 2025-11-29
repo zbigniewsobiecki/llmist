@@ -123,12 +123,13 @@ export const DEFAULT_PROMPTS: Required<
 
   criticalUsage: "INVOKE gadgets using the markers - do not describe what you want to do.",
 
-  formatDescriptionYaml: "Parameters in YAML format (one per line)",
+  formatDescriptionYaml:
+    "Parameters in YAML format (one per line, use heredoc for multiline: key: <<<EOF ... EOF)",
 
   formatDescriptionJson: "Parameters in JSON format (valid JSON object)",
 
   formatDescriptionToml:
-    "Parameters in TOML format (key = value pairs, use heredoc for multiline: key = <<<EOF ... EOF)",
+    "Parameters in TOML format (use heredoc for multiline: key = <<<EOF ... EOF)",
 
   rules: () => [
     "Output ONLY plain text with the exact markers - never use function/tool calling",

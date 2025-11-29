@@ -131,7 +131,7 @@ describe("prompt-config", () => {
 
     it("should have format descriptions", () => {
       expect(DEFAULT_PROMPTS.formatDescriptionYaml).toBe(
-        "Parameters in YAML format (one per line)",
+        "Parameters in YAML format (one per line, use heredoc for multiline: key: <<<EOF ... EOF)",
       );
       expect(DEFAULT_PROMPTS.formatDescriptionJson).toBe(
         "Parameters in JSON format (valid JSON object)",

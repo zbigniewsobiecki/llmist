@@ -277,7 +277,8 @@ This content can contain:
 EOF
 
 The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.
-No indentation is required for the content.`);
+No indentation is required for the content.
+IMPORTANT: ALWAYS use heredoc syntax (<<<EOF...EOF) for multiline string values. Never write multiline content directly after the colon.`);
     } else if (parameterFormat === "toml") {
       parts.push(`
 
