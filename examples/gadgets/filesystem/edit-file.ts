@@ -25,7 +25,8 @@ export const editFile = createGadget({
     {
       params: {
         filePath: "config.txt",
-        commands: "1,$p\nq",
+        commands: `1,$p
+q`,
       },
       output: "path=config.txt\n\n32\nkey=value\noption=true",
       comment: "Print entire file contents (ed shows byte count, then content)",
@@ -33,7 +34,9 @@ export const editFile = createGadget({
     {
       params: {
         filePath: "data.txt",
-        commands: "1,$s/foo/bar/g\nw\nq",
+        commands: `1,$s/foo/bar/g
+w
+q`,
       },
       output: "path=data.txt\n\n42\n42",
       comment: "Replace all 'foo' with 'bar' (ed shows bytes read, then bytes written)",
@@ -41,7 +44,9 @@ export const editFile = createGadget({
     {
       params: {
         filePath: "list.txt",
-        commands: "3d\nw\nq",
+        commands: `3d
+w
+q`,
       },
       output: "path=list.txt\n\n45\n28",
       comment: "Delete line 3, save and quit",
@@ -49,7 +54,11 @@ export const editFile = createGadget({
     {
       params: {
         filePath: "readme.txt",
-        commands: "$a\nNew last line\n.\nw\nq",
+        commands: `$a
+New last line
+.
+w
+q`,
       },
       output: "path=readme.txt\n\n40\n56",
       comment: "Append text after last line ($ = last line, . = end input mode)",

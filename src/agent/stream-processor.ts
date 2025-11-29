@@ -349,6 +349,7 @@ export class StreamProcessor {
       this.logger.warn("Gadget has parse error", {
         gadgetName: call.gadgetName,
         error: call.parseError,
+        rawParameters: call.parametersYaml,
       });
 
       const shouldContinue = await this.checkContinueAfterError(

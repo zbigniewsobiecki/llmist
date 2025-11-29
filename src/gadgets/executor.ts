@@ -59,6 +59,7 @@ export class GadgetExecutor {
         this.logger.error("Gadget parameter parse error", {
           gadgetName: call.gadgetName,
           parseError: call.parseError,
+          rawParameters: call.parametersYaml,
         });
         return {
           gadgetName: call.gadgetName,

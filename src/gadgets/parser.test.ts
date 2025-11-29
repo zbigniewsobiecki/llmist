@@ -1377,14 +1377,15 @@ describe("preprocessTomlHeredoc", () => {
     preprocessTomlHeredoc = module.preprocessTomlHeredoc;
   });
 
-  it("converts simple heredoc to triple-quoted string", () => {
+  it("converts simple heredoc to literal multiline string", () => {
     const input = `message = <<<EOF
 Hello
 EOF`;
     const result = preprocessTomlHeredoc(input);
-    // Closing """ is on same line to avoid trailing newline in TOML
-    expect(result).toBe(`message = """
-Hello"""`);
+    // Using ''' (literal) not """ (basic) to avoid escape sequence processing
+    // Closing ''' is on same line to avoid trailing newline in TOML
+    expect(result).toBe(`message = '''
+Hello'''`);
   });
 
   it("preserves non-heredoc lines", () => {
@@ -1402,8 +1403,8 @@ b = <<<B
 content b
 B`;
     const result = preprocessTomlHeredoc(input);
-    expect(result).toContain('a = """');
-    expect(result).toContain('b = """');
+    expect(result).toContain("a = '''");
+    expect(result).toContain("b = '''");
     expect(result).toContain("content a");
     expect(result).toContain("content b");
   });
@@ -1412,7 +1413,7 @@ B`;
     const input = `message = <<<EOF
 EOF`;
     const result = preprocessTomlHeredoc(input);
-    expect(result).toBe(`message = """"""`);
+    expect(result).toBe(`message = ''''''`);
   });
 
   it("allows trailing whitespace on closing delimiter", () => {
@@ -1420,9 +1421,9 @@ EOF`;
 Hello
 EOF   `;
     const result = preprocessTomlHeredoc(input);
-    // Closing """ is on same line to avoid trailing newline in TOML
-    expect(result).toBe(`message = """
-Hello"""`);
+    // Closing ''' is on same line to avoid trailing newline in TOML
+    expect(result).toBe(`message = '''
+Hello'''`);
   });
 
   it("validates delimiter starts with letter or underscore", () => {
@@ -1437,9 +1438,9 @@ _EOF`;
 test
 MyDelimiter123`;
 
-    expect(preprocessTomlHeredoc(validInput1)).toContain('"""');
-    expect(preprocessTomlHeredoc(validInput2)).toContain('"""');
-    expect(preprocessTomlHeredoc(validInput3)).toContain('"""');
+    expect(preprocessTomlHeredoc(validInput1)).toContain("'''");
+    expect(preprocessTomlHeredoc(validInput2)).toContain("'''");
+    expect(preprocessTomlHeredoc(validInput3)).toContain("'''");
 
     // Invalid delimiter (starts with number) - should not be recognized as heredoc
     const invalidInput = `a = <<<123EOF

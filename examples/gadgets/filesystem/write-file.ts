@@ -25,13 +25,21 @@ export const writeFile = createGadget({
     },
     {
       params: {
-        filePath: "src/utils.ts",
-        content: `export function add(a: number, b: number): number {
-  return a + b;
-}`,
+        filePath: "src/server.ts",
+        content: `import { serve } from "bun";
+
+const port = 3000;
+
+serve({
+  port,
+  fetch: (req) => new Response(\`Hello from \${req.url}\`),
+});
+
+console.log(\`Server running on http://localhost:\${port}\`);`,
       },
-      output: "path=src/utils.ts\n\nWrote 65 bytes (created directory: src)",
-      comment: "Write code file (ALWAYS use heredoc for multiline: content = <<<EOF...EOF)",
+      output: "path=src/server.ts\n\nWrote 198 bytes (created directory: src)",
+      comment:
+        "Write code with template literals - NO escaping needed inside heredoc (use <<<EOF...EOF)",
     },
   ],
   execute: ({ filePath, content }) => {
