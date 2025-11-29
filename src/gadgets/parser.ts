@@ -316,6 +316,29 @@ export function preprocessTomlHeredoc(tomlStr: string): string {
   return result.join("\n");
 }
 
+/**
+ * Strip markdown code fences from parameter content.
+ * LLMs sometimes wrap their parameters in ```toml, ```yaml, ```json, or plain ``` blocks.
+ * This function removes those fences to allow successful parsing.
+ *
+ * @internal Exported for testing only
+ */
+export function stripMarkdownFences(content: string): string {
+  let cleaned = content.trim();
+
+  // Pattern: ```toml, ```yaml, ```json, or just ``` at start (case-insensitive)
+  const openingFence = /^```(?:toml|yaml|json)?\s*\n/i;
+  // Pattern: ``` at end (with optional preceding newline)
+  const closingFence = /\n?```\s*$/;
+
+  // Strip opening fence if present
+  cleaned = cleaned.replace(openingFence, "");
+  // Strip closing fence if present
+  cleaned = cleaned.replace(closingFence, "");
+
+  return cleaned.trim();
+}
+
 export interface StreamParserOptions {
   startPrefix?: string;
   endPrefix?: string;
@@ -401,9 +424,12 @@ export class StreamParser {
     parameters?: Record<string, unknown>;
     parseError?: string;
   } {
+    // Strip markdown code fences if LLM wrapped the parameters
+    const cleaned = stripMarkdownFences(raw);
+
     if (this.parameterFormat === "json") {
       try {
-        return { parameters: JSON.parse(raw) as Record<string, unknown> };
+        return { parameters: JSON.parse(cleaned) as Record<string, unknown> };
       } catch (error) {
         return { parseError: this.truncateParseError(error, "JSON") };
       }
@@ -411,7 +437,7 @@ export class StreamParser {
 
     if (this.parameterFormat === "yaml") {
       try {
-        return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
+        return { parameters: yaml.load(preprocessYaml(cleaned)) as Record<string, unknown> };
       } catch (error) {
         return { parseError: this.truncateParseError(error, "YAML") };
       }
@@ -419,7 +445,7 @@ export class StreamParser {
 
     if (this.parameterFormat === "toml") {
       try {
-        return { parameters: parseToml(preprocessTomlHeredoc(raw)) as Record<string, unknown> };
+        return { parameters: parseToml(preprocessTomlHeredoc(cleaned)) as Record<string, unknown> };
       } catch (error) {
         return { parseError: this.truncateParseError(error, "TOML") };
       }
@@ -427,13 +453,13 @@ export class StreamParser {
 
     // Auto-detect: try JSON first, then TOML, then YAML
     try {
-      return { parameters: JSON.parse(raw) as Record<string, unknown> };
+      return { parameters: JSON.parse(cleaned) as Record<string, unknown> };
     } catch {
       try {
-        return { parameters: parseToml(preprocessTomlHeredoc(raw)) as Record<string, unknown> };
+        return { parameters: parseToml(preprocessTomlHeredoc(cleaned)) as Record<string, unknown> };
       } catch {
         try {
-          return { parameters: yaml.load(preprocessYaml(raw)) as Record<string, unknown> };
+          return { parameters: yaml.load(preprocessYaml(cleaned)) as Record<string, unknown> };
         } catch (error) {
           return { parseError: this.truncateParseError(error, "auto") };
         }
