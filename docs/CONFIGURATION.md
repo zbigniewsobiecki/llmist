@@ -103,6 +103,28 @@ LLMist.createAgent()
 | `.withGadgetStartPrefix(prefix)` | `string` | Custom gadget marker start |
 | `.withGadgetEndPrefix(prefix)` | `string` | Custom gadget marker end |
 | `.withTextOnlyHandler(handler)` | `TextOnlyHandler` | Handle text-only responses |
+| `.withTextWithGadgetsHandler(handler)` | `object` | Wrap text alongside gadget calls |
+
+#### Text Handling Configuration
+
+Control how text responses are handled in the agent loop:
+
+```typescript
+// Handle text-only responses (when LLM doesn't call any gadgets)
+.withTextOnlyHandler("acknowledge")  // Continue loop
+.withTextOnlyHandler("terminate")    // End loop (default)
+.withTextOnlyHandler("wait_for_input") // Ask for human input
+
+// Wrap text that accompanies gadget calls as synthetic gadget calls
+// This keeps conversation history consistent and gadget-oriented
+.withTextWithGadgetsHandler({
+  gadgetName: "TellUser",
+  parameterMapping: (text) => ({ message: text, done: false, type: "info" }),
+  resultMapping: (text) => `ℹ️  ${text}`,  // Optional: format the result
+})
+```
+
+The `textWithGadgetsHandler` is useful when you want text that appears alongside gadget calls to also appear in the conversation history as an explicit gadget call. This helps LLMs maintain a consistent "gadget invocation" mindset.
 
 ## Environment Variables
 
