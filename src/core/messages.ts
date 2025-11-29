@@ -294,7 +294,8 @@ This content can contain:
 - Multiple paragraphs
 EOF
 
-The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.`);
+The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.
+IMPORTANT: Content inside heredoc is LITERAL - do NOT escape backticks, dollar signs, or any characters.`);
     }
 
     return parts.join("");
