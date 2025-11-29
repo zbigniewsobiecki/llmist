@@ -1,3 +1,8 @@
+## <small>0.6.1 (2025-11-29)</small>
+
+* Merge pull request #94 from zbigniewsobiecki/dev ([dfaf97d](https://github.com/zbigniewsobiecki/llmist/commit/dfaf97d)), closes [#94](https://github.com/zbigniewsobiecki/llmist/issues/94)
+* fix(gadgets): update WriteFile example to show heredoc for multiline content ([1db53bb](https://github.com/zbigniewsobiecki/llmist/commit/1db53bb))
+
 ## 0.6.0 (2025-11-29)
 
 * Merge pull request #93 from zbigniewsobiecki/dev ([2fefc1c](https://github.com/zbigniewsobiecki/llmist/commit/2fefc1c)), closes [#93](https://github.com/zbigniewsobiecki/llmist/issues/93)
