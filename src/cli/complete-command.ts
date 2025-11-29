@@ -87,8 +87,8 @@ export async function executeComplete(
   progress.complete();
   printer.ensureNewline();
 
-  // Only show summary if stderr is a TTY (not redirected)
-  if (stderrTTY) {
+  // Only show summary if stderr is a TTY (not redirected) and not in quiet mode
+  if (stderrTTY && !options.quiet) {
     const summary = renderSummary({ finishReason, usage, cost: progress.getTotalCost() });
     if (summary) {
       env.stderr.write(`${summary}\n`);

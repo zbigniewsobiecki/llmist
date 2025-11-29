@@ -20,7 +20,11 @@ import {
   StreamPrinter,
   StreamProgress,
 } from "./utils.js";
-import { formatGadgetSummary, renderMarkdown, renderOverallSummary } from "./ui/formatters.js";
+import {
+  formatGadgetSummary,
+  renderMarkdown,
+  renderOverallSummary,
+} from "./ui/formatters.js";
 
 /**
  * Prompts the user for approval with optional rejection feedback.
@@ -133,11 +137,15 @@ export async function executeAgent(
   // Flags control built-in behavior:
   // --no-builtins: Exclude all built-in gadgets
   // --no-builtin-interaction: Exclude only AskUser (keeps TellUser for output)
+  //
+  // AskUser is also auto-excluded when stdin is not interactive (piped input)
+  const stdinIsInteractive = isInteractive(env.stdin);
   if (options.builtins !== false) {
     for (const gadget of builtinGadgets) {
-      // Skip AskUser if --no-builtin-interaction is set
-      // Useful for non-interactive environments (CI, pipes, etc.)
-      if (options.builtinInteraction === false && gadget.name === "AskUser") {
+      // Skip AskUser if:
+      // 1. --no-builtin-interaction is set, OR
+      // 2. stdin is not interactive (piped input) - AskUser can't work anyway
+      if (gadget.name === "AskUser" && (options.builtinInteraction === false || !stdinIsInteractive)) {
         continue;
       }
       registry.registerByClass(gadget);
@@ -232,6 +240,11 @@ export async function executeAgent(
             if (context.usage.outputTokens) {
               progress.setOutputTokens(context.usage.outputTokens, false);
             }
+            // Update cached token counts for live cost estimation
+            progress.setCachedTokens(
+              context.usage.cachedInputTokens ?? 0,
+              context.usage.cacheCreationInputTokens ?? 0,
+            );
           }
         },
 
@@ -253,17 +266,21 @@ export async function executeAgent(
             }
           }
 
-          // Calculate per-call cost for the summary
+          // Calculate per-call cost for the summary (accounting for cached tokens)
+          // Use context.options.model (resolved) instead of options.model (raw CLI input)
+          // This ensures aliases like "sonnet" are resolved to "claude-sonnet-4-5"
           let callCost: number | undefined;
           if (context.usage && client.modelRegistry) {
             try {
-              const modelName = options.model.includes(":")
-                ? options.model.split(":")[1]
-                : options.model;
+              const modelName = context.options.model.includes(":")
+                ? context.options.model.split(":")[1]
+                : context.options.model;
               const costResult = client.modelRegistry.estimateCost(
                 modelName,
                 context.usage.inputTokens,
                 context.usage.outputTokens,
+                context.usage.cachedInputTokens ?? 0,
+                context.usage.cacheCreationInputTokens ?? 0,
               );
               if (costResult) callCost = costResult.totalCost;
             } catch {
@@ -279,7 +296,8 @@ export async function executeAgent(
 
           // SHOWCASE: Print per-call summary after each LLM call
           // This gives users visibility into each iteration's metrics
-          if (stderrTTY) {
+          // Skip summaries in quiet mode
+          if (!options.quiet) {
             const summary = renderSummary({
               iterations: context.iteration + 1,
               model: options.model,
@@ -429,10 +447,17 @@ export async function executeAgent(
       printer.write(event.content);
     } else if (event.type === "gadget_result") {
       // Show gadget execution feedback on stderr
-      // Only displayed in TTY mode (hidden when piped)
       progress.pause();
-      if (stderrTTY) {
-        // Count tokens for output using provider-specific API
+
+      if (options.quiet) {
+        // In quiet mode, only output TellUser messages (to stdout, plain markdown)
+        if (event.result.gadgetName === "TellUser" && event.result.parameters?.message) {
+          const message = String(event.result.parameters.message);
+          const rendered = renderMarkdown(message);
+          env.stdout.write(`${rendered}\n`);
+        }
+      } else {
+        // Normal mode: show full gadget summary on stderr
         const tokenCount = await countGadgetOutputTokens(event.result.result);
         env.stderr.write(`${formatGadgetSummary({ ...event.result, tokenCount })}\n`);
       }
@@ -446,7 +471,8 @@ export async function executeAgent(
 
   // SHOWCASE: Show overall summary only if there were multiple iterations
   // Single-iteration runs already showed per-call summary, no need to repeat
-  if (stderrTTY && iterations > 1) {
+  // Skip summaries in quiet mode
+  if (!options.quiet && iterations > 1) {
     // Separator line to distinguish from per-call summaries
     env.stderr.write(`${chalk.dim("─".repeat(40))}\n`);
 

@@ -37,15 +37,132 @@ gadget = ["~/gadgets/common-tools.ts"]
 
 With this config, running `llmist complete "Hello"` will use Claude Sonnet instead of the default GPT-5-nano.
 
+### Inheritance
+
+Sections can inherit settings from other sections using the `inherits` key. This reduces duplication and allows you to create shared profiles:
+
+```toml
+# Base settings in [agent]
+[agent]
+model = "anthropic:claude-sonnet-4-5"
+max-iterations = 15
+
+# Profile inherits from agent, overrides some settings
+[review-base]
+inherits = "agent"
+temperature = 0.3
+max-iterations = 5
+
+# Command inherits from profile (chain: code-review → review-base → agent)
+[code-review]
+inherits = "review-base"
+system = "You are a code reviewer."
+# Gets: model from agent, temperature and max-iterations from review-base
+```
+
+**Inheritance rules:**
+- Single inheritance: `inherits = "agent"`
+- Multiple inheritance: `inherits = ["agent", "profile"]` (last wins for conflicts)
+- Own values always override inherited values
+- Arrays (like `gadget`) are replaced, not merged
+- Circular inheritance is detected and errors
+
+### Prompt Templates
+
+The `[prompts]` section lets you define reusable prompt snippets using [Eta](https://eta.js.org/) templating syntax. This is powerful for:
+
+- **Composition**: Build complex prompts from smaller, reusable pieces
+- **DRY**: Don't repeat yourself - define common instructions once
+- **Parameterization**: Create flexible templates that accept parameters
+
+#### Basic Syntax
+
+```toml
+[prompts]
+# Simple prompt
+base-assistant = "You are a helpful AI assistant."
+
+# Prompt with variable
+personalized = "Hello <%= it.name %>, I'm ready to help with <%= it.task %>!"
+
+# Include another prompt
+full-intro = """
+<%~ include("@base-assistant") %>
+
+I specialize in <%= it.specialty %>.
+"""
+```
+
+#### Including Prompts
+
+Use `<%~ include("@name") %>` to include another prompt. The `@` prefix references named prompts from `[prompts]`.
+
+```toml
+[prompts]
+base = "You are a helpful assistant."
+expert = """
+<%~ include("@base") %>
+You are also an expert in <%= it.field %>.
+"""
+
+[my-expert]
+system = '<%~ include("@expert", {field: "TypeScript"}) %>'
+```
+
+#### Passing Parameters
+
+Pass parameters when including prompts using the second argument:
+
+```toml
+[prompts]
+code-style = """
+When writing code:
+- Use <%= it.language %> idioms
+- Follow <%= it.style %> conventions
+"""
+
+senior-reviewer = """
+<%~ include("@base-assistant") %>
+
+You are a senior <%= it.role %> expert.
+<%~ include("@code-style", {language: "TypeScript", style: "modern"}) %>
+"""
+
+[code-review]
+type = "agent"
+system = '<%~ include("@senior-reviewer", {role: "code reviewer"}) %>'
+```
+
+#### Environment Variables
+
+Access environment variables with `<%= it.env.VAR_NAME %>`:
+
+```toml
+[prompts]
+user-greeting = "Hello <%= it.env.USER %>, welcome back!"
+project-context = "Working on project: <%= it.env.PROJECT_NAME %>"
+```
+
+**Note**: Missing environment variables will cause an error at config load time.
+
+#### Syntax Reference
+
+| Syntax | Purpose | Example |
+|--------|---------|---------|
+| `<%= it.var %>` | Output variable | `<%= it.name %>` |
+| `<%~ include("@name") %>` | Include prompt | `<%~ include("@base") %>` |
+| `<%~ include("@name", {k:v}) %>` | Include with params | `<%~ include("@style", {lang: "TS"}) %>` |
+| `<%= it.env.VAR %>` | Environment variable | `<%= it.env.USER %>` |
+
 ### Custom Commands
 
-Any section other than `complete` and `agent` creates a new CLI command:
+Any section other than `global`, `complete`, `agent`, and `prompts` creates a new CLI command:
 
 ```toml
 [code-review]
+inherits = "agent"  # Inherit base settings
 type = "agent"
 description = "Review code for bugs and best practices."
-model = "anthropic:claude-sonnet-4-5"
 system = "You are a senior code reviewer. Analyze code for bugs, security issues, style problems, and suggest improvements."
 gadget = ["~/gadgets/code-tools.ts"]
 max-iterations = 5
@@ -179,6 +296,7 @@ max-iterations = 3
 | `system` | string | System prompt |
 | `temperature` | number | Sampling temperature (0-2) |
 | `max-tokens` | integer | Maximum output tokens |
+| `inherits` | string or string[] | Section(s) to inherit settings from |
 
 #### Options for `[agent]` section
 
@@ -192,6 +310,7 @@ max-iterations = 3
 | `parameter-format` | string | `json`, `yaml`, `toml`, or `auto` |
 | `builtins` | boolean | Enable built-in gadgets (AskUser, TellUser) |
 | `builtin-interaction` | boolean | Enable AskUser gadget |
+| `inherits` | string or string[] | Section(s) to inherit settings from |
 
 #### Options for custom command sections
 

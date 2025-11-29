@@ -45,7 +45,13 @@ describe("AnthropicMessagesProvider", () => {
 
       expect(createSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          system: "You are helpful",
+          system: [
+            {
+              type: "text",
+              text: "You are helpful",
+              cache_control: { type: "ephemeral" },
+            },
+          ],
         }),
       );
     });
@@ -74,7 +80,14 @@ describe("AnthropicMessagesProvider", () => {
 
       expect(createSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          system: "First system\n\nSecond system",
+          system: [
+            { type: "text", text: "First system" },
+            {
+              type: "text",
+              text: "Second system",
+              cache_control: { type: "ephemeral" },
+            },
+          ],
         }),
       );
     });
@@ -107,7 +120,12 @@ describe("AnthropicMessagesProvider", () => {
           messages: [
             { role: "user", content: [{ type: "text", text: "User 1" }] },
             { role: "assistant", content: [{ type: "text", text: "Assistant 1" }] },
-            { role: "user", content: [{ type: "text", text: "User 2" }] },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "User 2", cache_control: { type: "ephemeral" } },
+              ],
+            },
           ],
         }),
       );

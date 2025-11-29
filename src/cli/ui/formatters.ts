@@ -208,21 +208,21 @@ export interface SummaryMetadata {
  *
  * @example
  * ```typescript
- * // Full summary with all fields
+ * // Full summary with all fields (including cached tokens)
  * renderSummary({
  *   iterations: 3,
- *   usage: { inputTokens: 896, outputTokens: 11500, totalTokens: 12396 },
+ *   usage: { inputTokens: 896, outputTokens: 11500, totalTokens: 12396, cachedInputTokens: 500 },
  *   elapsedSeconds: 9,
  *   cost: 0.0123,
  *   finishReason: "stop"
  * });
- * // Output: "#3 | ↑ 896 │ ↓ 11.5k │ 9s | $0.0123 | stop"
+ * // Output: "#3 | ↑ 896 | ⟳ 500 | ↓ 11.5k | 9s | $0.0123 | stop"
  *
- * // Partial summary (only tokens)
+ * // Partial summary (only tokens, no cache hit)
  * renderSummary({
  *   usage: { inputTokens: 500, outputTokens: 200, totalTokens: 700 }
  * });
- * // Output: "↑ 500 │ ↓ 200"
+ * // Output: "↑ 500 | ↓ 200"
  * ```
  */
 export function renderSummary(metadata: SummaryMetadata): string | null {
@@ -241,10 +241,19 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
     parts.push(chalk.magenta(metadata.model));
   }
 
-  // Token usage (↑ input │ ↓ output) - core metrics
+  // Token usage (↑ input │ ⟳ cached │ ✎ cache-write │ ↓ output) - core metrics
   if (metadata.usage) {
-    const { inputTokens, outputTokens } = metadata.usage;
+    const { inputTokens, outputTokens, cachedInputTokens, cacheCreationInputTokens } =
+      metadata.usage;
     parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(inputTokens)}`));
+    // Show cached tokens if present (indicates prompt caching hit - 0.1x cost)
+    if (cachedInputTokens && cachedInputTokens > 0) {
+      parts.push(chalk.dim("⟳") + chalk.blue(` ${formatTokens(cachedInputTokens)}`));
+    }
+    // Show cache creation tokens if present (Anthropic cache writes - 1.25x cost)
+    if (cacheCreationInputTokens && cacheCreationInputTokens > 0) {
+      parts.push(chalk.dim("✎") + chalk.magenta(` ${formatTokens(cacheCreationInputTokens)}`));
+    }
     parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(outputTokens)}`));
   }
 

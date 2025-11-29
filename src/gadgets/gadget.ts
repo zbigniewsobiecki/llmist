@@ -10,7 +10,16 @@ import type { GadgetExample } from "./types.js";
  * Common heredoc delimiter names, in order of preference.
  * We try these until we find one that doesn't appear in the content.
  */
-const HEREDOC_DELIMITERS = ["EOF", "END", "DOC", "CONTENT", "TEXT", "HEREDOC", "DATA", "BLOCK"];
+const HEREDOC_DELIMITERS = [
+  "__GADGET_PARAM_EOF__",
+  "__GADGET_PARAM_END__",
+  "__GADGET_PARAM_DOC__",
+  "__GADGET_PARAM_CONTENT__",
+  "__GADGET_PARAM_TEXT__",
+  "__GADGET_PARAM_HEREDOC__",
+  "__GADGET_PARAM_DATA__",
+  "__GADGET_PARAM_BLOCK__",
+];
 
 /**
  * Find a safe heredoc delimiter that doesn't appear alone on a line in the content.
@@ -28,7 +37,7 @@ function findSafeDelimiter(content: string): string {
   // Fallback: generate a unique delimiter with a number suffix
   let counter = 1;
   while (counter < 1000) {
-    const delimiter = `HEREDOC_${counter}`;
+    const delimiter = `__GADGET_PARAM_${counter}__`;
     const regex = new RegExp(`^${delimiter}\\s*$`);
     const isUsed = lines.some((line) => regex.test(line));
     if (!isUsed) {

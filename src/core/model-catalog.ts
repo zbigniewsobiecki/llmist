@@ -12,6 +12,8 @@ export interface ModelPricing {
   output: number;
   /** Price per 1 million cached input tokens in USD (if supported) */
   cachedInput?: number;
+  /** Price per 1 million cache write tokens in USD (Anthropic: 1.25x input price) */
+  cacheWriteInput?: number;
 }
 
 export interface ModelFeatures {
@@ -68,6 +70,10 @@ export interface ModelLimits {
 
 export interface CostEstimate {
   inputCost: number;
+  /** Cost for cached input tokens (already included in inputCost calculation) */
+  cachedInputCost: number;
+  /** Cost for cache creation tokens (already included in inputCost calculation, Anthropic only) */
+  cacheCreationCost: number;
   outputCost: number;
   totalCost: number;
   currency: "USD";

@@ -12,6 +12,23 @@ export type GadgetImportFunction = (specifier: string) => Promise<unknown>;
 const PATH_PREFIXES = [".", "/", "~"];
 
 /**
+ * Duck-type check if a value looks like a Gadget instance.
+ * This avoids instanceof issues when gadgets are loaded from external files
+ * that import from the 'llmist' npm package (different class instance).
+ */
+function isGadgetLike(value: unknown): value is BaseGadget {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.execute === "function" &&
+    typeof obj.description === "string" &&
+    ("parameterSchema" in obj || "schema" in obj)
+  );
+}
+
+/**
  * Type guard to check if a value is a Gadget constructor.
  *
  * @param value - Value to check
@@ -23,7 +40,8 @@ function isGadgetConstructor(value: unknown): value is new () => BaseGadget {
   }
 
   const prototype = value.prototype as unknown;
-  return Boolean(prototype) && prototype instanceof BaseGadget;
+  // Use duck typing for prototype check too
+  return Boolean(prototype) && (prototype instanceof BaseGadget || isGadgetLike(prototype));
 }
 
 /**
@@ -102,8 +120,9 @@ export function extractGadgetsFromModule(moduleExports: unknown): BaseGadget[] {
     }
     visited.add(value);
 
-    if (value instanceof BaseGadget) {
-      results.push(value);
+    // Use duck typing to handle gadgets from external packages
+    if (value instanceof BaseGadget || isGadgetLike(value)) {
+      results.push(value as BaseGadget);
       return;
     }
 

@@ -9,6 +9,7 @@
         "@google/genai": "^1.27.0",
         "chalk": "^5.6.2",
         "commander": "^12.1.0",
+        "eta": "^4.4.1",
         "js-toml": "^1.0.2",
         "js-yaml": "^4.1.0",
         "marked": "^15.0.12",
@@ -430,6 +431,8 @@
     "escalade": ["escalade@3.2.0", "", {}, "sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA=="],
 
     "escape-string-regexp": ["escape-string-regexp@5.0.0", "", {}, "sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw=="],
+
+    "eta": ["eta@4.4.1", "", {}, "sha512-4o6fYxhRmFmO9SJcU9PxBLYPGapvJ/Qha0ZE+Y6UE9QIUd0Wk1qaLISQ6J1bM7nOcWHhs1YmY3mfrfwkJRBTWQ=="],
 
     "execa": ["execa@5.1.1", "", { "dependencies": { "cross-spawn": "^7.0.3", "get-stream": "^6.0.0", "human-signals": "^2.1.0", "is-stream": "^2.0.0", "merge-stream": "^2.0.0", "npm-run-path": "^4.0.1", "onetime": "^5.1.2", "signal-exit": "^3.0.3", "strip-final-newline": "^2.0.0" } }, "sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg=="],
 

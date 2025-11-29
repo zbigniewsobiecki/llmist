@@ -17,6 +17,7 @@ export interface CompleteCommandOptions {
   system?: string;
   temperature?: number;
   maxTokens?: number;
+  quiet?: boolean;
 }
 
 /**
@@ -33,6 +34,7 @@ export interface AgentCommandOptions {
   builtinInteraction: boolean;
   gadgetStartPrefix?: string;
   gadgetEndPrefix?: string;
+  quiet?: boolean;
 }
 
 const PARAMETER_FORMAT_VALUES: ParameterFormat[] = ["json", "yaml", "toml", "auto"];
@@ -72,7 +74,8 @@ export function addCompleteOptions(cmd: Command, defaults?: CompleteConfig): Com
       OPTION_DESCRIPTIONS.maxTokens,
       createNumericParser({ label: "Max tokens", integer: true, min: 1 }),
       defaults?.["max-tokens"],
-    );
+    )
+    .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet);
 }
 
 /**
@@ -119,7 +122,8 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
       OPTION_FLAGS.noBuiltinInteraction,
       OPTION_DESCRIPTIONS.noBuiltinInteraction,
       defaults?.["builtin-interaction"] !== false,
-    );
+    )
+    .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet);
 }
 
 /**
@@ -131,6 +135,7 @@ export function configToCompleteOptions(config: CustomCommandConfig): Partial<Co
   if (config.system !== undefined) result.system = config.system;
   if (config.temperature !== undefined) result.temperature = config.temperature;
   if (config["max-tokens"] !== undefined) result.maxTokens = config["max-tokens"];
+  if (config.quiet !== undefined) result.quiet = config.quiet;
   return result;
 }
 
@@ -152,5 +157,6 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
     result.gadgetStartPrefix = config["gadget-start-prefix"];
   if (config["gadget-end-prefix"] !== undefined)
     result.gadgetEndPrefix = config["gadget-end-prefix"];
+  if (config.quiet !== undefined) result.quiet = config.quiet;
   return result;
 }

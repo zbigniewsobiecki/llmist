@@ -24,6 +24,7 @@ type GeminiChunk = {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
     totalTokenCount?: number;
+    cachedContentTokenCount?: number;
   };
 };
 
@@ -226,7 +227,9 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
 
   private extractUsage(
     chunk: GeminiChunk,
-  ): { inputTokens: number; outputTokens: number; totalTokens: number } | undefined {
+  ):
+    | { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens?: number }
+    | undefined {
     const usageMetadata = chunk?.usageMetadata;
     if (!usageMetadata) {
       return undefined;
@@ -236,6 +239,8 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
       inputTokens: usageMetadata.promptTokenCount ?? 0,
       outputTokens: usageMetadata.candidatesTokenCount ?? 0,
       totalTokens: usageMetadata.totalTokenCount ?? 0,
+      // Gemini returns cached token count in cachedContentTokenCount
+      cachedInputTokens: usageMetadata.cachedContentTokenCount ?? 0,
     };
   }
 

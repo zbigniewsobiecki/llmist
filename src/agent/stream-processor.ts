@@ -6,7 +6,7 @@
  */
 
 import type { ILogObj, Logger } from "tslog";
-import type { LLMStreamChunk } from "../core/options.js";
+import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
 import { GadgetExecutor } from "../gadgets/executor.js";
 import { type ParameterFormat, StreamParser } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
@@ -90,8 +90,8 @@ export interface StreamProcessingResult {
   /** LLM finish reason */
   finishReason: string | null;
 
-  /** Token usage */
-  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
+  /** Token usage (including cached token counts when available) */
+  usage?: TokenUsage;
 
   /** The raw accumulated response text */
   rawResponse: string;
@@ -169,7 +169,7 @@ export class StreamProcessor {
   async process(stream: AsyncIterable<LLMStreamChunk>): Promise<StreamProcessingResult> {
     const outputs: StreamEvent[] = [];
     let finishReason: string | null = null;
-    let usage: { inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
+    let usage: TokenUsage | undefined;
     let didExecuteGadgets = false;
     let shouldBreakLoop = false;
 
