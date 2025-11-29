@@ -281,22 +281,23 @@ export function preprocessTomlHeredoc(tomlStr: string): string {
         i++;
       }
 
-      // Convert to standard TOML multiline string
-      // If no closing delimiter found, include remaining content (will likely cause TOML parse error)
+      // Convert to TOML literal multiline string (''')
+      // Using ''' instead of """ because literal strings DON'T process escape sequences.
+      // This is critical because code often contains regex like \s, \d, \n which would
+      // be interpreted as (invalid) TOML escape sequences in basic strings.
       if (bodyLines.length === 0) {
         // Empty heredoc
-        result.push(`${indent}${key} = """"""`);
+        result.push(`${indent}${key} = ''''''`);
       } else {
-        // Non-empty heredoc - use triple quotes
-        // IMPORTANT: Put closing """ on the same line as last content to avoid trailing newline
-        // TOML adds a newline when """ is on its own line
+        // Non-empty heredoc - use triple single quotes (literal string)
+        // IMPORTANT: Put closing ''' on the same line as last content to avoid trailing newline
         // Also un-escape common LLM escaping mistakes (like \` and \$)
-        result.push(`${indent}${key} = """`);
+        result.push(`${indent}${key} = '''`);
         for (let j = 0; j < bodyLines.length - 1; j++) {
           result.push(unescapeHeredocContent(bodyLines[j]));
         }
         // Last line includes the closing quotes
-        result.push(`${unescapeHeredocContent(bodyLines[bodyLines.length - 1])}"""`);
+        result.push(`${unescapeHeredocContent(bodyLines[bodyLines.length - 1])}'''`);
       }
 
       if (!foundClosing) {
