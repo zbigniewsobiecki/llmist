@@ -379,6 +379,10 @@ export async function executeAgent(
   builder.withGadgetStartPrefix(markers.startPrefix);
   builder.withGadgetEndPrefix(markers.endPrefix);
 
+  // Continue looping when LLM responds with just text (no gadget calls)
+  // This allows multi-turn conversations where the LLM may explain before acting
+  builder.withTextOnlyHandler("acknowledge");
+
   // Build and start the agent
   const agent = builder.ask(prompt);
 
