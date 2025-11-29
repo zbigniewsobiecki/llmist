@@ -51,6 +51,24 @@ export interface LoggerOptions {
    * Logger name (appears in logs)
    */
   name?: string;
+
+  /**
+   * When true, reset (truncate) the log file instead of appending.
+   * Useful for getting clean logs per session.
+   * @default false
+   */
+  logReset?: boolean;
+}
+
+/**
+ * Parses a boolean environment variable.
+ */
+function parseEnvBoolean(value?: string): boolean | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return undefined;
 }
 
 /**
@@ -74,10 +92,13 @@ export interface LoggerOptions {
 export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
   const envMinLevel = parseLogLevel(process.env.LLMIST_LOG_LEVEL);
   const envLogFile = process.env.LLMIST_LOG_FILE?.trim() ?? "";
+  const envLogReset = parseEnvBoolean(process.env.LLMIST_LOG_RESET);
 
   const minLevel = options.minLevel ?? envMinLevel ?? 4;
   const defaultType = options.type ?? "pretty";
   const name = options.name ?? "llmist";
+  // Priority: options > env var > default (false = append)
+  const logReset = options.logReset ?? envLogReset ?? false;
 
   let logFileStream: WriteStream | undefined;
   let finalType = defaultType;
@@ -85,7 +106,9 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
   if (envLogFile) {
     try {
       mkdirSync(dirname(envLogFile), { recursive: true });
-      logFileStream = createWriteStream(envLogFile, { flags: "a" });
+      // Use "w" (write/truncate) when logReset is true, "a" (append) otherwise
+      const flags = logReset ? "w" : "a";
+      logFileStream = createWriteStream(envLogFile, { flags });
       finalType = "hidden";
     } catch (error) {
       console.error("Failed to initialize LLMIST_LOG_FILE output:", error);

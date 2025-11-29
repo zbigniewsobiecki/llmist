@@ -8,6 +8,23 @@ describe("config", () => {
       expect(result).toEqual({});
     });
 
+    it("should validate global section with logging options", () => {
+      const raw = {
+        global: {
+          "log-level": "debug",
+          "log-file": "/tmp/test.log",
+          "log-reset": true,
+        },
+      };
+
+      const result = validateConfig(raw);
+
+      expect(result.global).toBeDefined();
+      expect(result.global?.["log-level"]).toBe("debug");
+      expect(result.global?.["log-file"]).toBe("/tmp/test.log");
+      expect(result.global?.["log-reset"]).toBe(true);
+    });
+
     it("should validate complete section", () => {
       const raw = {
         complete: {
@@ -84,6 +101,26 @@ describe("config", () => {
       const result = validateConfig(raw);
 
       expect(result["quick-translate"]).toBeDefined();
+    });
+
+    it("should validate custom command section with logging options", () => {
+      const raw = {
+        "develop": {
+          type: "agent",
+          model: "openai:gpt-4o",
+          "log-level": "silly",
+          "log-file": "/tmp/develop.log",
+          "log-reset": true,
+        },
+      };
+
+      const result = validateConfig(raw);
+
+      expect(result["develop"]).toBeDefined();
+      const cmd = result["develop"] as { "log-level"?: string; "log-file"?: string; "log-reset"?: boolean };
+      expect(cmd?.["log-level"]).toBe("silly");
+      expect(cmd?.["log-file"]).toBe("/tmp/develop.log");
+      expect(cmd?.["log-reset"]).toBe(true);
     });
 
     it("should default custom command type to agent", () => {
@@ -254,6 +291,41 @@ describe("config", () => {
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
         expect(() => validateConfig(raw)).toThrow("[agent].builtins must be a boolean");
+      });
+
+      it("should reject invalid log-reset type in global", () => {
+        const raw = {
+          global: {
+            "log-reset": "yes",
+          },
+        };
+
+        expect(() => validateConfig(raw)).toThrow(ConfigError);
+        expect(() => validateConfig(raw)).toThrow("[global].log-reset must be a boolean");
+      });
+
+      it("should reject invalid log-reset type in custom command", () => {
+        const raw = {
+          "my-command": {
+            "log-reset": "true",
+          },
+        };
+
+        expect(() => validateConfig(raw)).toThrow(ConfigError);
+        expect(() => validateConfig(raw)).toThrow("[my-command].log-reset must be a boolean");
+      });
+
+      it("should reject invalid log-level in custom command", () => {
+        const raw = {
+          "my-command": {
+            "log-level": "verbose",
+          },
+        };
+
+        expect(() => validateConfig(raw)).toThrow(ConfigError);
+        expect(() => validateConfig(raw)).toThrow(
+          "[my-command].log-level must be one of: silly, trace, debug, info, warn, error, fatal",
+        );
       });
 
       it("should reject invalid custom command type", () => {

@@ -40,6 +40,7 @@ function parseLogLevel(value: string): LogLevelName {
 interface GlobalOptions {
   logLevel?: LogLevelName;
   logFile?: string;
+  logReset?: boolean;
 }
 
 /**
@@ -58,6 +59,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
     .version(packageJson.version)
     .option(OPTION_FLAGS.logLevel, OPTION_DESCRIPTIONS.logLevel, parseLogLevel)
     .option(OPTION_FLAGS.logFile, OPTION_DESCRIPTIONS.logFile)
+    .option(OPTION_FLAGS.logReset, OPTION_DESCRIPTIONS.logReset)
     .configureOutput({
       writeOut: (str) => env.stdout.write(str),
       writeErr: (str) => env.stderr.write(str),
@@ -115,6 +117,7 @@ export async function runCLI(
   preParser
     .option(OPTION_FLAGS.logLevel, OPTION_DESCRIPTIONS.logLevel, parseLogLevel)
     .option(OPTION_FLAGS.logFile, OPTION_DESCRIPTIONS.logFile)
+    .option(OPTION_FLAGS.logReset, OPTION_DESCRIPTIONS.logReset)
     .allowUnknownOption()
     .allowExcessArguments()
     .helpOption(false); // Don't intercept --help
@@ -127,6 +130,7 @@ export async function runCLI(
   const loggerConfig: CLILoggerConfig = {
     logLevel: globalOpts.logLevel ?? config.global?.["log-level"],
     logFile: globalOpts.logFile ?? config.global?.["log-file"],
+    logReset: globalOpts.logReset ?? config.global?.["log-reset"],
   };
 
   const defaultEnv = createDefaultEnvironment(loggerConfig);

@@ -67,7 +67,7 @@ export interface PromptConfig {
 
   /**
    * Format description for TOML parameter format.
-   * Default: "Parameters in TOML format (key = value pairs, use triple-quotes for multiline)"
+   * Default: "Parameters in TOML format (key = value pairs, use heredoc for multiline: key = <<<EOF ... EOF)"
    */
   formatDescriptionToml?: PromptTemplate;
 
@@ -128,7 +128,7 @@ export const DEFAULT_PROMPTS: Required<
   formatDescriptionJson: "Parameters in JSON format (valid JSON object)",
 
   formatDescriptionToml:
-    "Parameters in TOML format (key = value pairs, use triple-quotes for multiline)",
+    "Parameters in TOML format (key = value pairs, use heredoc for multiline: key = <<<EOF ... EOF)",
 
   rules: () => [
     "Output ONLY plain text with the exact markers - never use function/tool calling",
