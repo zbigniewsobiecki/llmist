@@ -1,9 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
   ConfigError,
   validateConfig,
   getCustomCommandNames,
   resolveInheritance,
+  resolveTemplatesInConfig,
   type CLIConfig,
 } from "./config.js";
 
@@ -122,8 +123,8 @@ describe("config", () => {
 
       const result = validateConfig(raw);
 
-      expect(result["develop"]).toBeDefined();
-      const cmd = result["develop"] as { "log-level"?: string; "log-file"?: string; "log-reset"?: boolean };
+      expect(result.develop).toBeDefined();
+      const cmd = result.develop as { "log-level"?: string; "log-file"?: string; "log-reset"?: boolean };
       expect(cmd?.["log-level"]).toBe("silly");
       expect(cmd?.["log-file"]).toBe("/tmp/develop.log");
       expect(cmd?.["log-reset"]).toBe(true);
@@ -433,7 +434,7 @@ describe("config", () => {
       };
 
       const result = resolveInheritance(config);
-      const cmd = result["translate"] as Record<string, unknown>;
+      const cmd = result.translate as Record<string, unknown>;
 
       expect(cmd.model).toBe("complete-model");
       expect(cmd["max-tokens"]).toBe(1000);
@@ -667,6 +668,277 @@ describe("config", () => {
 
       const result = validateConfig(raw);
       expect(result.complete?.inherits).toBe("agent");
+    });
+  });
+
+  describe("validateConfig with prompts", () => {
+    it("should accept prompts section with string values", () => {
+      const raw = {
+        prompts: {
+          greeting: "Hello, I am an assistant.",
+          expert: "I am an expert in <%= it.field %>.",
+        },
+      };
+
+      const result = validateConfig(raw);
+      expect(result.prompts).toBeDefined();
+      expect(result.prompts?.greeting).toBe("Hello, I am an assistant.");
+      expect(result.prompts?.expert).toBe("I am an expert in <%= it.field %>.");
+    });
+
+    it("should reject prompts with non-string values", () => {
+      const raw = {
+        prompts: {
+          valid: "This is valid",
+          invalid: 123,
+        },
+      };
+
+      expect(() => validateConfig(raw)).toThrow(ConfigError);
+      expect(() => validateConfig(raw)).toThrow("[prompts].invalid must be a string");
+    });
+
+    it("should reject prompts section that is not a table", () => {
+      const raw = {
+        prompts: "not a table",
+      };
+
+      expect(() => validateConfig(raw)).toThrow(ConfigError);
+      expect(() => validateConfig(raw)).toThrow("[prompts] must be a table");
+    });
+  });
+
+  describe("getCustomCommandNames with prompts", () => {
+    it("should exclude prompts section", () => {
+      const config: CLIConfig = {
+        complete: { model: "test" },
+        agent: { model: "test" },
+        prompts: { greeting: "Hello" },
+        "code-review": { model: "test" },
+      };
+
+      const result = getCustomCommandNames(config);
+      expect(result).toContain("code-review");
+      expect(result).not.toContain("prompts");
+      expect(result).not.toContain("complete");
+      expect(result).not.toContain("agent");
+    });
+  });
+
+  describe("resolveTemplatesInConfig", () => {
+    it("should pass through config without templates", () => {
+      const config: CLIConfig = {
+        agent: { model: "test", system: "Plain system prompt" },
+        complete: { model: "other" },
+      };
+
+      const result = resolveTemplatesInConfig(config);
+      expect(result.agent?.system).toBe("Plain system prompt");
+    });
+
+    it("should resolve simple variable in system prompt", () => {
+      const config: CLIConfig = {
+        prompts: {
+          greeting: "Hello, I am <%= it.name %>.",
+        },
+        "my-command": {
+          model: "test",
+          system: '<%~ include("@greeting", {name: "Assistant"}) %>',
+        },
+      };
+
+      const result = resolveTemplatesInConfig(config);
+      const cmd = result["my-command"] as { system?: string };
+      expect(cmd.system).toBe("Hello, I am Assistant.");
+    });
+
+    it("should resolve include without params", () => {
+      const config: CLIConfig = {
+        prompts: {
+          base: "You are a helpful assistant.",
+        },
+        agent: {
+          model: "test",
+          system: '<%~ include("@base") %> Be concise.',
+        },
+      };
+
+      const result = resolveTemplatesInConfig(config);
+      expect(result.agent?.system).toBe("You are a helpful assistant. Be concise.");
+    });
+
+    it("should resolve nested includes", () => {
+      const config: CLIConfig = {
+        prompts: {
+          base: "Base prompt.",
+          middle: '<%~ include("@base") %> Middle.',
+          top: '<%~ include("@middle") %> Top.',
+        },
+        "my-command": {
+          model: "test",
+          system: '<%~ include("@top") %>',
+        },
+      };
+
+      const result = resolveTemplatesInConfig(config);
+      const cmd = result["my-command"] as { system?: string };
+      expect(cmd.system).toBe("Base prompt. Middle. Top.");
+    });
+
+    it("should preserve non-template system prompts", () => {
+      const config: CLIConfig = {
+        prompts: {
+          base: "Base prompt.",
+        },
+        agent: {
+          model: "test",
+          system: "Plain prompt without templates",
+        },
+        "my-command": {
+          model: "test",
+          system: '<%~ include("@base") %>',
+        },
+      };
+
+      const result = resolveTemplatesInConfig(config);
+      expect(result.agent?.system).toBe("Plain prompt without templates");
+      const cmd = result["my-command"] as { system?: string };
+      expect(cmd.system).toBe("Base prompt.");
+    });
+
+    it("should handle config with no prompts section but template syntax", () => {
+      const config: CLIConfig = {
+        agent: {
+          model: "test",
+          system: "Hello <%= it.name %>",
+        },
+      };
+
+      // Should work - just renders the template with empty context
+      const result = resolveTemplatesInConfig(config);
+      expect(result.agent?.system).toBe("Hello undefined");
+    });
+
+    describe("environment variables", () => {
+      const originalEnv = { ...process.env };
+
+      beforeEach(() => {
+        process.env.TEST_USER = "TestUser";
+        process.env.TEST_ROLE = "Developer";
+      });
+
+      afterEach(() => {
+        process.env = { ...originalEnv };
+      });
+
+      it("should resolve environment variables in prompts", () => {
+        const config: CLIConfig = {
+          prompts: {
+            greeting: "Hello <%= it.env.TEST_USER %>!",
+          },
+          "my-command": {
+            model: "test",
+            system: '<%~ include("@greeting") %>',
+          },
+        };
+
+        const result = resolveTemplatesInConfig(config);
+        const cmd = result["my-command"] as { system?: string };
+        expect(cmd.system).toBe("Hello TestUser!");
+      });
+
+      it("should resolve environment variables in system prompts directly", () => {
+        const config: CLIConfig = {
+          prompts: {},
+          agent: {
+            model: "test",
+            system: "Welcome <%= it.env.TEST_USER %>, role: <%= it.env.TEST_ROLE %>",
+          },
+        };
+
+        const result = resolveTemplatesInConfig(config);
+        expect(result.agent?.system).toBe("Welcome TestUser, role: Developer");
+      });
+
+      it("should error on missing environment variable in prompts", () => {
+        const config: CLIConfig = {
+          prompts: {
+            greeting: "Hello <%= it.env.NONEXISTENT_VAR %>!",
+          },
+          "my-command": {
+            model: "test",
+            system: '<%~ include("@greeting") %>',
+          },
+        };
+
+        expect(() => resolveTemplatesInConfig(config, "/test/config.toml")).toThrow(ConfigError);
+        expect(() => resolveTemplatesInConfig(config)).toThrow("NONEXISTENT_VAR");
+      });
+
+      it("should error on missing environment variable in system prompt", () => {
+        const config: CLIConfig = {
+          prompts: {},
+          agent: {
+            model: "test",
+            system: "Hello <%= it.env.NONEXISTENT_VAR %>!",
+          },
+        };
+
+        expect(() => resolveTemplatesInConfig(config)).toThrow(ConfigError);
+        expect(() => resolveTemplatesInConfig(config)).toThrow("NONEXISTENT_VAR");
+      });
+    });
+
+    describe("error handling", () => {
+      it("should error on invalid template syntax in prompts", () => {
+        const config: CLIConfig = {
+          prompts: {
+            bad: "<% if (true { %>",
+          },
+        };
+
+        expect(() => resolveTemplatesInConfig(config)).toThrow(ConfigError);
+      });
+
+      it("should error on missing include reference", () => {
+        const config: CLIConfig = {
+          prompts: {
+            base: '<%~ include("@nonexistent") %>',
+          },
+        };
+
+        expect(() => resolveTemplatesInConfig(config)).toThrow(ConfigError);
+      });
+
+      it("should error on missing include in system prompt", () => {
+        const config: CLIConfig = {
+          prompts: {},
+          agent: {
+            model: "test",
+            system: '<%~ include("@nonexistent") %>',
+          },
+        };
+
+        expect(() => resolveTemplatesInConfig(config)).toThrow(ConfigError);
+      });
+
+      it("should include section name in error for system prompt issues", () => {
+        const config: CLIConfig = {
+          prompts: {},
+          "my-bad-command": {
+            model: "test",
+            system: '<%~ include("@missing") %>',
+          },
+        };
+
+        try {
+          resolveTemplatesInConfig(config, "/test/config.toml");
+          expect.unreachable("Should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(ConfigError);
+          expect((error as ConfigError).message).toContain("my-bad-command");
+        }
+      });
     });
   });
 });
