@@ -82,6 +82,15 @@ export const tellUser = createGadget({
         type: "warning",
       },
     },
+    {
+      comment: "Share detailed analysis with bullet points (use heredoc for multiline)",
+      params: {
+        message:
+          "Here's what I found in the codebase:\n\n1. **Main entry point**: `src/index.ts` exports all public APIs\n2. **Core logic**: Located in `src/core/` with 5 modules\n3. **Tests**: Good coverage in `src/__tests__/`\n\nI'll continue exploring the core modules.",
+        done: false,
+        type: "info",
+      },
+    },
   ],
   execute: ({ message, done, type }) => {
     // Format message for display, but return plain text for LLM context

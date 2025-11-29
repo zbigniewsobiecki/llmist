@@ -43,6 +43,8 @@ export interface AgentConfig extends BaseCommandConfig {
   "parameter-format"?: ParameterFormat;
   builtins?: boolean;
   "builtin-interaction"?: boolean;
+  "gadget-start-prefix"?: string;
+  "gadget-end-prefix"?: string;
 }
 
 /**
@@ -92,6 +94,8 @@ const AGENT_CONFIG_KEYS = new Set([
   "parameter-format",
   "builtins",
   "builtin-interaction",
+  "gadget-start-prefix",
+  "gadget-end-prefix",
 ]);
 
 /** Valid keys for custom command config (union of complete + agent + type + description + logging) */
@@ -326,6 +330,20 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
       section,
     );
   }
+  if ("gadget-start-prefix" in rawObj) {
+    result["gadget-start-prefix"] = validateString(
+      rawObj["gadget-start-prefix"],
+      "gadget-start-prefix",
+      section,
+    );
+  }
+  if ("gadget-end-prefix" in rawObj) {
+    result["gadget-end-prefix"] = validateString(
+      rawObj["gadget-end-prefix"],
+      "gadget-end-prefix",
+      section,
+    );
+  }
 
   return result;
 }
@@ -393,6 +411,20 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
     result["builtin-interaction"] = validateBoolean(
       rawObj["builtin-interaction"],
       "builtin-interaction",
+      section,
+    );
+  }
+  if ("gadget-start-prefix" in rawObj) {
+    result["gadget-start-prefix"] = validateString(
+      rawObj["gadget-start-prefix"],
+      "gadget-start-prefix",
+      section,
+    );
+  }
+  if ("gadget-end-prefix" in rawObj) {
+    result["gadget-end-prefix"] = validateString(
+      rawObj["gadget-end-prefix"],
+      "gadget-end-prefix",
       section,
     );
   }

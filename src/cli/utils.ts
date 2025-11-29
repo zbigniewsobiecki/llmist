@@ -7,39 +7,6 @@ import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import type { CLIEnvironment, TTYStream } from "./environment.js";
 
 /**
- * Pool of rarely-used emoji for generating unique gadget markers.
- * These are chosen to minimize collision risk with normal text content.
- */
-const RARE_EMOJI = [
-  "🔱", "⚗️", "🧿", "🔰", "⚛️", "🏺", "🧫", "🔬", "⚕️", "🗝️",
-  "⚖️", "🔮", "🪬", "🧬", "⚙️", "🔩", "🪛", "⛏️", "🪃", "🏹",
-  "🛡️", "⚔️", "🗡️", "🪓", "🗃️", "📜", "📯", "🎴", "🀄", "🎲",
-];
-
-/**
- * Generates random emoji sequences for gadget start/end markers.
- * Each CLI session gets unique markers to avoid collisions with user content.
- *
- * @returns Object with startPrefix and endPrefix, each a 5-emoji sequence
- */
-export function generateMarkers(): { startPrefix: string; endPrefix: string } {
-  const pick = (count: number): string => {
-    const result: string[] = [];
-    const pool = [...RARE_EMOJI];
-    for (let i = 0; i < count && pool.length > 0; i++) {
-      const idx = Math.floor(Math.random() * pool.length);
-      result.push(pool.splice(idx, 1)[0]);
-    }
-    return result.join("");
-  };
-
-  return {
-    startPrefix: pick(5),
-    endPrefix: pick(5),
-  };
-}
-
-/**
  * Options for creating a numeric value parser.
  */
 export interface NumericParserOptions {

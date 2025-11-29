@@ -31,6 +31,8 @@ export interface AgentCommandOptions {
   parameterFormat: ParameterFormat;
   builtins: boolean;
   builtinInteraction: boolean;
+  gadgetStartPrefix?: string;
+  gadgetEndPrefix?: string;
 }
 
 const PARAMETER_FORMAT_VALUES: ParameterFormat[] = ["json", "yaml", "toml", "auto"];
@@ -146,5 +148,9 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
   if (config.builtins !== undefined) result.builtins = config.builtins;
   if (config["builtin-interaction"] !== undefined)
     result.builtinInteraction = config["builtin-interaction"];
+  if (config["gadget-start-prefix"] !== undefined)
+    result.gadgetStartPrefix = config["gadget-start-prefix"];
+  if (config["gadget-end-prefix"] !== undefined)
+    result.gadgetEndPrefix = config["gadget-end-prefix"];
   return result;
 }

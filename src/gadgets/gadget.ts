@@ -110,8 +110,21 @@ function formatParamsAsYaml(params: Record<string, unknown>): string {
 }
 
 /**
+ * Format a TOML inline table (object).
+ * TOML uses { key = value, key2 = value2 } syntax, NOT JSON's {"key": value}.
+ * This is critical because LLMs copy the examples we show them in the prompt.
+ */
+function formatTomlInlineTable(obj: Record<string, unknown>): string {
+  const entries = Object.entries(obj).map(([k, v]) => `${k} = ${formatTomlValue(v)}`);
+  return `{ ${entries.join(", ")} }`;
+}
+
+/**
  * Format a value for TOML output, using heredoc syntax for multiline content.
  * This teaches LLMs to use the heredoc syntax which is cleaner for multi-line strings.
+ *
+ * IMPORTANT: Arrays and objects must use TOML inline table syntax, NOT JSON.stringify().
+ * If we use JSON.stringify(), the LLM will copy the JSON syntax and the parser will fail.
  */
 function formatTomlValue(value: unknown): string {
   if (typeof value === "string") {
@@ -134,13 +147,21 @@ function formatTomlValue(value: unknown): string {
   }
 
   if (Array.isArray(value)) {
-    // TOML arrays use brackets
-    return JSON.stringify(value);
+    if (value.length === 0) return "[]";
+    // Format array elements with proper TOML syntax
+    const items = value.map((item) => {
+      if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+        // Inline table for objects in arrays
+        return formatTomlInlineTable(item as Record<string, unknown>);
+      }
+      return formatTomlValue(item);
+    });
+    return `[${items.join(", ")}]`;
   }
 
   if (typeof value === "object") {
-    // For nested objects, use inline table syntax
-    return JSON.stringify(value);
+    // Use proper TOML inline table syntax for objects
+    return formatTomlInlineTable(value as Record<string, unknown>);
   }
 
   return JSON.stringify(value);
