@@ -3,6 +3,18 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { load as parseToml } from "js-toml";
 import type { ParameterFormat } from "../gadgets/parser.js";
+import {
+  type PromptsConfig,
+  TemplateError,
+  createTemplateEngine,
+  hasTemplateSyntax,
+  resolveTemplate,
+  validateEnvVars,
+  validatePrompts,
+} from "./templates.js";
+
+// Re-export PromptsConfig for consumers
+export type { PromptsConfig } from "./templates.js";
 
 /**
  * Valid log level names.
@@ -77,7 +89,14 @@ export interface CLIConfig {
   global?: GlobalConfig;
   complete?: CompleteConfig;
   agent?: AgentConfig;
-  [customCommand: string]: CustomCommandConfig | CompleteConfig | AgentConfig | GlobalConfig | undefined;
+  prompts?: PromptsConfig;
+  [customCommand: string]:
+    | CustomCommandConfig
+    | CompleteConfig
+    | AgentConfig
+    | GlobalConfig
+    | PromptsConfig
+    | undefined;
 }
 
 /** Valid keys for global config */
@@ -511,6 +530,25 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
 }
 
 /**
+ * Validates the prompts config section.
+ * Each key must be a string (prompt name) and each value must be a string (template).
+ */
+function validatePromptsConfig(raw: unknown, section: string): PromptsConfig {
+  if (typeof raw !== "object" || raw === null) {
+    throw new ConfigError(`[${section}] must be a table`);
+  }
+
+  const result: PromptsConfig = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string") {
+      throw new ConfigError(`[${section}].${key} must be a string`);
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+/**
  * Validates and normalizes raw TOML object to CLIConfig.
  *
  * @throws ConfigError if validation fails
@@ -531,6 +569,8 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.complete = validateCompleteConfig(value, key);
       } else if (key === "agent") {
         result.agent = validateAgentConfig(value, key);
+      } else if (key === "prompts") {
+        result.prompts = validatePromptsConfig(value, key);
       } else {
         // Custom command section
         result[key] = validateCustomConfig(value, key);
@@ -580,15 +620,119 @@ export function loadConfig(): CLIConfig {
   }
 
   const validated = validateConfig(raw, configPath);
-  return resolveInheritance(validated, configPath);
+  const inherited = resolveInheritance(validated, configPath);
+  return resolveTemplatesInConfig(inherited, configPath);
 }
 
 /**
  * Gets list of custom command names from config (excludes built-in sections).
  */
 export function getCustomCommandNames(config: CLIConfig): string[] {
-  const reserved = new Set(["global", "complete", "agent"]);
+  const reserved = new Set(["global", "complete", "agent", "prompts"]);
   return Object.keys(config).filter((key) => !reserved.has(key));
+}
+
+/**
+ * Resolves Eta templates in system prompts throughout the config.
+ * Templates are resolved using the [prompts] section as named partials.
+ *
+ * @param config - Config with inheritance already resolved
+ * @param configPath - Path to config file for error messages
+ * @returns Config with all templates resolved in system prompts
+ * @throws ConfigError if template resolution fails
+ */
+export function resolveTemplatesInConfig(config: CLIConfig, configPath?: string): CLIConfig {
+  const prompts = config.prompts ?? {};
+
+  // If no prompts and no templates used, return as-is
+  const hasPrompts = Object.keys(prompts).length > 0;
+
+  // Check if any section uses template syntax
+  let hasTemplates = false;
+  for (const [sectionName, section] of Object.entries(config)) {
+    if (sectionName === "global" || sectionName === "prompts") continue;
+    if (!section || typeof section !== "object") continue;
+
+    const sectionObj = section as Record<string, unknown>;
+    if (typeof sectionObj.system === "string" && hasTemplateSyntax(sectionObj.system)) {
+      hasTemplates = true;
+      break;
+    }
+  }
+
+  // Also check prompts for template syntax (they may reference each other)
+  for (const template of Object.values(prompts)) {
+    if (hasTemplateSyntax(template)) {
+      hasTemplates = true;
+      break;
+    }
+  }
+
+  // Quick return if nothing to do
+  if (!hasPrompts && !hasTemplates) {
+    return config;
+  }
+
+  // Validate all prompts compile correctly and env vars exist
+  try {
+    validatePrompts(prompts, configPath);
+  } catch (error) {
+    if (error instanceof TemplateError) {
+      throw new ConfigError(error.message, configPath);
+    }
+    throw error;
+  }
+
+  // Validate environment variables in all prompts
+  for (const [name, template] of Object.entries(prompts)) {
+    try {
+      validateEnvVars(template, name, configPath);
+    } catch (error) {
+      if (error instanceof TemplateError) {
+        throw new ConfigError(error.message, configPath);
+      }
+      throw error;
+    }
+  }
+
+  // Create template engine with all prompts registered
+  const eta = createTemplateEngine(prompts, configPath);
+  const result = { ...config };
+
+  // Resolve templates in all sections with system fields
+  for (const [sectionName, section] of Object.entries(config)) {
+    if (sectionName === "global" || sectionName === "prompts") continue;
+    if (!section || typeof section !== "object") continue;
+
+    const sectionObj = section as Record<string, unknown>;
+    if (typeof sectionObj.system === "string" && hasTemplateSyntax(sectionObj.system)) {
+      // Validate env vars in the system prompt itself
+      try {
+        validateEnvVars(sectionObj.system, undefined, configPath);
+      } catch (error) {
+        if (error instanceof TemplateError) {
+          throw new ConfigError(`[${sectionName}].system: ${error.message}`, configPath);
+        }
+        throw error;
+      }
+
+      // Resolve the template
+      try {
+        const resolved = resolveTemplate(eta, sectionObj.system, {}, configPath);
+        result[sectionName] = {
+          ...sectionObj,
+          system: resolved,
+        };
+      } catch (error) {
+        if (error instanceof TemplateError) {
+          throw new ConfigError(`[${sectionName}].system: ${error.message}`, configPath);
+        }
+        throw error;
+      }
+    }
+  }
+
+  return result;
 }
 
 /**

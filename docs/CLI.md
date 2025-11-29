@@ -67,9 +67,96 @@ system = "You are a code reviewer."
 - Arrays (like `gadget`) are replaced, not merged
 - Circular inheritance is detected and errors
 
+### Prompt Templates
+
+The `[prompts]` section lets you define reusable prompt snippets using [Eta](https://eta.js.org/) templating syntax. This is powerful for:
+
+- **Composition**: Build complex prompts from smaller, reusable pieces
+- **DRY**: Don't repeat yourself - define common instructions once
+- **Parameterization**: Create flexible templates that accept parameters
+
+#### Basic Syntax
+
+```toml
+[prompts]
+# Simple prompt
+base-assistant = "You are a helpful AI assistant."
+
+# Prompt with variable
+personalized = "Hello <%= it.name %>, I'm ready to help with <%= it.task %>!"
+
+# Include another prompt
+full-intro = """
+<%~ include("@base-assistant") %>
+
+I specialize in <%= it.specialty %>.
+"""
+```
+
+#### Including Prompts
+
+Use `<%~ include("@name") %>` to include another prompt. The `@` prefix references named prompts from `[prompts]`.
+
+```toml
+[prompts]
+base = "You are a helpful assistant."
+expert = """
+<%~ include("@base") %>
+You are also an expert in <%= it.field %>.
+"""
+
+[my-expert]
+system = '<%~ include("@expert", {field: "TypeScript"}) %>'
+```
+
+#### Passing Parameters
+
+Pass parameters when including prompts using the second argument:
+
+```toml
+[prompts]
+code-style = """
+When writing code:
+- Use <%= it.language %> idioms
+- Follow <%= it.style %> conventions
+"""
+
+senior-reviewer = """
+<%~ include("@base-assistant") %>
+
+You are a senior <%= it.role %> expert.
+<%~ include("@code-style", {language: "TypeScript", style: "modern"}) %>
+"""
+
+[code-review]
+type = "agent"
+system = '<%~ include("@senior-reviewer", {role: "code reviewer"}) %>'
+```
+
+#### Environment Variables
+
+Access environment variables with `<%= it.env.VAR_NAME %>`:
+
+```toml
+[prompts]
+user-greeting = "Hello <%= it.env.USER %>, welcome back!"
+project-context = "Working on project: <%= it.env.PROJECT_NAME %>"
+```
+
+**Note**: Missing environment variables will cause an error at config load time.
+
+#### Syntax Reference
+
+| Syntax | Purpose | Example |
+|--------|---------|---------|
+| `<%= it.var %>` | Output variable | `<%= it.name %>` |
+| `<%~ include("@name") %>` | Include prompt | `<%~ include("@base") %>` |
+| `<%~ include("@name", {k:v}) %>` | Include with params | `<%~ include("@style", {lang: "TS"}) %>` |
+| `<%= it.env.VAR %>` | Environment variable | `<%= it.env.USER %>` |
+
 ### Custom Commands
 
-Any section other than `global`, `complete`, and `agent` creates a new CLI command:
+Any section other than `global`, `complete`, `agent`, and `prompts` creates a new CLI command:
 
 ```toml
 [code-review]
