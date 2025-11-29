@@ -1,3 +1,11 @@
+## 0.7.0 (2025-11-29)
+
+* Merge pull request #100 from zbigniewsobiecki/dev ([eb68f6d](https://github.com/zbigniewsobiecki/llmist/commit/eb68f6d)), closes [#100](https://github.com/zbigniewsobiecki/llmist/issues/100)
+* feat(agent): add synthetic gadget calls for in-context learning (#99) ([962108b](https://github.com/zbigniewsobiecki/llmist/commit/962108b)), closes [#99](https://github.com/zbigniewsobiecki/llmist/issues/99)
+* fix(gadgets): use proper TOML inline table syntax in examples (#98) ([a3f2b37](https://github.com/zbigniewsobiecki/llmist/commit/a3f2b37)), closes [#98](https://github.com/zbigniewsobiecki/llmist/issues/98)
+* fix(parser): strip markdown code fences from gadget parameters (#97) ([2daca17](https://github.com/zbigniewsobiecki/llmist/commit/2daca17)), closes [#97](https://github.com/zbigniewsobiecki/llmist/issues/97)
+* docs: add CLAUDE.md with git workflow guidelines (#96) ([32ed581](https://github.com/zbigniewsobiecki/llmist/commit/32ed581)), closes [#96](https://github.com/zbigniewsobiecki/llmist/issues/96)
+
 ## <small>0.6.2 (2025-11-29)</small>
 
 * fix(toml): TOML heredoc parsing fixes for code with regex patterns (#95) ([582aca8](https://github.com/zbigniewsobiecki/llmist/commit/582aca8)), closes [#95](https://github.com/zbigniewsobiecki/llmist/issues/95)
