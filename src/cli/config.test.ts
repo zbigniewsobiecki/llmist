@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { ConfigError, validateConfig, getCustomCommandNames, type CLIConfig } from "./config.js";
+import {
+  ConfigError,
+  validateConfig,
+  getCustomCommandNames,
+  resolveInheritance,
+  type CLIConfig,
+} from "./config.js";
 
 describe("config", () => {
   describe("validateConfig", () => {
@@ -388,6 +394,279 @@ describe("config", () => {
       expect(result).toContain("translate");
       expect(result).not.toContain("complete");
       expect(result).not.toContain("agent");
+    });
+  });
+
+  describe("resolveInheritance", () => {
+    it("should pass through config with no inheritance", () => {
+      const config: CLIConfig = {
+        agent: { model: "test-model", temperature: 0.5 },
+        complete: { model: "other-model" },
+      };
+
+      const result = resolveInheritance(config);
+
+      expect(result.agent?.model).toBe("test-model");
+      expect(result.agent?.temperature).toBe(0.5);
+      expect(result.complete?.model).toBe("other-model");
+    });
+
+    it("should resolve single inheritance from agent", () => {
+      const config: CLIConfig = {
+        agent: { model: "base-model", temperature: 0.7 },
+        "my-command": { inherits: "agent", system: "custom system" },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["my-command"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("base-model");
+      expect(cmd.temperature).toBe(0.7);
+      expect(cmd.system).toBe("custom system");
+      expect(cmd.inherits).toBeUndefined(); // inherits key should be stripped
+    });
+
+    it("should resolve single inheritance from complete", () => {
+      const config: CLIConfig = {
+        complete: { model: "complete-model", "max-tokens": 1000 },
+        translate: { inherits: "complete", type: "complete", system: "Translate text" },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["translate"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("complete-model");
+      expect(cmd["max-tokens"]).toBe(1000);
+      expect(cmd.type).toBe("complete");
+      expect(cmd.system).toBe("Translate text");
+    });
+
+    it("should override inherited values with own values", () => {
+      const config: CLIConfig = {
+        agent: { model: "base-model", temperature: 0.7, "max-iterations": 10 },
+        "my-command": { inherits: "agent", model: "override-model", temperature: 0.3 },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["my-command"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("override-model"); // overridden
+      expect(cmd.temperature).toBe(0.3); // overridden
+      expect(cmd["max-iterations"]).toBe(10); // inherited
+    });
+
+    it("should resolve chain inheritance (a → b → c)", () => {
+      const config: CLIConfig = {
+        agent: { model: "base-model", temperature: 0.5 },
+        "review-base": { inherits: "agent", system: "review system", "max-iterations": 5 },
+        "code-review": { inherits: "review-base", system: "code review system" },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["code-review"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("base-model"); // from agent
+      expect(cmd.temperature).toBe(0.5); // from agent
+      expect(cmd["max-iterations"]).toBe(5); // from review-base
+      expect(cmd.system).toBe("code review system"); // own value overrides review-base
+    });
+
+    it("should resolve multiple inheritance with last-wins", () => {
+      const config: CLIConfig = {
+        agent: { model: "agent-model", temperature: 0.5 },
+        "profile-a": { model: "profile-a-model", system: "system A" },
+        "my-command": { inherits: ["agent", "profile-a"], temperature: 0.9 },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["my-command"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("profile-a-model"); // profile-a wins (last in list)
+      expect(cmd.system).toBe("system A"); // from profile-a
+      expect(cmd.temperature).toBe(0.9); // own value overrides all
+    });
+
+    it("should replace arrays, not merge them", () => {
+      const config: CLIConfig = {
+        agent: { gadget: ["base-gadget.ts", "common.ts"] },
+        "my-command": { inherits: "agent", gadget: ["my-gadget.ts"] },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["my-command"] as Record<string, unknown>;
+
+      expect(cmd.gadget).toEqual(["my-gadget.ts"]); // replaced, not merged
+    });
+
+    it("should handle inherits as array with single element", () => {
+      const config: CLIConfig = {
+        agent: { model: "base-model" },
+        "my-command": { inherits: ["agent"], system: "test" },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["my-command"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("base-model");
+      expect(cmd.system).toBe("test");
+    });
+
+    it("should handle empty inherits array", () => {
+      const config = {
+        agent: { model: "base-model" },
+        "my-command": { inherits: [], model: "own-model" },
+      } as unknown as CLIConfig;
+
+      const result = resolveInheritance(config);
+      const cmd = result["my-command"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("own-model");
+    });
+
+    it("should allow inheritance from custom sections", () => {
+      const config: CLIConfig = {
+        "base-profile": { model: "profile-model", temperature: 0.3 },
+        "derived-command": { inherits: "base-profile", system: "derived system" },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["derived-command"] as Record<string, unknown>;
+
+      expect(cmd.model).toBe("profile-model");
+      expect(cmd.temperature).toBe(0.3);
+      expect(cmd.system).toBe("derived system");
+    });
+
+    it("should allow inheritance from global for logging settings", () => {
+      const config: CLIConfig = {
+        global: { "log-level": "debug", "log-file": "/tmp/test.log" },
+        "my-command": { inherits: "global", model: "test-model" },
+      };
+
+      const result = resolveInheritance(config);
+      const cmd = result["my-command"] as Record<string, unknown>;
+
+      expect(cmd["log-level"]).toBe("debug");
+      expect(cmd["log-file"]).toBe("/tmp/test.log");
+      expect(cmd.model).toBe("test-model");
+    });
+
+    describe("error handling", () => {
+      it("should detect circular inheritance (self-reference)", () => {
+        const config = {
+          "my-command": { inherits: "my-command", model: "test" },
+        } as unknown as CLIConfig;
+
+        expect(() => resolveInheritance(config)).toThrow(ConfigError);
+        expect(() => resolveInheritance(config)).toThrow("Circular inheritance detected");
+      });
+
+      it("should detect circular inheritance (a → b → a)", () => {
+        const config = {
+          "command-a": { inherits: "command-b", model: "a" },
+          "command-b": { inherits: "command-a", model: "b" },
+        } as unknown as CLIConfig;
+
+        expect(() => resolveInheritance(config)).toThrow(ConfigError);
+        expect(() => resolveInheritance(config)).toThrow("Circular inheritance detected");
+      });
+
+      it("should detect circular inheritance in longer chains", () => {
+        const config = {
+          "a": { inherits: "b" },
+          "b": { inherits: "c" },
+          "c": { inherits: "a" },
+        } as unknown as CLIConfig;
+
+        expect(() => resolveInheritance(config)).toThrow(ConfigError);
+        expect(() => resolveInheritance(config)).toThrow("Circular inheritance detected");
+      });
+
+      it("should error on unknown parent section", () => {
+        const config = {
+          "my-command": { inherits: "nonexistent", model: "test" },
+        } as unknown as CLIConfig;
+
+        expect(() => resolveInheritance(config)).toThrow(ConfigError);
+        expect(() => resolveInheritance(config)).toThrow("Cannot inherit from unknown section");
+      });
+
+      it("should include config path in error message", () => {
+        const config = {
+          "my-command": { inherits: "nonexistent" },
+        } as unknown as CLIConfig;
+
+        try {
+          resolveInheritance(config, "/path/to/config.toml");
+          expect.unreachable("Should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(ConfigError);
+          expect((error as ConfigError).message).toContain("/path/to/config.toml");
+        }
+      });
+    });
+  });
+
+  describe("validateConfig with inherits", () => {
+    it("should accept inherits as string", () => {
+      const raw = {
+        agent: { model: "test" },
+        "my-command": { inherits: "agent" },
+      };
+
+      const result = validateConfig(raw);
+      const cmd = result["my-command"] as Record<string, unknown>;
+      expect(cmd.inherits).toBe("agent");
+    });
+
+    it("should accept inherits as array of strings", () => {
+      const raw = {
+        agent: { model: "test" },
+        complete: { model: "test" },
+        "my-command": { inherits: ["agent", "complete"] },
+      };
+
+      const result = validateConfig(raw);
+      const cmd = result["my-command"] as Record<string, unknown>;
+      expect(cmd.inherits).toEqual(["agent", "complete"]);
+    });
+
+    it("should reject inherits with non-string values", () => {
+      const raw = {
+        "my-command": { inherits: 123 },
+      };
+
+      expect(() => validateConfig(raw)).toThrow(ConfigError);
+      expect(() => validateConfig(raw)).toThrow("inherits must be a string or array of strings");
+    });
+
+    it("should reject inherits array with non-string elements", () => {
+      const raw = {
+        "my-command": { inherits: ["valid", 123] },
+      };
+
+      expect(() => validateConfig(raw)).toThrow(ConfigError);
+      expect(() => validateConfig(raw)).toThrow("[my-command].inherits[1] must be a string");
+    });
+
+    it("should accept inherits in agent section", () => {
+      const raw = {
+        complete: { model: "base" },
+        agent: { inherits: "complete", "max-iterations": 10 },
+      };
+
+      const result = validateConfig(raw);
+      expect(result.agent?.inherits).toBe("complete");
+    });
+
+    it("should accept inherits in complete section", () => {
+      const raw = {
+        agent: { model: "base" },
+        complete: { inherits: "agent", "max-tokens": 1000 },
+      };
+
+      const result = validateConfig(raw);
+      expect(result.complete?.inherits).toBe("agent");
     });
   });
 });

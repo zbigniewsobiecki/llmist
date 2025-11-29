@@ -37,15 +37,45 @@ gadget = ["~/gadgets/common-tools.ts"]
 
 With this config, running `llmist complete "Hello"` will use Claude Sonnet instead of the default GPT-5-nano.
 
+### Inheritance
+
+Sections can inherit settings from other sections using the `inherits` key. This reduces duplication and allows you to create shared profiles:
+
+```toml
+# Base settings in [agent]
+[agent]
+model = "anthropic:claude-sonnet-4-5"
+max-iterations = 15
+
+# Profile inherits from agent, overrides some settings
+[review-base]
+inherits = "agent"
+temperature = 0.3
+max-iterations = 5
+
+# Command inherits from profile (chain: code-review → review-base → agent)
+[code-review]
+inherits = "review-base"
+system = "You are a code reviewer."
+# Gets: model from agent, temperature and max-iterations from review-base
+```
+
+**Inheritance rules:**
+- Single inheritance: `inherits = "agent"`
+- Multiple inheritance: `inherits = ["agent", "profile"]` (last wins for conflicts)
+- Own values always override inherited values
+- Arrays (like `gadget`) are replaced, not merged
+- Circular inheritance is detected and errors
+
 ### Custom Commands
 
-Any section other than `complete` and `agent` creates a new CLI command:
+Any section other than `global`, `complete`, and `agent` creates a new CLI command:
 
 ```toml
 [code-review]
+inherits = "agent"  # Inherit base settings
 type = "agent"
 description = "Review code for bugs and best practices."
-model = "anthropic:claude-sonnet-4-5"
 system = "You are a senior code reviewer. Analyze code for bugs, security issues, style problems, and suggest improvements."
 gadget = ["~/gadgets/code-tools.ts"]
 max-iterations = 5
@@ -179,6 +209,7 @@ max-iterations = 3
 | `system` | string | System prompt |
 | `temperature` | number | Sampling temperature (0-2) |
 | `max-tokens` | integer | Maximum output tokens |
+| `inherits` | string or string[] | Section(s) to inherit settings from |
 
 #### Options for `[agent]` section
 
@@ -192,6 +223,7 @@ max-iterations = 3
 | `parameter-format` | string | `json`, `yaml`, `toml`, or `auto` |
 | `builtins` | boolean | Enable built-in gadgets (AskUser, TellUser) |
 | `builtin-interaction` | boolean | Enable AskUser gadget |
+| `inherits` | string or string[] | Section(s) to inherit settings from |
 
 #### Options for custom command sections
 
