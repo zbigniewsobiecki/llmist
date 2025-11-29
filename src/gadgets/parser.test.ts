@@ -2070,3 +2070,168 @@ ${GADGET_END_PREFIX}`;
     });
   });
 });
+
+describe("stripMarkdownFences", () => {
+  let stripMarkdownFences: (content: string) => string;
+
+  beforeEach(async () => {
+    const module = await import("./parser.js");
+    stripMarkdownFences = module.stripMarkdownFences;
+  });
+
+  describe("TOML fences", () => {
+    it("strips ```toml and ``` fences", () => {
+      const input = `\`\`\`toml
+command = "ls -la"
+timeout = 30000
+\`\`\``;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe(`command = "ls -la"
+timeout = 30000`);
+    });
+
+    it("strips ```TOML (uppercase) and ``` fences", () => {
+      const input = `\`\`\`TOML
+key = "value"
+\`\`\``;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe('key = "value"');
+    });
+  });
+
+  describe("YAML fences", () => {
+    it("strips ```yaml and ``` fences", () => {
+      const input = `\`\`\`yaml
+name: test
+count: 42
+\`\`\``;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe(`name: test
+count: 42`);
+    });
+  });
+
+  describe("JSON fences", () => {
+    it("strips ```json and ``` fences", () => {
+      const input = `\`\`\`json
+{"name": "test", "count": 42}
+\`\`\``;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe('{"name": "test", "count": 42}');
+    });
+  });
+
+  describe("plain fences", () => {
+    it("strips plain ``` fences without language specifier", () => {
+      const input = `\`\`\`
+command = "echo hello"
+\`\`\``;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe('command = "echo hello"');
+    });
+  });
+
+  describe("no fences", () => {
+    it("returns content unchanged when no fences present", () => {
+      const input = `command = "ls -la"
+timeout = 30000`;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe(input);
+    });
+
+    it("trims whitespace from content without fences", () => {
+      const input = `  command = "ls"  `;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe('command = "ls"');
+    });
+  });
+
+  describe("partial fences", () => {
+    it("handles only opening fence", () => {
+      const input = `\`\`\`toml
+command = "test"`;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe('command = "test"');
+    });
+
+    it("handles only closing fence", () => {
+      const input = `command = "test"
+\`\`\``;
+      const result = stripMarkdownFences(input);
+      expect(result).toBe('command = "test"');
+    });
+  });
+
+  describe("integration with parser", () => {
+    it("parses TOML wrapped in markdown fences", () => {
+      const parser = new StreamParser({ parameterFormat: "toml" });
+      const input = `${GADGET_START_PREFIX}RunCommand
+\`\`\`toml
+command = "ls -la"
+timeout = 30000
+\`\`\`
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "RunCommand",
+          parameters: {
+            command: "ls -la",
+            timeout: 30000,
+          },
+        },
+      });
+    });
+
+    it("parses JSON wrapped in markdown fences", () => {
+      const parser = new StreamParser({ parameterFormat: "json" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+\`\`\`json
+{"name": "test", "count": 42}
+\`\`\`
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "TestGadget",
+          parameters: {
+            name: "test",
+            count: 42,
+          },
+        },
+      });
+    });
+
+    it("parses YAML wrapped in markdown fences", () => {
+      const parser = new StreamParser({ parameterFormat: "yaml" });
+      const input = `${GADGET_START_PREFIX}TestGadget
+\`\`\`yaml
+name: test
+count: 42
+\`\`\`
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "TestGadget",
+          parameters: {
+            name: "test",
+            count: 42,
+          },
+        },
+      });
+    });
+  });
+});
