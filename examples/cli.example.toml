@@ -3,6 +3,13 @@
 #
 # Copy this file to ~/.llmist/cli.toml to customize CLI defaults.
 # All settings are optional - only specify what you want to override.
+#
+# INHERITANCE: Any section can use `inherits` to inherit settings from other sections.
+# - Single inheritance: inherits = "agent"
+# - Multiple inheritance: inherits = ["agent", "my-profile"]  (last wins for conflicts)
+# - Chain inheritance: A inherits B, B inherits C → A gets all of C's and B's settings
+# - Own values always override inherited values
+# - Arrays (like gadget) are replaced, not merged
 
 #──────────────────────────────────────────────────────────────────────────────
 # GLOBAL OPTIONS
@@ -22,6 +29,7 @@ model = "anthropic:claude-sonnet-4-5"   # Model identifier (provider:model or al
 # system = "You are a helpful assistant." # System prompt
 # temperature = 0.7                      # Sampling temperature (0-2)
 # max-tokens = 4096                      # Maximum output tokens
+# quiet = false                          # Suppress all output except content
 
 #──────────────────────────────────────────────────────────────────────────────
 # AGENT COMMAND DEFAULTS
@@ -39,20 +47,33 @@ max-iterations = 15                      # Max agent loop iterations
 # parameter-format = "toml"              # json, yaml, toml, or auto
 # builtins = true                        # Enable built-in gadgets (AskUser, TellUser)
 # builtin-interaction = true             # Enable AskUser (set false for non-interactive)
+# quiet = false                          # Suppress all output except content and TellUser
+
+#──────────────────────────────────────────────────────────────────────────────
+# PROFILES (base configurations for inheritance)
+# These aren't commands themselves, but provide shared settings for commands.
+# Any section becomes a CLI command unless it's [global], [complete], or [agent].
+#──────────────────────────────────────────────────────────────────────────────
+
+# Base profile for all review-related commands
+[review-base]
+inherits = "agent"                        # Inherits model, max-iterations, etc. from [agent]
+temperature = 0.3                         # Override: lower temperature for consistent reviews
+max-iterations = 5                        # Override: fewer iterations for focused tasks
 
 #──────────────────────────────────────────────────────────────────────────────
 # CUSTOM COMMANDS
-# Any section other than [complete] and [agent] creates a new CLI command.
+# Any section other than [global], [complete], [agent] creates a new CLI command.
 # Custom commands appear in `llmist --help` and can be run like built-in commands.
 #──────────────────────────────────────────────────────────────────────────────
 
-# Code review command
+# Code review command - inherits from review-base profile
 # Usage: llmist code-review "Review this: $(cat myfile.ts)"
 #        cat myfile.ts | llmist code-review
 [code-review]
-type = "agent"                           # "agent" (default) or "complete"
+inherits = "review-base"                  # Gets model from [agent], temperature from [review-base]
+type = "agent"                            # "agent" (default) or "complete"
 description = "Review code for bugs, security issues, and best practices."
-model = "anthropic:claude-sonnet-4-5"
 system = """
 You are a senior code reviewer. For each piece of code:
 1. Identify bugs and logic errors
@@ -61,15 +82,15 @@ You are a senior code reviewer. For each piece of code:
 4. Note style issues and best practices
 Be constructive and explain your reasoning.
 """
-max-iterations = 5
 # gadget = ["~/gadgets/code-analysis.ts"]
 
 # Quick translation command (uses complete mode, no agent loop)
 # Usage: llmist translate "Bonjour le monde"
 [translate]
+inherits = "complete"                     # Inherits model from [complete]
 type = "complete"
 description = "Translate text to English."
-model = "openai:gpt-4o"
+model = "openai:gpt-4o"                   # Override: use OpenAI for translation
 system = "Translate the following text to English. Preserve formatting and tone."
 temperature = 0.3
 max-tokens = 2000
@@ -77,9 +98,9 @@ max-tokens = 2000
 # Summarizer command
 # Usage: cat long-document.txt | llmist summarize
 [summarize]
+inherits = "complete"                     # Inherits model from [complete]
 type = "complete"
 description = "Summarize text concisely."
-model = "anthropic:claude-sonnet-4-5"
 system = """
 Summarize the following text concisely. Focus on:
 - Key points and main ideas
@@ -92,9 +113,9 @@ temperature = 0.3
 # Shell helper for system administration
 # Usage: llmist shell-help "How do I find large files?"
 [shell-help]
+inherits = "agent"                        # Inherits model, builtins from [agent]
 type = "agent"
 description = "Get help with shell commands and scripts."
-model = "anthropic:claude-sonnet-4-5"
 system = """
 You are a Unix/Linux shell expert. Help users with:
 - Writing shell commands and scripts
@@ -102,25 +123,25 @@ You are a Unix/Linux shell expert. Help users with:
 - Debugging shell issues
 Always explain what commands do before suggesting them.
 """
-builtin-interaction = false              # Non-interactive mode
+builtin-interaction = false               # Non-interactive mode
 max-iterations = 3
 
 # Creative writing assistant
 # Usage: llmist write "Write a haiku about programming"
 [write]
+inherits = "agent"                        # Inherits model from [agent]
 type = "agent"
 description = "Creative writing assistant."
-model = "anthropic:claude-sonnet-4-5"
 system = "You are a creative writing assistant. Help with stories, poems, and other creative content. Be imaginative and engaging."
-temperature = 0.9                        # Higher temperature for creativity
+temperature = 0.9                         # Higher temperature for creativity
 max-iterations = 3
 
 # Git commit message helper
 # Usage: git diff --staged | llmist commit-msg
 [commit-msg]
+inherits = "complete"                     # Inherits model from [complete]
 type = "complete"
 description = "Generate a commit message from diff."
-model = "anthropic:claude-sonnet-4-5"
 system = """
 Generate a concise git commit message for the provided diff.
 Follow conventional commits format: type(scope): description
@@ -134,9 +155,9 @@ max-tokens = 500
 # Explain code
 # Usage: cat complex-function.ts | llmist explain
 [explain]
+inherits = "complete"                     # Inherits model from [complete]
 type = "complete"
 description = "Explain what code does."
-model = "anthropic:claude-sonnet-4-5"
 system = """
 Explain what the provided code does in clear, simple terms.
 - Start with a one-sentence summary

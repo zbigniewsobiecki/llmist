@@ -37,6 +37,7 @@ export const OPTION_FLAGS = {
   logReset: "--log-reset",
   noBuiltins: "--no-builtins",
   noBuiltinInteraction: "--no-builtin-interaction",
+  quiet: "-q, --quiet",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -54,6 +55,7 @@ export const OPTION_DESCRIPTIONS = {
   logReset: "Reset (truncate) the log file at session start instead of appending.",
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
   noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
+  quiet: "Suppress all output except content (text and TellUser messages).",
 } as const;
 
 /** Prefix for summary output written to stderr */
