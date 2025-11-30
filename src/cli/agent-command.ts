@@ -23,7 +23,7 @@ import {
 } from "./utils.js";
 import {
   formatGadgetSummary,
-  renderMarkdown,
+  renderMarkdownWithSeparators,
   renderOverallSummary,
 } from "./ui/formatters.js";
 
@@ -70,8 +70,8 @@ function createHumanInputHandler(
     progress.pause(); // Pause progress indicator during human input
     const rl = createInterface({ input: env.stdin, output: env.stdout });
     try {
-      // Display question on first prompt only (with markdown rendering)
-      const questionLine = question.trim() ? `\n${renderMarkdown(question.trim())}` : "";
+      // Display question on first prompt only (with markdown rendering and separators)
+      const questionLine = question.trim() ? `\n${renderMarkdownWithSeparators(question.trim())}` : "";
       let isFirst = true;
 
       // Loop until non-empty input (like a REPL)
@@ -465,8 +465,9 @@ export async function executeAgent(
   let textBuffer = "";
   const flushTextBuffer = () => {
     if (textBuffer) {
-      const rendered = renderMarkdown(textBuffer);
-      printer.write(rendered);
+      // Use separators in normal mode, plain text in quiet mode
+      const output = options.quiet ? textBuffer : renderMarkdownWithSeparators(textBuffer);
+      printer.write(output);
       textBuffer = "";
     }
   };
@@ -483,11 +484,10 @@ export async function executeAgent(
       progress.pause();
 
       if (options.quiet) {
-        // In quiet mode, only output TellUser messages (to stdout, plain markdown)
+        // In quiet mode, only output TellUser messages (to stdout, plain unrendered text)
         if (event.result.gadgetName === "TellUser" && event.result.parameters?.message) {
           const message = String(event.result.parameters.message);
-          const rendered = renderMarkdown(message);
-          env.stdout.write(`${rendered}\n`);
+          env.stdout.write(`${message}\n`);
         }
       } else {
         // Normal mode: show full gadget summary on stderr
