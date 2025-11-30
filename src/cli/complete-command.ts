@@ -7,6 +7,7 @@ import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
+import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
 import {
   addCompleteOptions,
   type CompleteCommandOptions,
@@ -42,9 +43,23 @@ export async function executeComplete(
   }
   builder.addUser(prompt);
 
+  const messages = builder.build();
+
+  // Resolve LLM debug log directories (if enabled)
+  const llmRequestsDir = resolveLogDir(options.logLlmRequests, "requests");
+  const llmResponsesDir = resolveLogDir(options.logLlmResponses, "responses");
+  const timestamp = Date.now();
+
+  // Log request before streaming
+  if (llmRequestsDir) {
+    const filename = `${timestamp}_complete.request.txt`;
+    const content = formatLlmRequest(messages);
+    await writeLogFile(llmRequestsDir, filename, content);
+  }
+
   const stream = client.stream({
     model,
-    messages: builder.build(),
+    messages,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
   });
@@ -59,7 +74,7 @@ export async function executeComplete(
 
   let finishReason: string | null | undefined;
   let usage: TokenUsage | undefined;
-  let totalChars = 0;
+  let accumulatedResponse = "";
 
   for await (const chunk of stream) {
     // Capture actual usage from stream
@@ -74,8 +89,8 @@ export async function executeComplete(
     }
     if (chunk.text) {
       progress.pause(); // Must pause to avoid stderr/stdout interleaving
-      totalChars += chunk.text.length;
-      progress.update(totalChars); // Update token estimate from chars
+      accumulatedResponse += chunk.text;
+      progress.update(accumulatedResponse.length); // Update token estimate from chars
       printer.write(chunk.text);
     }
     if (chunk.finishReason !== undefined) {
@@ -86,6 +101,12 @@ export async function executeComplete(
   progress.endCall(usage); // Calculate cost before completing
   progress.complete();
   printer.ensureNewline();
+
+  // Log response after streaming
+  if (llmResponsesDir) {
+    const filename = `${timestamp}_complete.response.txt`;
+    await writeLogFile(llmResponsesDir, filename, accumulatedResponse);
+  }
 
   // Only show summary if stderr is a TTY (not redirected) and not in quiet mode
   if (stderrTTY && !options.quiet) {

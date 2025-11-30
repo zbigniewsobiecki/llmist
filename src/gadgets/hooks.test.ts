@@ -27,7 +27,7 @@ import type {
 } from "../agent/hooks.js";
 import { StreamProcessor } from "../agent/stream-processor.js";
 import { LLMist } from "../core/client.js";
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type {
   LLMGenerationOptions,
   LLMStreamChunk,
@@ -173,7 +173,7 @@ describe("Observers (Read-Only Hooks)", () => {
       const mockAdapter = new MockAdapter([
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -417,7 +417,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:123\n{"message": "hello"}\n${GADGET_END_PREFIX}TestGadget:123`,
+          text: `${GADGET_START_PREFIX}TestGadget:123\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}TestGadget:123`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -425,7 +425,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: { onGadgetExecutionStart },
@@ -452,10 +451,10 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "first"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         {
-          text: `${GADGET_START_PREFIX}TestGadget:2\n{"message": "second"}\n${GADGET_END_PREFIX}TestGadget:2`,
+          text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}TestGadget:2`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -463,7 +462,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: { onGadgetExecutionStart },
@@ -491,7 +489,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:456\n{"message": "success"}\n${GADGET_END_PREFIX}TestGadget:456`,
+          text: `${GADGET_START_PREFIX}TestGadget:456\n${GADGET_ARG_PREFIX}message\nsuccess\n${GADGET_END_PREFIX}TestGadget:456`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -499,7 +497,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: { onGadgetExecutionComplete },
@@ -538,7 +535,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         stopOnGadgetError: false,
         hooks: {
@@ -563,7 +559,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -571,7 +567,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: { onGadgetExecutionComplete },
@@ -605,7 +600,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: { onStreamChunk },
@@ -641,7 +635,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: {
@@ -683,7 +676,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: {
@@ -713,7 +705,6 @@ describe("Observers (Read-Only Hooks)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: {
@@ -755,7 +746,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptRawChunk },
@@ -784,7 +774,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptRawChunk },
@@ -813,7 +802,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptRawChunk },
@@ -837,7 +825,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptTextChunk },
@@ -867,7 +854,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptTextChunk },
@@ -897,7 +883,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptAssistantMessage },
@@ -930,7 +915,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptAssistantMessage },
@@ -952,7 +936,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptAssistantMessage },
@@ -975,7 +958,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "hello"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -983,7 +966,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptGadgetParameters },
@@ -1010,7 +992,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "original"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\noriginal\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1018,7 +1000,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: {
@@ -1053,7 +1034,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:42\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:42`,
+          text: `${GADGET_START_PREFIX}TestGadget:42\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:42`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1061,7 +1042,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptGadgetParameters },
@@ -1082,7 +1062,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1090,7 +1070,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptGadgetResult },
@@ -1124,7 +1103,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:99\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:99`,
+          text: `${GADGET_START_PREFIX}TestGadget:99\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:99`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1132,7 +1111,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptGadgetResult },
@@ -1149,7 +1127,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1157,7 +1135,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: { interceptGadgetResult },
@@ -1193,7 +1170,6 @@ describe("Interceptors (Synchronous Transformations)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           interceptors: {
@@ -1346,7 +1322,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         // First iteration with gadget call
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "first"}\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1422,7 +1398,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         // First iteration with gadget
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "first"}\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1580,7 +1556,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1588,7 +1564,6 @@ describe("Controllers (Async Lifecycle Control)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           controllers: { beforeGadgetExecution },
@@ -1615,7 +1590,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "hello"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1623,7 +1598,6 @@ describe("Controllers (Async Lifecycle Control)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           controllers: { beforeGadgetExecution },
@@ -1657,7 +1631,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:42\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:42`,
+          text: `${GADGET_START_PREFIX}TestGadget:42\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:42`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1665,7 +1639,6 @@ describe("Controllers (Async Lifecycle Control)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           controllers: { beforeGadgetExecution },
@@ -1697,7 +1670,6 @@ describe("Controllers (Async Lifecycle Control)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         stopOnGadgetError: false,
         hooks: {
@@ -1725,7 +1697,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1733,7 +1705,6 @@ describe("Controllers (Async Lifecycle Control)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           controllers: { afterGadgetExecution },
@@ -1770,7 +1741,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:99\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:99`,
+          text: `${GADGET_START_PREFIX}TestGadget:99\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:99`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1778,7 +1749,6 @@ describe("Controllers (Async Lifecycle Control)", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           controllers: { afterGadgetExecution },
@@ -1860,7 +1830,7 @@ describe("Hook System Integration", () => {
       const mockAdapter = new MockAdapter([
         [
           {
-            text: `Text ${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `Text ${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1937,14 +1907,14 @@ describe("Hook System Integration", () => {
         // Iteration 0: gadget call
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "first"}\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
           },
           { text: "", finishReason: "stop" },
         ],
         // Iteration 1: another gadget call
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:2\n{"message": "second"}\n${GADGET_END_PREFIX}TestGadget:2`,
+            text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}TestGadget:2`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1990,7 +1960,7 @@ describe("Hook System Integration", () => {
       const mockAdapter = new MockAdapter([
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -2042,7 +2012,6 @@ describe("Hook System Integration", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         stopOnGadgetError: false,
         hooks: {
@@ -2103,7 +2072,7 @@ describe("Hook System Integration", () => {
       const stream = createMockStream([
         { text: "hello " },
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "world"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nworld\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -2111,7 +2080,6 @@ describe("Hook System Integration", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks,
       });
@@ -2156,7 +2124,7 @@ describe("Hook System Integration", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n{"message": "test"}\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -2164,7 +2132,6 @@ describe("Hook System Integration", () => {
       const processor = new StreamProcessor({
         iteration: 0,
         registry,
-        parameterFormat: "json",
         logger: testLogger,
         hooks: {
           observers: { onGadgetExecutionComplete },

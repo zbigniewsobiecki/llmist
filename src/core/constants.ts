@@ -1,6 +1,7 @@
 // Gadget marker constants
 export const GADGET_START_PREFIX = "!!!GADGET_START:";
 export const GADGET_END_PREFIX = "!!!GADGET_END";
+export const GADGET_ARG_PREFIX = "!!!ARG:";
 
 // Default configuration values
 export const DEFAULT_MAX_TOKENS = 1024;

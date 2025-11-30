@@ -210,7 +210,7 @@ gadget = [                               # Default gadgets to load
   "~/gadgets/filesystem.ts",
   "~/gadgets/calculator.ts",
 ]
-parameter-format = "toml"                # Gadget parameter format: json, yaml, toml, auto
+parameter-format = "block"               # Gadget parameter format: block, json, yaml, toml, auto
 builtins = true                          # Enable built-in gadgets (AskUser, TellUser)
 builtin-interaction = true               # Enable AskUser (set false for non-interactive)
 
@@ -297,6 +297,8 @@ max-iterations = 3
 | `temperature` | number | Sampling temperature (0-2) |
 | `max-tokens` | integer | Maximum output tokens |
 | `inherits` | string or string[] | Section(s) to inherit settings from |
+| `log-llm-requests` | string or boolean | Save raw LLM requests. `true` = default dir, string = custom path |
+| `log-llm-responses` | string or boolean | Save raw LLM responses. `true` = default dir, string = custom path |
 
 #### Options for `[agent]` section
 
@@ -307,10 +309,12 @@ max-iterations = 3
 | `temperature` | number | Sampling temperature (0-2) |
 | `max-iterations` | integer | Max agent loop iterations |
 | `gadget` | string[] | Array of gadget file paths to load |
-| `parameter-format` | string | `json`, `yaml`, `toml`, or `auto` |
+| `parameter-format` | string | `block`, `json`, `yaml`, `toml`, or `auto` |
 | `builtins` | boolean | Enable built-in gadgets (AskUser, TellUser) |
 | `builtin-interaction` | boolean | Enable AskUser gadget |
 | `inherits` | string or string[] | Section(s) to inherit settings from |
+| `log-llm-requests` | string or boolean | Save raw LLM requests. `true` = default dir, string = custom path |
+| `log-llm-responses` | string or boolean | Save raw LLM responses. `true` = default dir, string = custom path |
 
 #### Options for custom command sections
 
@@ -387,6 +391,9 @@ llmist complete "Explain TypeScript generics" --model haiku
 | `--system <prompt>` | `-s` | System prompt | none |
 | `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
 | `--max-tokens <n>` | | Max output tokens | Provider default |
+| `--quiet` | `-q` | Suppress all output except content | false |
+| `--log-llm-requests [dir]` | | Save raw LLM requests | disabled |
+| `--log-llm-responses [dir]` | | Save raw LLM responses | disabled |
 
 **Examples:**
 
@@ -425,9 +432,12 @@ llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 | `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
 | `--max-iterations <n>` | `-i` | Max agent iterations | 10 |
 | `--gadget <path>` | `-g` | Gadget file (repeatable) | none |
-| `--parameter-format <fmt>` | | `json`, `yaml`, `toml`, or `auto` | `toml` |
+| `--parameter-format <fmt>` | | `block`, `json`, `yaml`, `toml`, or `auto` | `block` |
 | `--no-builtins` | | Disable all built-in gadgets | false |
 | `--no-builtin-interaction` | | Disable interactive gadgets (AskUser) | false |
+| `--quiet` | `-q` | Suppress output except TellUser messages | false |
+| `--log-llm-requests [dir]` | | Save raw LLM requests | disabled |
+| `--log-llm-responses [dir]` | | Save raw LLM responses | disabled |
 
 #### Built-in Gadgets
 
@@ -510,6 +520,55 @@ export LLMIST_LOG_FILE="./app.log" # Log to file
 ```
 
 Note: CLI options (`--log-level`, `--log-file`) take priority over environment variables.
+
+## LLM Debugging
+
+When debugging LLM prompting issues, you can save raw requests and responses as plain text files:
+
+```bash
+# Save both requests and responses to default directory (~/.llmist/logs/)
+llmist agent "Task" --log-llm-requests --log-llm-responses
+
+# Save to custom directories
+llmist agent "Task" --log-llm-requests /tmp/req --log-llm-responses /tmp/res
+
+# Works with complete command too
+llmist complete "Hello" --log-llm-requests
+```
+
+Or configure in `~/.llmist/cli.toml`:
+
+```toml
+[agent]
+log-llm-requests = true                    # Use default: ~/.llmist/logs/requests/
+log-llm-responses = "/custom/path"         # Use custom directory
+
+[complete]
+log-llm-requests = true
+log-llm-responses = true
+```
+
+**Output format:**
+
+Request files (`{timestamp}_call_{n}.request.txt`):
+```
+=== SYSTEM ===
+You are a helpful assistant...
+
+=== USER ===
+What is TypeScript?
+```
+
+Response files (`{timestamp}_call_{n}.response.txt`):
+```
+TypeScript is a statically typed superset of JavaScript...
+```
+
+This is useful for:
+- Debugging prompt engineering issues
+- Analyzing what the model actually receives
+- Troubleshooting unexpected model behavior
+- Validating system prompts are correctly formatted
 
 ## Model Shortcuts
 

@@ -29,7 +29,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "TestGadget",
         invocationId: "123",
-        parametersYaml: '{"message": "Hello"}',
+        parametersRaw: '{"message": "Hello"}',
         parameters: { message: "Hello" },
       };
 
@@ -51,7 +51,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "AsyncGadget",
         invocationId: "async-1",
-        parametersYaml: '{"delay": 10, "result": "success"}',
+        parametersRaw: '{"delay": 10, "result": "success"}',
         parameters: { delay: 10, result: "success" },
       };
 
@@ -73,7 +73,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "MathGadget",
         invocationId: "math-1",
-        parametersYaml: '{"operation": "add", "a": 15, "b": 27}',
+        parametersRaw: '{"operation": "add", "a": 15, "b": 27}',
         parameters: { operation: "add", a: 15, b: 27 },
       };
 
@@ -92,7 +92,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "NonExistent",
         invocationId: "err-1",
-        parametersYaml: '{"test": "value"}',
+        parametersRaw: '{"test": "value"}',
         parameters: { test: "value" },
       };
 
@@ -113,7 +113,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "TestGadget",
         invocationId: "err-2",
-        parametersYaml: "bad: [yaml",
+        parametersRaw: "bad: [yaml",
         parseError: "end of the stream or a document separator is expected",
       };
 
@@ -134,7 +134,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "TestGadget",
         invocationId: "err-3",
-        parametersYaml: "",
+        parametersRaw: "",
         parameters: undefined,
       };
 
@@ -155,7 +155,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "ErrorGadget",
         invocationId: "err-4",
-        parametersYaml: "",
+        parametersRaw: "",
         parameters: {},
       };
 
@@ -183,7 +183,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "WeirdGadget",
         invocationId: "err-5",
-        parametersYaml: "",
+        parametersRaw: "",
         parameters: {},
       };
 
@@ -249,7 +249,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SchemaGadget",
         invocationId: "schema-1",
-        parametersYaml: '{"name": "Widget"}',
+        parametersRaw: '{"name": "Widget"}',
         parameters: { name: "Widget" },
       };
 
@@ -269,7 +269,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SchemaGadget",
         invocationId: "schema-2",
-        parametersYaml: '{"name": "", "count": -1}',
+        parametersRaw: '{"name": "", "count": -1}',
         parameters: { name: "", count: -1 },
       };
 
@@ -288,7 +288,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "ComplexSchemaGadget",
         invocationId: "complex-1",
-        parametersYaml: '{"dataset": {"name": "widgets", "fields": [{"key": "size"}]}}',
+        parametersRaw: '{"dataset": {"name": "widgets", "fields": [{"key": "size"}]}}',
         parameters: { dataset: { name: "widgets", fields: [{ key: "size" }] } },
       };
 
@@ -312,7 +312,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "ComplexSchemaGadget",
         invocationId: "complex-2",
-        parametersYaml:
+        parametersRaw:
           '{"dataset": {"name": "", "fields": [{"key": "", "weight": 2}]}, "mode": "turbo"}',
         parameters: {
           dataset: { name: "", fields: [{ key: "", weight: 2 }] },
@@ -342,19 +342,19 @@ describe("GadgetExecutor", () => {
         {
           gadgetName: "TestGadget",
           invocationId: "1",
-          parametersYaml: '{"message": "First"}',
+          parametersRaw: '{"message": "First"}',
           parameters: { message: "First" },
         },
         {
           gadgetName: "MathGadget",
           invocationId: "2",
-          parametersYaml: '{"operation": "multiply", "a": 6, "b": 7}',
+          parametersRaw: '{"operation": "multiply", "a": 6, "b": 7}',
           parameters: { operation: "multiply", a: 6, b: 7 },
         },
         {
           gadgetName: "TestGadget",
           invocationId: "3",
-          parametersYaml: '{"message": "Third"}',
+          parametersRaw: '{"message": "Third"}',
           parameters: { message: "Third" },
         },
       ];
@@ -387,19 +387,19 @@ describe("GadgetExecutor", () => {
         {
           gadgetName: "TestGadget",
           invocationId: "1",
-          parametersYaml: '{"message": "Success"}',
+          parametersRaw: '{"message": "Success"}',
           parameters: { message: "Success" },
         },
         {
           gadgetName: "ErrorGadget",
           invocationId: "2",
-          parametersYaml: "{}",
+          parametersRaw: "{}",
           parameters: {},
         },
         {
           gadgetName: "NonExistent",
           invocationId: "3",
-          parametersYaml: "{}",
+          parametersRaw: "{}",
           parameters: {},
         },
       ];
@@ -425,7 +425,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "AsyncGadget",
         invocationId: "timing-1",
-        parametersYaml: '{"delay": 50, "result": "done"}',
+        parametersRaw: '{"delay": 50, "result": "done"}',
         parameters: { delay: 50, result: "done" },
       };
 
@@ -442,7 +442,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "ErrorGadget",
         invocationId: "timing-2",
-        parametersYaml: "",
+        parametersRaw: "",
         parameters: {},
       };
 
@@ -473,7 +473,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "FinishGadget",
         invocationId: "finish-1",
-        parametersYaml: '{"message": "All done!"}',
+        parametersRaw: '{"message": "All done!"}',
         parameters: { message: "All done!" },
       };
 
@@ -506,7 +506,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "QuietFinishGadget",
         invocationId: "finish-2",
-        parametersYaml: "",
+        parametersRaw: "",
         parameters: {},
       };
 
@@ -527,7 +527,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "ErrorGadget",
         invocationId: "error-1",
-        parametersYaml: "",
+        parametersRaw: "",
         parameters: {},
       };
 
@@ -546,7 +546,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "AskUser",
         invocationId: "ask-1",
-        parametersYaml: '{"question": "What is your name?"}',
+        parametersRaw: '{"question": "What is your name?"}',
         parameters: { question: "What is your name?" },
       };
 
@@ -574,7 +574,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "AskUser",
         invocationId: "ask-2",
-        parametersYaml: '{"question": "What is your favorite color?"}',
+        parametersRaw: '{"question": "What is your favorite color?"}',
         parameters: { question: "What is your favorite color?" },
       };
 
@@ -600,7 +600,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "AskUser",
         invocationId: "ask-3",
-        parametersYaml: '{"question": "Are you sure?"}',
+        parametersRaw: '{"question": "Are you sure?"}',
         parameters: { question: "Are you sure?" },
       };
 
@@ -627,7 +627,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "AskUser",
         invocationId: "ask-4",
-        parametersYaml: '{"question": "How are you?"}',
+        parametersRaw: '{"question": "How are you?"}',
         parameters: { question: "How are you?" },
       };
 
@@ -672,7 +672,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-1",
-        parametersYaml: '{"delay": 100}',
+        parametersRaw: '{"delay": 100}',
         parameters: { delay: 100 },
       };
 
@@ -696,7 +696,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-2",
-        parametersYaml: '{"delay": 200}',
+        parametersRaw: '{"delay": 200}',
         parameters: { delay: 200 },
       };
 
@@ -719,7 +719,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-3",
-        parametersYaml: '{"delay": 200}',
+        parametersRaw: '{"delay": 200}',
         parameters: { delay: 200 },
       };
 
@@ -747,7 +747,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-4",
-        parametersYaml: '{"delay": 150}',
+        parametersRaw: '{"delay": 150}',
         parameters: { delay: 150 },
       };
 
@@ -773,7 +773,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-5",
-        parametersYaml: '{"delay": 100}',
+        parametersRaw: '{"delay": 100}',
         parameters: { delay: 100 },
       };
 
@@ -794,7 +794,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "FastGadget",
         invocationId: "fast-1",
-        parametersYaml: "{}",
+        parametersRaw: "{}",
         parameters: {},
       };
 
@@ -817,7 +817,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-6",
-        parametersYaml: '{"delay": 500}',
+        parametersRaw: '{"delay": 500}',
         parameters: { delay: 500 },
       };
 
@@ -836,7 +836,7 @@ describe("GadgetExecutor", () => {
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
         invocationId: "slow-7",
-        parametersYaml: '{"delay": "not a number"}',
+        parametersRaw: '{"delay": "not a number"}',
         parameters: { delay: "not a number" },
       };
 

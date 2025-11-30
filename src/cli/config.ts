@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { load as parseToml } from "js-toml";
-import type { ParameterFormat } from "../gadgets/parser.js";
 import {
   type PromptsConfig,
   TemplateError,
@@ -49,6 +48,8 @@ export interface CompleteConfig extends BaseCommandConfig {
   "log-level"?: LogLevel;
   "log-file"?: string;
   "log-reset"?: boolean;
+  "log-llm-requests"?: string | boolean;
+  "log-llm-responses"?: string | boolean;
 }
 
 /**
@@ -57,15 +58,17 @@ export interface CompleteConfig extends BaseCommandConfig {
 export interface AgentConfig extends BaseCommandConfig {
   "max-iterations"?: number;
   gadget?: string[];
-  "parameter-format"?: ParameterFormat;
   builtins?: boolean;
   "builtin-interaction"?: boolean;
   "gadget-start-prefix"?: string;
   "gadget-end-prefix"?: string;
+  "gadget-arg-prefix"?: string;
   quiet?: boolean;
   "log-level"?: LogLevel;
   "log-file"?: string;
   "log-reset"?: boolean;
+  "log-llm-requests"?: string | boolean;
+  "log-llm-responses"?: string | boolean;
 }
 
 /**
@@ -116,6 +119,8 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "log-level",
   "log-file",
   "log-reset",
+  "log-llm-requests",
+  "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -126,16 +131,18 @@ const AGENT_CONFIG_KEYS = new Set([
   "temperature",
   "max-iterations",
   "gadget",
-  "parameter-format",
   "builtins",
   "builtin-interaction",
   "gadget-start-prefix",
   "gadget-end-prefix",
+  "gadget-arg-prefix",
   "quiet",
   "inherits",
   "log-level",
   "log-file",
   "log-reset",
+  "log-llm-requests",
+  "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -146,9 +153,6 @@ const CUSTOM_CONFIG_KEYS = new Set([
   "type",
   "description",
 ]);
-
-/** Valid parameter format values */
-const VALID_PARAMETER_FORMATS: ParameterFormat[] = ["json", "yaml", "toml", "auto"];
 
 /**
  * Returns the default config file path: ~/.llmist/cli.toml
@@ -354,6 +358,20 @@ function validateCompleteConfig(raw: unknown, section: string): CompleteConfig {
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
+  if ("log-llm-requests" in rawObj) {
+    result["log-llm-requests"] = validateStringOrBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
+  }
+  if ("log-llm-responses" in rawObj) {
+    result["log-llm-responses"] = validateStringOrBoolean(
+      rawObj["log-llm-responses"],
+      "log-llm-responses",
+      section,
+    );
+  }
 
   return result;
 }
@@ -389,15 +407,6 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
   if ("gadget" in rawObj) {
     result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
   }
-  if ("parameter-format" in rawObj) {
-    const format = validateString(rawObj["parameter-format"], "parameter-format", section);
-    if (!VALID_PARAMETER_FORMATS.includes(format as ParameterFormat)) {
-      throw new ConfigError(
-        `[${section}].parameter-format must be one of: ${VALID_PARAMETER_FORMATS.join(", ")}`,
-      );
-    }
-    result["parameter-format"] = format as ParameterFormat;
-  }
   if ("builtins" in rawObj) {
     result.builtins = validateBoolean(rawObj.builtins, "builtins", section);
   }
@@ -422,11 +431,42 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
       section,
     );
   }
+  if ("gadget-arg-prefix" in rawObj) {
+    result["gadget-arg-prefix"] = validateString(
+      rawObj["gadget-arg-prefix"],
+      "gadget-arg-prefix",
+      section,
+    );
+  }
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
+  if ("log-llm-requests" in rawObj) {
+    result["log-llm-requests"] = validateStringOrBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
+  }
+  if ("log-llm-responses" in rawObj) {
+    result["log-llm-responses"] = validateStringOrBoolean(
+      rawObj["log-llm-responses"],
+      "log-llm-responses",
+      section,
+    );
+  }
 
   return result;
+}
+
+/**
+ * Validates a value is either a string or boolean.
+ */
+function validateStringOrBoolean(value: unknown, field: string, section: string): string | boolean {
+  if (typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+  throw new ConfigError(`[${section}].${field} must be a string or boolean`);
 }
 
 /**
@@ -476,15 +516,6 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
   if ("gadget" in rawObj) {
     result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
   }
-  if ("parameter-format" in rawObj) {
-    const format = validateString(rawObj["parameter-format"], "parameter-format", section);
-    if (!VALID_PARAMETER_FORMATS.includes(format as ParameterFormat)) {
-      throw new ConfigError(
-        `[${section}].parameter-format must be one of: ${VALID_PARAMETER_FORMATS.join(", ")}`,
-      );
-    }
-    result["parameter-format"] = format as ParameterFormat;
-  }
   if ("builtins" in rawObj) {
     result.builtins = validateBoolean(rawObj.builtins, "builtins", section);
   }
@@ -506,6 +537,13 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
     result["gadget-end-prefix"] = validateString(
       rawObj["gadget-end-prefix"],
       "gadget-end-prefix",
+      section,
+    );
+  }
+  if ("gadget-arg-prefix" in rawObj) {
+    result["gadget-arg-prefix"] = validateString(
+      rawObj["gadget-arg-prefix"],
+      "gadget-arg-prefix",
       section,
     );
   }

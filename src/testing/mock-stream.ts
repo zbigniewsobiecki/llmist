@@ -1,4 +1,4 @@
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type { LLMStream, LLMStreamChunk } from "../core/options.js";
 import type { MockResponse } from "./mock-types.js";
 
@@ -53,8 +53,61 @@ function splitIntoChunks(text: string, minChunkSize = 5, maxChunkSize = 30): str
 }
 
 /**
+ * Serialize an object to block format parameters with !!!ARG: markers.
+ *
+ * Example:
+ * { operation: "add", a: 5, config: { timeout: 30 } }
+ * becomes:
+ * !!!ARG:operation
+ * add
+ * !!!ARG:a
+ * 5
+ * !!!ARG:config/timeout
+ * 30
+ */
+function serializeToBlockFormat(obj: Record<string, unknown>, prefix = ""): string {
+  let result = "";
+
+  for (const [key, value] of Object.entries(obj)) {
+    const pointer = prefix ? `${prefix}/${key}` : key;
+
+    if (value === null || value === undefined) {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      // Serialize array elements with numeric indices
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        const itemPointer = `${pointer}/${i}`;
+
+        if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+          // Nested object in array
+          result += serializeToBlockFormat(item as Record<string, unknown>, itemPointer);
+        } else if (Array.isArray(item)) {
+          // Nested array - serialize recursively
+          for (let j = 0; j < item.length; j++) {
+            result += `${GADGET_ARG_PREFIX}${itemPointer}/${j}\n${String(item[j])}\n`;
+          }
+        } else {
+          result += `${GADGET_ARG_PREFIX}${itemPointer}\n${String(item)}\n`;
+        }
+      }
+    } else if (typeof value === "object") {
+      // Nested object - recurse
+      result += serializeToBlockFormat(value as Record<string, unknown>, pointer);
+    } else {
+      // Primitive value
+      result += `${GADGET_ARG_PREFIX}${pointer}\n${String(value)}\n`;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Convert gadget calls in MockResponse to their text representation.
- * Formats them as the stream parser expects: !!!GADGET_START:name\n{params}\n!!!GADGET_END
+ * Formats them using block format: !!!GADGET_START:name\n!!!ARG:...\n!!!GADGET_END
  */
 function formatGadgetCalls(gadgetCalls: NonNullable<MockResponse["gadgetCalls"]>): {
   text: string;
@@ -67,11 +120,11 @@ function formatGadgetCalls(gadgetCalls: NonNullable<MockResponse["gadgetCalls"]>
     const invocationId = call.invocationId ?? generateInvocationId();
     calls.push({ name: call.gadgetName, invocationId });
 
-    // Format parameters as JSON (default format)
-    const paramsJson = JSON.stringify(call.parameters);
+    // Format parameters using block format with !!!ARG: markers
+    const blockParams = serializeToBlockFormat(call.parameters);
 
-    // Format using the new gadget marker format
-    text += `\n${GADGET_START_PREFIX}${call.gadgetName}\n${paramsJson}\n${GADGET_END_PREFIX}`;
+    // Format using the gadget marker format
+    text += `\n${GADGET_START_PREFIX}${call.gadgetName}\n${blockParams}${GADGET_END_PREFIX}`;
   }
 
   return { text, calls };

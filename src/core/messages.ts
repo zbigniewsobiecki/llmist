@@ -1,7 +1,6 @@
 import type { BaseGadget } from "../gadgets/gadget.js";
-import type { ParameterFormat } from "../gadgets/parser.js";
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
-import type { PromptConfig, PromptTemplate } from "./prompt-config.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
+import type { PromptConfig } from "./prompt-config.js";
 import { DEFAULT_PROMPTS, resolvePromptTemplate, resolveRulesTemplate } from "./prompt-config.js";
 
 export type LLMRole = "system" | "user" | "assistant";
@@ -17,6 +16,7 @@ export class LLMMessageBuilder {
   private readonly messages: LLMMessage[] = [];
   private startPrefix: string = GADGET_START_PREFIX;
   private endPrefix: string = GADGET_END_PREFIX;
+  private argPrefix: string = GADGET_ARG_PREFIX;
   private promptConfig: PromptConfig;
 
   constructor(promptConfig?: PromptConfig) {
@@ -27,9 +27,12 @@ export class LLMMessageBuilder {
    * Set custom prefixes for gadget markers.
    * Used to configure history builder to match system prompt markers.
    */
-  withPrefixes(startPrefix: string, endPrefix: string): this {
+  withPrefixes(startPrefix: string, endPrefix: string, argPrefix?: string): this {
     this.startPrefix = startPrefix;
     this.endPrefix = endPrefix;
+    if (argPrefix) {
+      this.argPrefix = argPrefix;
+    }
     return this;
   }
 
@@ -40,8 +43,7 @@ export class LLMMessageBuilder {
 
   addGadgets(
     gadgets: BaseGadget[],
-    parameterFormat: ParameterFormat = "json",
-    options?: { startPrefix?: string; endPrefix?: string },
+    options?: { startPrefix?: string; endPrefix?: string; argPrefix?: string },
   ): this {
     // Store custom prefixes for later use in addGadgetCall
     if (options?.startPrefix) {
@@ -50,11 +52,14 @@ export class LLMMessageBuilder {
     if (options?.endPrefix) {
       this.endPrefix = options.endPrefix;
     }
+    if (options?.argPrefix) {
+      this.argPrefix = options.argPrefix;
+    }
 
     const context = {
-      parameterFormat,
       startPrefix: this.startPrefix,
       endPrefix: this.endPrefix,
+      argPrefix: this.argPrefix,
       gadgetCount: gadgets.length,
       gadgetNames: gadgets.map((g) => g.name ?? g.constructor.name),
     };
@@ -69,30 +74,24 @@ export class LLMMessageBuilder {
     );
     parts.push(mainInstruction);
 
-    parts.push(this.buildGadgetsSection(gadgets, parameterFormat));
-    parts.push(this.buildUsageSection(parameterFormat, context));
+    parts.push(this.buildGadgetsSection(gadgets));
+    parts.push(this.buildUsageSection(context));
 
     this.messages.push({ role: "system", content: parts.join("") });
     return this;
   }
 
-  private buildGadgetsSection(gadgets: BaseGadget[], parameterFormat: ParameterFormat): string {
+  private buildGadgetsSection(gadgets: BaseGadget[]): string {
     const parts: string[] = [];
     parts.push("\n\nAVAILABLE GADGETS");
     parts.push("\n=================\n");
 
     for (const gadget of gadgets) {
       const gadgetName = gadget.name ?? gadget.constructor.name;
-      const instruction = gadget.getInstruction(parameterFormat);
+      const instruction = gadget.getInstruction(this.argPrefix);
 
       // Parse instruction to separate description and schema
-      const schemaMarkers: Record<ParameterFormat, string> = {
-        yaml: "\n\nInput Schema (YAML):",
-        json: "\n\nInput Schema (JSON):",
-        toml: "\n\nInput Schema (TOML):",
-        auto: "\n\nInput Schema (JSON):", // auto defaults to JSON schema display
-      };
-      const schemaMarker = schemaMarkers[parameterFormat];
+      const schemaMarker = "\n\nInput Schema (BLOCK):";
       const schemaIndex = instruction.indexOf(schemaMarker);
 
       const description = (
@@ -104,7 +103,7 @@ export class LLMMessageBuilder {
       parts.push(`\nGADGET: ${gadgetName}`);
       parts.push(`\n${description}`);
       if (schema) {
-        parts.push(`\n\nPARAMETERS (${parameterFormat.toUpperCase()}):\n${schema}`);
+        parts.push(`\n\nPARAMETERS (BLOCK):\n${schema}`);
       }
       parts.push("\n\n---");
     }
@@ -112,42 +111,21 @@ export class LLMMessageBuilder {
     return parts.join("");
   }
 
-  private buildUsageSection(
-    parameterFormat: ParameterFormat,
-    context: {
-      parameterFormat: ParameterFormat;
-      startPrefix: string;
-      endPrefix: string;
-      gadgetCount: number;
-      gadgetNames: string[];
-    },
-  ): string {
+  private buildUsageSection(context: {
+    startPrefix: string;
+    endPrefix: string;
+    argPrefix: string;
+    gadgetCount: number;
+    gadgetNames: string[];
+  }): string {
     const parts: string[] = [];
 
     // Use configurable format description
-    const formatDescriptionMap: Record<
-      ParameterFormat,
-      { config?: PromptTemplate; defaultValue: PromptTemplate }
-    > = {
-      yaml: {
-        config: this.promptConfig.formatDescriptionYaml,
-        defaultValue: DEFAULT_PROMPTS.formatDescriptionYaml,
-      },
-      json: {
-        config: this.promptConfig.formatDescriptionJson,
-        defaultValue: DEFAULT_PROMPTS.formatDescriptionJson,
-      },
-      toml: {
-        config: this.promptConfig.formatDescriptionToml,
-        defaultValue: DEFAULT_PROMPTS.formatDescriptionToml,
-      },
-      auto: {
-        config: this.promptConfig.formatDescriptionJson,
-        defaultValue: DEFAULT_PROMPTS.formatDescriptionJson,
-      },
-    };
-    const { config, defaultValue } = formatDescriptionMap[parameterFormat];
-    const formatDescription = resolvePromptTemplate(config, defaultValue, context);
+    const formatDescription = resolvePromptTemplate(
+      this.promptConfig.formatDescription,
+      DEFAULT_PROMPTS.formatDescription,
+      context,
+    );
 
     parts.push("\n\nHOW TO INVOKE GADGETS");
     parts.push("\n=====================\n");
@@ -166,7 +144,7 @@ export class LLMMessageBuilder {
     parts.push(`\n  2. ${formatDescription}`);
     parts.push(`\n  3. End marker: ${this.endPrefix}`);
 
-    parts.push(this.buildExamplesSection(parameterFormat, context));
+    parts.push(this.buildExamplesSection(context));
     parts.push(this.buildRulesSection(context));
 
     parts.push("\n");
@@ -174,16 +152,13 @@ export class LLMMessageBuilder {
     return parts.join("");
   }
 
-  private buildExamplesSection(
-    parameterFormat: ParameterFormat,
-    context: {
-      parameterFormat: ParameterFormat;
-      startPrefix: string;
-      endPrefix: string;
-      gadgetCount: number;
-      gadgetNames: string[];
-    },
-  ): string {
+  private buildExamplesSection(context: {
+    startPrefix: string;
+    endPrefix: string;
+    argPrefix: string;
+    gadgetCount: number;
+    gadgetNames: string[];
+  }): string {
     // Allow custom examples to completely replace default examples
     if (this.promptConfig.customExamples) {
       return this.promptConfig.customExamples(context);
@@ -191,121 +166,87 @@ export class LLMMessageBuilder {
 
     const parts: string[] = [];
 
-    // Format-specific single gadget examples
-    const singleExamples: Record<ParameterFormat, string> = {
-      yaml: `${this.startPrefix}translate
-from: English
-to: Polish
-content: "Paris is the capital of France: a beautiful city."
-${this.endPrefix}`,
-      json: `${this.startPrefix}translate
-{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
-${this.endPrefix}`,
-      toml: `${this.startPrefix}translate
-from = "English"
-to = "Polish"
-content = "Paris is the capital of France: a beautiful city."
-${this.endPrefix}`,
-      auto: `${this.startPrefix}translate
-{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
-${this.endPrefix}`,
-    };
+    // Single gadget example
+    const singleExample = `${this.startPrefix}translate
+${this.argPrefix}from
+English
+${this.argPrefix}to
+Polish
+${this.argPrefix}content
+Paris is the capital of France: a beautiful city.
+${this.endPrefix}`;
 
-    parts.push(`\n\nEXAMPLE (Single Gadget):\n\n${singleExamples[parameterFormat]}`);
+    parts.push(`\n\nEXAMPLE (Single Gadget):\n\n${singleExample}`);
 
-    // Format-specific multiple gadget examples (with multiline content)
-    const multipleExamples: Record<ParameterFormat, string> = {
-      yaml: `${this.startPrefix}translate
-from: English
-to: Polish
-content: "Paris is the capital of France: a beautiful city."
+    // Multiple gadget example with multiline content
+    const multipleExample = `${this.startPrefix}translate
+${this.argPrefix}from
+English
+${this.argPrefix}to
+Polish
+${this.argPrefix}content
+Paris is the capital of France: a beautiful city.
 ${this.endPrefix}
 ${this.startPrefix}analyze
-type: economic_analysis
-matter: "Polish Economy"
-question: <<<EOF
+${this.argPrefix}type
+economic_analysis
+${this.argPrefix}matter
+Polish Economy
+${this.argPrefix}question
 Analyze the following:
 - Polish arms exports 2025
 - Economic implications
-EOF
-${this.endPrefix}`,
-      json: `${this.startPrefix}translate
-{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
-${this.endPrefix}
-${this.startPrefix}analyze
-{"type": "economic_analysis", "matter": "Polish Economy", "question": "Analyze the following: Polish arms exports 2025, economic implications"}
-${this.endPrefix}`,
-      toml: `${this.startPrefix}translate
-from = "English"
-to = "Polish"
-content = "Paris is the capital of France: a beautiful city."
-${this.endPrefix}
-${this.startPrefix}analyze
-type = "economic_analysis"
-matter = "Polish Economy"
-question = <<<EOF
-Analyze the following:
-- Polish arms exports 2025
-- Economic implications
-EOF
-${this.endPrefix}`,
-      auto: `${this.startPrefix}translate
-{"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
-${this.endPrefix}
-${this.startPrefix}analyze
-{"type": "economic_analysis", "matter": "Polish Economy", "question": "Analyze the following: Polish arms exports 2025, economic implications"}
-${this.endPrefix}`,
-    };
+${this.endPrefix}`;
 
-    parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExamples[parameterFormat]}`);
+    parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExample}`);
 
-    // Add format-specific syntax guides
-    if (parameterFormat === "yaml") {
-      parts.push(`
+    // Block format syntax guide
+    parts.push(`
 
-YAML HEREDOC SYNTAX:
-For string values with multiple lines, use heredoc syntax (<<<DELIMITER...DELIMITER):
+BLOCK FORMAT SYNTAX:
+Block format uses ${this.argPrefix}name markers. Values are captured verbatim until the next marker.
 
-filePath: "README.md"
-content: <<<EOF
-# Project Title
+${this.argPrefix}filename
+calculator.ts
+${this.argPrefix}code
+class Calculator {
+  private history: string[] = [];
 
-This content can contain:
-- Markdown lists
-- Special characters: # : -
-- Multiple paragraphs
-EOF
+  add(a: number, b: number): number {
+    const result = a + b;
+    this.history.push(\`\${a} + \${b} = \${result}\`);
+    return result;
+  }
+}
 
-The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.
-No indentation is required for the content.`);
-    } else if (parameterFormat === "toml") {
-      parts.push(`
+BLOCK FORMAT RULES:
+- Each parameter starts with ${this.argPrefix}parameterName on its own line
+- The value starts on the NEXT line after the marker
+- Value ends when the next ${this.argPrefix} or ${this.endPrefix} appears
+- NO escaping needed - write values exactly as they should appear
+- Perfect for code, JSON, markdown, or any content with special characters
 
-TOML HEREDOC SYNTAX:
-For string values with multiple lines, use heredoc syntax (<<<DELIMITER...DELIMITER):
+NESTED OBJECTS (use / separator):
+${this.argPrefix}config/timeout
+30
+${this.argPrefix}config/retries
+3
+Produces: { "config": { "timeout": "30", "retries": "3" } }
 
-filePath = "README.md"
-content = <<<EOF
-# Project Title
-
-This content can contain:
-- Markdown lists
-- Special characters: # : -
-- Multiple paragraphs
-EOF
-
-The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.
-IMPORTANT: Content inside heredoc is LITERAL - do NOT escape backticks, dollar signs, or any characters.
-NEVER use TOML triple-quote strings ("""). ALWAYS use heredoc syntax (<<<EOF...EOF) for multiline content.`);
-    }
+ARRAYS (use numeric indices):
+${this.argPrefix}items/0
+first
+${this.argPrefix}items/1
+second
+Produces: { "items": ["first", "second"] }`);
 
     return parts.join("");
   }
 
   private buildRulesSection(context: {
-    parameterFormat: ParameterFormat;
     startPrefix: string;
     endPrefix: string;
+    argPrefix: string;
     gadgetCount: number;
     gadgetNames: string[];
   }): string {
@@ -332,13 +273,8 @@ NEVER use TOML triple-quote strings ("""). ALWAYS use heredoc syntax (<<<EOF...E
     return this;
   }
 
-  addGadgetCall(
-    gadget: string,
-    parameters: Record<string, unknown>,
-    result: string,
-    parameterFormat: ParameterFormat = "json",
-  ) {
-    const paramStr = this.formatParameters(parameters, parameterFormat);
+  addGadgetCall(gadget: string, parameters: Record<string, unknown>, result: string) {
+    const paramStr = this.formatBlockParameters(parameters, "");
 
     // Assistant message with simplified gadget markers (no invocation ID)
     this.messages.push({
@@ -355,29 +291,38 @@ NEVER use TOML triple-quote strings ("""). ALWAYS use heredoc syntax (<<<EOF...E
     return this;
   }
 
-  private formatParameters(parameters: Record<string, unknown>, format: ParameterFormat): string {
-    if (format === "yaml") {
-      return Object.entries(parameters)
-        .map(([key, value]) => {
-          if (typeof value === "string") {
-            return `${key}: ${value}`;
+  /**
+   * Format parameters as Block format with JSON Pointer paths.
+   * Uses the configured argPrefix for consistency with system prompt.
+   */
+  private formatBlockParameters(
+    params: Record<string, unknown>,
+    prefix: string,
+  ): string {
+    const lines: string[] = [];
+
+    for (const [key, value] of Object.entries(params)) {
+      const fullPath = prefix ? `${prefix}/${key}` : key;
+
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          const itemPath = `${fullPath}/${index}`;
+          if (typeof item === "object" && item !== null) {
+            lines.push(this.formatBlockParameters(item as Record<string, unknown>, itemPath));
+          } else {
+            lines.push(`${this.argPrefix}${itemPath}`);
+            lines.push(String(item));
           }
-          return `${key}: ${JSON.stringify(value)}`;
-        })
-        .join("\n");
+        });
+      } else if (typeof value === "object" && value !== null) {
+        lines.push(this.formatBlockParameters(value as Record<string, unknown>, fullPath));
+      } else {
+        lines.push(`${this.argPrefix}${fullPath}`);
+        lines.push(String(value));
+      }
     }
-    if (format === "toml") {
-      return Object.entries(parameters)
-        .map(([key, value]) => {
-          if (typeof value === "string" && value.includes("\n")) {
-            // Use heredoc syntax to avoid teaching model to use triple-quotes
-            return `${key} = <<<EOF\n${value}\nEOF`;
-          }
-          return `${key} = ${JSON.stringify(value)}`;
-        })
-        .join("\n");
-    }
-    return JSON.stringify(parameters);
+
+    return lines.join("\n");
   }
 
   build(): LLMMessage[] {

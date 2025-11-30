@@ -220,7 +220,7 @@ describe("Gadget", () => {
     }
 
     const gadget = new DocumentedGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("A well-documented gadget");
     expect(instruction).toContain("param1");

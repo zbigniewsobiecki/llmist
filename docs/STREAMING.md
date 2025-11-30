@@ -66,7 +66,7 @@ for await (const event of agent.run()) {
 | Type | Properties | Description |
 |------|------------|-------------|
 | `text` | `content: string` | Text chunk from LLM |
-| `gadget_call` | `call: { gadgetName, parameters, parametersYaml }` | Gadget about to execute |
+| `gadget_call` | `call: { gadgetName, parameters }` | Gadget about to execute |
 | `gadget_result` | `result: { gadgetName, result?, error?, parameters }` | Gadget completed |
 | `human_input_required` | `question, gadgetName, invocationId` | User input needed |
 
@@ -115,7 +115,6 @@ interface EventHandlers {
   onGadgetCall?: (call: {
     gadgetName: string;
     parameters?: Record<string, unknown>;
-    parametersYaml: string;
   }) => void | Promise<void>;
   onGadgetResult?: (result: {
     gadgetName: string;

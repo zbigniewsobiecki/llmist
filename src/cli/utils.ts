@@ -412,7 +412,11 @@ export class StreamProgress {
 
     // Only clear the line if we actually rendered something
     if (this.hasRendered) {
-      this.target.write("\r\x1b[K");
+      // Clear spinner line and ensure cursor is at column 0
+      // \r = carriage return (go to column 0)
+      // \x1b[K = clear from cursor to end of line
+      // \x1b[0G = move cursor to column 0 (ensures we're at start even after clear)
+      this.target.write("\r\x1b[K\x1b[0G");
       this.hasRendered = false;
     }
   }
