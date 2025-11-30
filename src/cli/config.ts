@@ -49,6 +49,8 @@ export interface CompleteConfig extends BaseCommandConfig {
   "log-level"?: LogLevel;
   "log-file"?: string;
   "log-reset"?: boolean;
+  "log-llm-requests"?: string | boolean;
+  "log-llm-responses"?: string | boolean;
 }
 
 /**
@@ -66,6 +68,8 @@ export interface AgentConfig extends BaseCommandConfig {
   "log-level"?: LogLevel;
   "log-file"?: string;
   "log-reset"?: boolean;
+  "log-llm-requests"?: string | boolean;
+  "log-llm-responses"?: string | boolean;
 }
 
 /**
@@ -116,6 +120,8 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "log-level",
   "log-file",
   "log-reset",
+  "log-llm-requests",
+  "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -136,6 +142,8 @@ const AGENT_CONFIG_KEYS = new Set([
   "log-level",
   "log-file",
   "log-reset",
+  "log-llm-requests",
+  "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -148,7 +156,7 @@ const CUSTOM_CONFIG_KEYS = new Set([
 ]);
 
 /** Valid parameter format values */
-const VALID_PARAMETER_FORMATS: ParameterFormat[] = ["json", "yaml", "toml", "auto"];
+const VALID_PARAMETER_FORMATS: ParameterFormat[] = ["block", "json", "yaml", "toml", "auto"];
 
 /**
  * Returns the default config file path: ~/.llmist/cli.toml
@@ -354,6 +362,20 @@ function validateCompleteConfig(raw: unknown, section: string): CompleteConfig {
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
+  if ("log-llm-requests" in rawObj) {
+    result["log-llm-requests"] = validateStringOrBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
+  }
+  if ("log-llm-responses" in rawObj) {
+    result["log-llm-responses"] = validateStringOrBoolean(
+      rawObj["log-llm-responses"],
+      "log-llm-responses",
+      section,
+    );
+  }
 
   return result;
 }
@@ -425,8 +447,32 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
+  if ("log-llm-requests" in rawObj) {
+    result["log-llm-requests"] = validateStringOrBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
+  }
+  if ("log-llm-responses" in rawObj) {
+    result["log-llm-responses"] = validateStringOrBoolean(
+      rawObj["log-llm-responses"],
+      "log-llm-responses",
+      section,
+    );
+  }
 
   return result;
+}
+
+/**
+ * Validates a value is either a string or boolean.
+ */
+function validateStringOrBoolean(value: unknown, field: string, section: string): string | boolean {
+  if (typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+  throw new ConfigError(`[${section}].${field} must be a string or boolean`);
 }
 
 /**

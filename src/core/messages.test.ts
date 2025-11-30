@@ -271,17 +271,17 @@ describe("LLMMessageBuilder", () => {
       expect(content).toContain("Second number");
     });
 
-    it("includes .describe() field descriptions in YAML format prompt", () => {
+    it("includes .describe() field descriptions in plain text format prompt", () => {
       const builder = new LLMMessageBuilder();
       builder.addGadgets([new MathGadget()], "yaml");
 
       const messages = builder.build();
       const content = messages[0]?.content ?? "";
 
-      // Verify descriptions appear in YAML format too
-      expect(content).toContain("description: add or multiply");
-      expect(content).toContain("description: First number");
-      expect(content).toContain("description: Second number");
+      // Verify descriptions appear in plain text format (used for all formats now)
+      expect(content).toContain("- operation (string) [required]: add or multiply");
+      expect(content).toContain("- a (number) [required]: First number");
+      expect(content).toContain("- b (number) [required]: Second number");
     });
   });
 

@@ -1,9 +1,11 @@
 import * as yaml from "js-yaml";
 import { load as parseToml } from "js-toml";
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type { StreamEvent } from "./types.js";
+import { parseBlockParams } from "./block-params.js";
+import { parseXmlParams } from "./xml-params.js";
 
-export type ParameterFormat = "json" | "yaml" | "toml" | "auto";
+export type ParameterFormat = "json" | "yaml" | "toml" | "xml" | "block" | "auto";
 
 /**
  * Preprocess YAML to handle common LLM output issues.
@@ -152,16 +154,31 @@ export function preprocessYaml(yamlStr: string): string {
           continue;
         }
 
-        // Check indentation - must be more indented than the key
+        // Check indentation
         const nextIndentMatch = nextLine.match(/^(\s*)/);
         const nextIndentLen = nextIndentMatch ? nextIndentMatch[1].length : 0;
 
-        // If more indented and starts with dash or looks like continuation text
+        // If more indented, definitely a continuation
         if (nextIndentLen > keyIndentLen) {
           continuationLines.push(nextLine);
           j++;
+        } else if (nextIndentLen === keyIndentLen) {
+          // Same indentation - check if it looks like a YAML key (word followed by colon and space)
+          // If it's NOT a key pattern, treat it as continuation of the value
+          // This handles LLM bare multiline output like:
+          //   code: class Calculator {
+          //   private history: string[];  <-- same indent, but part of code value
+          //   }
+          const looksLikeYamlKey = /^[\w-]+:\s/.test(nextLine.trim());
+          if (!looksLikeYamlKey) {
+            continuationLines.push(nextLine);
+            j++;
+          } else {
+            // It's a new YAML key, stop continuation
+            break;
+          }
         } else {
-          // Not a continuation line
+          // Less indented, definitely not continuation
           break;
         }
       }
@@ -339,13 +356,109 @@ export function stripMarkdownFences(content: string): string {
   return cleaned.trim();
 }
 
+/**
+ * Preprocess JSON to handle common LLM output issues:
+ * 1. Backtick strings (template literals): `...` → "..."
+ * 2. Literal newlines in strings: converts to \\n
+ * 3. Single quotes as string delimiters: '...' → "..." (JSON requires double quotes)
+ *
+ * @internal Exported for testing only
+ */
+export function preprocessJson(jsonStr: string): string {
+  let result = "";
+  let i = 0;
+  let inString = false;
+  let stringChar = "";
+
+  while (i < jsonStr.length) {
+    const char = jsonStr[i];
+
+    // Handle backticks outside strings - convert to double-quoted string
+    if (char === "`" && !inString) {
+      // Found start of backtick string, find the end
+      let j = i + 1;
+      let content = "";
+      while (j < jsonStr.length && jsonStr[j] !== "`") {
+        if (jsonStr[j] === "\\" && j + 1 < jsonStr.length) {
+          // Handle escape sequences - pass through as-is
+          content += jsonStr[j] + jsonStr[j + 1];
+          j += 2;
+        } else {
+          content += jsonStr[j];
+          j++;
+        }
+      }
+      // Convert to JSON string: escape internal quotes and newlines
+      const escaped = content
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t");
+      result += `"${escaped}"`;
+      i = j + 1; // Skip closing backtick
+      continue;
+    }
+
+    // Track string state - handle both " and ' as string delimiters
+    if ((char === '"' || char === "'") && !inString) {
+      inString = true;
+      stringChar = char;
+      // Always output double quote for JSON compliance
+      result += '"';
+      i++;
+      continue;
+    }
+
+    // Check for string end
+    if (inString && char === stringChar) {
+      // Check if this quote is escaped
+      let numBackslashes = 0;
+      let k = result.length - 1;
+      while (k >= 0 && result[k] === "\\") {
+        numBackslashes++;
+        k--;
+      }
+      // If even number of backslashes, the quote is NOT escaped
+      if (numBackslashes % 2 === 0) {
+        inString = false;
+        result += '"'; // Always output double quote
+        i++;
+        continue;
+      }
+    }
+
+    // Inside string: escape literal newlines
+    if (inString && (char === "\n" || char === "\r")) {
+      result += char === "\n" ? "\\n" : "\\r";
+      i++;
+      continue;
+    }
+
+    // Handle single quotes inside strings - need to escape for JSON if we entered with '
+    if (inString && stringChar === "'" && char === '"') {
+      result += '\\"';
+      i++;
+      continue;
+    }
+
+    result += char;
+    i++;
+  }
+
+  return result;
+}
+
 export interface StreamParserOptions {
   startPrefix?: string;
   endPrefix?: string;
+  /** Prefix for block format arguments. Default: "!!!ARG:" */
+  argPrefix?: string;
   /**
    * Format for parsing gadget parameters.
    * - 'json': Parse as JSON (more robust, recommended for complex nested data)
    * - 'yaml': Parse as YAML (backward compatible)
+   * - 'block': Block format with !!!ARG: prefixed parameters (no escaping needed)
    * - 'auto': Try JSON first, fall back to YAML
    * @default 'json'
    */
@@ -368,11 +481,13 @@ export class StreamParser {
   private lastReportedTextLength = 0;
   private readonly startPrefix: string;
   private readonly endPrefix: string;
+  private readonly argPrefix: string;
   private readonly parameterFormat: ParameterFormat;
 
   constructor(options: StreamParserOptions = {}) {
     this.startPrefix = options.startPrefix ?? GADGET_START_PREFIX;
     this.endPrefix = options.endPrefix ?? GADGET_END_PREFIX;
+    this.argPrefix = options.argPrefix ?? GADGET_ARG_PREFIX;
     this.parameterFormat = options.parameterFormat ?? "json";
   }
 
@@ -429,7 +544,8 @@ export class StreamParser {
 
     if (this.parameterFormat === "json") {
       try {
-        return { parameters: JSON.parse(cleaned) as Record<string, unknown> };
+        const preprocessed = preprocessJson(cleaned);
+        return { parameters: JSON.parse(preprocessed) as Record<string, unknown> };
       } catch (error) {
         return { parseError: this.truncateParseError(error, "JSON") };
       }
@@ -451,17 +567,38 @@ export class StreamParser {
       }
     }
 
-    // Auto-detect: try JSON first, then TOML, then YAML
+    if (this.parameterFormat === "xml") {
+      try {
+        return { parameters: parseXmlParams(cleaned) };
+      } catch (error) {
+        return { parseError: this.truncateParseError(error, "XML") };
+      }
+    }
+
+    if (this.parameterFormat === "block") {
+      try {
+        return { parameters: parseBlockParams(cleaned, { argPrefix: this.argPrefix }) };
+      } catch (error) {
+        return { parseError: this.truncateParseError(error, "block") };
+      }
+    }
+
+    // Auto-detect: try JSON first, then XML, then TOML, then YAML
     try {
-      return { parameters: JSON.parse(cleaned) as Record<string, unknown> };
+      const preprocessed = preprocessJson(cleaned);
+      return { parameters: JSON.parse(preprocessed) as Record<string, unknown> };
     } catch {
       try {
-        return { parameters: parseToml(preprocessTomlHeredoc(cleaned)) as Record<string, unknown> };
+        return { parameters: parseXmlParams(cleaned) };
       } catch {
         try {
-          return { parameters: yaml.load(preprocessYaml(cleaned)) as Record<string, unknown> };
-        } catch (error) {
-          return { parseError: this.truncateParseError(error, "auto") };
+          return { parameters: parseToml(preprocessTomlHeredoc(cleaned)) as Record<string, unknown> };
+        } catch {
+          try {
+            return { parameters: yaml.load(preprocessYaml(cleaned)) as Record<string, unknown> };
+          } catch (error) {
+            return { parseError: this.truncateParseError(error, "auto") };
+          }
         }
       }
     }

@@ -18,6 +18,8 @@ export interface CompleteCommandOptions {
   temperature?: number;
   maxTokens?: number;
   quiet?: boolean;
+  logLlmRequests?: string | boolean;
+  logLlmResponses?: string | boolean;
 }
 
 /**
@@ -35,9 +37,11 @@ export interface AgentCommandOptions {
   gadgetStartPrefix?: string;
   gadgetEndPrefix?: string;
   quiet?: boolean;
+  logLlmRequests?: string | boolean;
+  logLlmResponses?: string | boolean;
 }
 
-const PARAMETER_FORMAT_VALUES: ParameterFormat[] = ["json", "yaml", "toml", "auto"];
+const PARAMETER_FORMAT_VALUES: ParameterFormat[] = ["block", "json", "yaml", "toml", "auto"];
 
 /**
  * Parses and validates the parameter format option value.
@@ -75,7 +79,9 @@ export function addCompleteOptions(cmd: Command, defaults?: CompleteConfig): Com
       createNumericParser({ label: "Max tokens", integer: true, min: 1 }),
       defaults?.["max-tokens"],
     )
-    .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet);
+    .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet)
+    .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"])
+    .option(OPTION_FLAGS.logLlmResponses, OPTION_DESCRIPTIONS.logLlmResponses, defaults?.["log-llm-responses"]);
 }
 
 /**
@@ -123,7 +129,9 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
       OPTION_DESCRIPTIONS.noBuiltinInteraction,
       defaults?.["builtin-interaction"] !== false,
     )
-    .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet);
+    .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet)
+    .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"])
+    .option(OPTION_FLAGS.logLlmResponses, OPTION_DESCRIPTIONS.logLlmResponses, defaults?.["log-llm-responses"]);
 }
 
 /**
@@ -136,6 +144,8 @@ export function configToCompleteOptions(config: CustomCommandConfig): Partial<Co
   if (config.temperature !== undefined) result.temperature = config.temperature;
   if (config["max-tokens"] !== undefined) result.maxTokens = config["max-tokens"];
   if (config.quiet !== undefined) result.quiet = config.quiet;
+  if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
+  if (config["log-llm-responses"] !== undefined) result.logLlmResponses = config["log-llm-responses"];
   return result;
 }
 
@@ -158,5 +168,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
   if (config["gadget-end-prefix"] !== undefined)
     result.gadgetEndPrefix = config["gadget-end-prefix"];
   if (config.quiet !== undefined) result.quiet = config.quiet;
+  if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
+  if (config["log-llm-responses"] !== undefined) result.logLlmResponses = config["log-llm-responses"];
   return result;
 }

@@ -1,6 +1,6 @@
 import type { BaseGadget } from "../gadgets/gadget.js";
 import type { ParameterFormat } from "../gadgets/parser.js";
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
 import type { PromptConfig, PromptTemplate } from "./prompt-config.js";
 import { DEFAULT_PROMPTS, resolvePromptTemplate, resolveRulesTemplate } from "./prompt-config.js";
 
@@ -90,6 +90,8 @@ export class LLMMessageBuilder {
         yaml: "\n\nInput Schema (YAML):",
         json: "\n\nInput Schema (JSON):",
         toml: "\n\nInput Schema (TOML):",
+        xml: "\n\nInput Schema (XML):",
+        block: "\n\nInput Schema (BLOCK):",
         auto: "\n\nInput Schema (JSON):", // auto defaults to JSON schema display
       };
       const schemaMarker = schemaMarkers[parameterFormat];
@@ -140,6 +142,14 @@ export class LLMMessageBuilder {
       toml: {
         config: this.promptConfig.formatDescriptionToml,
         defaultValue: DEFAULT_PROMPTS.formatDescriptionToml,
+      },
+      xml: {
+        config: this.promptConfig.formatDescriptionXml,
+        defaultValue: DEFAULT_PROMPTS.formatDescriptionXml,
+      },
+      block: {
+        config: this.promptConfig.formatDescriptionBlock,
+        defaultValue: DEFAULT_PROMPTS.formatDescriptionBlock,
       },
       auto: {
         config: this.promptConfig.formatDescriptionJson,
@@ -206,6 +216,19 @@ from = "English"
 to = "Polish"
 content = "Paris is the capital of France: a beautiful city."
 ${this.endPrefix}`,
+      xml: `${this.startPrefix}translate
+<from>English</from>
+<to>Polish</to>
+<content>Paris is the capital of France: a beautiful city.</content>
+${this.endPrefix}`,
+      block: `${this.startPrefix}translate
+${GADGET_ARG_PREFIX}from
+English
+${GADGET_ARG_PREFIX}to
+Polish
+${GADGET_ARG_PREFIX}content
+Paris is the capital of France: a beautiful city.
+${this.endPrefix}`,
       auto: `${this.startPrefix}translate
 {"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
 ${this.endPrefix}`,
@@ -248,6 +271,36 @@ Analyze the following:
 - Polish arms exports 2025
 - Economic implications
 EOF
+${this.endPrefix}`,
+      xml: `${this.startPrefix}translate
+<from>English</from>
+<to>Polish</to>
+<content>Paris is the capital of France: a beautiful city.</content>
+${this.endPrefix}
+${this.startPrefix}analyze
+<type>economic_analysis</type>
+<matter>Polish Economy</matter>
+<question><![CDATA[Analyze the following:
+- Polish arms exports 2025
+- Economic implications]]></question>
+${this.endPrefix}`,
+      block: `${this.startPrefix}translate
+${GADGET_ARG_PREFIX}from
+English
+${GADGET_ARG_PREFIX}to
+Polish
+${GADGET_ARG_PREFIX}content
+Paris is the capital of France: a beautiful city.
+${this.endPrefix}
+${this.startPrefix}analyze
+${GADGET_ARG_PREFIX}type
+economic_analysis
+${GADGET_ARG_PREFIX}matter
+Polish Economy
+${GADGET_ARG_PREFIX}question
+Analyze the following:
+- Polish arms exports 2025
+- Economic implications
 ${this.endPrefix}`,
       auto: `${this.startPrefix}translate
 {"from": "English", "to": "Polish", "content": "Paris is the capital of France: a beautiful city."}
@@ -297,6 +350,112 @@ EOF
 The delimiter (EOF) can be any identifier. The closing delimiter must be on its own line.
 IMPORTANT: Content inside heredoc is LITERAL - do NOT escape backticks, dollar signs, or any characters.
 NEVER use TOML triple-quote strings ("""). ALWAYS use heredoc syntax (<<<EOF...EOF) for multiline content.`);
+    } else if (parameterFormat === "xml") {
+      parts.push(`
+
+XML PARAMETER SYNTAX:
+
+Basic parameters - use XML tags:
+<from>English</from>
+<to>Polish</to>
+<count>42</count>
+<enabled>true</enabled>
+
+Arrays - use repeated child tags:
+<items>
+  <item>first</item>
+  <item>second</item>
+</items>
+
+Nested objects - nest the tags:
+<config>
+  <timeout>30</timeout>
+  <retries>3</retries>
+</config>
+
+⚠️ CRITICAL FOR CODE AND MULTILINE CONTENT:
+ALWAYS wrap code, scripts, or multiline text in CDATA:
+
+<code><![CDATA[
+class Calculator {
+  private history: string[] = [];
+
+  constructor() {
+    // Initialize calculator
+  }
+
+  add(a: number, b: number): number {
+    const result = a + b;
+    this.history.push(\`\${a} + \${b} = \${result}\`);
+    return result;
+  }
+
+  subtract(a: number, b: number): number {
+    const result = a - b;
+    this.history.push(\`\${a} - \${b} = \${result}\`);
+    return result;
+  }
+
+  multiply(a: number, b: number): number {
+    return a * b;
+  }
+
+  divide(a: number, b: number): number {
+    if (b === 0) throw new Error("Division by zero");
+    return a / b;
+  }
+
+  getHistory(): string[] {
+    return [...this.history];
+  }
+}
+]]></code>
+
+CDATA rules:
+- Start with: <![CDATA[
+- End with: ]]>
+- Everything inside is LITERAL - quotes, backticks, <, >, & are preserved exactly
+- NEVER escape anything inside CDATA
+- NEVER try to embed code without CDATA wrapper`);
+    } else if (parameterFormat === "block") {
+      parts.push(`
+
+BLOCK FORMAT SYNTAX:
+Block format uses ${GADGET_ARG_PREFIX}name markers. Values are captured verbatim until the next marker.
+
+${GADGET_ARG_PREFIX}filename
+calculator.ts
+${GADGET_ARG_PREFIX}code
+class Calculator {
+  private history: string[] = [];
+
+  add(a: number, b: number): number {
+    const result = a + b;
+    this.history.push(\`\${a} + \${b} = \${result}\`);
+    return result;
+  }
+}
+
+BLOCK FORMAT RULES:
+- Each parameter starts with ${GADGET_ARG_PREFIX}parameterName on its own line
+- The value starts on the NEXT line after the marker
+- Value ends when the next ${GADGET_ARG_PREFIX} or ${this.endPrefix} appears
+- NO escaping needed - write values exactly as they should appear
+- Perfect for code, JSON, markdown, or any content with special characters
+
+NESTED OBJECTS (use / separator):
+${GADGET_ARG_PREFIX}config/timeout
+30
+${GADGET_ARG_PREFIX}config/retries
+3
+Produces: { "config": { "timeout": "30", "retries": "3" } }
+
+ARRAYS (use numeric indices):
+${GADGET_ARG_PREFIX}items/0
+first
+${GADGET_ARG_PREFIX}items/1
+second
+Produces: { "items": ["first", "second"] }`);
     }
 
     return parts.join("");
@@ -377,7 +536,43 @@ NEVER use TOML triple-quote strings ("""). ALWAYS use heredoc syntax (<<<EOF...E
         })
         .join("\n");
     }
+    if (format === "block") {
+      return this.formatBlockParameters(parameters, "");
+    }
     return JSON.stringify(parameters);
+  }
+
+  /**
+   * Format parameters as Block format with JSON Pointer paths.
+   */
+  private formatBlockParameters(
+    params: Record<string, unknown>,
+    prefix: string,
+  ): string {
+    const lines: string[] = [];
+
+    for (const [key, value] of Object.entries(params)) {
+      const fullPath = prefix ? `${prefix}/${key}` : key;
+
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          const itemPath = `${fullPath}/${index}`;
+          if (typeof item === "object" && item !== null) {
+            lines.push(this.formatBlockParameters(item as Record<string, unknown>, itemPath));
+          } else {
+            lines.push(`${GADGET_ARG_PREFIX}${itemPath}`);
+            lines.push(String(item));
+          }
+        });
+      } else if (typeof value === "object" && value !== null) {
+        lines.push(this.formatBlockParameters(value as Record<string, unknown>, fullPath));
+      } else {
+        lines.push(`${GADGET_ARG_PREFIX}${fullPath}`);
+        lines.push(String(value));
+      }
+    }
+
+    return lines.join("\n");
   }
 
   build(): LLMMessage[] {

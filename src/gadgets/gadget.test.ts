@@ -18,59 +18,36 @@ class SchemaGadget extends Gadget({
 }
 
 describe("BaseGadget", () => {
-  it("includes zod schema in instruction output as YAML", () => {
+  it("includes parameters in plain text format (default)", () => {
     const gadget = new SchemaGadget();
     const instruction = gadget.instruction;
 
-    expect(instruction).toContain("Input Schema (YAML):");
-    expect(instruction).toContain("type: object");
-    expect(instruction).toContain("count:");
-    expect(instruction).toContain("description: Number of items to process");
-    expect(instruction).toContain("tags:");
+    // Should use plain text format for all formats
+    expect(instruction).toContain("Parameters:");
+    expect(instruction).toContain("- count (integer) [required]: Number of items to process");
+    expect(instruction).toContain("- tags (array of string) [required]: Optional tags to apply");
   });
 
-  it("includes zod schema in instruction output as JSON when format is json", () => {
+  it("includes parameters in plain text format when format is json", () => {
     const gadget = new SchemaGadget();
     const instruction = gadget.getInstruction("json");
 
-    expect(instruction).toContain("Input Schema (JSON):");
     expect(instruction).toContain("Processes items with structured input.");
-
-    // Verify it's valid JSON by parsing it
-    const jsonMatch = instruction.match(/Input Schema \(JSON\):\n([\s\S]+)/);
-    expect(jsonMatch).toBeTruthy();
-
-    if (jsonMatch?.[1]) {
-      const jsonSchema = JSON.parse(jsonMatch[1]);
-
-      // Zod v4 returns direct schema (no $ref wrapper)
-      expect(jsonSchema).toHaveProperty("type", "object");
-      expect(jsonSchema).toHaveProperty("properties");
-      expect(jsonSchema.properties).toHaveProperty("count");
-      expect(jsonSchema.properties).toHaveProperty("tags");
-
-      // Verify parameter descriptions are included
-      expect(jsonSchema.properties.count.description).toBe("Number of items to process");
-      expect(jsonSchema.properties.tags.description).toBe("Optional tags to apply");
-
-      // Verify parameter types
-      expect(jsonSchema.properties.count.type).toBe("integer");
-      expect(jsonSchema.properties.tags.type).toBe("array");
-
-      // Verify parameter constraints
-      expect(jsonSchema.properties.count.minimum).toBe(1);
-    }
+    expect(instruction).toContain("Parameters:");
+    expect(instruction).toContain("- count (integer) [required]: Number of items to process");
+    expect(instruction).toContain("- tags (array of string) [required]: Optional tags to apply");
   });
 
-  it("includes zod schema in instruction output as JSON when format is auto", () => {
+  it("includes parameters in plain text format when format is auto", () => {
     const gadget = new SchemaGadget();
     const instruction = gadget.getInstruction("auto");
 
-    expect(instruction).toContain("Input Schema (JSON):");
+    expect(instruction).toContain("Parameters:");
     expect(instruction).toContain("Processes items with structured input.");
+    expect(instruction).toContain("- count (integer) [required]");
   });
 
-  it("includes all nested properties in JSON schema for complex objects", () => {
+  it("includes all nested properties in plain text schema for complex objects", () => {
     class ComplexGadget extends Gadget({
       name: "ComplexGadget",
       description: "Tests complex nested schemas",
@@ -101,35 +78,17 @@ describe("BaseGadget", () => {
     const gadget = new ComplexGadget();
     const instruction = gadget.getInstruction("json");
 
-    expect(instruction).toContain("Input Schema (JSON):");
+    expect(instruction).toContain("Parameters:");
 
-    const jsonMatch = instruction.match(/Input Schema \(JSON\):\n([\s\S]+)/);
-    expect(jsonMatch).toBeTruthy();
+    // Verify top-level properties with their descriptions
+    expect(instruction).toContain("- user (object) [required]: User information");
+    expect(instruction).toContain("- items (array of object) [required]: List of items");
+    expect(instruction).toContain("- metadata (object) [required]: Additional metadata");
 
-    if (jsonMatch?.[1]) {
-      const jsonSchema = JSON.parse(jsonMatch[1]);
-
-      // Zod v4 returns direct schema (no $ref wrapper)
-      // Verify all top-level properties
-      expect(jsonSchema.properties).toHaveProperty("user");
-      expect(jsonSchema.properties).toHaveProperty("items");
-      expect(jsonSchema.properties).toHaveProperty("metadata");
-
-      // Verify nested user properties
-      expect(jsonSchema.properties.user.properties).toHaveProperty("name");
-      expect(jsonSchema.properties.user.properties).toHaveProperty("email");
-      expect(jsonSchema.properties.user.properties).toHaveProperty("age");
-
-      // Verify descriptions are preserved
-      expect(jsonSchema.properties.user.description).toBe("User information");
-      expect(jsonSchema.properties.user.properties.name.description).toBe("User name");
-      expect(jsonSchema.properties.user.properties.email.description).toBe("User email");
-
-      // Verify array item schema
-      expect(jsonSchema.properties.items.type).toBe("array");
-      expect(jsonSchema.properties.items.items.properties).toHaveProperty("id");
-      expect(jsonSchema.properties.items.items.properties).toHaveProperty("quantity");
-    }
+    // Verify nested user properties (indented)
+    expect(instruction).toContain("  - name (string) [required]: User name");
+    expect(instruction).toContain("  - email (string) [required]: User email");
+    expect(instruction).toContain("  - age (number): User age");
   });
 
   it("throws error when using z.unknown() in parameter schema", () => {

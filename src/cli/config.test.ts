@@ -285,7 +285,7 @@ describe("config", () => {
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
         expect(() => validateConfig(raw)).toThrow(
-          "[agent].parameter-format must be one of: json, yaml, toml, auto",
+          "[agent].parameter-format must be one of: block, json, yaml, toml, auto",
         );
       });
 

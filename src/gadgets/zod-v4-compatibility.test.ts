@@ -177,21 +177,14 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       const gadget = new CreateSectionGadget();
       const instruction = gadget.getInstruction("json");
 
-      expect(instruction).toContain("Input Schema (JSON):");
+      // Now uses plain text format for all formats
+      expect(instruction).toContain("Parameters:");
       expect(instruction).toContain("The title for the new section");
 
-      // Verify the schema is actually valid JSON
-      const jsonMatch = instruction.match(/Input Schema \(JSON\):\n([\s\S]+)/);
-      expect(jsonMatch).toBeTruthy();
-      if (jsonMatch?.[1]) {
-        const jsonSchema = JSON.parse(jsonMatch[1]);
-        expect(jsonSchema.properties).toHaveProperty("title");
-        expect(jsonSchema.properties).toHaveProperty("parentSectionId");
-        expect(jsonSchema.properties).toHaveProperty("content");
-
-        // Verify descriptions
-        expect(jsonSchema.properties.title.description).toBe("The title for the new section");
-      }
+      // Verify all properties are listed in plain text format
+      expect(instruction).toContain("- title (string) [required]: The title for the new section");
+      expect(instruction).toContain("- parentSectionId");
+      expect(instruction).toContain("- content (string): Initial content for the section");
     });
   });
 });

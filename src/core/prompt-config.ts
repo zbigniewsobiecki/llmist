@@ -72,6 +72,18 @@ export interface PromptConfig {
   formatDescriptionToml?: PromptTemplate;
 
   /**
+   * Format description for XML parameter format.
+   * Default: "Parameters in XML tags format (<param>value</param>)"
+   */
+  formatDescriptionXml?: PromptTemplate;
+
+  /**
+   * Format description for BLOCK parameter format.
+   * Default: "Parameters using !!!ARG:name markers (value on next line(s), no escaping needed)"
+   */
+  formatDescriptionBlock?: PromptTemplate;
+
+  /**
    * Rules that appear in the rules section.
    * Can be an array of strings or a function that returns an array.
    * Default includes 6 rules about not using function calling.
@@ -95,6 +107,12 @@ export interface PromptConfig {
    * Default: "\n\nInput Schema (TOML):"
    */
   schemaLabelToml?: PromptTemplate;
+
+  /**
+   * Schema label for XML format.
+   * Default: "\n\nInput Schema (XML):"
+   */
+  schemaLabelXml?: PromptTemplate;
 
   /**
    * Custom examples to show in the examples section.
@@ -130,6 +148,12 @@ export const DEFAULT_PROMPTS: Required<
   formatDescriptionToml:
     "Parameters in TOML format (key = value pairs, use heredoc for multiline: key = <<<EOF ... EOF)",
 
+  formatDescriptionXml:
+    "Parameters in XML tags format (<param>value</param>, arrays use repeated child tags)",
+
+  formatDescriptionBlock:
+    "Parameters using !!!ARG:name markers (value on next line(s), no escaping needed)",
+
   rules: () => [
     "Output ONLY plain text with the exact markers - never use function/tool calling",
     "You can invoke multiple gadgets in a single response",
@@ -141,6 +165,8 @@ export const DEFAULT_PROMPTS: Required<
   schemaLabelYaml: "\n\nInput Schema (YAML):",
 
   schemaLabelToml: "\n\nInput Schema (TOML):",
+
+  schemaLabelXml: "\n\nInput Schema (XML):",
 
   customExamples: null,
 };
