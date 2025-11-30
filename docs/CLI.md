@@ -502,6 +502,143 @@ cat task.txt | llmist agent -g ./tools.ts
 llmist --log-level debug agent "Debug task" -g ./tools.ts
 ```
 
+### `gadget` - Test and Inspect Gadgets
+
+Test gadgets in isolation without the agent loop. Essential for gadget development and debugging.
+
+```bash
+llmist gadget run ./calculator.ts
+llmist gadget info ./calculator.ts
+llmist gadget validate ./calculator.ts
+```
+
+#### `gadget run <file>` - Execute a Gadget
+
+Runs a gadget's `execute()` method directly with interactive parameter prompts (TTY) or piped JSON input (non-TTY).
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--name <gadget>` | Select gadget by name (required if file exports multiple) |
+| `--json` | Format output as pretty-printed JSON |
+| `--raw` | Output result as raw string without formatting |
+
+**Interactive mode (TTY):**
+
+```bash
+$ llmist gadget run ./calculator.ts
+
+🔧 Running gadget: Calculator
+
+operation* - The operation
+  (add | subtract | multiply | divide)
+  > multiply
+
+a* - First number
+  (number)
+  > 7
+
+b* - Second number
+  (number)
+  > 6
+
+Executing...
+
+✓ Completed in 0ms
+
+42
+```
+
+**Piped mode (non-TTY):**
+
+```bash
+# JSON from stdin
+echo '{"operation": "add", "a": 5, "b": 3}' | llmist gadget run ./calculator.ts
+# Output: 8
+
+# From file
+cat params.json | llmist gadget run ./calculator.ts
+```
+
+**Multi-gadget files:**
+
+```bash
+# When file exports multiple gadgets, use --name
+$ llmist gadget run ./random.ts
+Error: File './random.ts' exports 3 gadgets.
+Use --name to select one:
+  - CoinFlip
+  - DiceRoll
+  - RandomNumber
+
+$ llmist gadget run ./random.ts --name CoinFlip
+# Output: heads
+```
+
+#### `gadget info <file>` - Display Gadget Details
+
+Shows the gadget's description, parameter schema, timeout, and examples.
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--name <gadget>` | Select gadget by name (required if file exports multiple) |
+| `--json` | Output as JSON instead of formatted text |
+
+**Example:**
+
+```bash
+$ llmist gadget info ./calculator.ts
+
+Calculator
+══════════
+
+Description:
+  Performs arithmetic: add, subtract, multiply, divide
+
+Parameters:
+  operation* (string): The operation - one of: add, subtract, multiply, divide
+  a* (number): First number
+  b* (number): Second number
+
+Examples:
+  # Add two numbers
+  Input: {"operation":"add","a":15,"b":23}
+  Output: 38
+```
+
+**JSON output:**
+
+```bash
+llmist gadget info ./calculator.ts --json > schema.json
+```
+
+#### `gadget validate <file>` - Validate Gadget Structure
+
+Checks if a file exports valid gadget(s) with proper structure.
+
+**Validates:**
+- File exports at least one gadget
+- Each gadget has a `description` property
+- Each gadget has an `execute()` method
+- Parameter schema (if present) is valid
+
+**Example:**
+
+```bash
+$ llmist gadget validate ./my-gadgets.ts
+
+✓ Valid
+
+Gadgets found:
+  Calculator (with schema)
+    Performs arithmetic: add, subtract, multiply, divide
+  FileReader (with schema)
+    Reads file contents from the filesystem
+```
+
 ## Environment Variables
 
 Set API keys before running:
@@ -645,6 +782,7 @@ cat prompt.txt | llmist agent
 ## See Also
 
 - **[CLI Gadgets](./CLI_GADGETS.md)** - Writing gadgets for CLI
+- **[Gadgets Guide](./GADGETS.md)** - Complete gadget development reference
 - **[Configuration](./CONFIGURATION.md)** - Library configuration options
 - **[Getting Started](./GETTING_STARTED.md)** - Library usage
 - **[Providers Guide](./PROVIDERS.md)** - Provider setup
