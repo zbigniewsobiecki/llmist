@@ -412,7 +412,9 @@ export class StreamProgress {
 
     // Only clear the line if we actually rendered something
     if (this.hasRendered) {
-      this.target.write("\r\x1b[K");
+      // Use cursor save/restore to avoid affecting stdout text
+      // \x1b7 = save cursor (DEC DECSC), \x1b8 = restore cursor (DEC DECRC)
+      this.target.write("\x1b7\r\x1b[K\x1b8");
       this.hasRendered = false;
     }
   }
