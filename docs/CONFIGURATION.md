@@ -57,7 +57,6 @@ LLMist.createAgent()
 |--------|------|-------------|
 | `.withGadgets(...gadgets)` | `GadgetOrClass[]` | Register gadgets (classes or instances) |
 | `.withDefaultGadgetTimeout(ms)` | `number` | Default timeout for all gadgets |
-| `.withParameterFormat(format)` | `'json' \| 'yaml'` | Gadget parameter format |
 
 ### Error Handling
 
@@ -100,10 +99,32 @@ LLMist.createAgent()
 | Method | Type | Description |
 |--------|------|-------------|
 | `.withPromptConfig(config)` | `PromptConfig` | Custom prompt templates |
-| `.withGadgetStartPrefix(prefix)` | `string` | Custom gadget marker start |
-| `.withGadgetEndPrefix(prefix)` | `string` | Custom gadget marker end |
+| `.withGadgetStartPrefix(prefix)` | `string` | Custom gadget marker start (default: `!!!GADGET_START:`) |
+| `.withGadgetEndPrefix(prefix)` | `string` | Custom gadget marker end (default: `!!!GADGET_END`) |
+| `.withGadgetArgPrefix(prefix)` | `string` | Custom argument prefix for block format (default: `!!!ARG:`) |
 | `.withTextOnlyHandler(handler)` | `TextOnlyHandler` | Handle text-only responses |
 | `.withTextWithGadgetsHandler(handler)` | `object` | Wrap text alongside gadget calls |
+
+#### Custom Prefixes
+
+All three marker prefixes can be customized if you need to avoid conflicts with your content or match existing systems:
+
+```typescript
+LLMist.createAgent()
+  .withGadgetStartPrefix("<<GADGET_START>>")
+  .withGadgetEndPrefix("<<GADGET_END>>")
+  .withGadgetArgPrefix("<<ARG>>")
+  // ...
+```
+
+Or in CLI config (`~/.llmist/cli.toml`):
+
+```toml
+[agent]
+gadget-start-prefix = "<<GADGET_START>>"
+gadget-end-prefix = "<<GADGET_END>>"
+gadget-arg-prefix = "<<ARG>>"
+```
 
 #### Text Handling Configuration
 

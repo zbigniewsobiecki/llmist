@@ -50,10 +50,14 @@ max-iterations = 15                      # Max agent loop iterations
 #   "~/gadgets/filesystem.ts",
 #   "~/gadgets/calculator.ts",
 # ]
-# parameter-format = "toml"              # json, yaml, toml, or auto
 # builtins = true                        # Enable built-in gadgets (AskUser, TellUser)
 # builtin-interaction = true             # Enable AskUser (set false for non-interactive)
 # quiet = false                          # Suppress all output except content and TellUser
+#
+# Custom gadget markers (defaults shown):
+# gadget-start-prefix = "!!!GADGET_START:"
+# gadget-end-prefix = "!!!GADGET_END"
+# gadget-arg-prefix = "!!!ARG:"
 
 #──────────────────────────────────────────────────────────────────────────────
 # PROMPT TEMPLATES

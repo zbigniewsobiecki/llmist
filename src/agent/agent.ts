@@ -17,7 +17,6 @@ import { LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 import type { PromptConfig } from "../core/prompt-config.js";
-import type { ParameterFormat } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type { StreamEvent, TextOnlyHandler } from "../gadgets/types.js";
 import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
@@ -80,14 +79,14 @@ export interface AgentOptions {
   /** Callback for human input */
   onHumanInputRequired?: (question: string) => Promise<string>;
 
-  /** Parameter format */
-  parameterFormat?: ParameterFormat;
-
   /** Custom gadget start prefix */
   gadgetStartPrefix?: string;
 
   /** Custom gadget end prefix */
   gadgetEndPrefix?: string;
+
+  /** Custom gadget argument prefix for block format parameters */
+  gadgetArgPrefix?: string;
 
   /** Initial messages */
   initialMessages?: Array<{ role: "system" | "user" | "assistant"; content: string }>;
@@ -156,9 +155,9 @@ export class Agent {
   private readonly hooks: AgentHooks;
   private readonly conversation: ConversationManager;
   private readonly registry: GadgetRegistry;
-  private readonly parameterFormat: ParameterFormat;
   private readonly gadgetStartPrefix?: string;
   private readonly gadgetEndPrefix?: string;
+  private readonly gadgetArgPrefix?: string;
   private readonly onHumanInputRequired?: (question: string) => Promise<string>;
   private readonly textOnlyHandler: TextOnlyHandler;
   private readonly textWithGadgetsHandler?: {
@@ -199,9 +198,9 @@ export class Agent {
     this.temperature = options.temperature;
     this.logger = options.logger ?? createLogger({ name: "llmist:agent" });
     this.registry = options.registry;
-    this.parameterFormat = options.parameterFormat ?? "json";
     this.gadgetStartPrefix = options.gadgetStartPrefix;
     this.gadgetEndPrefix = options.gadgetEndPrefix;
+    this.gadgetArgPrefix = options.gadgetArgPrefix;
     this.onHumanInputRequired = options.onHumanInputRequired;
     this.textOnlyHandler = options.textOnlyHandler ?? "terminate";
     this.textWithGadgetsHandler = options.textWithGadgetsHandler;
@@ -234,9 +233,10 @@ export class Agent {
       baseBuilder.addSystem(options.systemPrompt);
     }
 
-    baseBuilder.addGadgets(this.registry.getAll(), this.parameterFormat, {
+    baseBuilder.addGadgets(this.registry.getAll(), {
       startPrefix: options.gadgetStartPrefix,
       endPrefix: options.gadgetEndPrefix,
+      argPrefix: options.gadgetArgPrefix,
     });
     const baseMessages = baseBuilder.build();
 
@@ -246,9 +246,9 @@ export class Agent {
     }));
 
     this.conversation = new ConversationManager(baseMessages, initialMessages, {
-      parameterFormat: this.parameterFormat,
       startPrefix: options.gadgetStartPrefix,
       endPrefix: options.gadgetEndPrefix,
+      argPrefix: options.gadgetArgPrefix,
     });
     this.userPromptProvided = !!options.userPrompt;
     if (options.userPrompt) {
@@ -361,9 +361,9 @@ export class Agent {
         const processor = new StreamProcessor({
           iteration: currentIteration,
           registry: this.registry,
-          parameterFormat: this.parameterFormat,
           gadgetStartPrefix: this.gadgetStartPrefix,
           gadgetEndPrefix: this.gadgetEndPrefix,
+          gadgetArgPrefix: this.gadgetArgPrefix,
           hooks: this.hooks,
           logger: this.logger.getSubLogger({ name: "stream-processor" }),
           onHumanInputRequired: this.onHumanInputRequired,

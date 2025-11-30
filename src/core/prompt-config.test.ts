@@ -9,9 +9,9 @@ import {
 
 describe("prompt-config", () => {
   const mockContext: PromptContext = {
-    parameterFormat: "json",
     startPrefix: "!!!GADGET_START:",
     endPrefix: "!!!GADGET_END",
+    argPrefix: "!!!ARG:",
     gadgetCount: 3,
     gadgetNames: ["Calculator", "Weather", "Search"],
   };
@@ -45,7 +45,6 @@ describe("prompt-config", () => {
 
     it("should pass full context to template function", () => {
       const template = (ctx: PromptContext) => {
-        expect(ctx.parameterFormat).toBe("json");
         expect(ctx.startPrefix).toBe("!!!GADGET_START:");
         expect(ctx.endPrefix).toBe("!!!GADGET_END");
         expect(ctx.gadgetCount).toBe(3);
@@ -58,11 +57,10 @@ describe("prompt-config", () => {
 
     it("should handle complex string interpolation", () => {
       const template = (ctx: PromptContext) =>
-        `Format: ${ctx.parameterFormat}, Gadgets: ${ctx.gadgetNames.join(", ")}, ` +
-        `Markers: ${ctx.startPrefix} to ${ctx.endPrefix}`;
+        `Gadgets: ${ctx.gadgetNames.join(", ")}, ` + `Markers: ${ctx.startPrefix} to ${ctx.endPrefix}`;
       const result = resolvePromptTemplate(template, "default", mockContext);
       expect(result).toBe(
-        "Format: json, Gadgets: Calculator, Weather, Search, Markers: !!!GADGET_START: to !!!GADGET_END",
+        "Gadgets: Calculator, Weather, Search, Markers: !!!GADGET_START: to !!!GADGET_END",
       );
     });
   });
@@ -129,18 +127,17 @@ describe("prompt-config", () => {
       expect(DEFAULT_PROMPTS.criticalUsage).toContain("INVOKE gadgets");
     });
 
-    it("should have format descriptions", () => {
-      expect(DEFAULT_PROMPTS.formatDescriptionYaml).toBe(
-        "Parameters in YAML format (one per line)",
-      );
-      expect(DEFAULT_PROMPTS.formatDescriptionJson).toBe(
-        "Parameters in JSON format (valid JSON object)",
-      );
-    });
+    it("should have formatDescription as function that uses argPrefix", () => {
+      expect(typeof DEFAULT_PROMPTS.formatDescription).toBe("function");
+      const result = DEFAULT_PROMPTS.formatDescription(mockContext);
+      expect(result).toContain("!!!ARG:");
+      expect(result).toContain("name markers");
 
-    it("should have schema labels", () => {
-      expect(DEFAULT_PROMPTS.schemaLabelJson).toBe("\n\nInput Schema (JSON):");
-      expect(DEFAULT_PROMPTS.schemaLabelYaml).toBe("\n\nInput Schema (YAML):");
+      // Test with custom argPrefix
+      const customContext = { ...mockContext, argPrefix: "@param:" };
+      const customResult = DEFAULT_PROMPTS.formatDescription(customContext);
+      expect(customResult).toContain("@param:");
+      expect(customResult).not.toContain("!!!ARG:");
     });
 
     it("should have rules as function", () => {
@@ -178,11 +175,8 @@ describe("prompt-config", () => {
       const config: PromptConfig = {
         mainInstruction: "Custom instruction",
         criticalUsage: "Custom usage",
-        formatDescriptionYaml: "YAML format",
-        formatDescriptionJson: "JSON format",
+        formatDescription: "Block format with !!!ARG: markers",
         rules: ["Custom rule 1", "Custom rule 2"],
-        schemaLabelJson: "Schema (JSON):",
-        schemaLabelYaml: "Schema (YAML):",
       };
 
       expect(
@@ -193,18 +187,11 @@ describe("prompt-config", () => {
       ).toBe("Custom usage");
       expect(
         resolvePromptTemplate(
-          config.formatDescriptionYaml,
-          DEFAULT_PROMPTS.formatDescriptionYaml,
+          config.formatDescription,
+          DEFAULT_PROMPTS.formatDescription,
           mockContext,
         ),
-      ).toBe("YAML format");
-      expect(
-        resolvePromptTemplate(
-          config.formatDescriptionJson,
-          DEFAULT_PROMPTS.formatDescriptionJson,
-          mockContext,
-        ),
-      ).toBe("JSON format");
+      ).toBe("Block format with !!!ARG: markers");
       expect(resolveRulesTemplate(config.rules, mockContext)).toEqual([
         "Custom rule 1",
         "Custom rule 2",
@@ -250,17 +237,6 @@ describe("prompt-config", () => {
       const template = (ctx: PromptContext) => `Gadgets: ${ctx.gadgetCount}`;
       const result = resolvePromptTemplate(template, "default", emptyContext);
       expect(result).toBe("Gadgets: 0");
-    });
-
-    it("should handle context with yaml format", () => {
-      const yamlContext: PromptContext = {
-        ...mockContext,
-        parameterFormat: "yaml",
-      };
-
-      const template = (ctx: PromptContext) => `Format is ${ctx.parameterFormat}`;
-      const result = resolvePromptTemplate(template, "default", yamlContext);
-      expect(result).toBe("Format is yaml");
     });
 
     it("should handle multi-line strings in rules", () => {

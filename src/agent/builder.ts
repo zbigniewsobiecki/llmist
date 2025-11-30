@@ -21,7 +21,6 @@ import type { LLMist } from "../core/client.js";
 import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptConfig } from "../core/prompt-config.js";
-import type { ParameterFormat } from "../gadgets/parser.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import type { TextOnlyHandler } from "../gadgets/types.js";
@@ -56,9 +55,9 @@ export class AgentBuilder {
     content: string;
   }> = [];
   private onHumanInputRequired?: (question: string) => Promise<string>;
-  private parameterFormat?: ParameterFormat;
   private gadgetStartPrefix?: string;
   private gadgetEndPrefix?: string;
+  private gadgetArgPrefix?: string;
   private textOnlyHandler?: TextOnlyHandler;
   private textWithGadgetsHandler?: {
     gadgetName: string;
@@ -268,22 +267,6 @@ export class AgentBuilder {
   }
 
   /**
-   * Set the parameter format for gadget calls.
-   *
-   * @param format - Parameter format ("json" or "xml")
-   * @returns This builder for chaining
-   *
-   * @example
-   * ```typescript
-   * .withParameterFormat("xml")
-   * ```
-   */
-  withParameterFormat(format: ParameterFormat): this {
-    this.parameterFormat = format;
-    return this;
-  }
-
-  /**
    * Set custom gadget marker prefix.
    *
    * @param prefix - Custom start prefix for gadget markers
@@ -312,6 +295,22 @@ export class AgentBuilder {
    */
   withGadgetEndPrefix(suffix: string): this {
     this.gadgetEndPrefix = suffix;
+    return this;
+  }
+
+  /**
+   * Set custom argument prefix for block format parameters.
+   *
+   * @param prefix - Custom prefix for argument markers (default: "!!!ARG:")
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withGadgetArgPrefix("<<ARG>>")
+   * ```
+   */
+  withGadgetArgPrefix(prefix: string): this {
+    this.gadgetArgPrefix = prefix;
     return this;
   }
 
@@ -536,9 +535,8 @@ export class AgentBuilder {
   ): this {
     const startPrefix = this.gadgetStartPrefix ?? GADGET_START_PREFIX;
     const endPrefix = this.gadgetEndPrefix ?? GADGET_END_PREFIX;
-    const format = this.parameterFormat ?? "yaml";
 
-    const paramStr = this.formatSyntheticParameters(parameters, format);
+    const paramStr = this.formatBlockParameters(parameters, "");
 
     // Assistant message with gadget call
     this.initialMessages.push({
@@ -556,33 +554,34 @@ export class AgentBuilder {
   }
 
   /**
-   * Format parameters for synthetic gadget calls.
-   * Uses heredoc for multiline string values.
+   * Format parameters as block format with JSON Pointer paths.
    */
-  private formatSyntheticParameters(
-    parameters: Record<string, unknown>,
-    format: ParameterFormat,
-  ): string {
-    if (format === "json" || format === "auto") {
-      return JSON.stringify(parameters);
+  private formatBlockParameters(params: Record<string, unknown>, prefix: string): string {
+    const lines: string[] = [];
+    const argPrefix = "!!!ARG:"; // Using constant directly to avoid import cycle
+
+    for (const [key, value] of Object.entries(params)) {
+      const fullPath = prefix ? `${prefix}/${key}` : key;
+
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          const itemPath = `${fullPath}/${index}`;
+          if (typeof item === "object" && item !== null) {
+            lines.push(this.formatBlockParameters(item as Record<string, unknown>, itemPath));
+          } else {
+            lines.push(`${argPrefix}${itemPath}`);
+            lines.push(String(item));
+          }
+        });
+      } else if (typeof value === "object" && value !== null) {
+        lines.push(this.formatBlockParameters(value as Record<string, unknown>, fullPath));
+      } else {
+        lines.push(`${argPrefix}${fullPath}`);
+        lines.push(String(value));
+      }
     }
 
-    // YAML or TOML - use heredoc for multiline strings
-    return Object.entries(parameters)
-      .map(([key, value]) => {
-        if (typeof value === "string" && value.includes("\n")) {
-          // Use heredoc syntax for multiline
-          const separator = format === "yaml" ? ":" : " =";
-          return `${key}${separator} <<<EOF\n${value}\nEOF`;
-        }
-        // Simple values
-        if (format === "yaml") {
-          return typeof value === "string" ? `${key}: ${value}` : `${key}: ${JSON.stringify(value)}`;
-        }
-        // TOML
-        return `${key} = ${JSON.stringify(value)}`;
-      })
-      .join("\n");
+    return lines.join("\n");
   }
 
   /**
@@ -626,9 +625,9 @@ export class AgentBuilder {
       promptConfig: this.promptConfig,
       initialMessages: this.initialMessages,
       onHumanInputRequired: this.onHumanInputRequired,
-      parameterFormat: this.parameterFormat,
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
+      gadgetArgPrefix: this.gadgetArgPrefix,
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,
@@ -735,9 +734,9 @@ export class AgentBuilder {
       promptConfig: this.promptConfig,
       initialMessages: this.initialMessages,
       onHumanInputRequired: this.onHumanInputRequired,
-      parameterFormat: this.parameterFormat,
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
+      gadgetArgPrefix: this.gadgetArgPrefix,
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,

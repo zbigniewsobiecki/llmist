@@ -20,7 +20,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).not.toThrow();
+      expect(() => gadget.getInstruction()).not.toThrow();
     });
 
     it("supports nullable strings without .optional()", () => {
@@ -37,7 +37,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).not.toThrow();
+      expect(() => gadget.getInstruction()).not.toThrow();
     });
 
     it("supports simple nested objects", () => {
@@ -57,7 +57,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).not.toThrow();
+      expect(() => gadget.getInstruction()).not.toThrow();
     });
 
     it("supports arrays of primitives", () => {
@@ -74,7 +74,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).not.toThrow();
+      expect(() => gadget.getInstruction()).not.toThrow();
     });
   });
 
@@ -94,7 +94,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).not.toThrow();
+      expect(() => gadget.getInstruction()).not.toThrow();
     });
 
     it("supports .email() refinement", () => {
@@ -111,7 +111,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).not.toThrow();
+      expect(() => gadget.getInstruction()).not.toThrow();
     });
   });
 
@@ -130,7 +130,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).toThrow(/cannot be serialized/);
+      expect(() => gadget.getInstruction()).toThrow(/cannot be serialized/);
     });
   });
 
@@ -149,7 +149,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new TestGadget();
-      expect(() => gadget.getInstruction("json")).not.toThrow();
+      expect(() => gadget.getInstruction()).not.toThrow();
     });
   });
 
@@ -175,7 +175,7 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       }
 
       const gadget = new CreateSectionGadget();
-      const instruction = gadget.getInstruction("json");
+      const instruction = gadget.getInstruction();
 
       // Now uses plain text format for all formats
       expect(instruction).toContain("Parameters:");

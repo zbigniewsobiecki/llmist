@@ -1,15 +1,13 @@
-import type { ParameterFormat } from "../gadgets/parser.js";
-
 /**
  * Context provided to prompt template functions for rendering dynamic content.
  */
 export interface PromptContext {
-  /** The parameter format being used (json or yaml) */
-  parameterFormat: ParameterFormat;
   /** Custom gadget start prefix */
   startPrefix: string;
   /** Custom gadget end prefix */
   endPrefix: string;
+  /** Custom argument prefix for block format */
+  argPrefix: string;
   /** Number of gadgets being registered */
   gadgetCount: number;
   /** Names of all gadgets */
@@ -54,65 +52,17 @@ export interface PromptConfig {
   criticalUsage?: PromptTemplate;
 
   /**
-   * Format description for YAML parameter format.
-   * Default: "Parameters in YAML format (one per line)"
+   * Format description for the block parameter format.
+   * Default uses the configured argPrefix dynamically.
    */
-  formatDescriptionYaml?: PromptTemplate;
-
-  /**
-   * Format description for JSON parameter format.
-   * Default: "Parameters in JSON format (valid JSON object)"
-   */
-  formatDescriptionJson?: PromptTemplate;
-
-  /**
-   * Format description for TOML parameter format.
-   * Default: "Parameters in TOML format (key = value pairs, use heredoc for multiline: key = <<<EOF ... EOF)"
-   */
-  formatDescriptionToml?: PromptTemplate;
-
-  /**
-   * Format description for XML parameter format.
-   * Default: "Parameters in XML tags format (<param>value</param>)"
-   */
-  formatDescriptionXml?: PromptTemplate;
-
-  /**
-   * Format description for BLOCK parameter format.
-   * Default: "Parameters using !!!ARG:name markers (value on next line(s), no escaping needed)"
-   */
-  formatDescriptionBlock?: PromptTemplate;
+  formatDescription?: PromptTemplate;
 
   /**
    * Rules that appear in the rules section.
    * Can be an array of strings or a function that returns an array.
-   * Default includes 6 rules about not using function calling.
+   * Default includes rules about not using function calling.
    */
   rules?: PromptTemplate | string[] | ((context: PromptContext) => string[]);
-
-  /**
-   * Schema label for JSON format.
-   * Default: "\n\nInput Schema (JSON):"
-   */
-  schemaLabelJson?: PromptTemplate;
-
-  /**
-   * Schema label for YAML format.
-   * Default: "\n\nInput Schema (YAML):"
-   */
-  schemaLabelYaml?: PromptTemplate;
-
-  /**
-   * Schema label for TOML format.
-   * Default: "\n\nInput Schema (TOML):"
-   */
-  schemaLabelToml?: PromptTemplate;
-
-  /**
-   * Schema label for XML format.
-   * Default: "\n\nInput Schema (XML):"
-   */
-  schemaLabelXml?: PromptTemplate;
 
   /**
    * Custom examples to show in the examples section.
@@ -124,7 +74,6 @@ export interface PromptConfig {
 
 /**
  * Default prompt templates used by llmist.
- * These match the original hardcoded strings.
  */
 export const DEFAULT_PROMPTS: Required<
   Omit<PromptConfig, "rules" | "customExamples"> & {
@@ -141,32 +90,14 @@ export const DEFAULT_PROMPTS: Required<
 
   criticalUsage: "INVOKE gadgets using the markers - do not describe what you want to do.",
 
-  formatDescriptionYaml: "Parameters in YAML format (one per line)",
-
-  formatDescriptionJson: "Parameters in JSON format (valid JSON object)",
-
-  formatDescriptionToml:
-    "Parameters in TOML format (key = value pairs, use heredoc for multiline: key = <<<EOF ... EOF)",
-
-  formatDescriptionXml:
-    "Parameters in XML tags format (<param>value</param>, arrays use repeated child tags)",
-
-  formatDescriptionBlock:
-    "Parameters using !!!ARG:name markers (value on next line(s), no escaping needed)",
+  formatDescription: (ctx) =>
+    `Parameters using ${ctx.argPrefix}name markers (value on next line(s), no escaping needed)`,
 
   rules: () => [
     "Output ONLY plain text with the exact markers - never use function/tool calling",
     "You can invoke multiple gadgets in a single response",
     "For dependent gadgets, invoke the first one and wait for the result",
   ],
-
-  schemaLabelJson: "\n\nInput Schema (JSON):",
-
-  schemaLabelYaml: "\n\nInput Schema (YAML):",
-
-  schemaLabelToml: "\n\nInput Schema (TOML):",
-
-  schemaLabelXml: "\n\nInput Schema (XML):",
 
   customExamples: null,
 };

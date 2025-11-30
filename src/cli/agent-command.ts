@@ -408,15 +408,15 @@ export async function executeAgent(
     builder.withGadgets(...gadgets);
   }
 
-  // Set the parameter format for gadget invocations
-  builder.withParameterFormat(options.parameterFormat);
-
   // Set custom gadget markers if configured, otherwise use library defaults
   if (options.gadgetStartPrefix) {
     builder.withGadgetStartPrefix(options.gadgetStartPrefix);
   }
   if (options.gadgetEndPrefix) {
     builder.withGadgetEndPrefix(options.gadgetEndPrefix);
+  }
+  if (options.gadgetArgPrefix) {
+    builder.withGadgetArgPrefix(options.gadgetArgPrefix);
   }
 
   // Inject synthetic heredoc example for in-context learning

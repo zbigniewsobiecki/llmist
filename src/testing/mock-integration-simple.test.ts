@@ -58,10 +58,11 @@ describe("Mock Integration (Simple)", () => {
       fullText += chunk.text;
     }
 
-    // Should include both text and gadget marker
+    // Should include both text and gadget marker in block format
     expect(fullText).toContain("Calculating...");
     expect(fullText).toContain("!!!GADGET_START:calculator");
-    expect(fullText).toContain('"operation":"add"');
+    expect(fullText).toContain("!!!ARG:operation");
+    expect(fullText).toContain("add");
   });
 
   test("should handle multiple sequential calls with once()", async () => {

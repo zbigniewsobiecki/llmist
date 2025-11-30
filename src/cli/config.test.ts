@@ -59,7 +59,6 @@ describe("config", () => {
           temperature: 0.7,
           "max-iterations": 10,
           gadget: ["~/gadgets/tools.ts", "./local-gadget.ts"],
-          "parameter-format": "toml",
           builtins: true,
           "builtin-interaction": false,
         },
@@ -71,7 +70,6 @@ describe("config", () => {
       expect(result.agent?.model).toBe("anthropic:claude-sonnet-4-5");
       expect(result.agent?.["max-iterations"]).toBe(10);
       expect(result.agent?.gadget).toEqual(["~/gadgets/tools.ts", "./local-gadget.ts"]);
-      expect(result.agent?.["parameter-format"]).toBe("toml");
       expect(result.agent?.builtins).toBe(true);
       expect(result.agent?.["builtin-interaction"]).toBe(false);
     });
@@ -274,19 +272,6 @@ describe("config", () => {
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
         expect(() => validateConfig(raw)).toThrow("[agent].gadget[1] must be a string");
-      });
-
-      it("should reject invalid parameter-format", () => {
-        const raw = {
-          agent: {
-            "parameter-format": "xml",
-          },
-        };
-
-        expect(() => validateConfig(raw)).toThrow(ConfigError);
-        expect(() => validateConfig(raw)).toThrow(
-          "[agent].parameter-format must be one of: block, json, yaml, toml, auto",
-        );
       });
 
       it("should reject invalid builtins type", () => {

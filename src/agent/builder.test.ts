@@ -46,9 +46,9 @@ describe("AgentBuilder", () => {
       expect(builder.withHistory([{ user: "hi" }])).toBe(builder);
       expect(builder.addMessage({ user: "hello" })).toBe(builder);
       expect(builder.onHumanInput(async () => "response")).toBe(builder);
-      expect(builder.withParameterFormat("json")).toBe(builder);
       expect(builder.withGadgetStartPrefix("<<<")).toBe(builder);
       expect(builder.withGadgetEndPrefix(">>>")).toBe(builder);
+      expect(builder.withGadgetArgPrefix("<<<ARG>>>")).toBe(builder);
       expect(builder.withTextOnlyHandler("acknowledge")).toBe(builder);
       expect(builder.withStopOnGadgetError(false)).toBe(builder);
       expect(builder.withErrorHandler(() => true)).toBe(builder);
@@ -349,29 +349,6 @@ describe("AgentBuilder", () => {
     });
   });
 
-  describe("withParameterFormat", () => {
-    it("sets parameter format to json", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withParameterFormat("json");
-
-      expect(result).toBe(builder);
-    });
-
-    it("sets parameter format to xml", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withParameterFormat("xml");
-
-      expect(result).toBe(builder);
-    });
-
-    it("chains correctly", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withModel("gpt4").withParameterFormat("xml");
-
-      expect(result).toBe(builder);
-    });
-  });
-
   describe("withGadgetStartPrefix", () => {
     it("sets custom gadget start prefix", () => {
       const builder = new AgentBuilder();
@@ -392,6 +369,15 @@ describe("AgentBuilder", () => {
     it("sets custom gadget end prefix", () => {
       const builder = new AgentBuilder();
       const result = builder.withGadgetEndPrefix("<<GADGET_END>>");
+
+      expect(result).toBe(builder);
+    });
+  });
+
+  describe("withGadgetArgPrefix", () => {
+    it("sets custom argument prefix", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withGadgetArgPrefix("<<ARG>>");
 
       expect(result).toBe(builder);
     });
@@ -551,7 +537,6 @@ describe("AgentBuilder", () => {
         .withHooks(HookPresets.monitoring({ verbose: true }))
         .withHistory([{ user: "Hi" }, { assistant: "Hello! How can I help?" }])
         .onHumanInput(async (q) => `Answer to: ${q}`)
-        .withParameterFormat("json")
         .withTextOnlyHandler("acknowledge")
         .withStopOnGadgetError(false)
         .withDefaultGadgetTimeout(10000);
@@ -623,7 +608,6 @@ describe("AgentBuilder", () => {
         .withTemperature(0.7)
         .withMaxIterations(5)
         .withGadgets(Calculator)
-        .withParameterFormat("yaml")
         .build();
 
       // Verify registry is populated (indirect check that config was applied)

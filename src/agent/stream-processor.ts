@@ -8,7 +8,7 @@
 import type { ILogObj, Logger } from "tslog";
 import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
 import { GadgetExecutor } from "../gadgets/executor.js";
-import { type ParameterFormat, StreamParser } from "../gadgets/parser.js";
+import { StreamParser } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type { GadgetExecutionResult, ParsedGadgetCall, StreamEvent } from "../gadgets/types.js";
 import { createLogger } from "../logging/logger.js";
@@ -41,14 +41,14 @@ export interface StreamProcessorOptions {
   /** Gadget registry for execution */
   registry: GadgetRegistry;
 
-  /** Parameter format for parsing */
-  parameterFormat: ParameterFormat;
-
   /** Custom gadget start prefix */
   gadgetStartPrefix?: string;
 
   /** Custom gadget end prefix */
   gadgetEndPrefix?: string;
+
+  /** Custom argument prefix for block format */
+  gadgetArgPrefix?: string;
 
   /** Hooks for lifecycle events */
   hooks?: AgentHooks;
@@ -150,9 +150,9 @@ export class StreamProcessor {
     this.shouldContinueAfterError = options.shouldContinueAfterError;
 
     this.parser = new StreamParser({
-      parameterFormat: options.parameterFormat,
       startPrefix: options.gadgetStartPrefix,
       endPrefix: options.gadgetEndPrefix,
+      argPrefix: options.gadgetArgPrefix,
     });
 
     this.executor = new GadgetExecutor(
