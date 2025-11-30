@@ -26,7 +26,7 @@ export interface EventHandlers {
   onGadgetCall?: (call: {
     gadgetName: string;
     parameters?: Record<string, unknown>;
-    parametersYaml: string;
+    parametersRaw: string;
   }) => void | Promise<void>;
 
   /** Called when a gadget execution completes */
@@ -75,7 +75,7 @@ export async function runWithHandlers(
           await handlers.onGadgetCall({
             gadgetName: event.call.gadgetName,
             parameters: event.call.parameters,
-            parametersYaml: event.call.parametersYaml,
+            parametersRaw: event.call.parametersRaw,
           });
         }
         break;

@@ -18,7 +18,7 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
@@ -558,7 +558,7 @@ export class AgentBuilder {
    */
   private formatBlockParameters(params: Record<string, unknown>, prefix: string): string {
     const lines: string[] = [];
-    const argPrefix = "!!!ARG:"; // Using constant directly to avoid import cycle
+    const argPrefix = this.gadgetArgPrefix ?? GADGET_ARG_PREFIX;
 
     for (const [key, value] of Object.entries(params)) {
       const fullPath = prefix ? `${prefix}/${key}` : key;

@@ -212,7 +212,7 @@ export class StreamParser {
         call: {
           gadgetName: actualGadgetName,
           invocationId,
-          parametersYaml: parametersRaw, // Keep property name for backward compatibility
+          parametersRaw,
           parameters,
           parseError,
         },
@@ -262,7 +262,7 @@ export class StreamParser {
           call: {
             gadgetName: actualGadgetName,
             invocationId,
-            parametersYaml: parametersRaw,
+            parametersRaw: parametersRaw,
             parameters,
             parseError,
           },
