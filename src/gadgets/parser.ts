@@ -85,19 +85,12 @@ export class StreamParser {
   }
 
   /**
-   * Truncate verbose parse errors to avoid context overflow.
-   * Keeps first meaningful line and limits total length.
+   * Extract the error message from a parse error.
+   * Preserves full message since the error formatter adds contextual help
+   * that benefits from precise, detailed error information.
    */
-  private truncateParseError(error: unknown, format: string): string {
-    const message = error instanceof Error ? error.message : String(error);
-    // Take first line only (most TOML errors have useful info there)
-    const firstLine = message.split("\n")[0];
-    // Truncate to max 200 chars
-    const maxLen = 200;
-    if (firstLine.length <= maxLen) {
-      return firstLine;
-    }
-    return `${firstLine.slice(0, maxLen)}... (${message.length} chars total)`;
+  private extractParseError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   /**
@@ -113,7 +106,7 @@ export class StreamParser {
     try {
       return { parameters: parseBlockParams(cleaned, { argPrefix: this.argPrefix }) };
     } catch (error) {
-      return { parseError: this.truncateParseError(error, "block") };
+      return { parseError: this.extractParseError(error) };
     }
   }
 

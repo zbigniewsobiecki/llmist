@@ -1,19 +1,23 @@
 import type { ILogObj, Logger } from "tslog";
 import { createLogger } from "../logging/logger.js";
+import { GadgetErrorFormatter, type ErrorFormatterOptions } from "./error-formatter.js";
 import { BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
 import type { GadgetRegistry } from "./registry.js";
 import type { GadgetExecutionResult, ParsedGadgetCall } from "./types.js";
 
 export class GadgetExecutor {
   private readonly logger: Logger<ILogObj>;
+  private readonly errorFormatter: GadgetErrorFormatter;
 
   constructor(
     private readonly registry: GadgetRegistry,
     private readonly onHumanInputRequired?: (question: string) => Promise<string>,
     logger?: Logger<ILogObj>,
     private readonly defaultGadgetTimeoutMs?: number,
+    errorFormatterOptions?: ErrorFormatterOptions,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
+    this.errorFormatter = new GadgetErrorFormatter(errorFormatterOptions);
   }
 
   /**
@@ -45,11 +49,12 @@ export class GadgetExecutor {
       const gadget = this.registry.get(call.gadgetName);
       if (!gadget) {
         this.logger.error("Gadget not found", { gadgetName: call.gadgetName });
+        const availableGadgets = this.registry.getNames();
         return {
           gadgetName: call.gadgetName,
           invocationId: call.invocationId,
           parameters: call.parameters ?? {},
-          error: `Gadget '${call.gadgetName}' not found in registry`,
+          error: this.errorFormatter.formatRegistryError(call.gadgetName, availableGadgets),
           executionTimeMs: Date.now() - startTime,
         };
       }
@@ -61,11 +66,12 @@ export class GadgetExecutor {
           parseError: call.parseError,
           rawParameters: call.parametersRaw,
         });
+        const parseErrorMessage = call.parseError ?? "Failed to parse parameters";
         return {
           gadgetName: call.gadgetName,
           invocationId: call.invocationId,
           parameters: {},
-          error: call.parseError ?? "Failed to parse parameters",
+          error: this.errorFormatter.formatParseError(call.gadgetName, parseErrorMessage, gadget),
           executionTimeMs: Date.now() - startTime,
         };
       }
@@ -73,17 +79,14 @@ export class GadgetExecutor {
       if (gadget.parameterSchema) {
         const validationResult = gadget.parameterSchema.safeParse(rawParameters);
         if (!validationResult.success) {
-          const formattedIssues = validationResult.error.issues
-            .map((issue) => {
-              const path = issue.path.join(".") || "root";
-              return `${path}: ${issue.message}`;
-            })
-            .join("; ");
-
-          const validationError = `Invalid parameters: ${formattedIssues}`;
+          const validationError = this.errorFormatter.formatValidationError(
+            call.gadgetName,
+            validationResult.error,
+            gadget,
+          );
           this.logger.error("Gadget parameter validation failed", {
             gadgetName: call.gadgetName,
-            error: validationError,
+            issueCount: validationResult.error.issues.length,
           });
 
           return {

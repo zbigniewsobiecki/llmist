@@ -720,3 +720,91 @@ ${GADGET_END_PREFIX}`;
     });
   });
 });
+
+describe("parse error handling", () => {
+  let parser: StreamParser;
+
+  beforeEach(() => {
+    resetGlobalInvocationCounter();
+    parser = new StreamParser();
+  });
+
+  it("captures parse error when block format has duplicate pointers", () => {
+    const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}duplicate
+first value
+${GADGET_ARG_PREFIX}duplicate
+second value
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("gadget_call");
+
+    if (events[0]?.type === "gadget_call") {
+      expect(events[0].call.parseError).toBeDefined();
+      expect(events[0].call.parseError).toContain("Duplicate pointer");
+      expect(events[0].call.parameters).toBeUndefined();
+    }
+  });
+
+  it("captures parse error when array indices have gaps", () => {
+    const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}items/0
+first
+${GADGET_ARG_PREFIX}items/5
+skipped indices
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("gadget_call");
+
+    if (events[0]?.type === "gadget_call") {
+      expect(events[0].call.parseError).toBeDefined();
+      expect(events[0].call.parseError).toContain("Array index gap");
+      expect(events[0].call.parameters).toBeUndefined();
+    }
+  });
+
+  it("preserves full multi-line error messages without truncation", () => {
+    // Create an error that would have multiple lines
+    const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}items/0
+first
+${GADGET_ARG_PREFIX}items/2
+gap error - expected 1, got 2
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    if (events[0]?.type === "gadget_call") {
+      // Error should contain full context, not just first line
+      expect(events[0].call.parseError).toBeDefined();
+      const errorMsg = events[0].call.parseError!;
+      // The error should mention the specific gap (expected 1, got 2)
+      expect(errorMsg).toContain("expected 1");
+      expect(errorMsg).toContain("got 2");
+    }
+  });
+
+  it("includes raw parameters in event even when parsing fails", () => {
+    const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}duplicate
+value
+${GADGET_ARG_PREFIX}duplicate
+oops
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    if (events[0]?.type === "gadget_call") {
+      expect(events[0].call.parametersRaw).toBeDefined();
+      expect(events[0].call.parametersRaw).toContain("duplicate");
+    }
+  });
+});
