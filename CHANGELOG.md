@@ -1,3 +1,10 @@
+## 1.1.0 (2025-11-30)
+
+* Merge pull request #113 from zbigniewsobiecki/dev ([8e9d0a3](https://github.com/zbigniewsobiecki/llmist/commit/8e9d0a3)), closes [#113](https://github.com/zbigniewsobiecki/llmist/issues/113)
+* fix(tests): add timer tolerance to async callback test ([14f8f2d](https://github.com/zbigniewsobiecki/llmist/commit/14f8f2d))
+* feat(cli): add gadget subcommand for testing gadgets outside agent loop (#111) ([a4d8c4a](https://github.com/zbigniewsobiecki/llmist/commit/a4d8c4a)), closes [#111](https://github.com/zbigniewsobiecki/llmist/issues/111)
+* feat(gadgets): add helpful error messages with gadget usage instructions (#112) ([68cd4d3](https://github.com/zbigniewsobiecki/llmist/commit/68cd4d3)), closes [#112](https://github.com/zbigniewsobiecki/llmist/issues/112)
+
 ## 1.0.0 (2025-11-30)
 
 * Merge pull request #110 from zbigniewsobiecki/dev ([3da969f](https://github.com/zbigniewsobiecki/llmist/commit/3da969f)), closes [#110](https://github.com/zbigniewsobiecki/llmist/issues/110)
