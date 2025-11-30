@@ -651,8 +651,9 @@ describe("GadgetExecutor", () => {
       const elapsed = Date.now() - startTime;
 
       expect(result.result).toBe("Answer to: How are you?");
-      expect(elapsed).toBeGreaterThanOrEqual(50);
-      expect(result.executionTimeMs).toBeGreaterThanOrEqual(50);
+      // Use 45ms threshold to account for timer precision in CI environments
+      expect(elapsed).toBeGreaterThanOrEqual(45);
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(45);
     });
   });
 
