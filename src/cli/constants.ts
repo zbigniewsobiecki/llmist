@@ -9,6 +9,7 @@ export const COMMANDS = {
   complete: "complete",
   agent: "agent",
   models: "models",
+  gadget: "gadget",
 } as const;
 
 /** Valid log level names */
