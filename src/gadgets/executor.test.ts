@@ -102,8 +102,9 @@ describe("GadgetExecutor", () => {
         gadgetName: "NonExistent",
         invocationId: "err-1",
         parameters: { test: "value" },
-        error: "Gadget 'NonExistent' not found in registry",
       });
+      // Error now includes rich context with available gadgets list
+      expect(result.error).toContain("Gadget 'NonExistent' not found");
       expect(result.result).toBeUndefined();
     });
 
@@ -144,8 +145,10 @@ describe("GadgetExecutor", () => {
         gadgetName: "TestGadget",
         invocationId: "err-3",
         parameters: {},
-        error: "Failed to parse parameters",
       });
+      // Error now includes rich context with gadget instructions
+      expect(result.error).toContain("Failed to parse parameters");
+      expect(result.error).toContain("Gadget Usage:");
       expect(result.result).toBeUndefined();
     });
 
