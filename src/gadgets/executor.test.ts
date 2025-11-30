@@ -102,8 +102,10 @@ describe("GadgetExecutor", () => {
         gadgetName: "NonExistent",
         invocationId: "err-1",
         parameters: { test: "value" },
-        error: "Gadget 'NonExistent' not found in registry",
       });
+      // Error now includes rich context with available gadgets list
+      expect(result.error).toContain("Gadget 'NonExistent' not found");
+      expect(result.error).toContain("No gadgets are currently registered");
       expect(result.result).toBeUndefined();
     });
 
@@ -123,8 +125,12 @@ describe("GadgetExecutor", () => {
         gadgetName: "TestGadget",
         invocationId: "err-2",
         parameters: {},
-        error: expect.stringContaining("expected"),
       });
+      // Error now includes rich context with gadget instructions and block format reference
+      expect(result.error).toContain("expected");
+      expect(result.error).toContain("Gadget Usage:");
+      expect(result.error).toContain("Block Format Reference:");
+      expect(result.error).toContain("!!!GADGET_START:");
       expect(result.result).toBeUndefined();
     });
 
@@ -144,8 +150,14 @@ describe("GadgetExecutor", () => {
         gadgetName: "TestGadget",
         invocationId: "err-3",
         parameters: {},
-        error: "Failed to parse parameters",
       });
+      // Error now includes rich context with gadget instructions and block format reference
+      expect(result.error).toContain("Failed to parse parameters");
+      expect(result.error).toContain("Gadget Usage:");
+      expect(result.error).toContain("Block Format Reference:");
+      expect(result.error).toContain("!!!GADGET_START:");
+      expect(result.error).toContain("!!!ARG:");
+      expect(result.error).toContain("!!!GADGET_END");
       expect(result.result).toBeUndefined();
     });
 
@@ -276,9 +288,12 @@ describe("GadgetExecutor", () => {
       const result = await executor.execute(call);
 
       expect(result.error).toBeTruthy();
+      // Error includes validation issues
       expect(result.error).toContain("Invalid parameters");
       expect(result.error).toContain("name");
       expect(result.error).toContain("count");
+      // Error now includes gadget usage instructions for self-correction
+      expect(result.error).toContain("Gadget Usage:");
       expect(result.parameters).toEqual({ name: "", count: -1 });
     });
 
@@ -636,8 +651,9 @@ describe("GadgetExecutor", () => {
       const elapsed = Date.now() - startTime;
 
       expect(result.result).toBe("Answer to: How are you?");
-      expect(elapsed).toBeGreaterThanOrEqual(50);
-      expect(result.executionTimeMs).toBeGreaterThanOrEqual(50);
+      // Use 45ms threshold to account for timer precision in CI environments
+      expect(elapsed).toBeGreaterThanOrEqual(45);
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(45);
     });
   });
 

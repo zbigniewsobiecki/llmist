@@ -10,6 +10,7 @@ import {
   getCustomCommandNames,
   loadConfig,
 } from "./config.js";
+import { registerGadgetCommand } from "./gadget-command.js";
 import { registerModelsCommand } from "./models-command.js";
 import { registerCustomCommand } from "./custom-command.js";
 import {
@@ -69,6 +70,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
   registerCompleteCommand(program, env, config?.complete);
   registerAgentCommand(program, env, config?.agent);
   registerModelsCommand(program, env);
+  registerGadgetCommand(program, env);
 
   // Register custom commands from config
   if (config) {
