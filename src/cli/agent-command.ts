@@ -460,13 +460,25 @@ export async function executeAgent(
   // - Real-time streaming UIs
   // - Progress indicators during tool execution
   // - Separation of business logic (agent) from presentation (UI)
+
+  // Buffer for accumulating text chunks - markdown rendering requires complete content
+  let textBuffer = "";
+  const flushTextBuffer = () => {
+    if (textBuffer) {
+      const rendered = renderMarkdown(textBuffer);
+      printer.write(rendered);
+      textBuffer = "";
+    }
+  };
+
   for await (const event of agent.run()) {
     if (event.type === "text") {
-      // Stream LLM output to stdout
-      // Pause progress indicator to avoid stderr/stdout interleaving
+      // Accumulate text chunks - we'll render markdown when complete
       progress.pause();
-      printer.write(event.content);
+      textBuffer += event.content;
     } else if (event.type === "gadget_result") {
+      // Flush any accumulated text before showing gadget result
+      flushTextBuffer();
       // Show gadget execution feedback on stderr
       progress.pause();
 
@@ -486,6 +498,9 @@ export async function executeAgent(
     }
     // Note: human_input_required handled by callback (see createHumanInputHandler)
   }
+
+  // Flush any remaining buffered text with markdown rendering
+  flushTextBuffer();
 
   progress.complete();
   printer.ensureNewline();
