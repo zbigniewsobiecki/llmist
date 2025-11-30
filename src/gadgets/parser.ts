@@ -86,14 +86,11 @@ export class StreamParser {
 
   /**
    * Extract the error message from a parse error.
-   * Previously truncated errors, but now preserves full message since
-   * the error formatter adds contextual help that benefits from precise errors.
+   * Preserves full message since the error formatter adds contextual help
+   * that benefits from precise, detailed error information.
    */
   private extractParseError(error: unknown): string {
-    const message = error instanceof Error ? error.message : String(error);
-    // Take first line only (most parse errors have useful info there)
-    // but don't truncate - let the error formatter handle presentation
-    return message.split("\n")[0];
+    return error instanceof Error ? error.message : String(error);
   }
 
   /**
