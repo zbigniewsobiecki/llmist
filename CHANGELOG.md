@@ -1,3 +1,81 @@
+## 1.0.0 (2025-11-30)
+
+* Merge pull request #110 from zbigniewsobiecki/dev ([3da969f](https://github.com/zbigniewsobiecki/llmist/commit/3da969f)), closes [#110](https://github.com/zbigniewsobiecki/llmist/issues/110)
+* fix(cli): improve streaming output and add rainbow markdown separators (#109) ([cad0843](https://github.com/zbigniewsobiecki/llmist/commit/cad0843)), closes [#109](https://github.com/zbigniewsobiecki/llmist/issues/109)
+* feat: simplify to block-only format and fix custom argPrefix propagation (#108) ([2306ebe](https://github.com/zbigniewsobiecki/llmist/commit/2306ebe)), closes [#108](https://github.com/zbigniewsobiecki/llmist/issues/108)
+
+
+### BREAKING CHANGE
+
+* Remove YAML, JSON, TOML, and XML parameter formats.
+The gadget system now uses exclusively the block format with !!!ARG: markers.
+
+## Block Format Simplification
+- Remove xml-params.ts and all XML parameter handling
+- Remove YAML/JSON/TOML format options from parser
+- Simplify StreamParser to only handle block format
+- Remove parameterFormat configuration option
+- Update all tests to use block format exclusively
+
+## Custom argPrefix Propagation Fix
+- Add argPrefix parameter to formatParamsAsBlock() in gadget.ts
+- Add argPrefix parameter to getInstruction() for gadget examples
+- Update buildGadgetsSection() to pass custom argPrefix to gadgets
+- Make DEFAULT_PROMPTS.formatDescription dynamic using context.argPrefix
+- Update formatBlockParameters() in messages.ts to use configured prefix
+- Add comprehensive tests for custom prefix propagation
+
+## Other Improvements
+- Simplify prompt configuration (remove format-specific descriptions)
+- Clean up constants (remove unused format-related constants)
+- Update documentation to reflect block-only format
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* fix(cli): render markdown for orphan text output
+
+When an LLM outputs plain text instead of using the TellUser gadget,
+the CLI now renders it with markdown formatting. This ensures headers,
+bullets, code blocks, etc. are displayed properly rather than as raw text.
+
+Implementation details:
+- Text chunks are accumulated in a buffer during streaming
+- Markdown is rendered when a non-text event occurs or at stream end
+- This ensures complete markdown structures are parsed together
+
+Also fixes test isolation issues caused by chalk.level being set
+globally when renderMarkdown initializes marked-terminal.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* fix(cli): render bold/italic in markdown list items
+
+Workaround for marked-terminal bug where inline markdown (**bold** and
+*italic*) inside list items is not processed. The library's listitem
+renderer doesn't call parseInline() like the paragraph renderer does.
+
+Post-process the marked output to handle any remaining unrendered
+inline formatting using regex replacement with chalk styling.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* fix: use configured gadgetArgPrefix in synthetic history and rename parametersYaml
+
+- Fix formatBlockParameters to use this.gadgetArgPrefix instead of hardcoded "!!!ARG:"
+- Add comprehensive tests for withSyntheticGadgetCall with custom prefixes
+- Rename misleading parametersYaml property to parametersRaw across codebase
+  (YAML parsing was removed, property now holds raw block-format parameters)
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
 ## 0.8.0 (2025-11-29)
 
 * Merge pull request #107 from zbigniewsobiecki/dev ([7e51257](https://github.com/zbigniewsobiecki/llmist/commit/7e51257)), closes [#107](https://github.com/zbigniewsobiecki/llmist/issues/107)
