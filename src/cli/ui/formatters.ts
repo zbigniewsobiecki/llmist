@@ -120,6 +120,44 @@ export function renderMarkdown(text: string): string {
 }
 
 /**
+ * Creates a rainbow-colored horizontal line for visual emphasis.
+ * Cycles through colors for each character segment.
+ * Uses the full terminal width for a complete visual separator.
+ *
+ * @returns Rainbow-colored separator string spanning the terminal width
+ */
+function createRainbowSeparator(): string {
+  const colors = [chalk.red, chalk.yellow, chalk.green, chalk.cyan, chalk.blue, chalk.magenta];
+  const char = "─";
+  // Use terminal width, fallback to 80 if not available (e.g., piped output)
+  const width = process.stdout.columns || 80;
+  let result = "";
+  for (let i = 0; i < width; i++) {
+    result += colors[i % colors.length](char);
+  }
+  return result;
+}
+
+/**
+ * Renders markdown with colorful rainbow horizontal line separators above and below.
+ * Use this for prominent markdown content that should stand out visually.
+ *
+ * @param text - Markdown text to render
+ * @returns Rendered markdown with rainbow separators
+ *
+ * @example
+ * ```typescript
+ * renderMarkdownWithSeparators("**Hello** world!");
+ * // Returns rainbow line + styled markdown + rainbow line
+ * ```
+ */
+export function renderMarkdownWithSeparators(text: string): string {
+  const rendered = renderMarkdown(text);
+  const separator = createRainbowSeparator();
+  return `\n${separator}\n${rendered}\n${separator}\n`;
+}
+
+/**
  * Formats token count with 'k' suffix for thousands.
  *
  * Uses compact notation to save terminal space while maintaining readability.
@@ -507,10 +545,10 @@ export function formatGadgetSummary(result: GadgetResult): string {
   const icon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
   const summaryLine = `${icon} ${gadgetLabel}${paramsLabel} ${chalk.dim("→")} ${outputLabel} ${timeLabel}`;
 
-  // TellUser gadget: display full message content below the summary (with markdown)
+  // TellUser gadget: display full message content below the summary (with markdown and separators)
   if (result.gadgetName === "TellUser" && result.parameters?.message) {
     const message = String(result.parameters.message);
-    const rendered = renderMarkdown(message);
+    const rendered = renderMarkdownWithSeparators(message);
     return `${summaryLine}\n${rendered}`;
   }
 
