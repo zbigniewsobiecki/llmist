@@ -46,9 +46,9 @@ describe("AgentBuilder", () => {
       expect(builder.withHistory([{ user: "hi" }])).toBe(builder);
       expect(builder.addMessage({ user: "hello" })).toBe(builder);
       expect(builder.onHumanInput(async () => "response")).toBe(builder);
-      expect(builder.withParameterFormat("json")).toBe(builder);
       expect(builder.withGadgetStartPrefix("<<<")).toBe(builder);
       expect(builder.withGadgetEndPrefix(">>>")).toBe(builder);
+      expect(builder.withGadgetArgPrefix("<<<ARG>>>")).toBe(builder);
       expect(builder.withTextOnlyHandler("acknowledge")).toBe(builder);
       expect(builder.withStopOnGadgetError(false)).toBe(builder);
       expect(builder.withErrorHandler(() => true)).toBe(builder);
@@ -349,29 +349,6 @@ describe("AgentBuilder", () => {
     });
   });
 
-  describe("withParameterFormat", () => {
-    it("sets parameter format to json", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withParameterFormat("json");
-
-      expect(result).toBe(builder);
-    });
-
-    it("sets parameter format to xml", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withParameterFormat("xml");
-
-      expect(result).toBe(builder);
-    });
-
-    it("chains correctly", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withModel("gpt4").withParameterFormat("xml");
-
-      expect(result).toBe(builder);
-    });
-  });
-
   describe("withGadgetStartPrefix", () => {
     it("sets custom gadget start prefix", () => {
       const builder = new AgentBuilder();
@@ -394,6 +371,105 @@ describe("AgentBuilder", () => {
       const result = builder.withGadgetEndPrefix("<<GADGET_END>>");
 
       expect(result).toBe(builder);
+    });
+  });
+
+  describe("withGadgetArgPrefix", () => {
+    it("sets custom argument prefix", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withGadgetArgPrefix("<<ARG>>");
+
+      expect(result).toBe(builder);
+    });
+  });
+
+  describe("withSyntheticGadgetCall", () => {
+    it("returns this for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withSyntheticGadgetCall("TestGadget", { foo: "bar" }, "result");
+
+      expect(result).toBe(builder);
+    });
+
+    it("formats gadget call with default prefixes", () => {
+      const builder = new AgentBuilder();
+      builder.withSyntheticGadgetCall("TestGadget", { message: "hello" }, "Success");
+
+      // Access private initialMessages via type assertion
+      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+
+      expect(messages).toHaveLength(2);
+
+      // Assistant message with gadget call
+      expect(messages[0].role).toBe("assistant");
+      expect(messages[0].content).toContain("!!!GADGET_START:TestGadget");
+      expect(messages[0].content).toContain("!!!ARG:message");
+      expect(messages[0].content).toContain("hello");
+      expect(messages[0].content).toContain("!!!GADGET_END");
+
+      // User message with result
+      expect(messages[1].role).toBe("user");
+      expect(messages[1].content).toBe("Result: Success");
+    });
+
+    it("uses custom gadget prefixes when configured", () => {
+      const builder = new AgentBuilder();
+      builder
+        .withGadgetStartPrefix("<<<GADGET>>>")
+        .withGadgetEndPrefix("<<<END>>>")
+        .withGadgetArgPrefix("<<<ARG>>>")
+        .withSyntheticGadgetCall("Calculator", { a: 1, b: 2 }, "3");
+
+      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+
+      expect(messages).toHaveLength(2);
+
+      // Verify custom prefixes are used
+      const assistantContent = messages[0].content;
+      expect(assistantContent).toContain("<<<GADGET>>>Calculator");
+      expect(assistantContent).toContain("<<<ARG>>>a");
+      expect(assistantContent).toContain("<<<ARG>>>b");
+      expect(assistantContent).toContain("<<<END>>>");
+
+      // Ensure default prefixes are NOT used
+      expect(assistantContent).not.toContain("!!!GADGET_START:");
+      expect(assistantContent).not.toContain("!!!ARG:");
+      expect(assistantContent).not.toContain("!!!GADGET_END");
+    });
+
+    it("handles nested object parameters", () => {
+      const builder = new AgentBuilder();
+      builder.withSyntheticGadgetCall(
+        "CreateTask",
+        {
+          title: "My Task",
+          metadata: { priority: "high", tags: ["urgent", "bug"] }
+        },
+        "Task created"
+      );
+
+      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+      const content = messages[0].content;
+
+      // Verify nested paths use JSON Pointer format
+      expect(content).toContain("!!!ARG:title");
+      expect(content).toContain("!!!ARG:metadata/priority");
+      expect(content).toContain("!!!ARG:metadata/tags/0");
+      expect(content).toContain("!!!ARG:metadata/tags/1");
+    });
+
+    it("can be called multiple times to add multiple synthetic calls", () => {
+      const builder = new AgentBuilder();
+      builder
+        .withSyntheticGadgetCall("First", { x: 1 }, "one")
+        .withSyntheticGadgetCall("Second", { y: 2 }, "two");
+
+      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+
+      // Each call adds 2 messages (assistant + user)
+      expect(messages).toHaveLength(4);
+      expect(messages[0].content).toContain("First");
+      expect(messages[2].content).toContain("Second");
     });
   });
 
@@ -551,7 +627,6 @@ describe("AgentBuilder", () => {
         .withHooks(HookPresets.monitoring({ verbose: true }))
         .withHistory([{ user: "Hi" }, { assistant: "Hello! How can I help?" }])
         .onHumanInput(async (q) => `Answer to: ${q}`)
-        .withParameterFormat("json")
         .withTextOnlyHandler("acknowledge")
         .withStopOnGadgetError(false)
         .withDefaultGadgetTimeout(10000);
@@ -623,7 +698,6 @@ describe("AgentBuilder", () => {
         .withTemperature(0.7)
         .withMaxIterations(5)
         .withGadgets(Calculator)
-        .withParameterFormat("yaml")
         .build();
 
       // Verify registry is populated (indirect check that config was applied)

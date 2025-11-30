@@ -1,320 +1,9 @@
-import * as yaml from "js-yaml";
-import { load as parseToml } from "js-toml";
-import { GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type { StreamEvent } from "./types.js";
+import { parseBlockParams } from "./block-params.js";
 
-export type ParameterFormat = "json" | "yaml" | "toml" | "auto";
+export type ParameterFormat = "block";
 
-/**
- * Preprocess YAML to handle common LLM output issues.
- *
- * Handles three patterns:
- * 1. Single-line values with colons: `key: value with: colon` → `key: "value with: colon"`
- * 2. Multi-line continuations where LLM writes:
- *    ```
- *    key: value ending with:
- *      - list item 1
- *      - list item 2
- *    ```
- *    Converts to proper YAML multiline:
- *    ```
- *    key: |
- *      value ending with:
- *      - list item 1
- *      - list item 2
- *    ```
- * 3. Pipe blocks with inconsistent indentation:
- *    ```
- *    key: |
- *        first line (4 spaces)
- *      second line (2 spaces - wrong!)
- *    ```
- *    Normalizes to consistent indentation based on minimum indent.
- *
- * @internal Exported for testing only
- */
-export function preprocessYaml(yamlStr: string): string {
-  const lines = yamlStr.split("\n");
-  const result: string[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Check for heredoc syntax: key: <<<DELIMITER
-    const heredocMatch = line.match(/^(\s*)([\w-]+):\s*<<<([A-Za-z_][A-Za-z0-9_]*)\s*$/);
-    if (heredocMatch) {
-      const [, indent, key, delimiter] = heredocMatch;
-      const bodyLines: string[] = [];
-      i++; // Move past heredoc start line
-
-      // Collect body until closing delimiter (lenient - allows trailing whitespace)
-      const closingRegex = new RegExp(`^${delimiter}\\s*$`);
-      while (i < lines.length && !closingRegex.test(lines[i])) {
-        bodyLines.push(lines[i]);
-        i++;
-      }
-      if (i < lines.length) {
-        i++; // Move past closing delimiter
-      }
-
-      // Convert to YAML pipe block with proper indentation
-      result.push(`${indent}${key}: |`);
-      for (const bodyLine of bodyLines) {
-        result.push(`${indent}  ${bodyLine}`);
-      }
-      continue;
-    }
-
-    // Match lines like "key: value" where value isn't quoted or using pipe
-    // Support keys with hyphens/underscores (e.g., my-key, my_key)
-    const match = line.match(/^(\s*)([\w-]+):\s+(.+)$/);
-
-    if (match) {
-      const [, indent, key, value] = match;
-
-      // Handle pipe/block indicators - need to check for inconsistent indentation
-      if (value === "|" || value === ">" || value === "|-" || value === ">-") {
-        result.push(line);
-        i++;
-
-        // Collect all block content lines
-        const keyIndentLen = indent.length;
-        const blockLines: { content: string; originalIndent: number }[] = [];
-        let minContentIndent = Infinity;
-
-        while (i < lines.length) {
-          const blockLine = lines[i];
-          const blockIndentMatch = blockLine.match(/^(\s*)/);
-          const blockIndentLen = blockIndentMatch ? blockIndentMatch[1].length : 0;
-
-          // Empty lines are part of the block
-          if (blockLine.trim() === "") {
-            blockLines.push({ content: "", originalIndent: 0 });
-            i++;
-            continue;
-          }
-
-          // Lines must be more indented than the key to be part of block
-          if (blockIndentLen > keyIndentLen) {
-            const content = blockLine.substring(blockIndentLen);
-            blockLines.push({ content, originalIndent: blockIndentLen });
-            if (content.trim().length > 0) {
-              minContentIndent = Math.min(minContentIndent, blockIndentLen);
-            }
-            i++;
-          } else {
-            // End of block
-            break;
-          }
-        }
-
-        // Normalize indentation: use minimum indent found as the base
-        const targetIndent = keyIndentLen + 2; // Standard 2-space indent from key
-        for (const blockLine of blockLines) {
-          if (blockLine.content === "") {
-            result.push("");
-          } else {
-            // All content gets the same base indentation
-            result.push(" ".repeat(targetIndent) + blockLine.content);
-          }
-        }
-        continue;
-      }
-
-      // Skip if already quoted or is a boolean/number
-      if (
-        value.startsWith('"') ||
-        value.startsWith("'") ||
-        value === "true" ||
-        value === "false" ||
-        /^-?\d+(\.\d+)?$/.test(value)
-      ) {
-        result.push(line);
-        i++;
-        continue;
-      }
-
-      // Check if this is a multi-line continuation pattern:
-      // A value followed by more-indented lines starting with dash (list items)
-      // or text that looks like continuation
-      const keyIndentLen = indent.length;
-      const continuationLines: string[] = [];
-      let j = i + 1;
-
-      // Look ahead to see if there are continuation lines
-      while (j < lines.length) {
-        const nextLine = lines[j];
-        // Empty lines can be part of continuation
-        if (nextLine.trim() === "") {
-          continuationLines.push(nextLine);
-          j++;
-          continue;
-        }
-
-        // Check indentation - must be more indented than the key
-        const nextIndentMatch = nextLine.match(/^(\s*)/);
-        const nextIndentLen = nextIndentMatch ? nextIndentMatch[1].length : 0;
-
-        // If more indented and starts with dash or looks like continuation text
-        if (nextIndentLen > keyIndentLen) {
-          continuationLines.push(nextLine);
-          j++;
-        } else {
-          // Not a continuation line
-          break;
-        }
-      }
-
-      // If we found continuation lines, convert to pipe multiline
-      if (continuationLines.length > 0 && continuationLines.some((l) => l.trim().length > 0)) {
-        result.push(`${indent}${key}: |`);
-        // Add the first line value as part of multiline content
-        result.push(`${indent}  ${value}`);
-        // Add continuation lines, adjusting indentation
-        for (const contLine of continuationLines) {
-          if (contLine.trim() === "") {
-            result.push("");
-          } else {
-            // Normalize indentation: ensure all lines have at least 2-space indent from key
-            const contIndentMatch = contLine.match(/^(\s*)/);
-            const contIndent = contIndentMatch ? contIndentMatch[1] : "";
-            const contContent = contLine.substring(contIndent.length);
-            result.push(`${indent}  ${contContent}`);
-          }
-        }
-        i = j;
-        continue;
-      }
-
-      // Single-line value: quote if it contains problematic colon patterns
-      if (value.includes(": ") || value.endsWith(":")) {
-        const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-        result.push(`${indent}${key}: "${escaped}"`);
-        i++;
-        continue;
-      }
-    }
-
-    result.push(line);
-    i++;
-  }
-
-  return result.join("\n");
-}
-
-/**
- * Remove unnecessary escape sequences from heredoc content.
- * LLMs often escape characters like backticks and dollar signs even when told not to.
- * This function un-escapes common patterns to make the content valid for TOML multiline strings.
- *
- * @internal Exported for testing only
- */
-export function unescapeHeredocContent(content: string): string {
-  return content
-    .replace(/\\`/g, "`") // \` -> `
-    .replace(/\\\$/g, "$") // \$ -> $
-    .replace(/\\{/g, "{") // \{ -> {
-    .replace(/\\}/g, "}"); // \} -> }
-}
-
-/**
- * Preprocess TOML to convert heredoc syntax to standard multiline strings.
- *
- * Supports basic heredoc: `key = <<<DELIMITER...DELIMITER`
- * - Delimiter: ASCII letters, digits, or _, starting with letter or _
- * - Closing delimiter: alone on line (trailing whitespace allowed for LLM friendliness)
- * - Escape sequences are preserved and processed by js-toml as standard basic strings
- *
- * Example:
- * ```toml
- * message = <<<EOF
- * Hello "world"
- * Line 2
- * EOF
- * ```
- * Transforms to:
- * ```toml
- * message = """
- * Hello "world"
- * Line 2
- * """
- * ```
- *
- * @internal Exported for testing only
- */
-export function preprocessTomlHeredoc(tomlStr: string): string {
-  const lines = tomlStr.split("\n");
-  const result: string[] = [];
-  let i = 0;
-
-  // Regex to match heredoc start: key = <<<DELIMITER or key = <<<DELIMITER (with optional trailing content)
-  // Also supports keys with hyphens/underscores
-  const heredocStartRegex = /^(\s*)([\w-]+)\s*=\s*<<<([A-Za-z_][A-Za-z0-9_]*)\s*$/;
-
-  while (i < lines.length) {
-    const line = lines[i];
-    const match = line.match(heredocStartRegex);
-
-    if (match) {
-      const [, indent, key, delimiter] = match;
-
-      // Start collecting heredoc body
-      const bodyLines: string[] = [];
-      i++; // Move past the heredoc start line
-
-      // Create lenient closing delimiter regex (allows trailing whitespace)
-      const closingRegex = new RegExp(`^${delimiter}\\s*$`);
-
-      let foundClosing = false;
-      while (i < lines.length) {
-        const bodyLine = lines[i];
-
-        // Check if this is the closing delimiter
-        if (closingRegex.test(bodyLine)) {
-          foundClosing = true;
-          i++; // Move past the closing delimiter
-          break;
-        }
-
-        bodyLines.push(bodyLine);
-        i++;
-      }
-
-      // Convert to TOML literal multiline string (''')
-      // Using ''' instead of """ because literal strings DON'T process escape sequences.
-      // This is critical because code often contains regex like \s, \d, \n which would
-      // be interpreted as (invalid) TOML escape sequences in basic strings.
-      if (bodyLines.length === 0) {
-        // Empty heredoc
-        result.push(`${indent}${key} = ''''''`);
-      } else {
-        // Non-empty heredoc - use triple single quotes (literal string)
-        // IMPORTANT: Put closing ''' on the same line as last content to avoid trailing newline
-        // Also un-escape common LLM escaping mistakes (like \` and \$)
-        result.push(`${indent}${key} = '''`);
-        for (let j = 0; j < bodyLines.length - 1; j++) {
-          result.push(unescapeHeredocContent(bodyLines[j]));
-        }
-        // Last line includes the closing quotes
-        result.push(`${unescapeHeredocContent(bodyLines[bodyLines.length - 1])}'''`);
-      }
-
-      if (!foundClosing) {
-        // If we didn't find a closing delimiter, the TOML will be malformed
-        // but let js-toml handle the error
-      }
-
-      continue;
-    }
-
-    // Not a heredoc line, pass through unchanged
-    result.push(line);
-    i++;
-  }
-
-  return result.join("\n");
-}
 
 /**
  * Strip markdown code fences from parameter content.
@@ -342,14 +31,8 @@ export function stripMarkdownFences(content: string): string {
 export interface StreamParserOptions {
   startPrefix?: string;
   endPrefix?: string;
-  /**
-   * Format for parsing gadget parameters.
-   * - 'json': Parse as JSON (more robust, recommended for complex nested data)
-   * - 'yaml': Parse as YAML (backward compatible)
-   * - 'auto': Try JSON first, fall back to YAML
-   * @default 'json'
-   */
-  parameterFormat?: ParameterFormat;
+  /** Prefix for block format arguments. Default: "!!!ARG:" */
+  argPrefix?: string;
 }
 
 // Global counter for generating unique invocation IDs across all parser instances
@@ -368,12 +51,12 @@ export class StreamParser {
   private lastReportedTextLength = 0;
   private readonly startPrefix: string;
   private readonly endPrefix: string;
-  private readonly parameterFormat: ParameterFormat;
+  private readonly argPrefix: string;
 
   constructor(options: StreamParserOptions = {}) {
     this.startPrefix = options.startPrefix ?? GADGET_START_PREFIX;
     this.endPrefix = options.endPrefix ?? GADGET_END_PREFIX;
-    this.parameterFormat = options.parameterFormat ?? "json";
+    this.argPrefix = options.argPrefix ?? GADGET_ARG_PREFIX;
   }
 
   private takeTextUntil(index: number): string | undefined {
@@ -418,7 +101,7 @@ export class StreamParser {
   }
 
   /**
-   * Parse parameter string according to configured format
+   * Parse parameter string using block format
    */
   private parseParameters(raw: string): {
     parameters?: Record<string, unknown>;
@@ -427,43 +110,10 @@ export class StreamParser {
     // Strip markdown code fences if LLM wrapped the parameters
     const cleaned = stripMarkdownFences(raw);
 
-    if (this.parameterFormat === "json") {
-      try {
-        return { parameters: JSON.parse(cleaned) as Record<string, unknown> };
-      } catch (error) {
-        return { parseError: this.truncateParseError(error, "JSON") };
-      }
-    }
-
-    if (this.parameterFormat === "yaml") {
-      try {
-        return { parameters: yaml.load(preprocessYaml(cleaned)) as Record<string, unknown> };
-      } catch (error) {
-        return { parseError: this.truncateParseError(error, "YAML") };
-      }
-    }
-
-    if (this.parameterFormat === "toml") {
-      try {
-        return { parameters: parseToml(preprocessTomlHeredoc(cleaned)) as Record<string, unknown> };
-      } catch (error) {
-        return { parseError: this.truncateParseError(error, "TOML") };
-      }
-    }
-
-    // Auto-detect: try JSON first, then TOML, then YAML
     try {
-      return { parameters: JSON.parse(cleaned) as Record<string, unknown> };
-    } catch {
-      try {
-        return { parameters: parseToml(preprocessTomlHeredoc(cleaned)) as Record<string, unknown> };
-      } catch {
-        try {
-          return { parameters: yaml.load(preprocessYaml(cleaned)) as Record<string, unknown> };
-        } catch (error) {
-          return { parseError: this.truncateParseError(error, "auto") };
-        }
-      }
+      return { parameters: parseBlockParams(cleaned, { argPrefix: this.argPrefix }) };
+    } catch (error) {
+      return { parseError: this.truncateParseError(error, "block") };
     }
   }
 
@@ -562,7 +212,7 @@ export class StreamParser {
         call: {
           gadgetName: actualGadgetName,
           invocationId,
-          parametersYaml: parametersRaw, // Keep property name for backward compatibility
+          parametersRaw,
           parameters,
           parseError,
         },
@@ -612,7 +262,7 @@ export class StreamParser {
           call: {
             gadgetName: actualGadgetName,
             invocationId,
-            parametersYaml: parametersRaw,
+            parametersRaw: parametersRaw,
             parameters,
             parseError,
           },

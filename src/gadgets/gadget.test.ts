@@ -18,59 +18,27 @@ class SchemaGadget extends Gadget({
 }
 
 describe("BaseGadget", () => {
-  it("includes zod schema in instruction output as YAML", () => {
+  it("includes parameters in plain text format (default)", () => {
     const gadget = new SchemaGadget();
     const instruction = gadget.instruction;
 
-    expect(instruction).toContain("Input Schema (YAML):");
-    expect(instruction).toContain("type: object");
-    expect(instruction).toContain("count:");
-    expect(instruction).toContain("description: Number of items to process");
-    expect(instruction).toContain("tags:");
+    // Should use plain text format for all formats
+    expect(instruction).toContain("Parameters:");
+    expect(instruction).toContain("- count (integer) [required]: Number of items to process");
+    expect(instruction).toContain("- tags (array of string) [required]: Optional tags to apply");
   });
 
-  it("includes zod schema in instruction output as JSON when format is json", () => {
+  it("includes parameters in plain text format", () => {
     const gadget = new SchemaGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
-    expect(instruction).toContain("Input Schema (JSON):");
     expect(instruction).toContain("Processes items with structured input.");
-
-    // Verify it's valid JSON by parsing it
-    const jsonMatch = instruction.match(/Input Schema \(JSON\):\n([\s\S]+)/);
-    expect(jsonMatch).toBeTruthy();
-
-    if (jsonMatch?.[1]) {
-      const jsonSchema = JSON.parse(jsonMatch[1]);
-
-      // Zod v4 returns direct schema (no $ref wrapper)
-      expect(jsonSchema).toHaveProperty("type", "object");
-      expect(jsonSchema).toHaveProperty("properties");
-      expect(jsonSchema.properties).toHaveProperty("count");
-      expect(jsonSchema.properties).toHaveProperty("tags");
-
-      // Verify parameter descriptions are included
-      expect(jsonSchema.properties.count.description).toBe("Number of items to process");
-      expect(jsonSchema.properties.tags.description).toBe("Optional tags to apply");
-
-      // Verify parameter types
-      expect(jsonSchema.properties.count.type).toBe("integer");
-      expect(jsonSchema.properties.tags.type).toBe("array");
-
-      // Verify parameter constraints
-      expect(jsonSchema.properties.count.minimum).toBe(1);
-    }
+    expect(instruction).toContain("Parameters:");
+    expect(instruction).toContain("- count (integer) [required]: Number of items to process");
+    expect(instruction).toContain("- tags (array of string) [required]: Optional tags to apply");
   });
 
-  it("includes zod schema in instruction output as JSON when format is auto", () => {
-    const gadget = new SchemaGadget();
-    const instruction = gadget.getInstruction("auto");
-
-    expect(instruction).toContain("Input Schema (JSON):");
-    expect(instruction).toContain("Processes items with structured input.");
-  });
-
-  it("includes all nested properties in JSON schema for complex objects", () => {
+  it("includes all nested properties in plain text schema for complex objects", () => {
     class ComplexGadget extends Gadget({
       name: "ComplexGadget",
       description: "Tests complex nested schemas",
@@ -99,37 +67,19 @@ describe("BaseGadget", () => {
     }
 
     const gadget = new ComplexGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
-    expect(instruction).toContain("Input Schema (JSON):");
+    expect(instruction).toContain("Parameters:");
 
-    const jsonMatch = instruction.match(/Input Schema \(JSON\):\n([\s\S]+)/);
-    expect(jsonMatch).toBeTruthy();
+    // Verify top-level properties with their descriptions
+    expect(instruction).toContain("- user (object) [required]: User information");
+    expect(instruction).toContain("- items (array of object) [required]: List of items");
+    expect(instruction).toContain("- metadata (object) [required]: Additional metadata");
 
-    if (jsonMatch?.[1]) {
-      const jsonSchema = JSON.parse(jsonMatch[1]);
-
-      // Zod v4 returns direct schema (no $ref wrapper)
-      // Verify all top-level properties
-      expect(jsonSchema.properties).toHaveProperty("user");
-      expect(jsonSchema.properties).toHaveProperty("items");
-      expect(jsonSchema.properties).toHaveProperty("metadata");
-
-      // Verify nested user properties
-      expect(jsonSchema.properties.user.properties).toHaveProperty("name");
-      expect(jsonSchema.properties.user.properties).toHaveProperty("email");
-      expect(jsonSchema.properties.user.properties).toHaveProperty("age");
-
-      // Verify descriptions are preserved
-      expect(jsonSchema.properties.user.description).toBe("User information");
-      expect(jsonSchema.properties.user.properties.name.description).toBe("User name");
-      expect(jsonSchema.properties.user.properties.email.description).toBe("User email");
-
-      // Verify array item schema
-      expect(jsonSchema.properties.items.type).toBe("array");
-      expect(jsonSchema.properties.items.items.properties).toHaveProperty("id");
-      expect(jsonSchema.properties.items.items.properties).toHaveProperty("quantity");
-    }
+    // Verify nested user properties (indented)
+    expect(instruction).toContain("  - name (string) [required]: User name");
+    expect(instruction).toContain("  - email (string) [required]: User email");
+    expect(instruction).toContain("  - age (number): User age");
   });
 
   it("throws error when using z.unknown() in parameter schema", () => {
@@ -181,7 +131,7 @@ describe("BaseGadget", () => {
 });
 
 describe("BaseGadget examples", () => {
-  it("renders single example with comment and output in JSON format", () => {
+  it("renders single example with comment and output in block format", () => {
     class ExampleGadget extends Gadget({
       description: "Test gadget with example",
       schema: z.object({
@@ -195,35 +145,15 @@ describe("BaseGadget examples", () => {
     }
 
     const gadget = new ExampleGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("Examples:");
     expect(instruction).toContain("# Basic usage");
     expect(instruction).toContain("Input:");
-    expect(instruction).toContain('"value": 42');
+    expect(instruction).toContain("!!!ARG:value");
+    expect(instruction).toContain("42");
     expect(instruction).toContain("Output:");
     expect(instruction).toContain("Result: 42");
-  });
-
-  it("renders single example in YAML format", () => {
-    class YamlExampleGadget extends Gadget({
-      description: "Test",
-      schema: z.object({ name: z.string() }),
-      examples: [{ params: { name: "test" }, output: "hello", comment: "YAML example" }],
-    }) {
-      execute(): string {
-        return "done";
-      }
-    }
-
-    const gadget = new YamlExampleGadget();
-    const instruction = gadget.getInstruction("yaml");
-
-    expect(instruction).toContain("Examples:");
-    expect(instruction).toContain("# YAML example");
-    expect(instruction).toContain("name: test");
-    expect(instruction).toContain("Output:");
-    expect(instruction).toContain("hello");
   });
 
   it("renders multiple examples with blank line separation", () => {
@@ -241,12 +171,12 @@ describe("BaseGadget examples", () => {
     }
 
     const gadget = new MultiExampleGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("# First example");
     expect(instruction).toContain("# Second example");
     // Verify blank line between examples (multiple newlines)
-    expect(instruction).toMatch(/first"[\s\S]*?\n\n# Second/);
+    expect(instruction).toMatch(/first[\s\S]*?\n\n# Second/);
   });
 
   it("omits Examples section when no examples provided", () => {
@@ -260,7 +190,7 @@ describe("BaseGadget examples", () => {
     }
 
     const gadget = new NoExamplesGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
     expect(instruction).not.toContain("Examples:");
   });
@@ -277,7 +207,7 @@ describe("BaseGadget examples", () => {
     }
 
     const gadget = new EmptyExamplesGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
     expect(instruction).not.toContain("Examples:");
   });
@@ -294,7 +224,7 @@ describe("BaseGadget examples", () => {
     }
 
     const gadget = new NoOutputGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("Examples:");
     expect(instruction).toContain("# Just input");
@@ -314,70 +244,21 @@ describe("BaseGadget examples", () => {
     }
 
     const gadget = new NoCommentGadget();
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("Examples:");
     expect(instruction).toContain("Input:");
-    expect(instruction).toContain('"x": 5');
+    expect(instruction).toContain("!!!ARG:x");
+    expect(instruction).toContain("5");
     expect(instruction).toContain("Output:");
     expect(instruction).toContain("five");
     // Should not have a # line since no comment
     expect(instruction).not.toMatch(/Examples:\n#/);
   });
 
-  it("renders TOML examples with proper inline table syntax for arrays of objects", () => {
-    // This test ensures we use TOML syntax { key = value } NOT JSON syntax {"key": value}
-    // The LLM copies examples from the prompt, so incorrect syntax here causes parse errors
-    class TomlArrayGadget extends Gadget({
-      description: "Test TOML array of objects",
-      schema: z.object({
-        patterns: z.array(
-          z.object({
-            regex: z.string(),
-            include: z.boolean(),
-          }),
-        ),
-      }),
-      examples: [
-        {
-          params: {
-            patterns: [
-              { regex: "error", include: true },
-              { regex: "debug", include: false },
-            ],
-          },
-          comment: "Filter patterns",
-        },
-      ],
-    }) {
-      execute(): string {
-        return "done";
-      }
-    }
-
-    const gadget = new TomlArrayGadget();
-    const instruction = gadget.getInstruction("toml");
-
-    // Extract the examples section only (schema uses JSON syntax which is fine)
-    const examplesSection = instruction.split("Examples:")[1] || "";
-
-    // Verify TOML syntax is used in examples (key = value), NOT JSON syntax ("key": value)
-    expect(examplesSection).toContain("patterns = [");
-    expect(examplesSection).toContain("regex = ");
-    expect(examplesSection).toContain("include = ");
-
-    // Verify JSON syntax is NOT used in examples
-    expect(examplesSection).not.toContain('"regex":');
-    expect(examplesSection).not.toContain('"include":');
-
-    // Verify the full pattern looks correct
-    expect(examplesSection).toMatch(/\{ regex = "error", include = true \}/);
-    expect(examplesSection).toMatch(/\{ regex = "debug", include = false \}/);
-  });
-
-  it("renders TOML examples with nested objects using inline table syntax", () => {
-    class TomlNestedGadget extends Gadget({
-      description: "Test TOML nested objects",
+  it("renders block format examples with nested objects using JSON Pointer paths", () => {
+    class NestedGadget extends Gadget({
+      description: "Test nested objects",
       schema: z.object({
         config: z.object({
           name: z.string(),
@@ -397,14 +278,141 @@ describe("BaseGadget examples", () => {
       }
     }
 
-    const gadget = new TomlNestedGadget();
-    const instruction = gadget.getInstruction("toml");
+    const gadget = new NestedGadget();
+    const instruction = gadget.getInstruction();
 
-    // Extract the examples section only (schema uses JSON syntax which is fine)
-    const examplesSection = instruction.split("Examples:")[1] || "";
+    // Verify block format with nested paths
+    expect(instruction).toContain("Examples:");
+    expect(instruction).toContain("!!!ARG:config/name");
+    expect(instruction).toContain("test");
+    expect(instruction).toContain("!!!ARG:config/enabled");
+    expect(instruction).toContain("true");
+  });
 
-    // Verify TOML inline table syntax in examples
-    expect(examplesSection).toContain("config = { name = ");
-    expect(examplesSection).not.toContain('"name":');
+  it("renders block format examples with arrays using numeric indices", () => {
+    class ArrayGadget extends Gadget({
+      description: "Test arrays",
+      schema: z.object({
+        items: z.array(z.string()),
+      }),
+      examples: [
+        {
+          params: {
+            items: ["first", "second"],
+          },
+          comment: "Array items",
+        },
+      ],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new ArrayGadget();
+    const instruction = gadget.getInstruction();
+
+    // Verify block format with array indices
+    expect(instruction).toContain("Examples:");
+    expect(instruction).toContain("!!!ARG:items/0");
+    expect(instruction).toContain("first");
+    expect(instruction).toContain("!!!ARG:items/1");
+    expect(instruction).toContain("second");
+  });
+});
+
+describe("BaseGadget examples with custom argPrefix", () => {
+  it("uses custom argPrefix when provided to getInstruction", () => {
+    class CustomPrefixGadget extends Gadget({
+      description: "Test gadget with example",
+      schema: z.object({
+        value: z.number(),
+      }),
+      examples: [{ params: { value: 42 }, output: "Result: 42", comment: "Basic usage" }],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new CustomPrefixGadget();
+    const instruction = gadget.getInstruction("@param:");
+
+    expect(instruction).toContain("@param:value");
+    expect(instruction).not.toContain("!!!ARG:");
+  });
+
+  it("uses custom argPrefix for nested objects", () => {
+    class NestedGadget extends Gadget({
+      description: "Test nested objects",
+      schema: z.object({
+        config: z.object({
+          name: z.string(),
+          enabled: z.boolean(),
+        }),
+      }),
+      examples: [
+        {
+          params: {
+            config: { name: "test", enabled: true },
+          },
+        },
+      ],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new NestedGadget();
+    const instruction = gadget.getInstruction("<<<GADGET_ARG>>>:");
+
+    expect(instruction).toContain("<<<GADGET_ARG>>>:config/name");
+    expect(instruction).toContain("<<<GADGET_ARG>>>:config/enabled");
+    expect(instruction).not.toContain("!!!ARG:");
+  });
+
+  it("uses custom argPrefix for arrays", () => {
+    class ArrayGadget extends Gadget({
+      description: "Test arrays",
+      schema: z.object({
+        items: z.array(z.string()),
+      }),
+      examples: [
+        {
+          params: {
+            items: ["first", "second"],
+          },
+        },
+      ],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new ArrayGadget();
+    const instruction = gadget.getInstruction("$ARG$");
+
+    expect(instruction).toContain("$ARG$items/0");
+    expect(instruction).toContain("$ARG$items/1");
+    expect(instruction).not.toContain("!!!ARG:");
+  });
+
+  it("uses default prefix when argPrefix is not provided", () => {
+    class DefaultGadget extends Gadget({
+      description: "Test",
+      schema: z.object({ x: z.number() }),
+      examples: [{ params: { x: 1 } }],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new DefaultGadget();
+    const instruction = gadget.getInstruction();
+
+    expect(instruction).toContain("!!!ARG:x");
   });
 });

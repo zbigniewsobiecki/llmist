@@ -11,6 +11,7 @@ import type { AgentConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { loadGadgets } from "./gadgets.js";
+import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
   executeAction,
@@ -172,6 +173,11 @@ export async function executeAgent(
   let usage: TokenUsage | undefined;
   let iterations = 0;
 
+  // Resolve LLM debug log directories (if enabled)
+  const llmRequestsDir = resolveLogDir(options.logLlmRequests, "requests");
+  const llmResponsesDir = resolveLogDir(options.logLlmResponses, "responses");
+  let llmCallCounter = 0;
+
   // Count tokens accurately using provider-specific methods
   const countMessagesTokens = async (model: string, messages: LLMMessage[]): Promise<number> => {
     try {
@@ -215,6 +221,8 @@ export async function executeAgent(
         // onLLMCallStart: Start progress indicator for each LLM call
         // This showcases how to react to agent lifecycle events
         onLLMCallStart: async (context) => {
+          llmCallCounter++;
+
           // Count input tokens accurately using provider-specific methods
           // This ensures we never show ~ for input tokens
           const inputTokens = await countMessagesTokens(
@@ -224,6 +232,13 @@ export async function executeAgent(
           progress.startCall(context.options.model, inputTokens);
           // Mark input tokens as accurate (not estimated)
           progress.setInputTokens(inputTokens, false);
+
+          // Write LLM request to debug log if enabled
+          if (llmRequestsDir) {
+            const filename = `${Date.now()}_call_${llmCallCounter}.request.txt`;
+            const content = formatLlmRequest(context.options.messages);
+            await writeLogFile(llmRequestsDir, filename, content);
+          }
         },
         // onStreamChunk: Real-time updates as LLM generates tokens
         // This enables responsive UIs that show progress during generation
@@ -310,6 +325,12 @@ export async function executeAgent(
               env.stderr.write(`${summary}\n`);
             }
           }
+
+          // Write LLM response to debug log if enabled
+          if (llmResponsesDir) {
+            const filename = `${Date.now()}_call_${llmCallCounter}.response.txt`;
+            await writeLogFile(llmResponsesDir, filename, context.rawResponse);
+          }
         },
       },
 
@@ -387,15 +408,15 @@ export async function executeAgent(
     builder.withGadgets(...gadgets);
   }
 
-  // Set the parameter format for gadget invocations
-  builder.withParameterFormat(options.parameterFormat);
-
   // Set custom gadget markers if configured, otherwise use library defaults
   if (options.gadgetStartPrefix) {
     builder.withGadgetStartPrefix(options.gadgetStartPrefix);
   }
   if (options.gadgetEndPrefix) {
     builder.withGadgetEndPrefix(options.gadgetEndPrefix);
+  }
+  if (options.gadgetArgPrefix) {
+    builder.withGadgetArgPrefix(options.gadgetArgPrefix);
   }
 
   // Inject synthetic heredoc example for in-context learning
@@ -439,13 +460,25 @@ export async function executeAgent(
   // - Real-time streaming UIs
   // - Progress indicators during tool execution
   // - Separation of business logic (agent) from presentation (UI)
+
+  // Buffer for accumulating text chunks - markdown rendering requires complete content
+  let textBuffer = "";
+  const flushTextBuffer = () => {
+    if (textBuffer) {
+      const rendered = renderMarkdown(textBuffer);
+      printer.write(rendered);
+      textBuffer = "";
+    }
+  };
+
   for await (const event of agent.run()) {
     if (event.type === "text") {
-      // Stream LLM output to stdout
-      // Pause progress indicator to avoid stderr/stdout interleaving
+      // Accumulate text chunks - we'll render markdown when complete
       progress.pause();
-      printer.write(event.content);
+      textBuffer += event.content;
     } else if (event.type === "gadget_result") {
+      // Flush any accumulated text before showing gadget result
+      flushTextBuffer();
       // Show gadget execution feedback on stderr
       progress.pause();
 
@@ -465,6 +498,9 @@ export async function executeAgent(
     }
     // Note: human_input_required handled by callback (see createHumanInputHandler)
   }
+
+  // Flush any remaining buffered text with markdown rendering
+  flushTextBuffer();
 
   progress.complete();
   printer.ensureNewline();

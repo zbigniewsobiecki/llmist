@@ -42,7 +42,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Calculator",
             parameters: { a: 5, b: 3 },
-            parametersYaml: "a: 5\nb: 3",
+            parametersRaw: "a: 5\nb: 3",
           },
         },
       ];
@@ -56,7 +56,7 @@ describe("Event Handlers", () => {
       expect(onGadgetCall).toHaveBeenCalledWith({
         gadgetName: "Calculator",
         parameters: { a: 5, b: 3 },
-        parametersYaml: "a: 5\nb: 3",
+        parametersRaw: "a: 5\nb: 3",
       });
     });
 
@@ -159,7 +159,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Math",
             parameters: { x: 10 },
-            parametersYaml: "x: 10",
+            parametersRaw: "x: 10",
           },
         },
         {
@@ -213,7 +213,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Test",
             parameters: {},
-            parametersYaml: "",
+            parametersRaw: "",
           },
         },
       ];
@@ -261,7 +261,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Math",
             parameters: { a: 1, b: 2 },
-            parametersYaml: "a: 1\nb: 2",
+            parametersRaw: "a: 1\nb: 2",
           },
         },
         {
@@ -269,7 +269,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "String",
             parameters: { text: "hello" },
-            parametersYaml: "text: hello",
+            parametersRaw: "text: hello",
           },
         },
       ];
@@ -330,7 +330,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Test",
             parameters: { x: 1 },
-            parametersYaml: "x: 1",
+            parametersRaw: "x: 1",
           },
         },
         {
@@ -363,7 +363,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Test",
             parameters: {},
-            parametersYaml: "",
+            parametersRaw: "",
           },
         },
         {
@@ -413,7 +413,7 @@ describe("Event Handlers", () => {
           type: "gadget_call",
           call: {
             gadgetName: "NoParams",
-            parametersYaml: "",
+            parametersRaw: "",
           },
         },
       ];
@@ -446,7 +446,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Test",
             parameters: {},
-            parametersYaml: "",
+            parametersRaw: "",
           },
         },
         {
@@ -472,7 +472,7 @@ describe("Event Handlers", () => {
           call: {
             gadgetName: "Test",
             parameters: {},
-            parametersYaml: "",
+            parametersRaw: "",
           },
         },
       ];

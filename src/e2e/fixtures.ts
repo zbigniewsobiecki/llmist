@@ -165,11 +165,6 @@ export class TestAgentBuilder {
     return this;
   }
 
-  withParameterFormat(format: "yaml" | "json"): this {
-    // Note: parameterFormat is not directly supported in AgentBuilder
-    // This would need to be added to AgentBuilder if needed
-    return this;
-  }
 
   build(): Agent {
     if (!this.userPrompt) {
@@ -194,7 +189,6 @@ export function createAgent(fixture: TestFixture, userPrompt: string, options: a
     .withModel(options.model || "openai:gpt-5-nano")
     .withMaxIterations(options.maxIterations || 10)
     .withTextOnlyHandler(options.textOnlyHandler || "terminate")
-    .withParameterFormat(options.parameterFormat || "yaml")
     .build();
 }
 

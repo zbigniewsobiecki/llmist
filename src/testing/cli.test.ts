@@ -182,7 +182,8 @@ describe("runCLI", () => {
 
     await runCLI({ env, config: {} });
 
-    expect(stdout.read()).toBe("Agent response\n");
+    // Content is rendered with markdown (includes ANSI codes)
+    expect(stdout.read()).toContain("Agent response");
     // New compact format: #1 | ↑ 1 | ↓ 2 | stop
     expect(stderr.read()).toContain("#1");
     expect(stderr.read()).toContain("↑");
@@ -209,8 +210,8 @@ describe("runCLI", () => {
 
     await runCLI({ env, config: {} });
 
-    // Agent output goes to stdout
-    expect(stdout.read()).toBe("Agent completed task without using any tools.\n");
+    // Agent output goes to stdout (rendered with markdown, includes ANSI codes)
+    expect(stdout.read()).toContain("Agent completed task without using any tools.");
     // Summary goes to stderr
     expect(stderr.read()).toContain("stop");
   });
@@ -307,7 +308,8 @@ describe("executeAction", () => {
       throw new Error("Test error");
     }, env);
 
-    expect(stderr.read()).toContain("Error: Test error");
+    // Error output may include ANSI codes which break substring matching
+    expect(stderr.read()).toContain("Test error");
     expect(exitCode).toBe(1);
   });
 
@@ -319,7 +321,8 @@ describe("executeAction", () => {
       throw "string error";
     }, env);
 
-    expect(stderr.read()).toContain("Error: string error");
+    // Error output may include ANSI codes which break substring matching
+    expect(stderr.read()).toContain("string error");
   });
 });
 

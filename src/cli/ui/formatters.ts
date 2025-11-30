@@ -105,7 +105,16 @@ function ensureMarkedConfigured(): void {
  */
 export function renderMarkdown(text: string): string {
   ensureMarkedConfigured();
-  const rendered = marked.parse(text) as string;
+  let rendered = marked.parse(text) as string;
+
+  // Workaround for marked-terminal bug: inline markdown in list items
+  // is not processed. Post-process to handle **bold** and *italic*.
+  // See: https://github.com/mikaelbr/marked-terminal/issues
+  rendered = rendered
+    .replace(/\*\*(.+?)\*\*/g, (_, content) => chalk.bold(content))
+    // Italic: require non-space after * to avoid matching bullet points (  * )
+    .replace(/(?<!\*)\*(\S[^*]*)\*(?!\*)/g, (_, content) => chalk.italic(content));
+
   // Remove trailing newlines that marked adds
   return rendered.trimEnd();
 }

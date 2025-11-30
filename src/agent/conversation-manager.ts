@@ -4,18 +4,18 @@
  */
 
 import { type LLMMessage, LLMMessageBuilder } from "../core/messages.js";
-import type { ParameterFormat } from "../gadgets/parser.js";
 import type { IConversationManager } from "./interfaces.js";
 
 /**
  * Options for ConversationManager constructor.
  */
 export interface ConversationManagerOptions {
-  parameterFormat?: ParameterFormat;
   /** Custom gadget start marker prefix */
   startPrefix?: string;
   /** Custom gadget end marker prefix */
   endPrefix?: string;
+  /** Custom argument prefix for block format */
+  argPrefix?: string;
 }
 
 /**
@@ -26,7 +26,6 @@ export class ConversationManager implements IConversationManager {
   private readonly baseMessages: LLMMessage[];
   private readonly initialMessages: LLMMessage[];
   private readonly historyBuilder: LLMMessageBuilder;
-  private readonly parameterFormat: ParameterFormat;
 
   constructor(
     baseMessages: LLMMessage[],
@@ -35,12 +34,11 @@ export class ConversationManager implements IConversationManager {
   ) {
     this.baseMessages = baseMessages;
     this.initialMessages = initialMessages;
-    this.parameterFormat = options.parameterFormat ?? "json";
     this.historyBuilder = new LLMMessageBuilder();
 
     // Apply custom prefixes if provided (must match system prompt markers)
     if (options.startPrefix && options.endPrefix) {
-      this.historyBuilder.withPrefixes(options.startPrefix, options.endPrefix);
+      this.historyBuilder.withPrefixes(options.startPrefix, options.endPrefix, options.argPrefix);
     }
   }
 
@@ -53,7 +51,7 @@ export class ConversationManager implements IConversationManager {
   }
 
   addGadgetCall(gadgetName: string, parameters: Record<string, unknown>, result: string): void {
-    this.historyBuilder.addGadgetCall(gadgetName, parameters, result, this.parameterFormat);
+    this.historyBuilder.addGadgetCall(gadgetName, parameters, result);
   }
 
   getMessages(): LLMMessage[] {

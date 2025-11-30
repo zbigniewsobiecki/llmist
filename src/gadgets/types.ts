@@ -43,7 +43,7 @@ export interface GadgetExecutionResult {
 export interface ParsedGadgetCall {
   gadgetName: string;
   invocationId: string; // Auto-generated internally if not provided
-  parametersYaml: string;
+  parametersRaw: string;
   parameters?: Record<string, unknown>;
   parseError?: string;
 }

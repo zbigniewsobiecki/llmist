@@ -151,7 +151,7 @@ describe("createGadget", () => {
       execute: ({ city, country }) => `${city}, ${country}`,
     });
 
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
     expect(instruction).toContain("city");
     expect(instruction).toContain("country");
   });
@@ -166,7 +166,7 @@ describe("createGadget", () => {
       execute: ({ location }) => `Weather in ${location}`,
     });
 
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
     expect(instruction).toContain("Gets weather information");
     expect(instruction).toContain("location");
   });
@@ -187,10 +187,11 @@ describe("createGadget", () => {
     expect(gadget.examples![0].output).toBe("8");
     expect(gadget.examples![0].comment).toBe("Addition");
 
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
     expect(instruction).toContain("Examples:");
     expect(instruction).toContain("# Addition");
-    expect(instruction).toContain('"a": 5');
+    expect(instruction).toContain("!!!ARG:a");
+    expect(instruction).toContain("5");
     expect(instruction).toContain("Output:");
     expect(instruction).toContain("8");
   });
@@ -212,7 +213,7 @@ describe("createGadget", () => {
 
     expect(gadget.examples).toHaveLength(2);
 
-    const instruction = gadget.getInstruction("json");
+    const instruction = gadget.getInstruction();
     expect(instruction).toContain("# Addition");
     expect(instruction).toContain("# Subtraction");
   });

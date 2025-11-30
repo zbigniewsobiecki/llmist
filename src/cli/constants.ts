@@ -1,5 +1,3 @@
-import type { ParameterFormat } from "../gadgets/parser.js";
-
 /** CLI program name */
 export const CLI_NAME = "llmist";
 
@@ -20,9 +18,6 @@ export type LogLevelName = (typeof LOG_LEVELS)[number];
 /** Default model used when --model is not specified */
 export const DEFAULT_MODEL = "openai:gpt-5-nano";
 
-/** Default parameter format for gadgets */
-export const DEFAULT_PARAMETER_FORMAT: ParameterFormat = "toml";
-
 /** Command-line option flags */
 export const OPTION_FLAGS = {
   model: "-m, --model <identifier>",
@@ -31,10 +26,11 @@ export const OPTION_FLAGS = {
   maxTokens: "--max-tokens <count>",
   maxIterations: "-i, --max-iterations <count>",
   gadgetModule: "-g, --gadget <module>",
-  parameterFormat: "--parameter-format <format>",
   logLevel: "--log-level <level>",
   logFile: "--log-file <path>",
   logReset: "--log-reset",
+  logLlmRequests: "--log-llm-requests [dir]",
+  logLlmResponses: "--log-llm-responses [dir]",
   noBuiltins: "--no-builtins",
   noBuiltinInteraction: "--no-builtin-interaction",
   quiet: "-q, --quiet",
@@ -49,10 +45,11 @@ export const OPTION_DESCRIPTIONS = {
   maxIterations: "Maximum number of agent loop iterations before exiting.",
   gadgetModule:
     "Path or module specifier for a gadget export. Repeat to register multiple gadgets.",
-  parameterFormat: "Format for gadget parameter schemas: 'json', 'yaml', 'toml', or 'auto'.",
   logLevel: "Log level: silly, trace, debug, info, warn, error, fatal.",
   logFile: "Path to log file. When set, logs are written to file instead of stderr.",
   logReset: "Reset (truncate) the log file at session start instead of appending.",
+  logLlmRequests: "Save raw LLM requests as plain text. Optional dir, defaults to ~/.llmist/logs/requests/",
+  logLlmResponses: "Save raw LLM responses as plain text. Optional dir, defaults to ~/.llmist/logs/responses/",
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
   noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
   quiet: "Suppress all output except content (text and TellUser messages).",
