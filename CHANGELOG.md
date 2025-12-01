@@ -1,3 +1,8 @@
+## 1.2.0 (2025-12-01)
+
+* Merge pull request #115 from zbigniewsobiecki/dev ([fff0bf1](https://github.com/zbigniewsobiecki/llmist/commit/fff0bf1)), closes [#115](https://github.com/zbigniewsobiecki/llmist/issues/115)
+* feat(gadgets): add schema-aware type coercion for block parameters (#114) ([0b62ddf](https://github.com/zbigniewsobiecki/llmist/commit/0b62ddf)), closes [#114](https://github.com/zbigniewsobiecki/llmist/issues/114)
+
 ## 1.1.0 (2025-11-30)
 
 * Merge pull request #113 from zbigniewsobiecki/dev ([8e9d0a3](https://github.com/zbigniewsobiecki/llmist/commit/8e9d0a3)), closes [#113](https://github.com/zbigniewsobiecki/llmist/issues/113)
