@@ -50,8 +50,8 @@ function formatParamsAsBlock(
 
 /**
  * Format JSON Schema as plain text description.
- * This avoids format confusion by presenting parameters in a neutral,
- * human-readable format that works equally well for JSON, YAML, TOML, or XML.
+ * This presents parameters in a neutral, human-readable format
+ * that complements the block format used for gadget invocation.
  */
 function formatSchemaAsPlainText(schema: Record<string, unknown>, indent = ""): string {
   const lines: string[] = [];

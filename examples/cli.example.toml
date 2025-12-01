@@ -15,6 +15,7 @@
 # - Use Eta syntax: <%~ include("@name") %> to include, <%= it.var %> for variables
 # - Prompts can include other prompts for composition
 # - Access environment variables with <%= it.env.VAR_NAME %>
+# - Access current date with <%= it.date %> (ISO format: YYYY-MM-DD)
 # - Templates are resolved at config load time
 
 #──────────────────────────────────────────────────────────────────────────────
@@ -100,6 +101,12 @@ Focus on:
 - Secure coding practices
 - Authentication and authorization patterns
 - Data protection and encryption
+"""
+
+# Using the built-in date variable (always available, no setup needed)
+date-aware = """
+Today's date is <%= it.date %>.
+Use this for time-sensitive responses.
 """
 
 # Using environment variables (must be set or config load will fail)

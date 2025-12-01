@@ -121,6 +121,7 @@
 import type { ILogObj, Logger } from "tslog";
 import type { LLMMessage } from "../core/messages.js";
 import type { LLMGenerationOptions, TokenUsage } from "../core/options.js";
+import type { CompactionEvent, CompactionStats } from "./compaction/config.js";
 
 // ============================================================================
 // OBSERVERS (Read-Only, Side-Effects Only)
@@ -237,6 +238,24 @@ export interface Observers {
 
   /** Called for each stream chunk */
   onStreamChunk?: (context: ObserveChunkContext) => void | Promise<void>;
+
+  /** Called when context compaction occurs */
+  onCompaction?: (context: ObserveCompactionContext) => void | Promise<void>;
+}
+
+/**
+ * Context provided when context compaction occurs.
+ * Read-only observation point.
+ */
+export interface ObserveCompactionContext {
+  /** Agent iteration when compaction occurred */
+  iteration: number;
+  /** Details of the compaction event */
+  event: CompactionEvent;
+  /** Cumulative compaction statistics */
+  stats: CompactionStats;
+  /** Logger instance */
+  logger: Logger<ILogObj>;
 }
 
 // ============================================================================
@@ -356,6 +375,8 @@ export interface Interceptors {
  */
 export interface LLMCallControllerContext {
   iteration: number;
+  /** Maximum iterations configured for the agent */
+  maxIterations: number;
   options: LLMGenerationOptions;
   logger: Logger<ILogObj>;
 }
@@ -372,12 +393,16 @@ export type BeforeLLMCallAction =
  */
 export interface AfterLLMCallControllerContext {
   iteration: number;
+  /** Maximum iterations configured for the agent */
+  maxIterations: number;
   options: Readonly<LLMGenerationOptions>;
   finishReason: string | null;
   /** Token usage including cached token counts when available */
   usage?: TokenUsage;
   /** The final message (after interceptors) that will be added to history */
   finalMessage: string;
+  /** Number of gadget calls in the current response */
+  gadgetCallCount: number;
   logger: Logger<ILogObj>;
 }
 

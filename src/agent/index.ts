@@ -47,3 +47,36 @@ export {
 // Gadget output limiting
 export type { StoredOutput } from "./gadget-output-store.js";
 export { GadgetOutputStore } from "./gadget-output-store.js";
+
+// Context compaction
+export {
+  type CompactionConfig,
+  type CompactionEvent,
+  type CompactionStats,
+  type ResolvedCompactionConfig,
+  DEFAULT_COMPACTION_CONFIG,
+  DEFAULT_SUMMARIZATION_PROMPT,
+} from "./compaction/index.js";
+
+export {
+  type CompactionContext,
+  type CompactionResult,
+  type CompactionStrategy,
+  type MessageTurn,
+  CompactionManager,
+  HybridStrategy,
+  SlidingWindowStrategy,
+  SummarizationStrategy,
+} from "./compaction/index.js";
+
+export type { ObserveCompactionContext } from "./hooks.js";
+
+// LLM Assistance Hints
+export {
+  createHints,
+  iterationProgressHint,
+  parallelGadgetHint,
+  type HintsConfig,
+  type IterationHintOptions,
+  type ParallelGadgetHintOptions,
+} from "./hints.js";

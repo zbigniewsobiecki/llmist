@@ -369,17 +369,23 @@ When a gadget exceeds the limit, the LLM sees:
 
 The `GadgetOutputViewer` gadget is automatically registered when output limiting is enabled. It provides grep-like filtering:
 
-```typescript
-// The LLM can call GadgetOutputViewer to browse stored output
-<gadget:GadgetOutputViewer>
-id = "Search_d34db33f"
-[[patterns]]
-regex = "TODO.*HIGH"
-include = true
-before = 2
-after = 2
-limit = "100-"
-</gadget>
+The LLM can call GadgetOutputViewer to browse stored output:
+
+```
+!!!GADGET_START:GadgetOutputViewer
+!!!ARG:id
+Search_d34db33f
+!!!ARG:patterns/0/regex
+TODO.*HIGH
+!!!ARG:patterns/0/include
+true
+!!!ARG:patterns/0/before
+2
+!!!ARG:patterns/0/after
+2
+!!!ARG:limit
+100-
+!!!GADGET_END
 ```
 
 **Parameters:**

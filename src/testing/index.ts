@@ -61,3 +61,46 @@ export type {
   MockResponse,
   MockStats,
 } from "./mock-types.js";
+
+// Stream helpers
+export {
+  collectStream,
+  collectStreamText,
+  createEmptyStream,
+  createErrorStream,
+  createTestStream,
+  createTextStream,
+  getStreamFinalChunk,
+} from "./stream-helpers.js";
+
+// Conversation fixtures
+export {
+  createAssistantMessage,
+  createConversation,
+  createConversationWithGadgets,
+  createLargeConversation,
+  createMinimalConversation,
+  createSystemMessage,
+  createUserMessage,
+  estimateTokens,
+} from "./conversation-fixtures.js";
+
+// Mock conversation manager
+export {
+  createMockConversationManager,
+  MockConversationManager,
+} from "./mock-conversation.js";
+
+// CLI helpers
+export {
+  collectOutput,
+  createMockPrompt,
+  createMockReadable,
+  createMockWritable,
+  createTestEnvironment,
+  getBufferedOutput,
+  MockPromptRecorder,
+  type TestEnvironment,
+  type TestEnvironmentOptions,
+  waitFor,
+} from "./cli-helpers.js";
