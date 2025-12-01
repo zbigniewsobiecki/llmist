@@ -57,7 +57,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Run unit tests with coverage
-        run: bun test src/testing src/gadgets src/providers src/core --coverage --coverage-reporter=lcov
+        run: bun test src/agent src/cli src/core src/gadgets src/logging src/providers src/testing --coverage --coverage-reporter=lcov
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
