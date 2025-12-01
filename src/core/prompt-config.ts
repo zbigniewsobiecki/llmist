@@ -22,6 +22,8 @@ export interface HintContext {
   iteration: number;
   /** Maximum iterations allowed */
   maxIterations: number;
+  /** Iterations remaining (maxIterations - iteration) */
+  remaining: number;
   /** Number of gadget calls in the current response */
   gadgetCallCount?: number;
 }
@@ -205,9 +207,8 @@ export function resolveHintTemplate(
   }
 
   // Replace placeholders in string template
-  const remaining = context.maxIterations - context.iteration;
   return resolved
     .replace(/\{iteration\}/g, String(context.iteration))
     .replace(/\{maxIterations\}/g, String(context.maxIterations))
-    .replace(/\{remaining\}/g, String(remaining));
+    .replace(/\{remaining\}/g, String(context.remaining));
 }

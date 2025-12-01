@@ -169,10 +169,12 @@ export function iterationProgressHint(options?: IterationHintOptions): AgentHook
           return { action: "proceed" };
         }
 
-        // Build hint context
+        // Build hint context with all fields populated
+        const remaining = maxIterations - iteration;
         const hintContext: HintContext = {
           iteration,
           maxIterations,
+          remaining,
         };
 
         // Resolve template
@@ -202,6 +204,12 @@ export function iterationProgressHint(options?: IterationHintOptions): AgentHook
         if (lastUserIndex >= 0) {
           // Insert hint after the last user message
           messages.splice(lastUserIndex + 1, 0, {
+            role: "user",
+            content: `[System Hint] ${hint}`,
+          });
+        } else {
+          // No user messages found - append hint at the end
+          messages.push({
             role: "user",
             content: `[System Hint] ${hint}`,
           });

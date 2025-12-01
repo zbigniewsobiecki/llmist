@@ -184,6 +184,25 @@ describe("iterationProgressHint", () => {
         .modifiedOptions.messages;
       expect(messages.some((m) => m.content.includes("Step 5/10"))).toBe(true);
     });
+
+    it("provides ctx.remaining in function templates", async () => {
+      const hooks = iterationProgressHint({
+        template: (ctx) => `${ctx.remaining} iterations left out of ${ctx.maxIterations}`,
+      });
+      const controller = hooks.controllers?.beforeLLMCall;
+
+      // iteration 2 (0-indexed), maxIterations 10 → remaining = 10 - 3 = 7
+      const ctx = createBeforeLLMCallContext(2, 10, [
+        { role: "user", content: "Hello" },
+      ]);
+      const action = await controller!(ctx);
+
+      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
+        .modifiedOptions.messages;
+      expect(messages.some((m) => m.content.includes("7 iterations left out of 10"))).toBe(
+        true,
+      );
+    });
   });
 
   it("inserts hint after the last user message", async () => {
@@ -215,6 +234,29 @@ describe("iterationProgressHint", () => {
 
     // Hint should be right after last user message
     expect(hintIndex).toBe(lastUserIndex + 1);
+  });
+
+  it("appends hint at end when no user messages exist", async () => {
+    const hooks = iterationProgressHint();
+    const controller = hooks.controllers?.beforeLLMCall;
+
+    // Messages with no user role
+    const ctx = createBeforeLLMCallContext(0, 10, [
+      { role: "system", content: "System prompt" },
+      { role: "assistant", content: "Previous response" },
+    ]);
+    const action = await controller!(ctx);
+
+    expect(action.action).toBe("proceed");
+    expect(action).toHaveProperty("modifiedOptions");
+
+    const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
+      .modifiedOptions.messages;
+
+    // Hint should be appended at the end
+    expect(messages.length).toBe(3);
+    expect(messages[2].content).toContain("[System Hint]");
+    expect(messages[2].content).toContain("Iteration 1/10");
   });
 });
 
