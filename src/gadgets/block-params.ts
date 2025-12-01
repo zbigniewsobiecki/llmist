@@ -1,8 +1,12 @@
+import type { ZodTypeAny } from "zod";
 import { GADGET_ARG_PREFIX } from "../core/constants.js";
+import { SchemaIntrospector, type TypeHint } from "./schema-introspector.js";
 
 export interface BlockParseOptions {
   /** Prefix that declares an argument. Default: "!!!ARG:" */
   argPrefix?: string;
+  /** Optional Zod schema for schema-aware type coercion */
+  schema?: ZodTypeAny;
 }
 
 /**
@@ -48,6 +52,11 @@ export function parseBlockParams(
   const result: Record<string, unknown> = {};
   const seenPointers = new Set<string>();
 
+  // Create schema introspector if schema is provided
+  const introspector = options?.schema
+    ? new SchemaIntrospector(options.schema)
+    : undefined;
+
   // Split content by arg prefix to get individual arg entries
   // First element will be empty or whitespace before first arg
   const parts = content.split(argPrefix);
@@ -65,7 +74,7 @@ export function parseBlockParams(
           throw new Error(`Duplicate pointer: ${pointer}`);
         }
         seenPointers.add(pointer);
-        setByPointer(result, pointer, "");
+        setByPointer(result, pointer, "", introspector);
       }
       continue;
     }
@@ -87,7 +96,7 @@ export function parseBlockParams(
     }
     seenPointers.add(pointer);
 
-    setByPointer(result, pointer, value);
+    setByPointer(result, pointer, value, introspector);
   }
 
   return result;
@@ -95,20 +104,63 @@ export function parseBlockParams(
 
 /**
  * Coerce a string value to its appropriate primitive type.
+ *
+ * When an `expectedType` hint is provided (from schema introspection), the coercion
+ * respects the schema's expected type:
+ * - 'string': Keep value as string, no coercion
+ * - 'number': Coerce to number if valid
+ * - 'boolean': Coerce to boolean if "true"/"false"
+ * - 'unknown': Use auto-coercion logic (backwards compatible)
+ *
+ * Without a type hint (undefined), uses auto-coercion:
  * - "true" / "false" → boolean
  * - Numeric strings → number
  * - Everything else stays string
  *
- * Only coerces single-line values to avoid accidentally converting
- * code or multiline content that happens to look like a number/boolean.
+ * Multiline values are never coerced (likely code/content).
+ *
+ * @param value - The string value to coerce
+ * @param expectedType - Optional type hint from schema introspection
+ * @returns Coerced value
  */
-function coerceValue(value: string): string | number | boolean {
+function coerceValue(
+  value: string,
+  expectedType?: TypeHint
+): string | number | boolean {
   // Don't coerce multiline values - they're likely code/content
   if (value.includes("\n")) {
     return value;
   }
 
   const trimmed = value.trim();
+
+  // If schema provides a type hint, respect it
+  if (expectedType === "string") {
+    // Keep as string - no coercion at all
+    return value;
+  }
+
+  if (expectedType === "boolean") {
+    // Only coerce recognized boolean strings
+    if (trimmed === "true") return true;
+    if (trimmed === "false") return false;
+    // Invalid boolean - keep as string for Zod to report error
+    return value;
+  }
+
+  if (expectedType === "number") {
+    // Attempt to coerce to number
+    const num = Number(trimmed);
+    if (!isNaN(num) && isFinite(num) && trimmed !== "") {
+      return num;
+    }
+    // Invalid number - keep as string for Zod to report error
+    return value;
+  }
+
+  // expectedType === 'unknown' or undefined: use auto-coercion logic
+  // This maintains backwards compatibility when no schema is provided
+  // or when schema introspection can't determine the type
 
   // Boolean coercion
   if (trimmed === "true") return true;
@@ -134,18 +186,20 @@ function coerceValue(value: string): string | number | boolean {
  * - Nested paths: "config/timeout" → { config: { timeout: value } }
  * - Array indices: "items/0" → { items: [value] }
  *
- * Values are automatically coerced to appropriate types (boolean, number)
- * for single-line values.
+ * Values are coerced based on the schema's expected type when an introspector
+ * is provided. Without a schema, falls back to auto-coercion (backwards compatible).
  *
  * @param obj - Target object to modify
  * @param pointer - JSON Pointer path without leading /
  * @param value - Value to set (string that may be coerced)
+ * @param introspector - Optional schema introspector for type-aware coercion
  * @throws Error if array index gaps detected
  */
 function setByPointer(
   obj: Record<string, unknown>,
   pointer: string,
-  value: string
+  value: string,
+  introspector?: SchemaIntrospector
 ): void {
   const segments = pointer.split("/");
   let current: Record<string, unknown> | unknown[] = obj;
@@ -181,8 +235,9 @@ function setByPointer(
   // Set the final value
   const lastSegment = segments[segments.length - 1];
 
-  // Coerce the value to appropriate type
-  const coercedValue = coerceValue(value);
+  // Get expected type from schema if available, then coerce accordingly
+  const expectedType = introspector?.getTypeAtPath(pointer);
+  const coercedValue = coerceValue(value, expectedType);
 
   if (Array.isArray(current)) {
     const index = parseInt(lastSegment, 10);

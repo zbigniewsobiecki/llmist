@@ -1,13 +1,17 @@
 import type { ILogObj, Logger } from "tslog";
+import { GADGET_ARG_PREFIX } from "../core/constants.js";
 import { createLogger } from "../logging/logger.js";
+import { parseBlockParams } from "./block-params.js";
 import { GadgetErrorFormatter, type ErrorFormatterOptions } from "./error-formatter.js";
 import { BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
+import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
 import type { GadgetExecutionResult, ParsedGadgetCall } from "./types.js";
 
 export class GadgetExecutor {
   private readonly logger: Logger<ILogObj>;
   private readonly errorFormatter: GadgetErrorFormatter;
+  private readonly argPrefix: string;
 
   constructor(
     private readonly registry: GadgetRegistry,
@@ -18,6 +22,7 @@ export class GadgetExecutor {
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetErrorFormatter(errorFormatterOptions);
+    this.argPrefix = errorFormatterOptions?.argPrefix ?? GADGET_ARG_PREFIX;
   }
 
   /**
@@ -76,8 +81,56 @@ export class GadgetExecutor {
         };
       }
 
+      // Re-parse parameters with schema for type-aware coercion (Approach B)
+      // This allows the parser to use the schema to determine correct types
+      // (e.g., keeping "1" as string when schema expects z.string())
+      // Only re-parse if:
+      // 1. The raw content is in block format (contains configured arg prefix)
+      // 2. Parameters weren't modified by an interceptor (compare with initial parse)
+      let schemaAwareParameters: Record<string, unknown> = rawParameters;
+      const hasBlockFormat = call.parametersRaw?.includes(this.argPrefix);
+      if (gadget.parameterSchema && hasBlockFormat) {
+        try {
+          const cleanedRaw = stripMarkdownFences(call.parametersRaw);
+
+          // First, parse without schema to get what initial parse would produce
+          const initialParse = parseBlockParams(cleanedRaw, { argPrefix: this.argPrefix });
+
+          // Check if parameters were modified by an interceptor
+          // by comparing current parameters with what initial parse produces
+          const parametersWereModified = !this.deepEquals(rawParameters, initialParse);
+
+          if (parametersWereModified) {
+            // Parameters were modified by an interceptor - keep the modifications
+            this.logger.debug("Parameters modified by interceptor, skipping re-parse", {
+              gadgetName: call.gadgetName,
+            });
+            schemaAwareParameters = rawParameters;
+          } else {
+            // Re-parse with schema for type-aware coercion
+            schemaAwareParameters = parseBlockParams(cleanedRaw, {
+              argPrefix: this.argPrefix,
+              schema: gadget.parameterSchema,
+            });
+            this.logger.debug("Re-parsed parameters with schema", {
+              gadgetName: call.gadgetName,
+              original: rawParameters,
+              schemaAware: schemaAwareParameters,
+            });
+          }
+        } catch (error) {
+          // If re-parsing fails, fall back to original parameters
+          // This shouldn't happen if initial parse succeeded, but be safe
+          this.logger.warn("Schema-aware re-parsing failed, using original parameters", {
+            gadgetName: call.gadgetName,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          schemaAwareParameters = rawParameters;
+        }
+      }
+
       if (gadget.parameterSchema) {
-        const validationResult = gadget.parameterSchema.safeParse(rawParameters);
+        const validationResult = gadget.parameterSchema.safeParse(schemaAwareParameters);
         if (!validationResult.success) {
           const validationError = this.errorFormatter.formatValidationError(
             call.gadgetName,
@@ -92,13 +145,16 @@ export class GadgetExecutor {
           return {
             gadgetName: call.gadgetName,
             invocationId: call.invocationId,
-            parameters: rawParameters,
+            parameters: schemaAwareParameters,
             error: validationError,
             executionTimeMs: Date.now() - startTime,
           };
         }
 
         validatedParameters = validationResult.data as Record<string, unknown>;
+      } else {
+        // No schema - use the schema-aware parameters (which are same as raw if no schema)
+        validatedParameters = schemaAwareParameters;
       }
 
       // Determine the timeout for this gadget
@@ -247,5 +303,34 @@ export class GadgetExecutor {
   // Execute multiple gadget calls in parallel
   async executeAll(calls: ParsedGadgetCall[]): Promise<GadgetExecutionResult[]> {
     return Promise.all(calls.map((call) => this.execute(call)));
+  }
+
+  /**
+   * Deep equality check for objects/arrays.
+   * Used to detect if parameters were modified by an interceptor.
+   */
+  private deepEquals(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a === null || b === null) return a === b;
+    if (typeof a !== typeof b) return false;
+
+    if (typeof a !== "object") return a === b;
+
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      return a.every((val, i) => this.deepEquals(val, b[i]));
+    }
+
+    const aObj = a as Record<string, unknown>;
+    const bObj = b as Record<string, unknown>;
+
+    const aKeys = Object.keys(aObj);
+    const bKeys = Object.keys(bObj);
+
+    if (aKeys.length !== bKeys.length) return false;
+
+    return aKeys.every((key) => this.deepEquals(aObj[key], bObj[key]));
   }
 }
