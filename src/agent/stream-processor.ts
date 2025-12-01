@@ -160,6 +160,7 @@ export class StreamProcessor {
       options.onHumanInputRequired,
       this.logger.getSubLogger({ name: "executor" }),
       options.defaultGadgetTimeoutMs,
+      { argPrefix: options.gadgetArgPrefix },
     );
   }
 
