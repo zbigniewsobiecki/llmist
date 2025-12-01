@@ -25,7 +25,10 @@ export interface ConversationManagerOptions {
 export class ConversationManager implements IConversationManager {
   private readonly baseMessages: LLMMessage[];
   private readonly initialMessages: LLMMessage[];
-  private readonly historyBuilder: LLMMessageBuilder;
+  private historyBuilder: LLMMessageBuilder;
+  private readonly startPrefix?: string;
+  private readonly endPrefix?: string;
+  private readonly argPrefix?: string;
 
   constructor(
     baseMessages: LLMMessage[],
@@ -35,6 +38,11 @@ export class ConversationManager implements IConversationManager {
     this.baseMessages = baseMessages;
     this.initialMessages = initialMessages;
     this.historyBuilder = new LLMMessageBuilder();
+
+    // Store prefixes for history replacement
+    this.startPrefix = options.startPrefix;
+    this.endPrefix = options.endPrefix;
+    this.argPrefix = options.argPrefix;
 
     // Apply custom prefixes if provided (must match system prompt markers)
     if (options.startPrefix && options.endPrefix) {
@@ -56,5 +64,31 @@ export class ConversationManager implements IConversationManager {
 
   getMessages(): LLMMessage[] {
     return [...this.baseMessages, ...this.initialMessages, ...this.historyBuilder.build()];
+  }
+
+  getHistoryMessages(): LLMMessage[] {
+    return this.historyBuilder.build();
+  }
+
+  getBaseMessages(): LLMMessage[] {
+    return [...this.baseMessages, ...this.initialMessages];
+  }
+
+  replaceHistory(newHistory: LLMMessage[]): void {
+    // Create a new builder with the same prefixes
+    this.historyBuilder = new LLMMessageBuilder();
+    if (this.startPrefix && this.endPrefix) {
+      this.historyBuilder.withPrefixes(this.startPrefix, this.endPrefix, this.argPrefix);
+    }
+
+    // Add each message from the new history
+    for (const msg of newHistory) {
+      if (msg.role === "user") {
+        this.historyBuilder.addUser(msg.content);
+      } else if (msg.role === "assistant") {
+        this.historyBuilder.addAssistant(msg.content);
+      }
+      // System messages are not added to history (they're in baseMessages)
+    }
   }
 }

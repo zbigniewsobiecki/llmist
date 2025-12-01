@@ -48,12 +48,16 @@ export interface ParsedGadgetCall {
   parseError?: string;
 }
 
+// Import compaction types
+import type { CompactionEvent } from "../agent/compaction/config.js";
+
 // Stream chunk with text or gadget metadata
 export type StreamEvent =
   | { type: "text"; content: string }
   | { type: "gadget_call"; call: ParsedGadgetCall }
   | { type: "gadget_result"; result: GadgetExecutionResult }
-  | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string };
+  | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string }
+  | { type: "compaction"; event: CompactionEvent };
 
 // Imports for text-only handlers
 import type { ILogObj, Logger } from "tslog";

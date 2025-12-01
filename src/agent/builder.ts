@@ -26,6 +26,7 @@ import { GadgetRegistry } from "../gadgets/registry.js";
 import type { TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
+import type { CompactionConfig } from "./compaction/config.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
 import type { AgentHooks } from "./hooks.js";
 
@@ -74,6 +75,7 @@ export class AgentBuilder {
   private defaultGadgetTimeoutMs?: number;
   private gadgetOutputLimit?: boolean;
   private gadgetOutputLimitPercent?: number;
+  private compactionConfig?: CompactionConfig;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -504,6 +506,59 @@ export class AgentBuilder {
   }
 
   /**
+   * Configure context compaction.
+   *
+   * Context compaction automatically manages conversation history to prevent
+   * context window overflow in long-running agent conversations.
+   *
+   * @param config - Compaction configuration options
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Custom thresholds
+   * .withCompaction({
+   *   triggerThresholdPercent: 70,
+   *   targetPercent: 40,
+   *   preserveRecentTurns: 10,
+   * })
+   *
+   * // Different strategy
+   * .withCompaction({
+   *   strategy: 'sliding-window',
+   * })
+   *
+   * // With callback
+   * .withCompaction({
+   *   onCompaction: (event) => {
+   *     console.log(`Saved ${event.tokensBefore - event.tokensAfter} tokens`);
+   *   }
+   * })
+   * ```
+   */
+  withCompaction(config: CompactionConfig): this {
+    this.compactionConfig = { ...config, enabled: config.enabled ?? true };
+    return this;
+  }
+
+  /**
+   * Disable context compaction.
+   *
+   * By default, compaction is enabled. Use this method to explicitly disable it.
+   *
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withoutCompaction() // Disable automatic compaction
+   * ```
+   */
+  withoutCompaction(): this {
+    this.compactionConfig = { enabled: false };
+    return this;
+  }
+
+  /**
    * Add a synthetic gadget call to the conversation history.
    *
    * This is useful for in-context learning - showing the LLM what "past self"
@@ -635,6 +690,7 @@ export class AgentBuilder {
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
+      compactionConfig: this.compactionConfig,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);
@@ -744,6 +800,7 @@ export class AgentBuilder {
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
+      compactionConfig: this.compactionConfig,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

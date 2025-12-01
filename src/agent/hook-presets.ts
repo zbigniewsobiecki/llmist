@@ -697,6 +697,52 @@ export class HookPresets {
   }
 
   /**
+   * Tracks context compaction events.
+   *
+   * **Output:**
+   * - Compaction events with 🗜️ emoji
+   * - Strategy name, tokens before/after, and savings
+   * - Cumulative statistics
+   *
+   * **Use cases:**
+   * - Monitoring long-running conversations
+   * - Understanding when and how compaction occurs
+   * - Debugging context management issues
+   *
+   * **Performance:** Minimal overhead. Simple console output.
+   *
+   * @returns Hook configuration that can be passed to .withHooks()
+   *
+   * @example
+   * ```typescript
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.compactionTracking())
+   *   .ask("Your prompt");
+   * ```
+   */
+  static compactionTracking(): AgentHooks {
+    return {
+      observers: {
+        onCompaction: async (ctx) => {
+          const saved = ctx.event.tokensBefore - ctx.event.tokensAfter;
+          const percent = ((saved / ctx.event.tokensBefore) * 100).toFixed(1);
+          console.log(
+            `🗜️  Compaction (${ctx.event.strategy}): ${ctx.event.tokensBefore} → ${ctx.event.tokensAfter} tokens (saved ${saved}, ${percent}%)`,
+          );
+          console.log(
+            `   Messages: ${ctx.event.messagesBefore} → ${ctx.event.messagesAfter}`,
+          );
+          if (ctx.stats.totalCompactions > 1) {
+            console.log(
+              `   Cumulative: ${ctx.stats.totalCompactions} compactions, ${ctx.stats.totalTokensSaved} tokens saved`,
+            );
+          }
+        },
+      },
+    };
+  }
+
+  /**
    * Returns empty hook configuration for clean output without any logging.
    *
    * **Output:**
