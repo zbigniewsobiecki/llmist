@@ -1,3 +1,17 @@
+## 1.3.0 (2025-12-01)
+
+* Merge pull request #117 from zbigniewsobiecki/dev ([5088ef4](https://github.com/zbigniewsobiecki/llmist/commit/5088ef4)), closes [#117](https://github.com/zbigniewsobiecki/llmist/issues/117)
+* Merge pull request #125 from zbigniewsobiecki/dev ([0b3fa36](https://github.com/zbigniewsobiecki/llmist/commit/0b3fa36)), closes [#125](https://github.com/zbigniewsobiecki/llmist/issues/125)
+* chore: sync dev with main after release [skip ci] ([1e8a1b3](https://github.com/zbigniewsobiecki/llmist/commit/1e8a1b3))
+* fix(ci): include all test directories in coverage reporting (#124) ([ee1656b](https://github.com/zbigniewsobiecki/llmist/commit/ee1656b)), closes [#124](https://github.com/zbigniewsobiecki/llmist/issues/124)
+* feat(agent): add automatic context compaction system (#119) ([05f3c30](https://github.com/zbigniewsobiecki/llmist/commit/05f3c30)), closes [#119](https://github.com/zbigniewsobiecki/llmist/issues/119)
+* feat(agent): add LLM assistance hints system (#123) ([9219bc1](https://github.com/zbigniewsobiecki/llmist/commit/9219bc1)), closes [#123](https://github.com/zbigniewsobiecki/llmist/issues/123)
+* feat(templates): add built-in date variable for prompt templates (#120) ([98fea89](https://github.com/zbigniewsobiecki/llmist/commit/98fea89)), closes [#120](https://github.com/zbigniewsobiecki/llmist/issues/120)
+* test: add comprehensive test coverage for critical paths (#121) ([86f76d0](https://github.com/zbigniewsobiecki/llmist/commit/86f76d0)), closes [#121](https://github.com/zbigniewsobiecki/llmist/issues/121) [#122](https://github.com/zbigniewsobiecki/llmist/issues/122)
+* refactor(cli): separate task completion from user messaging (#122) ([db65770](https://github.com/zbigniewsobiecki/llmist/commit/db65770)), closes [#122](https://github.com/zbigniewsobiecki/llmist/issues/122)
+* docs: update documentation and fix deprecated format examples (#118) ([bcd307c](https://github.com/zbigniewsobiecki/llmist/commit/bcd307c)), closes [#118](https://github.com/zbigniewsobiecki/llmist/issues/118)
+* docs: update documentation for block format only (#116) ([6a875c8](https://github.com/zbigniewsobiecki/llmist/commit/6a875c8)), closes [#116](https://github.com/zbigniewsobiecki/llmist/issues/116)
+
 ## 1.2.0 (2025-12-01)
 
 * Merge pull request #115 from zbigniewsobiecki/dev ([fff0bf1](https://github.com/zbigniewsobiecki/llmist/commit/fff0bf1)), closes [#115](https://github.com/zbigniewsobiecki/llmist/issues/115)
