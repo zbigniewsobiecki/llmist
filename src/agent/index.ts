@@ -70,3 +70,13 @@ export {
 } from "./compaction/index.js";
 
 export type { ObserveCompactionContext } from "./hooks.js";
+
+// LLM Assistance Hints
+export {
+  createHints,
+  iterationProgressHint,
+  parallelGadgetHint,
+  type HintsConfig,
+  type IterationHintOptions,
+  type ParallelGadgetHintOptions,
+} from "./hints.js";

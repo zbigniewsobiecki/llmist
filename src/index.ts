@@ -27,8 +27,11 @@ export type {
   GadgetExecutionControllerContext,
   GadgetParameterInterceptorContext,
   GadgetResultInterceptorContext,
+  // LLM Assistance Hints
+  HintsConfig,
   IConversationManager,
   Interceptors,
+  IterationHintOptions,
   // Controller contexts and actions
   LLMCallControllerContext,
   LLMErrorControllerContext,
@@ -41,6 +44,7 @@ export type {
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
   Observers,
+  ParallelGadgetHintOptions,
   StreamProcessingResult,
   StreamProcessorOptions,
   // Gadget output limiting
@@ -68,6 +72,10 @@ export {
   HybridStrategy,
   SlidingWindowStrategy,
   SummarizationStrategy,
+  // LLM Assistance Hints
+  createHints,
+  iterationProgressHint,
+  parallelGadgetHint,
 } from "./agent/index.js";
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
@@ -100,9 +108,17 @@ export type {
   TokenUsage,
 } from "./core/options.js";
 export { ModelIdentifierParser } from "./core/options.js";
-export type { PromptConfig, PromptContext, PromptTemplate } from "./core/prompt-config.js";
+export type {
+  HintContext,
+  HintTemplate,
+  PromptConfig,
+  PromptContext,
+  PromptTemplate,
+} from "./core/prompt-config.js";
 export {
+  DEFAULT_HINTS,
   DEFAULT_PROMPTS,
+  resolveHintTemplate,
   resolvePromptTemplate,
   resolveRulesTemplate,
 } from "./core/prompt-config.js";
