@@ -322,6 +322,19 @@ export class StreamProgress {
       parts.push(iterPart);
     }
 
+    // Context usage percentage (color-coded by usage level)
+    const usagePercent = this.getContextUsagePercent();
+    if (usagePercent !== null) {
+      const formatted = `${Math.round(usagePercent)}%`;
+      if (usagePercent >= 80) {
+        parts.push(chalk.red(formatted)); // Danger zone - compaction threshold
+      } else if (usagePercent >= 50) {
+        parts.push(chalk.yellow(formatted)); // Warning zone
+      } else {
+        parts.push(chalk.green(formatted)); // Safe zone
+      }
+    }
+
     // ↑ input tokens
     if (this.callInputTokens > 0) {
       const prefix = this.callInputTokensEstimated ? "~" : "";
@@ -369,6 +382,26 @@ export class StreamProgress {
     } catch {
       return 0;
     }
+  }
+
+  /**
+   * Calculates context window usage percentage.
+   * Returns null if model is unknown or context window unavailable.
+   */
+  private getContextUsagePercent(): number | null {
+    if (!this.modelRegistry || !this.model || this.callInputTokens === 0) {
+      return null;
+    }
+
+    // Strip provider prefix if present (e.g., "anthropic:claude-sonnet-4-5" -> "claude-sonnet-4-5")
+    const modelName = this.model.includes(":") ? this.model.split(":")[1] : this.model;
+
+    const limits = this.modelRegistry.getModelLimits(modelName);
+    if (!limits?.contextWindow) {
+      return null;
+    }
+
+    return (this.callInputTokens / limits.contextWindow) * 100;
   }
 
   private renderCumulativeMode(spinner: string): void {

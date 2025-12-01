@@ -21,6 +21,8 @@ import type { GadgetRegistry } from "../gadgets/registry.js";
 import type { StreamEvent, TextOnlyHandler } from "../gadgets/types.js";
 import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import { createLogger } from "../logging/logger.js";
+import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
+import { CompactionManager } from "./compaction/manager.js";
 import { GadgetOutputStore } from "./gadget-output-store.js";
 import type { GadgetResultInterceptorContext } from "./hooks.js";
 import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.js";
@@ -129,6 +131,9 @@ export interface AgentOptions {
 
   /** Max gadget output as % of model context window (default: 15) */
   gadgetOutputLimitPercent?: number;
+
+  /** Context compaction configuration (enabled by default) */
+  compactionConfig?: CompactionConfig;
 }
 
 /**
@@ -180,6 +185,9 @@ export class Agent {
   private readonly outputStore: GadgetOutputStore;
   private readonly outputLimitEnabled: boolean;
   private readonly outputLimitCharLimit: number;
+
+  // Context compaction
+  private readonly compactionManager?: CompactionManager;
 
   /**
    * Creates a new Agent instance.
@@ -254,6 +262,16 @@ export class Agent {
     if (options.userPrompt) {
       this.conversation.addUserMessage(options.userPrompt);
     }
+
+    // Initialize context compaction (enabled by default)
+    const compactionEnabled = options.compactionConfig?.enabled ?? true;
+    if (compactionEnabled) {
+      this.compactionManager = new CompactionManager(
+        this.client,
+        this.model,
+        options.compactionConfig,
+      );
+    }
   }
 
   /**
@@ -276,6 +294,55 @@ export class Agent {
    */
   getRegistry(): GadgetRegistry {
     return this.registry;
+  }
+
+  /**
+   * Manually trigger context compaction.
+   *
+   * Forces compaction regardless of threshold. Useful for:
+   * - Pre-emptive context management before expected long operations
+   * - Testing compaction behavior
+   *
+   * @returns CompactionEvent if compaction was performed, null if not configured or no history
+   *
+   * @example
+   * ```typescript
+   * const agent = await LLMist.createAgent()
+   *   .withModel('sonnet')
+   *   .withCompaction({ allowManualCompaction: true })
+   *   .ask('...');
+   *
+   * // Manually compact before a long operation
+   * const event = await agent.compact();
+   * if (event) {
+   *   console.log(`Saved ${event.tokensBefore - event.tokensAfter} tokens`);
+   * }
+   * ```
+   */
+  async compact(): Promise<CompactionEvent | null> {
+    if (!this.compactionManager) {
+      return null;
+    }
+    return this.compactionManager.compact(this.conversation, 0);
+  }
+
+  /**
+   * Get compaction statistics.
+   *
+   * @returns CompactionStats if compaction is enabled, null otherwise
+   *
+   * @example
+   * ```typescript
+   * const stats = agent.getCompactionStats();
+   * if (stats) {
+   *   console.log(`Total compactions: ${stats.totalCompactions}`);
+   *   console.log(`Tokens saved: ${stats.totalTokensSaved}`);
+   *   console.log(`Current usage: ${stats.currentUsage.percent.toFixed(1)}%`);
+   * }
+   * ```
+   */
+  getCompactionStats(): CompactionStats | null {
+    return this.compactionManager?.getStats() ?? null;
   }
 
   /**
@@ -302,6 +369,34 @@ export class Agent {
       this.logger.debug("Starting iteration", { iteration: currentIteration });
 
       try {
+        // Check and perform context compaction if needed
+        if (this.compactionManager) {
+          const compactionEvent = await this.compactionManager.checkAndCompact(
+            this.conversation,
+            currentIteration,
+          );
+          if (compactionEvent) {
+            this.logger.info("Context compacted", {
+              strategy: compactionEvent.strategy,
+              tokensBefore: compactionEvent.tokensBefore,
+              tokensAfter: compactionEvent.tokensAfter,
+            });
+            yield { type: "compaction", event: compactionEvent } as StreamEvent;
+
+            // Observer: Compaction occurred
+            await this.safeObserve(async () => {
+              if (this.hooks.observers?.onCompaction) {
+                await this.hooks.observers.onCompaction({
+                  iteration: currentIteration,
+                  event: compactionEvent,
+                  stats: this.compactionManager!.getStats(),
+                  logger: this.logger,
+                });
+              }
+            });
+          }
+        }
+
         // Prepare LLM call options
         let llmOptions: LLMGenerationOptions = {
           model: this.model,

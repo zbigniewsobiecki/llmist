@@ -29,4 +29,23 @@ export interface IConversationManager {
    * Gets the complete conversation history including base messages (system prompts, gadget instructions).
    */
   getMessages(): LLMMessage[];
+
+  /**
+   * Gets only the conversation history messages (excludes base messages).
+   * Used by compaction to determine what can be compressed.
+   */
+  getHistoryMessages(): LLMMessage[];
+
+  /**
+   * Gets the base messages (system prompts, gadget instructions).
+   * These are never compacted and always included at the start.
+   */
+  getBaseMessages(): LLMMessage[];
+
+  /**
+   * Replaces the conversation history with new messages.
+   * Used by compaction to update history after compression.
+   * @param newHistory - The compacted history messages to replace with
+   */
+  replaceHistory(newHistory: LLMMessage[]): void;
 }

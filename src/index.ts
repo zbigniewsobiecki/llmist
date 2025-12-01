@@ -45,8 +45,30 @@ export type {
   StreamProcessorOptions,
   // Gadget output limiting
   StoredOutput,
+  // Context compaction
+  CompactionConfig,
+  CompactionContext,
+  CompactionEvent,
+  CompactionResult,
+  CompactionStats,
+  CompactionStrategy,
+  MessageTurn,
+  ObserveCompactionContext,
+  ResolvedCompactionConfig,
 } from "./agent/index.js";
-export { ConversationManager, GadgetOutputStore, StreamProcessor } from "./agent/index.js";
+export {
+  // Existing exports
+  ConversationManager,
+  GadgetOutputStore,
+  StreamProcessor,
+  // Compaction exports
+  CompactionManager,
+  DEFAULT_COMPACTION_CONFIG,
+  DEFAULT_SUMMARIZATION_PROMPT,
+  HybridStrategy,
+  SlidingWindowStrategy,
+  SummarizationStrategy,
+} from "./agent/index.js";
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
 export type { LLMMessage, LLMRole } from "./core/messages.js";
