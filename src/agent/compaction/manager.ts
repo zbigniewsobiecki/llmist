@@ -16,7 +16,20 @@ import {
   resolveCompactionConfig,
 } from "./config.js";
 import type { CompactionStrategy } from "./strategy.js";
+import type { LLMMessage } from "../../core/messages.js";
 import { HybridStrategy, SlidingWindowStrategy, SummarizationStrategy } from "./strategies/index.js";
+
+/**
+ * Pre-computed token counts to avoid redundant counting.
+ * Passed from checkAndCompact to compact for efficiency.
+ */
+interface PrecomputedTokens {
+  historyMessages: LLMMessage[];
+  baseMessages: LLMMessage[];
+  historyTokens: number;
+  baseTokens: number;
+  currentTokens: number;
+}
 
 /**
  * Creates a strategy instance from a strategy name.
@@ -109,20 +122,33 @@ export class CompactionManager {
       return null;
     }
 
-    // Perform compaction
-    return this.compact(conversation, iteration);
+    // Perform compaction with precomputed token counts to avoid redundant counting
+    const historyMessages = conversation.getHistoryMessages();
+    const baseMessages = conversation.getBaseMessages();
+    const historyTokens = await this.client.countTokens(this.model, historyMessages);
+    const baseTokens = await this.client.countTokens(this.model, baseMessages);
+
+    return this.compact(conversation, iteration, {
+      historyMessages,
+      baseMessages,
+      historyTokens,
+      baseTokens,
+      currentTokens: historyTokens + baseTokens,
+    });
   }
 
   /**
    * Force compaction regardless of threshold.
    *
    * @param conversation - The conversation manager to compact
-   * @param iteration - Current agent iteration (for event metadata)
+   * @param iteration - Current agent iteration (for event metadata). Use -1 for manual compaction.
+   * @param precomputed - Optional pre-computed token counts (passed from checkAndCompact for efficiency)
    * @returns CompactionEvent with compaction details
    */
   async compact(
     conversation: IConversationManager,
     iteration: number,
+    precomputed?: PrecomputedTokens,
   ): Promise<CompactionEvent | null> {
     if (!this.modelLimits) {
       this.modelLimits = this.client.modelRegistry.getModelLimits(this.model);
@@ -131,14 +157,14 @@ export class CompactionManager {
       }
     }
 
-    // Get only the history messages (not base messages)
-    const historyMessages = conversation.getHistoryMessages();
-    const baseMessages = conversation.getBaseMessages();
-
-    // Count tokens for history only
-    const historyTokens = await this.client.countTokens(this.model, historyMessages);
-    const baseTokens = await this.client.countTokens(this.model, baseMessages);
-    const currentTokens = historyTokens + baseTokens;
+    // Use precomputed values if available, otherwise compute them
+    const historyMessages = precomputed?.historyMessages ?? conversation.getHistoryMessages();
+    const baseMessages = precomputed?.baseMessages ?? conversation.getBaseMessages();
+    const historyTokens =
+      precomputed?.historyTokens ?? (await this.client.countTokens(this.model, historyMessages));
+    const baseTokens =
+      precomputed?.baseTokens ?? (await this.client.countTokens(this.model, baseMessages));
+    const currentTokens = precomputed?.currentTokens ?? historyTokens + baseTokens;
 
     // Calculate target tokens for history (leaving room for base messages and output)
     const targetTotalTokens = Math.floor(
@@ -167,9 +193,9 @@ export class CompactionManager {
     this.totalTokensSaved += tokensSaved;
     this.lastTokenCount = afterTokens;
 
-    // Create event
+    // Create event - use result.strategyName for accurate reporting (e.g., when hybrid falls back to sliding-window)
     const event: CompactionEvent = {
-      strategy: this.strategy.name,
+      strategy: result.strategyName,
       tokensBefore: currentTokens,
       tokensAfter: afterTokens,
       messagesBefore: historyMessages.length + baseMessages.length,

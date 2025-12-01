@@ -309,7 +309,7 @@ export class Agent {
    * ```typescript
    * const agent = await LLMist.createAgent()
    *   .withModel('sonnet')
-   *   .withCompaction({ allowManualCompaction: true })
+   *   .withCompaction()
    *   .ask('...');
    *
    * // Manually compact before a long operation
@@ -323,7 +323,8 @@ export class Agent {
     if (!this.compactionManager) {
       return null;
     }
-    return this.compactionManager.compact(this.conversation, 0);
+    // Use -1 to indicate manual (out-of-band) compaction, not part of the normal iteration cycle
+    return this.compactionManager.compact(this.conversation, -1);
   }
 
   /**

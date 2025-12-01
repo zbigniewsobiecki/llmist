@@ -47,6 +47,7 @@ export class SlidingWindowStrategy implements CompactionStrategy {
     if (turns.length <= preserveCount) {
       return {
         messages,
+        strategyName: this.name,
         metadata: {
           originalCount: messages.length,
           compactedCount: messages.length,
@@ -76,6 +77,7 @@ export class SlidingWindowStrategy implements CompactionStrategy {
 
     return {
       messages: compactedMessages,
+      strategyName: this.name,
       metadata: {
         originalCount: messages.length,
         compactedCount: compactedMessages.length,

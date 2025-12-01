@@ -52,6 +52,7 @@ export class HybridStrategy implements CompactionStrategy {
     if (turns.length <= preserveCount) {
       return {
         messages,
+        strategyName: this.name,
         metadata: {
           originalCount: messages.length,
           compactedCount: messages.length,
@@ -66,23 +67,11 @@ export class HybridStrategy implements CompactionStrategy {
 
     // If there are too few turns to summarize, use sliding window instead
     if (turnsToSummarize < MIN_TURNS_FOR_SUMMARIZATION) {
-      const result = await this.slidingWindow.compact(messages, config, context);
-      // Override the strategy name to reflect the fallback
-      return {
-        ...result,
-        metadata: {
-          ...result.metadata,
-        },
-      };
+      // Delegate to sliding window - propagate its strategyName for accurate reporting
+      return this.slidingWindow.compact(messages, config, context);
     }
 
-    // Use summarization for older turns
-    const result = await this.summarization.compact(messages, config, context);
-
-    return {
-      ...result,
-      // Keep the hybrid name even though we delegated to summarization
-      metadata: result.metadata,
-    };
+    // Use summarization for older turns - propagate its strategyName
+    return this.summarization.compact(messages, config, context);
   }
 }

@@ -42,6 +42,7 @@ export class SummarizationStrategy implements CompactionStrategy {
     if (turns.length <= preserveCount) {
       return {
         messages,
+        strategyName: this.name,
         metadata: {
           originalCount: messages.length,
           compactedCount: messages.length,
@@ -78,6 +79,7 @@ export class SummarizationStrategy implements CompactionStrategy {
     return {
       messages: compactedMessages,
       summary,
+      strategyName: this.name,
       metadata: {
         originalCount: messages.length,
         compactedCount: compactedMessages.length,

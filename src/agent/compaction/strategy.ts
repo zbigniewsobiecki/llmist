@@ -37,6 +37,8 @@ export interface CompactionResult {
   messages: LLMMessage[];
   /** Summary text if summarization was used */
   summary?: string;
+  /** The name of the strategy that was ultimately executed */
+  strategyName: string;
   /** Metadata about the compaction */
   metadata: {
     /** Number of messages before compaction */

@@ -5,6 +5,8 @@
  * context window overflow in long-running agent conversations.
  */
 
+import type { CompactionStrategy } from "./strategy.js";
+
 /**
  * Event emitted when compaction occurs.
  * This is included in StreamEvent for UI visibility.
@@ -77,9 +79,10 @@ export interface CompactionConfig {
    * - 'sliding-window': Fast, drops oldest turns (no LLM call)
    * - 'summarization': LLM-based compression of old messages
    * - 'hybrid': Summarizes old messages + keeps recent turns (recommended)
+   * - Or provide a custom CompactionStrategy instance
    * @default 'hybrid'
    */
-  strategy?: "sliding-window" | "summarization" | "hybrid";
+  strategy?: "sliding-window" | "summarization" | "hybrid" | CompactionStrategy;
 
   /**
    * Context usage percentage that triggers compaction.
@@ -170,12 +173,29 @@ export interface ResolvedCompactionConfig {
 export function resolveCompactionConfig(
   config: CompactionConfig = {},
 ): ResolvedCompactionConfig {
+  const trigger =
+    config.triggerThresholdPercent ?? DEFAULT_COMPACTION_CONFIG.triggerThresholdPercent;
+  const target = config.targetPercent ?? DEFAULT_COMPACTION_CONFIG.targetPercent;
+
+  // Warn about potentially misconfigured thresholds
+  if (target >= trigger) {
+    console.warn(
+      `[llmist/compaction] targetPercent (${target}) should be less than triggerThresholdPercent (${trigger}) to be effective.`,
+    );
+  }
+
+  // Handle custom strategy instances vs string names
+  const strategy = config.strategy ?? DEFAULT_COMPACTION_CONFIG.strategy;
+  const strategyName =
+    typeof strategy === "object" && "name" in strategy
+      ? (strategy.name as "sliding-window" | "summarization" | "hybrid")
+      : strategy;
+
   return {
     enabled: config.enabled ?? DEFAULT_COMPACTION_CONFIG.enabled,
-    strategy: config.strategy ?? DEFAULT_COMPACTION_CONFIG.strategy,
-    triggerThresholdPercent:
-      config.triggerThresholdPercent ?? DEFAULT_COMPACTION_CONFIG.triggerThresholdPercent,
-    targetPercent: config.targetPercent ?? DEFAULT_COMPACTION_CONFIG.targetPercent,
+    strategy: strategyName,
+    triggerThresholdPercent: trigger,
+    targetPercent: target,
     preserveRecentTurns:
       config.preserveRecentTurns ?? DEFAULT_COMPACTION_CONFIG.preserveRecentTurns,
     summarizationModel: config.summarizationModel,
