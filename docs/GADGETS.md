@@ -1,6 +1,6 @@
 # Gadgets (Tools)
 
-Gadgets are functions that LLMs can call. llmist uses a simple block format with `!!!ARG:` markers that works with any text model - no native tool calling required.
+Gadgets are functions that LLMs can call. llmist uses a simple block format with `!!!ARG:` markers that works with any text model - no native tool calling required. See **[Block Format Reference](./BLOCK_FORMAT.md)** for detailed syntax documentation.
 
 ## Quick Start
 
