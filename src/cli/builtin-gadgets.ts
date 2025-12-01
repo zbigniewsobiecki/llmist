@@ -43,24 +43,19 @@ export const askUser = createGadget({
 });
 
 /**
- * TellUser gadget - Outputs a message to the user and optionally ends the conversation.
+ * TellUser gadget - Outputs a message to the user.
  *
  * Use this for key results, warnings, or structured output that should stand out
- * from regular streamed text. Set done=true when the task is complete.
+ * from regular streamed text.
  */
 export const tellUser = createGadget({
   name: "TellUser",
-  description:
-    "Tell the user something important. Set done=true when your work is complete and you want to end the conversation.",
+  description: "Tell the user something important.",
   schema: z.object({
     message: z
       .string()
       .optional()
       .describe("The message to display to the user in Markdown"),
-    done: z
-      .boolean()
-      .default(false)
-      .describe("Set to true to end the conversation, false to continue"),
     type: z
       .enum(["info", "success", "warning", "error"])
       .default("info")
@@ -68,18 +63,9 @@ export const tellUser = createGadget({
   }),
   examples: [
     {
-      comment: "Report successful completion and end the conversation",
-      params: {
-        message: "I've completed the refactoring. All tests pass.",
-        done: true,
-        type: "success",
-      },
-    },
-    {
-      comment: "Warn the user about something without ending",
+      comment: "Warn the user about something",
       params: {
         message: "Found 3 files with potential issues. Continuing analysis...",
-        done: false,
         type: "warning",
       },
     },
@@ -88,12 +74,11 @@ export const tellUser = createGadget({
       params: {
         message:
           "Here's what I found in the codebase:\n\n1. **Main entry point**: `src/index.ts` exports all public APIs\n2. **Core logic**: Located in `src/core/` with 5 modules\n3. **Tests**: Good coverage in `src/__tests__/`\n\nI'll continue exploring the core modules.",
-        done: false,
         type: "info",
       },
     },
   ],
-  execute: ({ message, done, type }) => {
+  execute: ({ message, type }) => {
     // Handle empty or missing message gracefully
     // This happens when LLM sends malformed parameters that fail to parse the message field
     if (!message || message.trim() === "") {
@@ -108,16 +93,32 @@ export const tellUser = createGadget({
       warning: "⚠️  ",
       error: "❌ ",
     };
-    const plainResult = prefixes[type] + message;
+    return prefixes[type] + message;
+  },
+});
 
-    if (done) {
-      throw new BreakLoopException(plainResult);
-    }
-    return plainResult;
+/**
+ * Finish gadget - Signals that the task is complete.
+ *
+ * Use this when you have completed all requested work and want to end the conversation.
+ */
+export const finish = createGadget({
+  name: "Finish",
+  description:
+    "Signal that you have completed your task. Call this when your work is done.",
+  schema: z.object({}),
+  examples: [
+    {
+      comment: "Signal task completion",
+      params: {},
+    },
+  ],
+  execute: () => {
+    throw new BreakLoopException("Task completed");
   },
 });
 
 /**
  * All built-in gadgets as an array for easy registration.
  */
-export const builtinGadgets = [askUser, tellUser];
+export const builtinGadgets = [askUser, tellUser, finish];
