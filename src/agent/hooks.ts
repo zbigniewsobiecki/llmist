@@ -375,6 +375,8 @@ export interface Interceptors {
  */
 export interface LLMCallControllerContext {
   iteration: number;
+  /** Maximum iterations configured for the agent */
+  maxIterations: number;
   options: LLMGenerationOptions;
   logger: Logger<ILogObj>;
 }
@@ -391,12 +393,16 @@ export type BeforeLLMCallAction =
  */
 export interface AfterLLMCallControllerContext {
   iteration: number;
+  /** Maximum iterations configured for the agent */
+  maxIterations: number;
   options: Readonly<LLMGenerationOptions>;
   finishReason: string | null;
   /** Token usage including cached token counts when available */
   usage?: TokenUsage;
   /** The final message (after interceptors) that will be added to history */
   finalMessage: string;
+  /** Number of gadget calls in the current response */
+  gadgetCallCount: number;
   logger: Logger<ILogObj>;
 }
 

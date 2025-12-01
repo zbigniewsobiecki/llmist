@@ -15,9 +15,26 @@ export interface PromptContext {
 }
 
 /**
+ * Context provided to hint template functions for rendering dynamic hints.
+ */
+export interface HintContext {
+  /** Current iteration (1-based for readability) */
+  iteration: number;
+  /** Maximum iterations allowed */
+  maxIterations: number;
+  /** Number of gadget calls in the current response */
+  gadgetCallCount?: number;
+}
+
+/**
  * Template that can be either a static string or a function that renders based on context.
  */
 export type PromptTemplate = string | ((context: PromptContext) => string);
+
+/**
+ * Template for hints that can be either a static string or a function that renders based on hint context.
+ */
+export type HintTemplate = string | ((context: HintContext) => string);
 
 /**
  * Configuration for customizing all prompts used internally by llmist.
@@ -70,13 +87,45 @@ export interface PromptConfig {
    * Should be a function that returns formatted example strings.
    */
   customExamples?: (context: PromptContext) => string;
+
+  // ============================================================================
+  // HINT TEMPLATES
+  // ============================================================================
+
+  /**
+   * Hint shown when LLM uses only one gadget per response.
+   * Encourages parallel gadget usage for efficiency.
+   */
+  parallelGadgetsHint?: HintTemplate;
+
+  /**
+   * Template for iteration progress hint.
+   * Informs the LLM about remaining iterations to help plan work.
+   *
+   * When using a string template, supports placeholders:
+   * - {iteration}: Current iteration (1-based)
+   * - {maxIterations}: Maximum iterations allowed
+   * - {remaining}: Iterations remaining
+   */
+  iterationProgressHint?: HintTemplate;
 }
+
+/**
+ * Default hint templates used by llmist.
+ */
+export const DEFAULT_HINTS = {
+  parallelGadgetsHint:
+    "Tip: You can call multiple gadgets in a single response for efficiency.",
+
+  iterationProgressHint:
+    "[Iteration {iteration}/{maxIterations}] Plan your actions accordingly.",
+} as const;
 
 /**
  * Default prompt templates used by llmist.
  */
 export const DEFAULT_PROMPTS: Required<
-  Omit<PromptConfig, "rules" | "customExamples"> & {
+  Omit<PromptConfig, "rules" | "customExamples" | "parallelGadgetsHint" | "iterationProgressHint"> & {
     rules: (context: PromptContext) => string[];
     customExamples: null;
   }
@@ -133,4 +182,32 @@ export function resolveRulesTemplate(
   }
 
   return [resolved];
+}
+
+/**
+ * Resolve a hint template to a string using the given context.
+ * Supports both function templates and string templates with placeholders.
+ *
+ * @param template - The hint template to resolve
+ * @param defaultValue - Default value if template is undefined
+ * @param context - Context for rendering the template
+ * @returns The resolved hint string
+ */
+export function resolveHintTemplate(
+  template: HintTemplate | undefined,
+  defaultValue: string,
+  context: HintContext,
+): string {
+  const resolved = template ?? defaultValue;
+
+  if (typeof resolved === "function") {
+    return resolved(context);
+  }
+
+  // Replace placeholders in string template
+  const remaining = context.maxIterations - context.iteration;
+  return resolved
+    .replace(/\{iteration\}/g, String(context.iteration))
+    .replace(/\{maxIterations\}/g, String(context.maxIterations))
+    .replace(/\{remaining\}/g, String(remaining));
 }

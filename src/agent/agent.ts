@@ -422,6 +422,7 @@ export class Agent {
         if (this.hooks.controllers?.beforeLLMCall) {
           const context: LLMCallControllerContext = {
             iteration: currentIteration,
+            maxIterations: this.maxIterations,
             options: llmOptions,
             logger: this.logger,
           };
@@ -503,12 +504,19 @@ export class Agent {
         // Controller: After LLM call
         let finalMessage = result.finalMessage;
         if (this.hooks.controllers?.afterLLMCall) {
+          // Count gadget calls in this response
+          const gadgetCallCount = result.outputs.filter(
+            (output) => output.type === "gadget_result",
+          ).length;
+
           const context: AfterLLMCallControllerContext = {
             iteration: currentIteration,
+            maxIterations: this.maxIterations,
             options: llmOptions,
             finishReason: result.finishReason,
             usage: result.usage,
             finalMessage: result.finalMessage,
+            gadgetCallCount,
             logger: this.logger,
           };
           const action: AfterLLMCallAction = await this.hooks.controllers.afterLLMCall(context);
