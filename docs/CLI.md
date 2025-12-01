@@ -312,6 +312,9 @@ max-iterations = 3
 | `parameter-format` | string | `block` (only format) |
 | `builtins` | boolean | Enable built-in gadgets (AskUser, TellUser) |
 | `builtin-interaction` | boolean | Enable AskUser gadget |
+| `gadget-start-prefix` | string | Custom prefix for gadget start marker (default: `!!!GADGET_START:`) |
+| `gadget-end-prefix` | string | Custom prefix for gadget end marker (default: `!!!GADGET_END`) |
+| `gadget-arg-prefix` | string | Custom prefix for argument markers (default: `!!!ARG:`) |
 | `inherits` | string or string[] | Section(s) to inherit settings from |
 | `log-llm-requests` | string or boolean | Save raw LLM requests. `true` = default dir, string = custom path |
 | `log-llm-responses` | string or boolean | Save raw LLM responses. `true` = default dir, string = custom path |
