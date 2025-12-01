@@ -6,7 +6,7 @@ Configure how the agent handles gadget errors and LLM failures.
 
 | Type | Description | When |
 |------|-------------|------|
-| `parse` | Failed to parse gadget call from LLM output | Malformed YAML/JSON |
+| `parse` | Failed to parse gadget call from LLM output | Malformed block format |
 | `validation` | Parameters don't match schema | Zod validation failed |
 | `execution` | Gadget threw an error | Runtime error in execute() |
 

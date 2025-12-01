@@ -210,7 +210,7 @@ gadget = [                               # Default gadgets to load
   "~/gadgets/filesystem.ts",
   "~/gadgets/calculator.ts",
 ]
-parameter-format = "block"               # Gadget parameter format: block, json, yaml, toml, auto
+parameter-format = "block"               # Gadget parameter format (only block supported)
 builtins = true                          # Enable built-in gadgets (AskUser, TellUser)
 builtin-interaction = true               # Enable AskUser (set false for non-interactive)
 
@@ -309,7 +309,7 @@ max-iterations = 3
 | `temperature` | number | Sampling temperature (0-2) |
 | `max-iterations` | integer | Max agent loop iterations |
 | `gadget` | string[] | Array of gadget file paths to load |
-| `parameter-format` | string | `block`, `json`, `yaml`, `toml`, or `auto` |
+| `parameter-format` | string | `block` (only format) |
 | `builtins` | boolean | Enable built-in gadgets (AskUser, TellUser) |
 | `builtin-interaction` | boolean | Enable AskUser gadget |
 | `inherits` | string or string[] | Section(s) to inherit settings from |
@@ -432,7 +432,7 @@ llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 | `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
 | `--max-iterations <n>` | `-i` | Max agent iterations | 10 |
 | `--gadget <path>` | `-g` | Gadget file (repeatable) | none |
-| `--parameter-format <fmt>` | | `block`, `json`, `yaml`, `toml`, or `auto` | `block` |
+| `--parameter-format <fmt>` | | `block` (only format) | `block` |
 | `--no-builtins` | | Disable all built-in gadgets | false |
 | `--no-builtin-interaction` | | Disable interactive gadgets (AskUser) | false |
 | `--quiet` | `-q` | Suppress output except TellUser messages | false |
