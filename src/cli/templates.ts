@@ -72,10 +72,11 @@ export function resolveTemplate(
   configPath?: string,
 ): string {
   try {
-    // Merge env vars into context
+    // Merge env vars and built-in variables into context
     const fullContext = {
       ...context,
       env: process.env,
+      date: new Date().toISOString().split("T")[0], // "2025-12-01"
     };
     return eta.renderString(template, fullContext);
   } catch (error) {
