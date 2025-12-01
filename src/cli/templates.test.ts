@@ -137,6 +137,30 @@ describe("templates", () => {
       expect(result).toBe("Just plain text");
     });
 
+    describe("built-in date variable", () => {
+      it("provides current date as it.date in ISO format", () => {
+        const eta = createTemplateEngine({});
+        const result = resolveTemplate(eta, "Date: <%= it.date %>");
+        // Should match YYYY-MM-DD format
+        expect(result).toMatch(/^Date: \d{4}-\d{2}-\d{2}$/);
+      });
+
+      it("provides correct current date", () => {
+        const eta = createTemplateEngine({});
+        const result = resolveTemplate(eta, "<%= it.date %>");
+        const expectedDate = new Date().toISOString().split("T")[0];
+        expect(result).toBe(expectedDate);
+      });
+
+      it("works alongside other context variables", () => {
+        const eta = createTemplateEngine({});
+        const result = resolveTemplate(eta, "Hello <%= it.name %> on <%= it.date %>", {
+          name: "World",
+        });
+        expect(result).toMatch(/^Hello World on \d{4}-\d{2}-\d{2}$/);
+      });
+    });
+
     describe("environment variables", () => {
       const originalEnv = { ...process.env };
 
