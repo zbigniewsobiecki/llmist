@@ -76,6 +76,8 @@ export function createTextStream(
 
       if (isLast) {
         chunk.finishReason = options?.finishReason ?? "stop";
+        // Simplified token estimation heuristic (~4 chars per token) for testing only.
+        // For accurate token counts, provide explicit usage in options.
         const inputTokens = Math.ceil(text.length / 4);
         const outputTokens = Math.ceil(text.length / 4);
         chunk.usage = options?.usage ?? {
