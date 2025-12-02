@@ -77,7 +77,10 @@ export interface CompleteConfig extends BaseCommandConfig {
  */
 export interface AgentConfig extends BaseCommandConfig {
   "max-iterations"?: number;
-  gadget?: string[];
+  gadgets?: string[]; // Full replacement (preferred)
+  "gadget-add"?: string[]; // Add to inherited gadgets
+  "gadget-remove"?: string[]; // Remove from inherited gadgets
+  gadget?: string[]; // DEPRECATED: alias for gadgets
   builtins?: boolean;
   "builtin-interaction"?: boolean;
   "gadget-start-prefix"?: string;
@@ -151,7 +154,10 @@ const AGENT_CONFIG_KEYS = new Set([
   "system",
   "temperature",
   "max-iterations",
-  "gadget",
+  "gadgets", // Full replacement (preferred)
+  "gadget-add", // Add to inherited gadgets
+  "gadget-remove", // Remove from inherited gadgets
+  "gadget", // DEPRECATED: alias for gadgets
   "builtins",
   "builtin-interaction",
   "gadget-start-prefix",
@@ -453,6 +459,17 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
       min: 1,
     });
   }
+  // Gadget configuration (new plural form preferred)
+  if ("gadgets" in rawObj) {
+    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
+  }
+  if ("gadget-add" in rawObj) {
+    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
+  }
+  if ("gadget-remove" in rawObj) {
+    result["gadget-remove"] = validateStringArray(rawObj["gadget-remove"], "gadget-remove", section);
+  }
+  // Legacy singular form (deprecated)
   if ("gadget" in rawObj) {
     result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
   }
@@ -565,6 +582,17 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
       min: 1,
     });
   }
+  // Gadget configuration (new plural form preferred)
+  if ("gadgets" in rawObj) {
+    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
+  }
+  if ("gadget-add" in rawObj) {
+    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
+  }
+  if ("gadget-remove" in rawObj) {
+    result["gadget-remove"] = validateStringArray(rawObj["gadget-remove"], "gadget-remove", section);
+  }
+  // Legacy singular form (deprecated)
   if ("gadget" in rawObj) {
     result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
   }
@@ -829,12 +857,80 @@ export function resolveTemplatesInConfig(config: CLIConfig, configPath?: string)
 }
 
 /**
+ * Resolves gadget configuration with inheritance support.
+ * Handles gadgets (full replacement), gadget-add (append), and gadget-remove (filter).
+ *
+ * Resolution order:
+ * 1. If `gadgets` is present (or deprecated `gadget`), use it as full replacement
+ * 2. Otherwise, start with inherited gadgets and apply add/remove
+ *
+ * @param section - The section's own values (not yet merged)
+ * @param inheritedGadgets - Gadgets from parent sections
+ * @param sectionName - Name of section for error messages
+ * @param configPath - Path to config file for error messages
+ * @returns Resolved gadget array
+ * @throws ConfigError if conflicting gadget options
+ */
+function resolveGadgets(
+  section: Record<string, unknown>,
+  inheritedGadgets: string[],
+  sectionName: string,
+  configPath?: string,
+): string[] {
+  const hasGadgets = "gadgets" in section;
+  const hasGadgetLegacy = "gadget" in section;
+  const hasGadgetAdd = "gadget-add" in section;
+  const hasGadgetRemove = "gadget-remove" in section;
+
+  // Warn on deprecated 'gadget' usage
+  if (hasGadgetLegacy && !hasGadgets) {
+    console.warn(
+      `[config] Warning: [${sectionName}].gadget is deprecated, use 'gadgets' (plural) instead`,
+    );
+  }
+
+  // Error if both full replacement AND add/remove
+  if ((hasGadgets || hasGadgetLegacy) && (hasGadgetAdd || hasGadgetRemove)) {
+    throw new ConfigError(
+      `[${sectionName}] Cannot use 'gadgets' with 'gadget-add'/'gadget-remove'. ` +
+        `Use either full replacement (gadgets) OR modification (gadget-add/gadget-remove).`,
+      configPath,
+    );
+  }
+
+  // Full replacement mode (new `gadgets` takes precedence over deprecated `gadget`)
+  if (hasGadgets) {
+    return section.gadgets as string[];
+  }
+  if (hasGadgetLegacy) {
+    return section.gadget as string[];
+  }
+
+  // Modification mode: start with inherited
+  let result = [...inheritedGadgets];
+
+  // Apply removes first
+  if (hasGadgetRemove) {
+    const toRemove = new Set(section["gadget-remove"] as string[]);
+    result = result.filter((g) => !toRemove.has(g));
+  }
+
+  // Then apply adds
+  if (hasGadgetAdd) {
+    const toAdd = section["gadget-add"] as string[];
+    result.push(...toAdd);
+  }
+
+  return result;
+}
+
+/**
  * Resolves inheritance chains for all sections in the config.
  * Each section can specify `inherits` as a string or array of strings.
  * Resolution follows these rules:
  * - For multiple parents, later parents override earlier ones (last wins)
  * - Section's own values always override inherited values
- * - Arrays are replaced, not merged
+ * - Arrays are replaced, not merged (except gadgets with add/remove support)
  * - Circular inheritance is detected and throws an error
  *
  * @param config - Validated config with possible unresolved inheritance
@@ -880,9 +976,30 @@ export function resolveInheritance(config: CLIConfig, configPath?: string): CLIC
       merged = { ...merged, ...parentResolved };
     }
 
-    // Apply own values on top (excluding 'inherits' key - it's metadata, not a value)
-    const { inherits: _inherits, ...ownValues } = sectionObj;
+    // Get inherited gadgets before applying own values
+    const inheritedGadgets = (merged.gadgets as string[] | undefined) ?? [];
+
+    // Apply own values on top (excluding metadata and gadget-related keys handled specially)
+    const {
+      inherits: _inherits,
+      gadgets: _gadgets,
+      gadget: _gadget,
+      "gadget-add": _gadgetAdd,
+      "gadget-remove": _gadgetRemove,
+      ...ownValues
+    } = sectionObj;
     merged = { ...merged, ...ownValues };
+
+    // Resolve gadgets with add/remove support
+    const resolvedGadgets = resolveGadgets(sectionObj, inheritedGadgets, name, configPath);
+    if (resolvedGadgets.length > 0) {
+      merged.gadgets = resolvedGadgets;
+    }
+
+    // Clean up legacy/modification fields from output
+    delete merged["gadget"];
+    delete merged["gadget-add"];
+    delete merged["gadget-remove"];
 
     resolving.delete(name);
     resolved[name] = merged;

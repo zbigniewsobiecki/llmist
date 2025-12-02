@@ -156,13 +156,18 @@ Be extremely concise. Use bullet points. No fluff.
 #   - "~/gadgets/my-gadget.ts" (file path)
 #   - "my-npm-gadget-package" (npm package)
 #
+# Gadget configuration options:
+#   - gadgets = [...]        Full replacement (preferred, was 'gadget')
+#   - gadget-add = [...]     Add to inherited gadgets
+#   - gadget-remove = [...]  Remove from inherited gadgets
+#
 # Gadget approval modes:
 #   - "allowed" (default): Execute without prompting
 #   - "approval-required": Prompt user before execution
 #   - "denied": Block execution, return denial message to LLM
 [profile-readonly]
 inherits = "agent"
-gadget = [
+gadgets = [
   "ListDirectory",                        # List directory contents
   "ReadFile",                             # Read file contents
   "RunCommand",                           # Execute shell commands
@@ -170,18 +175,20 @@ gadget = [
 # RunCommand can have side effects, so require approval
 gadget-approval = { RunCommand = "approval-required" }
 
-# Read-write profile with additional write gadgets
+# Read-write profile - extends readonly by adding write gadgets (no repetition needed!)
 [profile-readwrite]
 inherits = "profile-readonly"
-gadget = [
-  "ListDirectory",
-  "ReadFile",
+gadget-add = [
   "WriteFile",                            # Write files
   "EditFile",                             # Edit files with ed commands
-  "RunCommand",
 ]
 # Write operations require explicit approval for safety
-gadget-approval = { WriteFile = "approval-required", EditFile = "approval-required", RunCommand = "approval-required" }
+gadget-approval = { WriteFile = "approval-required", EditFile = "approval-required" }
+
+# Example: removing a gadget from inherited profile
+# [profile-no-command]
+# inherits = "profile-readonly"
+# gadget-remove = ["RunCommand"]          # Remove RunCommand from inherited list
 
 # Base profile for all review-related commands
 [review-base]
