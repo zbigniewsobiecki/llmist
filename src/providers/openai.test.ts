@@ -62,6 +62,7 @@ describe("OpenAIChatProvider", () => {
           ],
           stream: true,
         }),
+        undefined, // signal options
       );
     });
 
@@ -96,6 +97,7 @@ describe("OpenAIChatProvider", () => {
           top_p: 0.9,
           stop: ["STOP"],
         }),
+        undefined, // signal options
       );
     });
 
@@ -255,6 +257,60 @@ describe("OpenAIChatProvider", () => {
       }
 
       expect(chunks[0]).toMatchObject({ text: "FirstSecond" });
+    });
+  });
+
+  describe("abort signal propagation", () => {
+    it("passes abort signal to SDK when provided", async () => {
+      const createSpy = mock().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const controller = new AbortController();
+      const options = {
+        model: "gpt-4",
+        messages: [{ role: "user" as const, content: "Test" }],
+        signal: controller.signal,
+      };
+
+      await provider.stream(options, { provider: "openai", name: "gpt-4" }).next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ signal: controller.signal }),
+      );
+    });
+
+    it("does not pass signal options when signal is not provided", async () => {
+      const createSpy = mock().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const options = {
+        model: "gpt-4",
+        messages: [{ role: "user" as const, content: "Test" }],
+      };
+
+      await provider.stream(options, { provider: "openai", name: "gpt-4" }).next();
+
+      // When no signal is provided, second argument should be undefined
+      expect(createSpy).toHaveBeenCalledWith(expect.any(Object), undefined);
     });
   });
 

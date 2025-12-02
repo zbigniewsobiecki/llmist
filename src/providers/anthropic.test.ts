@@ -53,6 +53,7 @@ describe("AnthropicMessagesProvider", () => {
             },
           ],
         }),
+        undefined, // signal options
       );
     });
 
@@ -89,6 +90,7 @@ describe("AnthropicMessagesProvider", () => {
             },
           ],
         }),
+        undefined, // signal options
       );
     });
 
@@ -128,6 +130,7 @@ describe("AnthropicMessagesProvider", () => {
             },
           ],
         }),
+        undefined, // signal options
       );
     });
 
@@ -161,6 +164,7 @@ describe("AnthropicMessagesProvider", () => {
           stop_sequences: ["END"],
           stream: true,
         }),
+        undefined, // signal options
       );
     });
 
@@ -186,6 +190,7 @@ describe("AnthropicMessagesProvider", () => {
         expect.objectContaining({
           max_tokens: 4096, // Default fallback when model not in catalog
         }),
+        undefined, // signal options
       );
     });
   });
@@ -339,6 +344,56 @@ describe("AnthropicMessagesProvider", () => {
       // Should only have the text delta, not the start event
       expect(chunks).toHaveLength(1);
       expect(chunks[0]).toMatchObject({ text: "Hello" });
+    });
+  });
+
+  describe("abort signal propagation", () => {
+    it("passes abort signal to SDK when provided", async () => {
+      const createSpy = mock().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const controller = new AbortController();
+      const options = {
+        model: "claude-3",
+        messages: [{ role: "user" as const, content: "Test" }],
+        signal: controller.signal,
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ signal: controller.signal }),
+      );
+    });
+
+    it("does not pass signal options when signal is not provided", async () => {
+      const createSpy = mock().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const options = {
+        model: "claude-3",
+        messages: [{ role: "user" as const, content: "Test" }],
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      // When no signal is provided, second argument should be undefined
+      expect(createSpy).toHaveBeenCalledWith(expect.any(Object), undefined);
     });
   });
 

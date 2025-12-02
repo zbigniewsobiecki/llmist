@@ -21,6 +21,26 @@ export type { PromptsConfig } from "./templates.js";
 export type LogLevel = "silly" | "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
 /**
+ * Gadget approval mode determines how a gadget execution is handled.
+ * - "allowed": Auto-proceed without prompting
+ * - "denied": Auto-reject, return denial message to LLM
+ * - "approval-required": Prompt user for approval before execution
+ */
+export type GadgetApprovalMode = "allowed" | "denied" | "approval-required";
+
+/**
+ * Valid gadget approval modes.
+ */
+const VALID_APPROVAL_MODES: GadgetApprovalMode[] = ["allowed", "denied", "approval-required"];
+
+/**
+ * Configuration for per-gadget approval behavior.
+ * Keys are gadget names (case-insensitive), values are approval modes.
+ * Special key "*" sets the default for unconfigured gadgets.
+ */
+export type GadgetApprovalConfig = Record<string, GadgetApprovalMode>;
+
+/**
  * Global CLI options that apply to all commands.
  */
 export interface GlobalConfig {
@@ -57,12 +77,16 @@ export interface CompleteConfig extends BaseCommandConfig {
  */
 export interface AgentConfig extends BaseCommandConfig {
   "max-iterations"?: number;
-  gadget?: string[];
+  gadgets?: string[]; // Full replacement (preferred)
+  "gadget-add"?: string[]; // Add to inherited gadgets
+  "gadget-remove"?: string[]; // Remove from inherited gadgets
+  gadget?: string[]; // DEPRECATED: alias for gadgets
   builtins?: boolean;
   "builtin-interaction"?: boolean;
   "gadget-start-prefix"?: string;
   "gadget-end-prefix"?: string;
   "gadget-arg-prefix"?: string;
+  "gadget-approval"?: GadgetApprovalConfig;
   quiet?: boolean;
   "log-level"?: LogLevel;
   "log-file"?: string;
@@ -130,12 +154,16 @@ const AGENT_CONFIG_KEYS = new Set([
   "system",
   "temperature",
   "max-iterations",
-  "gadget",
+  "gadgets", // Full replacement (preferred)
+  "gadget-add", // Add to inherited gadgets
+  "gadget-remove", // Remove from inherited gadgets
+  "gadget", // DEPRECATED: alias for gadgets
   "builtins",
   "builtin-interaction",
   "gadget-start-prefix",
   "gadget-end-prefix",
   "gadget-arg-prefix",
+  "gadget-approval",
   "quiet",
   "inherits",
   "log-level",
@@ -249,6 +277,33 @@ function validateInherits(value: unknown, section: string): string | string[] {
     return value as string[];
   }
   throw new ConfigError(`[${section}].inherits must be a string or array of strings`);
+}
+
+/**
+ * Validates that a value is a gadget approval config (object mapping gadget names to modes).
+ */
+function validateGadgetApproval(value: unknown, section: string): GadgetApprovalConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(
+      `[${section}].gadget-approval must be a table (e.g., { WriteFile = "approval-required" })`,
+    );
+  }
+
+  const result: GadgetApprovalConfig = {};
+  for (const [gadgetName, mode] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof mode !== "string") {
+      throw new ConfigError(
+        `[${section}].gadget-approval.${gadgetName} must be a string`,
+      );
+    }
+    if (!VALID_APPROVAL_MODES.includes(mode as GadgetApprovalMode)) {
+      throw new ConfigError(
+        `[${section}].gadget-approval.${gadgetName} must be one of: ${VALID_APPROVAL_MODES.join(", ")}`,
+      );
+    }
+    result[gadgetName] = mode as GadgetApprovalMode;
+  }
+  return result;
 }
 
 /**
@@ -404,6 +459,17 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
       min: 1,
     });
   }
+  // Gadget configuration (new plural form preferred)
+  if ("gadgets" in rawObj) {
+    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
+  }
+  if ("gadget-add" in rawObj) {
+    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
+  }
+  if ("gadget-remove" in rawObj) {
+    result["gadget-remove"] = validateStringArray(rawObj["gadget-remove"], "gadget-remove", section);
+  }
+  // Legacy singular form (deprecated)
   if ("gadget" in rawObj) {
     result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
   }
@@ -437,6 +503,9 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
       "gadget-arg-prefix",
       section,
     );
+  }
+  if ("gadget-approval" in rawObj) {
+    result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
   }
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
@@ -513,6 +582,17 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
       min: 1,
     });
   }
+  // Gadget configuration (new plural form preferred)
+  if ("gadgets" in rawObj) {
+    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
+  }
+  if ("gadget-add" in rawObj) {
+    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
+  }
+  if ("gadget-remove" in rawObj) {
+    result["gadget-remove"] = validateStringArray(rawObj["gadget-remove"], "gadget-remove", section);
+  }
+  // Legacy singular form (deprecated)
   if ("gadget" in rawObj) {
     result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
   }
@@ -546,6 +626,9 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
       "gadget-arg-prefix",
       section,
     );
+  }
+  if ("gadget-approval" in rawObj) {
+    result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
   }
 
   // Complete-specific fields
@@ -774,12 +857,80 @@ export function resolveTemplatesInConfig(config: CLIConfig, configPath?: string)
 }
 
 /**
+ * Resolves gadget configuration with inheritance support.
+ * Handles gadgets (full replacement), gadget-add (append), and gadget-remove (filter).
+ *
+ * Resolution order:
+ * 1. If `gadgets` is present (or deprecated `gadget`), use it as full replacement
+ * 2. Otherwise, start with inherited gadgets and apply add/remove
+ *
+ * @param section - The section's own values (not yet merged)
+ * @param inheritedGadgets - Gadgets from parent sections
+ * @param sectionName - Name of section for error messages
+ * @param configPath - Path to config file for error messages
+ * @returns Resolved gadget array
+ * @throws ConfigError if conflicting gadget options
+ */
+function resolveGadgets(
+  section: Record<string, unknown>,
+  inheritedGadgets: string[],
+  sectionName: string,
+  configPath?: string,
+): string[] {
+  const hasGadgets = "gadgets" in section;
+  const hasGadgetLegacy = "gadget" in section;
+  const hasGadgetAdd = "gadget-add" in section;
+  const hasGadgetRemove = "gadget-remove" in section;
+
+  // Warn on deprecated 'gadget' usage
+  if (hasGadgetLegacy && !hasGadgets) {
+    console.warn(
+      `[config] Warning: [${sectionName}].gadget is deprecated, use 'gadgets' (plural) instead`,
+    );
+  }
+
+  // Error if both full replacement AND add/remove
+  if ((hasGadgets || hasGadgetLegacy) && (hasGadgetAdd || hasGadgetRemove)) {
+    throw new ConfigError(
+      `[${sectionName}] Cannot use 'gadgets' with 'gadget-add'/'gadget-remove'. ` +
+        `Use either full replacement (gadgets) OR modification (gadget-add/gadget-remove).`,
+      configPath,
+    );
+  }
+
+  // Full replacement mode (new `gadgets` takes precedence over deprecated `gadget`)
+  if (hasGadgets) {
+    return section.gadgets as string[];
+  }
+  if (hasGadgetLegacy) {
+    return section.gadget as string[];
+  }
+
+  // Modification mode: start with inherited
+  let result = [...inheritedGadgets];
+
+  // Apply removes first
+  if (hasGadgetRemove) {
+    const toRemove = new Set(section["gadget-remove"] as string[]);
+    result = result.filter((g) => !toRemove.has(g));
+  }
+
+  // Then apply adds
+  if (hasGadgetAdd) {
+    const toAdd = section["gadget-add"] as string[];
+    result.push(...toAdd);
+  }
+
+  return result;
+}
+
+/**
  * Resolves inheritance chains for all sections in the config.
  * Each section can specify `inherits` as a string or array of strings.
  * Resolution follows these rules:
  * - For multiple parents, later parents override earlier ones (last wins)
  * - Section's own values always override inherited values
- * - Arrays are replaced, not merged
+ * - Arrays are replaced, not merged (except gadgets with add/remove support)
  * - Circular inheritance is detected and throws an error
  *
  * @param config - Validated config with possible unresolved inheritance
@@ -825,9 +976,30 @@ export function resolveInheritance(config: CLIConfig, configPath?: string): CLIC
       merged = { ...merged, ...parentResolved };
     }
 
-    // Apply own values on top (excluding 'inherits' key - it's metadata, not a value)
-    const { inherits: _inherits, ...ownValues } = sectionObj;
+    // Get inherited gadgets before applying own values
+    const inheritedGadgets = (merged.gadgets as string[] | undefined) ?? [];
+
+    // Apply own values on top (excluding metadata and gadget-related keys handled specially)
+    const {
+      inherits: _inherits,
+      gadgets: _gadgets,
+      gadget: _gadget,
+      "gadget-add": _gadgetAdd,
+      "gadget-remove": _gadgetRemove,
+      ...ownValues
+    } = sectionObj;
     merged = { ...merged, ...ownValues };
+
+    // Resolve gadgets with add/remove support
+    const resolvedGadgets = resolveGadgets(sectionObj, inheritedGadgets, name, configPath);
+    if (resolvedGadgets.length > 0) {
+      merged.gadgets = resolvedGadgets;
+    }
+
+    // Clean up legacy/modification fields from output
+    delete merged["gadget"];
+    delete merged["gadget-add"];
+    delete merged["gadget-remove"];
 
     resolving.delete(name);
     resolved[name] = merged;

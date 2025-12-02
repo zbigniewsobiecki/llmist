@@ -10,6 +10,41 @@ export interface LLMGenerationOptions {
   responseFormat?: "text";
   metadata?: Record<string, unknown>;
   extra?: Record<string, unknown>;
+  /**
+   * Optional abort signal for cancelling the request mid-flight.
+   *
+   * When the signal is aborted, the provider will attempt to cancel
+   * the underlying HTTP request and the stream will terminate with
+   * an abort error. Use `isAbortError()` from `@/core/errors` to
+   * detect cancellation in error handling.
+   *
+   * @example
+   * ```typescript
+   * const controller = new AbortController();
+   *
+   * const stream = client.stream({
+   *   model: "claude-3-5-sonnet-20241022",
+   *   messages: [{ role: "user", content: "Tell me a long story" }],
+   *   signal: controller.signal,
+   * });
+   *
+   * // Cancel after 5 seconds
+   * setTimeout(() => controller.abort(), 5000);
+   *
+   * try {
+   *   for await (const chunk of stream) {
+   *     process.stdout.write(chunk.text);
+   *   }
+   * } catch (error) {
+   *   if (isAbortError(error)) {
+   *     console.log("\nRequest was cancelled");
+   *   } else {
+   *     throw error;
+   *   }
+   * }
+   * ```
+   */
+  signal?: AbortSignal;
 }
 
 export interface TokenUsage {
