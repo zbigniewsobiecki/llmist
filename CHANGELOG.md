@@ -1,3 +1,11 @@
+## <small>1.3.1 (2025-12-02)</small>
+
+* Merge pull request #126 from zbigniewsobiecki/feat/test-coverage-improvements ([59ac763](https://github.com/zbigniewsobiecki/llmist/commit/59ac763)), closes [#126](https://github.com/zbigniewsobiecki/llmist/issues/126)
+* Merge pull request #127 from zbigniewsobiecki/chore/readme-update ([3b1dc78](https://github.com/zbigniewsobiecki/llmist/commit/3b1dc78)), closes [#127](https://github.com/zbigniewsobiecki/llmist/issues/127)
+* Merge pull request #128 from zbigniewsobiecki/dev ([16404ee](https://github.com/zbigniewsobiecki/llmist/commit/16404ee)), closes [#128](https://github.com/zbigniewsobiecki/llmist/issues/128)
+* chore: readme updates ([d7c9782](https://github.com/zbigniewsobiecki/llmist/commit/d7c9782))
+* test: add comprehensive tests for core architecture ([8cc453f](https://github.com/zbigniewsobiecki/llmist/commit/8cc453f))
+
 ## 1.3.0 (2025-12-01)
 
 * Merge pull request #117 from zbigniewsobiecki/dev ([5088ef4](https://github.com/zbigniewsobiecki/llmist/commit/5088ef4)), closes [#117](https://github.com/zbigniewsobiecki/llmist/issues/117)
