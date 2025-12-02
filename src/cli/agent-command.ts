@@ -194,7 +194,9 @@ export async function executeAgent(
     cleanupEsc: null,
     cleanupSigint: null,
     restore: () => {
-      // Restore ESC listener if it was previously active
+      // Only restore ESC listener if not cancelled - when wasCancelled is true,
+      // the executeAgent function is terminating and we don't need the listener.
+      // This is called after readline closes to re-enable ESC key detection.
       if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
         keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
       }
@@ -224,7 +226,7 @@ export async function executeAgent(
     }
 
     env.stderr.write(chalk.dim("[Quit]\n"));
-    process.exit(0);
+    process.exit(130); // SIGINT convention: 128 + signal number (2)
   };
 
   // Set up ESC key listener if in interactive TTY mode

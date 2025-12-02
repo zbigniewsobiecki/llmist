@@ -727,7 +727,7 @@ describe("createSigintListener", () => {
   });
 
   describe("state transitions", () => {
-    test("resets double-press timer after cancelling an operation", () => {
+    test("allows double-press quit after cancelling an operation", () => {
       const onCancel = mock();
       const onQuit = mock();
       let operationActive = true;
@@ -735,21 +735,17 @@ describe("createSigintListener", () => {
 
       const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
 
-      // First SIGINT while operation active - cancels it
+      // First SIGINT while operation active - cancels it and sets timer to now
       simulateSigint();
       expect(onCancel).toHaveBeenCalledTimes(1);
 
       // Operation now inactive
       operationActive = false;
 
-      // Second SIGINT - should show hint (not quit, because timer was reset)
-      simulateSigint();
-      expect(mockStderr.output).toContain("Press Ctrl+C again to quit");
-      expect(onQuit).not.toHaveBeenCalled();
-
-      // Third SIGINT - should quit (double-press)
+      // Second SIGINT (within 1 second) - should trigger quit (double-press detected)
       simulateSigint();
       expect(onQuit).toHaveBeenCalledTimes(1);
+      expect(mockStderr.output).not.toContain("Press Ctrl+C again to quit");
 
       cleanup();
     });

@@ -224,7 +224,8 @@ export function createSigintListener(
     if (isOperationActive()) {
       // Cancel the current operation
       onCancel();
-      lastSigintTime = 0; // Reset double-press timer
+      // Set timer to now so that a second Ctrl+C within 1 second will trigger quit
+      lastSigintTime = now;
       return;
     }
 
