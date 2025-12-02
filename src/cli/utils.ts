@@ -95,6 +95,70 @@ export function isInteractive(stream: TTYStream): boolean {
   return Boolean(stream.isTTY);
 }
 
+const ESC_KEY = 0x1b;
+const ESC_TIMEOUT_MS = 50; // Distinguish standalone ESC from escape sequences
+
+/**
+ * Creates a keyboard listener for ESC key detection in TTY mode.
+ *
+ * Uses a timeout to distinguish standalone ESC from escape sequences (like arrow keys).
+ * Arrow keys start with ESC byte (0x1B) followed by additional bytes, so we wait briefly
+ * to see if more bytes arrive before triggering the callback.
+ *
+ * @param stdin - The stdin stream (must be TTY with setRawMode support)
+ * @param onEsc - Callback when ESC is pressed
+ * @returns Cleanup function to restore normal mode, or null if not supported
+ */
+export function createEscKeyListener(
+  stdin: NodeJS.ReadStream,
+  onEsc: () => void,
+): (() => void) | null {
+  // Check both isTTY and setRawMode availability (mock streams may have isTTY but no setRawMode)
+  if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
+    return null;
+  }
+
+  let escTimeout: NodeJS.Timeout | null = null;
+
+  const handleData = (data: Buffer) => {
+    if (data[0] === ESC_KEY) {
+      if (data.length === 1) {
+        // Could be standalone ESC or start of sequence - use timeout
+        escTimeout = setTimeout(() => {
+          onEsc();
+        }, ESC_TIMEOUT_MS);
+      } else {
+        // Part of escape sequence (arrow key, etc.) - clear any pending timeout
+        if (escTimeout) {
+          clearTimeout(escTimeout);
+          escTimeout = null;
+        }
+      }
+    } else {
+      // Other key - clear any pending ESC timeout
+      if (escTimeout) {
+        clearTimeout(escTimeout);
+        escTimeout = null;
+      }
+    }
+  };
+
+  // Enable raw mode to get individual keystrokes
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.on("data", handleData);
+
+  // Return cleanup function
+  return () => {
+    if (escTimeout) {
+      clearTimeout(escTimeout);
+    }
+    stdin.removeListener("data", handleData);
+    stdin.setRawMode(false);
+    stdin.pause();
+  };
+}
+
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_DELAY_MS = 500; // Don't show spinner for fast responses
 
@@ -466,6 +530,34 @@ export class StreamProgress {
    */
   getTotalCost(): number {
     return this.totalCost;
+  }
+
+  /**
+   * Returns a formatted stats string for cancellation messages.
+   * Format: "↑ 1.2k | ↓ 300 | 5.0s"
+   */
+  formatStats(): string {
+    const parts: string[] = [];
+    const elapsed = ((Date.now() - this.callStartTime) / 1000).toFixed(1);
+
+    // Output tokens: use actual if available, otherwise estimate from chars
+    const outTokens = this.callOutputTokensEstimated
+      ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
+      : this.callOutputTokens;
+
+    if (this.callInputTokens > 0) {
+      const prefix = this.callInputTokensEstimated ? "~" : "";
+      parts.push(`↑ ${prefix}${formatTokens(this.callInputTokens)}`);
+    }
+
+    if (outTokens > 0) {
+      const prefix = this.callOutputTokensEstimated ? "~" : "";
+      parts.push(`↓ ${prefix}${formatTokens(outTokens)}`);
+    }
+
+    parts.push(`${elapsed}s`);
+
+    return parts.join(" | ");
   }
 
   /**

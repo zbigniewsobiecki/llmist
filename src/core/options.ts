@@ -10,6 +10,8 @@ export interface LLMGenerationOptions {
   responseFormat?: "text";
   metadata?: Record<string, unknown>;
   extra?: Record<string, unknown>;
+  /** Optional abort signal for cancelling the request mid-flight */
+  signal?: AbortSignal;
 }
 
 export interface TokenUsage {

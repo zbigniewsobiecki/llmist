@@ -83,9 +83,11 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
 
   protected async executeStreamRequest(
     payload: Parameters<OpenAI["chat"]["completions"]["create"]>[0],
+    signal?: AbortSignal,
   ): Promise<AsyncIterable<ChatCompletionChunk>> {
     const client = this.client as OpenAI;
-    const stream = await client.chat.completions.create(payload);
+    // Pass abort signal to SDK via request options
+    const stream = await client.chat.completions.create(payload, signal ? { signal } : undefined);
     return stream as unknown as AsyncIterable<ChatCompletionChunk>;
   }
 

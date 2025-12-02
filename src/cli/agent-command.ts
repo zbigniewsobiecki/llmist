@@ -2,6 +2,7 @@ import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { AgentBuilder } from "../agent/builder.js";
+import { isAbortError } from "../core/errors.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
@@ -15,6 +16,7 @@ import { loadGadgets } from "./gadgets.js";
 import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
+  createEscKeyListener,
   executeAction,
   isInteractive,
   renderSummary,
@@ -29,16 +31,27 @@ import {
 } from "./ui/formatters.js";
 
 /**
+ * Keyboard listener management for ESC key handling.
+ * Allows pausing and restoring the listener during readline operations.
+ */
+interface KeyboardManager {
+  cleanup: (() => void) | null;
+  restore: () => void;
+}
+
+/**
  * Creates a human input handler for interactive mode.
  * Only returns a handler if stdin is a TTY (terminal), not a pipe.
  *
  * @param env - CLI environment
  * @param progress - Progress indicator to pause during input
+ * @param keyboard - Keyboard listener manager for ESC handling
  * @returns Human input handler function or undefined if not interactive
  */
 function createHumanInputHandler(
   env: CLIEnvironment,
   progress: StreamProgress,
+  keyboard: KeyboardManager,
 ): ((question: string) => Promise<string>) | undefined {
   const stdout = env.stdout as NodeJS.WriteStream;
   if (!isInteractive(env.stdin) || typeof stdout.isTTY !== "boolean" || !stdout.isTTY) {
@@ -47,6 +60,13 @@ function createHumanInputHandler(
 
   return async (question: string): Promise<string> => {
     progress.pause(); // Pause progress indicator during human input
+
+    // Temporarily disable ESC listener for readline (raw mode conflict)
+    if (keyboard.cleanup) {
+      keyboard.cleanup();
+      keyboard.cleanup = null;
+    }
+
     const rl = createInterface({ input: env.stdin, output: env.stdout });
     try {
       // Display question on first prompt only (with markdown rendering and separators)
@@ -68,6 +88,8 @@ function createHumanInputHandler(
       }
     } finally {
       rl.close();
+      // Restore ESC listener after readline closes
+      keyboard.restore();
     }
   };
 }
@@ -148,6 +170,41 @@ export async function executeAgent(
   const printer = new StreamPrinter(env.stdout);
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
   const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
+
+  // Set up cancellation support for ESC key handling
+  const abortController = new AbortController();
+  let wasCancelled = false;
+  const stdinStream = env.stdin as NodeJS.ReadStream;
+
+  // Create keyboard manager for ESC listener coordination with readline
+  const keyboard: KeyboardManager = {
+    cleanup: null,
+    restore: () => {
+      // Restore ESC listener if it was previously active
+      if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
+        keyboard.cleanup = createEscKeyListener(stdinStream, () => {
+          if (!abortController.signal.aborted) {
+            wasCancelled = true;
+            abortController.abort();
+            progress.pause();
+            env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
+          }
+        });
+      }
+    },
+  };
+
+  // Set up ESC key listener if in interactive TTY mode
+  if (stdinIsInteractive && stdinStream.isTTY) {
+    keyboard.cleanup = createEscKeyListener(stdinStream, () => {
+      if (!abortController.signal.aborted) {
+        wasCancelled = true;
+        abortController.abort();
+        progress.pause();
+        env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
+      }
+    });
+  }
 
   // Set up gadget approval manager
   // Default: RunCommand, WriteFile, EditFile require approval unless overridden by config
@@ -405,10 +462,13 @@ export async function executeAgent(
     builder.withTemperature(options.temperature);
   }
 
-  const humanInputHandler = createHumanInputHandler(env, progress);
+  const humanInputHandler = createHumanInputHandler(env, progress, keyboard);
   if (humanInputHandler) {
     builder.onHumanInput(humanInputHandler);
   }
+
+  // Pass abort signal for ESC key cancellation
+  builder.withSignal(abortController.signal);
 
   // Add gadgets from the registry
   const gadgets = registry.getAll();
@@ -480,34 +540,47 @@ export async function executeAgent(
     }
   };
 
-  for await (const event of agent.run()) {
-    if (event.type === "text") {
-      // Accumulate text chunks - we'll render markdown when complete
-      progress.pause();
-      textBuffer += event.content;
-    } else if (event.type === "gadget_result") {
-      // Flush any accumulated text before showing gadget result
-      flushTextBuffer();
-      // Show gadget execution feedback on stderr
-      progress.pause();
+  try {
+    for await (const event of agent.run()) {
+      if (event.type === "text") {
+        // Accumulate text chunks - we'll render markdown when complete
+        progress.pause();
+        textBuffer += event.content;
+      } else if (event.type === "gadget_result") {
+        // Flush any accumulated text before showing gadget result
+        flushTextBuffer();
+        // Show gadget execution feedback on stderr
+        progress.pause();
 
-      if (options.quiet) {
-        // In quiet mode, only output TellUser messages (to stdout, plain unrendered text)
-        if (event.result.gadgetName === "TellUser" && event.result.parameters?.message) {
-          const message = String(event.result.parameters.message);
-          env.stdout.write(`${message}\n`);
+        if (options.quiet) {
+          // In quiet mode, only output TellUser messages (to stdout, plain unrendered text)
+          if (event.result.gadgetName === "TellUser" && event.result.parameters?.message) {
+            const message = String(event.result.parameters.message);
+            env.stdout.write(`${message}\n`);
+          }
+        } else {
+          // Normal mode: show full gadget summary on stderr
+          const tokenCount = await countGadgetOutputTokens(event.result.result);
+          env.stderr.write(`${formatGadgetSummary({ ...event.result, tokenCount })}\n`);
         }
-      } else {
-        // Normal mode: show full gadget summary on stderr
-        const tokenCount = await countGadgetOutputTokens(event.result.result);
-        env.stderr.write(`${formatGadgetSummary({ ...event.result, tokenCount })}\n`);
+        // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
       }
-      // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
+      // Note: human_input_required handled by callback (see createHumanInputHandler)
     }
-    // Note: human_input_required handled by callback (see createHumanInputHandler)
+  } catch (error) {
+    // Handle abort gracefully - message already shown in ESC handler
+    if (!isAbortError(error)) {
+      throw error;
+    }
+    // Keep partial response in buffer for flushing below
+  } finally {
+    // Always cleanup keyboard listener
+    if (keyboard.cleanup) {
+      keyboard.cleanup();
+    }
   }
 
-  // Flush any remaining buffered text with markdown rendering
+  // Flush any remaining buffered text with markdown rendering (includes partial on cancel)
   flushTextBuffer();
 
   progress.complete();

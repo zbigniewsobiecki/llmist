@@ -62,6 +62,7 @@ describe("OpenAIChatProvider", () => {
           ],
           stream: true,
         }),
+        undefined, // signal options
       );
     });
 
@@ -96,6 +97,7 @@ describe("OpenAIChatProvider", () => {
           top_p: 0.9,
           stop: ["STOP"],
         }),
+        undefined, // signal options
       );
     });
 

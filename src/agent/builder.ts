@@ -76,6 +76,7 @@ export class AgentBuilder {
   private gadgetOutputLimit?: boolean;
   private gadgetOutputLimitPercent?: number;
   private compactionConfig?: CompactionConfig;
+  private signal?: AbortSignal;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -559,6 +560,36 @@ export class AgentBuilder {
   }
 
   /**
+   * Set an abort signal for cancelling requests mid-flight.
+   *
+   * When the signal is aborted, the current LLM request will be cancelled
+   * and the agent loop will exit gracefully.
+   *
+   * @param signal - AbortSignal from an AbortController
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * const controller = new AbortController();
+   *
+   * // Cancel after 30 seconds
+   * setTimeout(() => controller.abort(), 30000);
+   *
+   * const agent = LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withSignal(controller.signal)
+   *   .ask("Write a long story");
+   *
+   * // Or cancel on user action
+   * document.getElementById("cancel").onclick = () => controller.abort();
+   * ```
+   */
+  withSignal(signal: AbortSignal): this {
+    this.signal = signal;
+    return this;
+  }
+
+  /**
    * Add a synthetic gadget call to the conversation history.
    *
    * This is useful for in-context learning - showing the LLM what "past self"
@@ -691,6 +722,7 @@ export class AgentBuilder {
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
+      signal: this.signal,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);
@@ -801,6 +833,7 @@ export class AgentBuilder {
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
+      signal: this.signal,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

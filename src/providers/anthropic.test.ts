@@ -53,6 +53,7 @@ describe("AnthropicMessagesProvider", () => {
             },
           ],
         }),
+        undefined, // signal options
       );
     });
 
@@ -89,6 +90,7 @@ describe("AnthropicMessagesProvider", () => {
             },
           ],
         }),
+        undefined, // signal options
       );
     });
 
@@ -128,6 +130,7 @@ describe("AnthropicMessagesProvider", () => {
             },
           ],
         }),
+        undefined, // signal options
       );
     });
 
@@ -161,6 +164,7 @@ describe("AnthropicMessagesProvider", () => {
           stop_sequences: ["END"],
           stream: true,
         }),
+        undefined, // signal options
       );
     });
 
@@ -186,6 +190,7 @@ describe("AnthropicMessagesProvider", () => {
         expect.objectContaining({
           max_tokens: 4096, // Default fallback when model not in catalog
         }),
+        undefined, // signal options
       );
     });
   });
