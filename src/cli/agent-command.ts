@@ -6,6 +6,7 @@ import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
+import { ApprovalManager, type ApprovalConfig } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
@@ -26,28 +27,6 @@ import {
   renderMarkdownWithSeparators,
   renderOverallSummary,
 } from "./ui/formatters.js";
-
-/**
- * Prompts the user for approval with optional rejection feedback.
- * Used by the gating controller to approve dangerous gadget executions.
- *
- * SHOWCASE: This demonstrates how to build approval workflows using llmist's
- * controller hooks. The CLI gates RunCommand executions, but the pattern
- * can be applied to any gadget that needs user approval.
- *
- * @param env - CLI environment for I/O operations
- * @param prompt - The prompt to display to the user
- * @returns The user's input (empty string or "y" = approved, anything else = rejection reason)
- */
-async function promptApproval(env: CLIEnvironment, prompt: string): Promise<string> {
-  const rl = createInterface({ input: env.stdin, output: env.stderr });
-  try {
-    const answer = await rl.question(prompt);
-    return answer.trim();
-  } finally {
-    rl.close();
-  }
-}
 
 /**
  * Creates a human input handler for interactive mode.
@@ -169,6 +148,31 @@ export async function executeAgent(
   const printer = new StreamPrinter(env.stdout);
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
   const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
+
+  // Set up gadget approval manager
+  // Default: RunCommand, WriteFile, EditFile require approval unless overridden by config
+  const DEFAULT_APPROVAL_REQUIRED = ["RunCommand", "WriteFile", "EditFile"];
+  const userApprovals = options.gadgetApproval ?? {};
+
+  // Apply defaults for dangerous gadgets if not explicitly configured
+  const gadgetApprovals: Record<string, "allowed" | "denied" | "approval-required"> = {
+    ...userApprovals,
+  };
+  for (const gadget of DEFAULT_APPROVAL_REQUIRED) {
+    const normalizedGadget = gadget.toLowerCase();
+    const isConfigured = Object.keys(userApprovals).some(
+      (key) => key.toLowerCase() === normalizedGadget,
+    );
+    if (!isConfigured) {
+      gadgetApprovals[gadget] = "approval-required";
+    }
+  }
+
+  const approvalConfig: ApprovalConfig = {
+    gadgetApprovals,
+    defaultMode: "allowed",
+  };
+  const approvalManager = new ApprovalManager(approvalConfig, env, progress);
 
   let usage: TokenUsage | undefined;
   let iterations = 0;
@@ -334,53 +338,57 @@ export async function executeAgent(
         },
       },
 
-      // SHOWCASE: Controller-based approval gating for dangerous gadgets
+      // SHOWCASE: Controller-based approval gating for gadgets
       //
       // This demonstrates how to add safety layers WITHOUT modifying gadgets.
-      // The RunCommand gadget is simple - it just executes commands. The CLI
-      // adds the approval flow externally via beforeGadgetExecution controller.
+      // The ApprovalManager handles approval flows externally via beforeGadgetExecution.
+      // Approval modes are configurable via cli.toml:
+      //   - "allowed": auto-proceed
+      //   - "denied": auto-reject, return message to LLM
+      //   - "approval-required": prompt user interactively
       //
-      // This pattern is composable: you can apply the same gating logic to
-      // any gadget (DeleteFile, SendEmail, etc.) without changing the gadgets.
+      // Default: RunCommand, WriteFile, EditFile require approval unless overridden.
       controllers: {
         beforeGadgetExecution: async (ctx) => {
-          // Only gate RunCommand - let other gadgets through
-          if (ctx.gadgetName !== "RunCommand") {
+          const mode = approvalManager.getApprovalMode(ctx.gadgetName);
+
+          // Fast path: allowed gadgets proceed immediately
+          if (mode === "allowed") {
             return { action: "proceed" };
           }
 
-          // Only prompt for approval in interactive mode
+          // Check if we can prompt (interactive mode required for approval-required)
           const stdinTTY = isInteractive(env.stdin);
           const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-          if (!stdinTTY || !stderrTTY) {
-            // Non-interactive mode: deny by default for safety
+          const canPrompt = stdinTTY && stderrTTY;
+
+          // Non-interactive mode handling
+          if (!canPrompt) {
+            if (mode === "approval-required") {
+              return {
+                action: "skip",
+                syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Run in a terminal to approve.`,
+              };
+            }
+            if (mode === "denied") {
+              return {
+                action: "skip",
+                syntheticResult: `status=denied\n\n${ctx.gadgetName} is denied by configuration.`,
+              };
+            }
+            return { action: "proceed" };
+          }
+
+          // Interactive mode: use approval manager
+          const result = await approvalManager.requestApproval(ctx.gadgetName, ctx.parameters);
+
+          if (!result.approved) {
             return {
               action: "skip",
-              syntheticResult:
-                "status=denied\n\nRunCommand requires interactive approval. Run in a terminal to approve commands.",
+              syntheticResult: `status=denied\n\nDenied: ${result.reason ?? "by user"}`,
             };
           }
 
-          const command = ctx.parameters.command as string;
-
-          // Pause progress indicator and prompt for approval
-          progress.pause();
-          env.stderr.write(`\n🔒 Execute: ${chalk.cyan(command)}\n`);
-
-          const response = await promptApproval(env, "   ⏎ approve, or type to reject: ");
-
-          // Empty input or "y"/"Y" = approved
-          const isApproved = response === "" || response.toLowerCase() === "y";
-
-          if (!isApproved) {
-            env.stderr.write(`   ${chalk.red("✗ Denied")}\n\n`);
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\nCommand rejected by user with message: "${response}"`,
-            };
-          }
-
-          env.stderr.write(`   ${chalk.green("✓ Approved")}\n`);
           return { action: "proceed" };
         },
       },
@@ -545,6 +553,13 @@ export function registerAgentCommand(
   addAgentOptions(cmd, config);
 
   cmd.action((prompt, options) =>
-    executeAction(() => executeAgent(prompt, options as AgentCommandOptions, env), env),
+    executeAction(() => {
+      // Merge config-only options (no CLI flags) into command options
+      const mergedOptions: AgentCommandOptions = {
+        ...(options as AgentCommandOptions),
+        gadgetApproval: config?.["gadget-approval"],
+      };
+      return executeAgent(prompt, mergedOptions, env);
+    }, env),
   );
 }
