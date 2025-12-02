@@ -95,6 +95,158 @@ export function isInteractive(stream: TTYStream): boolean {
   return Boolean(stream.isTTY);
 }
 
+/** ESC key byte code */
+const ESC_KEY = 0x1b;
+
+/**
+ * Timeout in milliseconds to distinguish standalone ESC key from escape sequences.
+ *
+ * When a user presses the ESC key alone, only byte 0x1B is sent. However, arrow keys
+ * and other special keys send escape sequences that START with 0x1B followed by
+ * additional bytes (e.g., `ESC[A` for up arrow, `ESC[B` for down arrow).
+ *
+ * These additional bytes typically arrive within 10-20ms on most terminals and SSH
+ * connections. The 50ms timeout provides a safe buffer to detect escape sequences
+ * while keeping the standalone ESC key responsive to user input.
+ *
+ * If no additional bytes arrive within this window after an initial ESC byte,
+ * we treat it as a standalone ESC key press.
+ */
+const ESC_TIMEOUT_MS = 50;
+
+/**
+ * Creates a keyboard listener for ESC key detection in TTY mode.
+ *
+ * Uses a timeout to distinguish standalone ESC from escape sequences (like arrow keys).
+ * Arrow keys start with ESC byte (0x1B) followed by additional bytes, so we wait briefly
+ * to see if more bytes arrive before triggering the callback.
+ *
+ * @param stdin - The stdin stream (must be TTY with setRawMode support)
+ * @param onEsc - Callback when ESC is pressed
+ * @returns Cleanup function to restore normal mode, or null if not supported
+ */
+export function createEscKeyListener(
+  stdin: NodeJS.ReadStream,
+  onEsc: () => void,
+): (() => void) | null {
+  // Check both isTTY and setRawMode availability (mock streams may have isTTY but no setRawMode)
+  if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
+    return null;
+  }
+
+  let escTimeout: NodeJS.Timeout | null = null;
+
+  const handleData = (data: Buffer) => {
+    if (data[0] === ESC_KEY) {
+      if (data.length === 1) {
+        // Could be standalone ESC or start of sequence - use timeout
+        escTimeout = setTimeout(() => {
+          onEsc();
+        }, ESC_TIMEOUT_MS);
+      } else {
+        // Part of escape sequence (arrow key, etc.) - clear any pending timeout
+        if (escTimeout) {
+          clearTimeout(escTimeout);
+          escTimeout = null;
+        }
+      }
+    } else {
+      // Other key - clear any pending ESC timeout
+      if (escTimeout) {
+        clearTimeout(escTimeout);
+        escTimeout = null;
+      }
+    }
+  };
+
+  // Enable raw mode to get individual keystrokes
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.on("data", handleData);
+
+  // Return cleanup function
+  return () => {
+    if (escTimeout) {
+      clearTimeout(escTimeout);
+    }
+    stdin.removeListener("data", handleData);
+    stdin.setRawMode(false);
+    stdin.pause();
+  };
+}
+
+/**
+ * Timeout window for detecting double Ctrl+C press (in milliseconds).
+ *
+ * When no operation is active, pressing Ctrl+C once shows a hint message.
+ * If a second Ctrl+C is pressed within this window, the CLI exits gracefully.
+ * This pattern is familiar from many CLI tools (npm, vim, etc.).
+ */
+const SIGINT_DOUBLE_PRESS_MS = 1000;
+
+/**
+ * Creates a SIGINT (Ctrl+C) listener with double-press detection.
+ *
+ * Behavior:
+ * - If an operation is active: cancels the operation via `onCancel`
+ * - If no operation active and first press: shows hint message
+ * - If no operation active and second press within 1 second: calls `onQuit`
+ *
+ * @param onCancel - Callback when Ctrl+C pressed during an active operation
+ * @param onQuit - Callback when double Ctrl+C pressed (quit CLI)
+ * @param isOperationActive - Function that returns true if an operation is in progress
+ * @param stderr - Stream to write hint messages to (defaults to process.stderr)
+ * @returns Cleanup function to remove the listener
+ *
+ * @example
+ * ```typescript
+ * const cleanup = createSigintListener(
+ *   () => abortController.abort(),
+ *   () => process.exit(0),
+ *   () => isStreaming,
+ * );
+ *
+ * // When done:
+ * cleanup();
+ * ```
+ */
+export function createSigintListener(
+  onCancel: () => void,
+  onQuit: () => void,
+  isOperationActive: () => boolean,
+  stderr: NodeJS.WritableStream = process.stderr,
+): () => void {
+  let lastSigintTime = 0;
+
+  const handler = () => {
+    const now = Date.now();
+
+    if (isOperationActive()) {
+      // Cancel the current operation
+      onCancel();
+      // Set timer to now so that a second Ctrl+C within 1 second will trigger quit
+      lastSigintTime = now;
+      return;
+    }
+
+    // Check for double-press
+    if (now - lastSigintTime < SIGINT_DOUBLE_PRESS_MS) {
+      onQuit();
+      return;
+    }
+
+    // First press when no operation is active
+    lastSigintTime = now;
+    stderr.write(chalk.dim("\n[Press Ctrl+C again to quit]\n"));
+  };
+
+  process.on("SIGINT", handler);
+
+  return () => {
+    process.removeListener("SIGINT", handler);
+  };
+}
+
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_DELAY_MS = 500; // Don't show spinner for fast responses
 
@@ -466,6 +618,34 @@ export class StreamProgress {
    */
   getTotalCost(): number {
     return this.totalCost;
+  }
+
+  /**
+   * Returns a formatted stats string for cancellation messages.
+   * Format: "↑ 1.2k | ↓ 300 | 5.0s"
+   */
+  formatStats(): string {
+    const parts: string[] = [];
+    const elapsed = ((Date.now() - this.callStartTime) / 1000).toFixed(1);
+
+    // Output tokens: use actual if available, otherwise estimate from chars
+    const outTokens = this.callOutputTokensEstimated
+      ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
+      : this.callOutputTokens;
+
+    if (this.callInputTokens > 0) {
+      const prefix = this.callInputTokensEstimated ? "~" : "";
+      parts.push(`↑ ${prefix}${formatTokens(this.callInputTokens)}`);
+    }
+
+    if (outTokens > 0) {
+      const prefix = this.callOutputTokensEstimated ? "~" : "";
+      parts.push(`↓ ${prefix}${formatTokens(outTokens)}`);
+    }
+
+    parts.push(`${elapsed}s`);
+
+    return parts.join(" | ");
   }
 
   /**

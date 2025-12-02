@@ -45,8 +45,8 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     // Step 2: Build the provider-specific request payload
     const payload = this.buildRequestPayload(options, descriptor, spec, preparedMessages);
 
-    // Step 3: Execute the stream request using the provider's SDK
-    const rawStream = await this.executeStreamRequest(payload);
+    // Step 3: Execute the stream request using the provider's SDK (with optional abort signal)
+    const rawStream = await this.executeStreamRequest(payload, options.signal);
 
     // Step 4: Transform the provider-specific stream into universal format
     yield* this.wrapStream(rawStream);
@@ -87,9 +87,13 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
    * This method must be implemented by each concrete provider.
    *
    * @param payload - The provider-specific payload
+   * @param signal - Optional abort signal for cancelling the request
    * @returns An async iterable of provider-specific chunks
    */
-  protected abstract executeStreamRequest(payload: unknown): Promise<AsyncIterable<unknown>>;
+  protected abstract executeStreamRequest(
+    payload: unknown,
+    signal?: AbortSignal,
+  ): Promise<AsyncIterable<unknown>>;
 
   /**
    * Wrap the provider-specific stream into the universal LLMStream format.

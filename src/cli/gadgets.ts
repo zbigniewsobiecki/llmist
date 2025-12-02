@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { BaseGadget } from "../gadgets/gadget.js";
+import { getBuiltinGadget, isBuiltinGadgetName } from "./builtins/index.js";
 
 /**
  * Function type for importing modules dynamically.
@@ -10,6 +11,7 @@ import { BaseGadget } from "../gadgets/gadget.js";
 export type GadgetImportFunction = (specifier: string) => Promise<unknown>;
 
 const PATH_PREFIXES = [".", "/", "~"];
+const BUILTIN_PREFIX = "builtin:";
 
 /**
  * Duck-type check if a value looks like a Gadget instance.
@@ -74,6 +76,35 @@ function isFileLikeSpecifier(specifier: string): boolean {
   return (
     PATH_PREFIXES.some((prefix) => specifier.startsWith(prefix)) || specifier.includes(path.sep)
   );
+}
+
+/**
+ * Attempts to resolve a specifier as a built-in gadget.
+ * Handles both explicit "builtin:" prefix and bare names that match built-in gadgets.
+ *
+ * @param specifier - The gadget specifier to check
+ * @returns The built-in gadget if found, null otherwise
+ * @throws Error if "builtin:" prefix is used but gadget doesn't exist
+ */
+export function tryResolveBuiltin(specifier: string): BaseGadget | null {
+  // Handle explicit builtin: prefix
+  if (specifier.startsWith(BUILTIN_PREFIX)) {
+    const name = specifier.slice(BUILTIN_PREFIX.length);
+    const gadget = getBuiltinGadget(name);
+    if (!gadget) {
+      throw new Error(
+        `Unknown builtin gadget: ${name}. Available builtins: ListDirectory, ReadFile, WriteFile, EditFile, RunCommand`
+      );
+    }
+    return gadget;
+  }
+
+  // For non-file-path specifiers, check builtins first
+  if (!isFileLikeSpecifier(specifier) && isBuiltinGadgetName(specifier)) {
+    return getBuiltinGadget(specifier)!;
+  }
+
+  return null;
 }
 
 /**
@@ -150,10 +181,16 @@ export function extractGadgetsFromModule(moduleExports: unknown): BaseGadget[] {
 }
 
 /**
- * Loads gadgets from one or more file paths or npm module names.
- * Resolves paths, imports modules, and extracts gadgets.
+ * Loads gadgets from one or more specifiers.
+ * Supports built-in gadgets (by name or "builtin:" prefix), file paths, and npm module names.
  *
- * @param specifiers - Array of gadget specifiers (file paths or module names)
+ * Resolution order:
+ * 1. "builtin:Name" - explicit built-in lookup (error if not found)
+ * 2. Bare "Name" without path chars - check built-in registry first
+ * 3. File paths (starting with ., /, ~) - resolve and import
+ * 4. npm module names - dynamic import
+ *
+ * @param specifiers - Array of gadget specifiers
  * @param cwd - Current working directory for resolving relative paths
  * @param importer - Function to dynamically import modules (default: native import)
  * @returns Array of loaded Gadget instances
@@ -167,6 +204,14 @@ export async function loadGadgets(
   const gadgets: BaseGadget[] = [];
 
   for (const specifier of specifiers) {
+    // Try builtin resolution first
+    const builtin = tryResolveBuiltin(specifier);
+    if (builtin) {
+      gadgets.push(builtin);
+      continue;
+    }
+
+    // Fall back to file/npm resolution
     const resolved = resolveGadgetSpecifier(specifier, cwd);
     let exports: unknown;
     try {

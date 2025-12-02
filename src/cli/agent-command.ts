@@ -2,10 +2,12 @@ import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { AgentBuilder } from "../agent/builder.js";
+import { isAbortError } from "../core/errors.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
+import { ApprovalManager, type ApprovalConfig } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
@@ -14,6 +16,8 @@ import { loadGadgets } from "./gadgets.js";
 import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
+  createEscKeyListener,
+  createSigintListener,
   executeAction,
   isInteractive,
   renderSummary,
@@ -28,25 +32,13 @@ import {
 } from "./ui/formatters.js";
 
 /**
- * Prompts the user for approval with optional rejection feedback.
- * Used by the gating controller to approve dangerous gadget executions.
- *
- * SHOWCASE: This demonstrates how to build approval workflows using llmist's
- * controller hooks. The CLI gates RunCommand executions, but the pattern
- * can be applied to any gadget that needs user approval.
- *
- * @param env - CLI environment for I/O operations
- * @param prompt - The prompt to display to the user
- * @returns The user's input (empty string or "y" = approved, anything else = rejection reason)
+ * Keyboard/signal listener management for ESC key and Ctrl+C (SIGINT) handling.
+ * Allows pausing and restoring the ESC listener during readline operations.
  */
-async function promptApproval(env: CLIEnvironment, prompt: string): Promise<string> {
-  const rl = createInterface({ input: env.stdin, output: env.stderr });
-  try {
-    const answer = await rl.question(prompt);
-    return answer.trim();
-  } finally {
-    rl.close();
-  }
+interface KeyboardManager {
+  cleanupEsc: (() => void) | null;
+  cleanupSigint: (() => void) | null;
+  restore: () => void;
 }
 
 /**
@@ -55,11 +47,13 @@ async function promptApproval(env: CLIEnvironment, prompt: string): Promise<stri
  *
  * @param env - CLI environment
  * @param progress - Progress indicator to pause during input
+ * @param keyboard - Keyboard listener manager for ESC handling
  * @returns Human input handler function or undefined if not interactive
  */
 function createHumanInputHandler(
   env: CLIEnvironment,
   progress: StreamProgress,
+  keyboard: KeyboardManager,
 ): ((question: string) => Promise<string>) | undefined {
   const stdout = env.stdout as NodeJS.WriteStream;
   if (!isInteractive(env.stdin) || typeof stdout.isTTY !== "boolean" || !stdout.isTTY) {
@@ -68,6 +62,13 @@ function createHumanInputHandler(
 
   return async (question: string): Promise<string> => {
     progress.pause(); // Pause progress indicator during human input
+
+    // Temporarily disable ESC listener for readline (raw mode conflict)
+    if (keyboard.cleanupEsc) {
+      keyboard.cleanupEsc();
+      keyboard.cleanupEsc = null;
+    }
+
     const rl = createInterface({ input: env.stdin, output: env.stdout });
     try {
       // Display question on first prompt only (with markdown rendering and separators)
@@ -89,6 +90,8 @@ function createHumanInputHandler(
       }
     } finally {
       rl.close();
+      // Restore ESC listener after readline closes
+      keyboard.restore();
     }
   };
 }
@@ -170,6 +173,100 @@ export async function executeAgent(
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
   const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
 
+  // Set up cancellation support for ESC key and Ctrl+C (SIGINT) handling
+  const abortController = new AbortController();
+  let wasCancelled = false;
+  let isStreaming = false; // Track if LLM call is in progress
+  const stdinStream = env.stdin as NodeJS.ReadStream;
+
+  // Shared cancel handler for both ESC and Ctrl+C
+  const handleCancel = () => {
+    if (!abortController.signal.aborted) {
+      wasCancelled = true;
+      abortController.abort();
+      progress.pause();
+      env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
+    }
+  };
+
+  // Create keyboard manager for ESC/SIGINT listener coordination with readline
+  const keyboard: KeyboardManager = {
+    cleanupEsc: null,
+    cleanupSigint: null,
+    restore: () => {
+      // Only restore ESC listener if not cancelled - when wasCancelled is true,
+      // the executeAgent function is terminating and we don't need the listener.
+      // This is called after readline closes to re-enable ESC key detection.
+      if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
+        keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
+      }
+    },
+  };
+
+  // Quit handler for double Ctrl+C - shows summary and exits
+  const handleQuit = () => {
+    // Clean up listeners
+    keyboard.cleanupEsc?.();
+    keyboard.cleanupSigint?.();
+
+    progress.complete();
+    printer.ensureNewline();
+
+    // Show final summary
+    const summary = renderOverallSummary({
+      totalTokens: usage?.totalTokens,
+      iterations,
+      elapsedSeconds: progress.getTotalElapsedSeconds(),
+      cost: progress.getTotalCost(),
+    });
+
+    if (summary) {
+      env.stderr.write(`${chalk.dim("─".repeat(40))}\n`);
+      env.stderr.write(`${summary}\n`);
+    }
+
+    env.stderr.write(chalk.dim("[Quit]\n"));
+    process.exit(130); // SIGINT convention: 128 + signal number (2)
+  };
+
+  // Set up ESC key listener if in interactive TTY mode
+  if (stdinIsInteractive && stdinStream.isTTY) {
+    keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
+  }
+
+  // Set up SIGINT (Ctrl+C) listener - always active for graceful cancellation
+  keyboard.cleanupSigint = createSigintListener(
+    handleCancel,
+    handleQuit,
+    () => isStreaming && !abortController.signal.aborted,
+    env.stderr,
+  );
+
+  // Set up gadget approval manager
+  // Default: RunCommand, WriteFile, EditFile require approval unless overridden by config
+  const DEFAULT_APPROVAL_REQUIRED = ["RunCommand", "WriteFile", "EditFile"];
+  const userApprovals = options.gadgetApproval ?? {};
+
+  // Apply defaults for dangerous gadgets if not explicitly configured
+  const gadgetApprovals: Record<string, "allowed" | "denied" | "approval-required"> = {
+    ...userApprovals,
+  };
+  for (const gadget of DEFAULT_APPROVAL_REQUIRED) {
+    const normalizedGadget = gadget.toLowerCase();
+    const isConfigured = Object.keys(userApprovals).some(
+      (key) => key.toLowerCase() === normalizedGadget,
+    );
+    if (!isConfigured) {
+      gadgetApprovals[gadget] = "approval-required";
+    }
+  }
+
+  const approvalConfig: ApprovalConfig = {
+    gadgetApprovals,
+    defaultMode: "allowed",
+  };
+  const approvalManager = new ApprovalManager(approvalConfig, env, progress);
+
   let usage: TokenUsage | undefined;
   let iterations = 0;
 
@@ -221,6 +318,7 @@ export async function executeAgent(
         // onLLMCallStart: Start progress indicator for each LLM call
         // This showcases how to react to agent lifecycle events
         onLLMCallStart: async (context) => {
+          isStreaming = true; // Mark that we're actively streaming (for SIGINT handling)
           llmCallCounter++;
 
           // Count input tokens accurately using provider-specific methods
@@ -266,6 +364,8 @@ export async function executeAgent(
         // onLLMCallComplete: Finalize metrics after each LLM call
         // This is where you'd typically log metrics or update dashboards
         onLLMCallComplete: async (context) => {
+          isStreaming = false; // Mark that streaming is complete (for SIGINT handling)
+
           // Capture completion metadata for final summary
           usage = context.usage;
           iterations = Math.max(iterations, context.iteration + 1);
@@ -334,53 +434,57 @@ export async function executeAgent(
         },
       },
 
-      // SHOWCASE: Controller-based approval gating for dangerous gadgets
+      // SHOWCASE: Controller-based approval gating for gadgets
       //
       // This demonstrates how to add safety layers WITHOUT modifying gadgets.
-      // The RunCommand gadget is simple - it just executes commands. The CLI
-      // adds the approval flow externally via beforeGadgetExecution controller.
+      // The ApprovalManager handles approval flows externally via beforeGadgetExecution.
+      // Approval modes are configurable via cli.toml:
+      //   - "allowed": auto-proceed
+      //   - "denied": auto-reject, return message to LLM
+      //   - "approval-required": prompt user interactively
       //
-      // This pattern is composable: you can apply the same gating logic to
-      // any gadget (DeleteFile, SendEmail, etc.) without changing the gadgets.
+      // Default: RunCommand, WriteFile, EditFile require approval unless overridden.
       controllers: {
         beforeGadgetExecution: async (ctx) => {
-          // Only gate RunCommand - let other gadgets through
-          if (ctx.gadgetName !== "RunCommand") {
+          const mode = approvalManager.getApprovalMode(ctx.gadgetName);
+
+          // Fast path: allowed gadgets proceed immediately
+          if (mode === "allowed") {
             return { action: "proceed" };
           }
 
-          // Only prompt for approval in interactive mode
+          // Check if we can prompt (interactive mode required for approval-required)
           const stdinTTY = isInteractive(env.stdin);
           const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-          if (!stdinTTY || !stderrTTY) {
-            // Non-interactive mode: deny by default for safety
+          const canPrompt = stdinTTY && stderrTTY;
+
+          // Non-interactive mode handling
+          if (!canPrompt) {
+            if (mode === "approval-required") {
+              return {
+                action: "skip",
+                syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Run in a terminal to approve.`,
+              };
+            }
+            if (mode === "denied") {
+              return {
+                action: "skip",
+                syntheticResult: `status=denied\n\n${ctx.gadgetName} is denied by configuration.`,
+              };
+            }
+            return { action: "proceed" };
+          }
+
+          // Interactive mode: use approval manager
+          const result = await approvalManager.requestApproval(ctx.gadgetName, ctx.parameters);
+
+          if (!result.approved) {
             return {
               action: "skip",
-              syntheticResult:
-                "status=denied\n\nRunCommand requires interactive approval. Run in a terminal to approve commands.",
+              syntheticResult: `status=denied\n\nDenied: ${result.reason ?? "by user"}`,
             };
           }
 
-          const command = ctx.parameters.command as string;
-
-          // Pause progress indicator and prompt for approval
-          progress.pause();
-          env.stderr.write(`\n🔒 Execute: ${chalk.cyan(command)}\n`);
-
-          const response = await promptApproval(env, "   ⏎ approve, or type to reject: ");
-
-          // Empty input or "y"/"Y" = approved
-          const isApproved = response === "" || response.toLowerCase() === "y";
-
-          if (!isApproved) {
-            env.stderr.write(`   ${chalk.red("✗ Denied")}\n\n`);
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\nCommand rejected by user with message: "${response}"`,
-            };
-          }
-
-          env.stderr.write(`   ${chalk.green("✓ Approved")}\n`);
           return { action: "proceed" };
         },
       },
@@ -397,10 +501,13 @@ export async function executeAgent(
     builder.withTemperature(options.temperature);
   }
 
-  const humanInputHandler = createHumanInputHandler(env, progress);
+  const humanInputHandler = createHumanInputHandler(env, progress, keyboard);
   if (humanInputHandler) {
     builder.onHumanInput(humanInputHandler);
   }
+
+  // Pass abort signal for ESC key cancellation
+  builder.withSignal(abortController.signal);
 
   // Add gadgets from the registry
   const gadgets = registry.getAll();
@@ -472,34 +579,47 @@ export async function executeAgent(
     }
   };
 
-  for await (const event of agent.run()) {
-    if (event.type === "text") {
-      // Accumulate text chunks - we'll render markdown when complete
-      progress.pause();
-      textBuffer += event.content;
-    } else if (event.type === "gadget_result") {
-      // Flush any accumulated text before showing gadget result
-      flushTextBuffer();
-      // Show gadget execution feedback on stderr
-      progress.pause();
+  try {
+    for await (const event of agent.run()) {
+      if (event.type === "text") {
+        // Accumulate text chunks - we'll render markdown when complete
+        progress.pause();
+        textBuffer += event.content;
+      } else if (event.type === "gadget_result") {
+        // Flush any accumulated text before showing gadget result
+        flushTextBuffer();
+        // Show gadget execution feedback on stderr
+        progress.pause();
 
-      if (options.quiet) {
-        // In quiet mode, only output TellUser messages (to stdout, plain unrendered text)
-        if (event.result.gadgetName === "TellUser" && event.result.parameters?.message) {
-          const message = String(event.result.parameters.message);
-          env.stdout.write(`${message}\n`);
+        if (options.quiet) {
+          // In quiet mode, only output TellUser messages (to stdout, plain unrendered text)
+          if (event.result.gadgetName === "TellUser" && event.result.parameters?.message) {
+            const message = String(event.result.parameters.message);
+            env.stdout.write(`${message}\n`);
+          }
+        } else {
+          // Normal mode: show full gadget summary on stderr
+          const tokenCount = await countGadgetOutputTokens(event.result.result);
+          env.stderr.write(`${formatGadgetSummary({ ...event.result, tokenCount })}\n`);
         }
-      } else {
-        // Normal mode: show full gadget summary on stderr
-        const tokenCount = await countGadgetOutputTokens(event.result.result);
-        env.stderr.write(`${formatGadgetSummary({ ...event.result, tokenCount })}\n`);
+        // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
       }
-      // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
+      // Note: human_input_required handled by callback (see createHumanInputHandler)
     }
-    // Note: human_input_required handled by callback (see createHumanInputHandler)
+  } catch (error) {
+    // Handle abort gracefully - message already shown in ESC handler
+    if (!isAbortError(error)) {
+      throw error;
+    }
+    // Keep partial response in buffer for flushing below
+  } finally {
+    // Always cleanup keyboard and signal listeners
+    isStreaming = false;
+    keyboard.cleanupEsc?.();
+    keyboard.cleanupSigint?.();
   }
 
-  // Flush any remaining buffered text with markdown rendering
+  // Flush any remaining buffered text with markdown rendering (includes partial on cancel)
   flushTextBuffer();
 
   progress.complete();
@@ -545,6 +665,13 @@ export function registerAgentCommand(
   addAgentOptions(cmd, config);
 
   cmd.action((prompt, options) =>
-    executeAction(() => executeAgent(prompt, options as AgentCommandOptions, env), env),
+    executeAction(() => {
+      // Merge config-only options (no CLI flags) into command options
+      const mergedOptions: AgentCommandOptions = {
+        ...(options as AgentCommandOptions),
+        gadgetApproval: config?.["gadget-approval"],
+      };
+      return executeAgent(prompt, mergedOptions, env);
+    }, env),
   );
 }

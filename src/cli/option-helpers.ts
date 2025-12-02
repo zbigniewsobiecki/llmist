@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { AgentConfig, CompleteConfig, CustomCommandConfig } from "./config.js";
+import type { AgentConfig, CompleteConfig, CustomCommandConfig, GadgetApprovalConfig } from "./config.js";
 import { DEFAULT_MODEL, OPTION_DESCRIPTIONS, OPTION_FLAGS } from "./constants.js";
 import { createNumericParser } from "./utils.js";
 
@@ -30,6 +30,7 @@ export interface AgentCommandOptions {
   gadgetStartPrefix?: string;
   gadgetEndPrefix?: string;
   gadgetArgPrefix?: string;
+  gadgetApproval?: GadgetApprovalConfig;
   quiet?: boolean;
   logLlmRequests?: string | boolean;
   logLlmResponses?: string | boolean;
@@ -76,7 +77,7 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
     ...previous,
     value,
   ];
-  const defaultGadgets = defaults?.gadget ?? [];
+  const defaultGadgets = defaults?.gadgets ?? defaults?.gadget ?? [];
 
   return cmd
     .option(OPTION_FLAGS.model, OPTION_DESCRIPTIONS.model, defaults?.model ?? DEFAULT_MODEL)
@@ -131,7 +132,9 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
   if (config.system !== undefined) result.system = config.system;
   if (config.temperature !== undefined) result.temperature = config.temperature;
   if (config["max-iterations"] !== undefined) result.maxIterations = config["max-iterations"];
-  if (config.gadget !== undefined) result.gadget = config.gadget;
+  // Prefer gadgets (plural) from resolved config, fall back to legacy gadget (singular)
+  const gadgets = config.gadgets ?? config.gadget;
+  if (gadgets !== undefined) result.gadget = gadgets;
   if (config.builtins !== undefined) result.builtins = config.builtins;
   if (config["builtin-interaction"] !== undefined)
     result.builtinInteraction = config["builtin-interaction"];
@@ -141,6 +144,8 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
     result.gadgetEndPrefix = config["gadget-end-prefix"];
   if (config["gadget-arg-prefix"] !== undefined)
     result.gadgetArgPrefix = config["gadget-arg-prefix"];
+  if (config["gadget-approval"] !== undefined)
+    result.gadgetApproval = config["gadget-approval"];
   if (config.quiet !== undefined) result.quiet = config.quiet;
   if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
   if (config["log-llm-responses"] !== undefined) result.logLlmResponses = config["log-llm-responses"];
