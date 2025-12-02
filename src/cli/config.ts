@@ -21,6 +21,26 @@ export type { PromptsConfig } from "./templates.js";
 export type LogLevel = "silly" | "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
 /**
+ * Gadget approval mode determines how a gadget execution is handled.
+ * - "allowed": Auto-proceed without prompting
+ * - "denied": Auto-reject, return denial message to LLM
+ * - "approval-required": Prompt user for approval before execution
+ */
+export type GadgetApprovalMode = "allowed" | "denied" | "approval-required";
+
+/**
+ * Valid gadget approval modes.
+ */
+const VALID_APPROVAL_MODES: GadgetApprovalMode[] = ["allowed", "denied", "approval-required"];
+
+/**
+ * Configuration for per-gadget approval behavior.
+ * Keys are gadget names (case-insensitive), values are approval modes.
+ * Special key "*" sets the default for unconfigured gadgets.
+ */
+export type GadgetApprovalConfig = Record<string, GadgetApprovalMode>;
+
+/**
  * Global CLI options that apply to all commands.
  */
 export interface GlobalConfig {
@@ -63,6 +83,7 @@ export interface AgentConfig extends BaseCommandConfig {
   "gadget-start-prefix"?: string;
   "gadget-end-prefix"?: string;
   "gadget-arg-prefix"?: string;
+  "gadget-approval"?: GadgetApprovalConfig;
   quiet?: boolean;
   "log-level"?: LogLevel;
   "log-file"?: string;
@@ -136,6 +157,7 @@ const AGENT_CONFIG_KEYS = new Set([
   "gadget-start-prefix",
   "gadget-end-prefix",
   "gadget-arg-prefix",
+  "gadget-approval",
   "quiet",
   "inherits",
   "log-level",
@@ -249,6 +271,33 @@ function validateInherits(value: unknown, section: string): string | string[] {
     return value as string[];
   }
   throw new ConfigError(`[${section}].inherits must be a string or array of strings`);
+}
+
+/**
+ * Validates that a value is a gadget approval config (object mapping gadget names to modes).
+ */
+function validateGadgetApproval(value: unknown, section: string): GadgetApprovalConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(
+      `[${section}].gadget-approval must be a table (e.g., { WriteFile = "approval-required" })`,
+    );
+  }
+
+  const result: GadgetApprovalConfig = {};
+  for (const [gadgetName, mode] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof mode !== "string") {
+      throw new ConfigError(
+        `[${section}].gadget-approval.${gadgetName} must be a string`,
+      );
+    }
+    if (!VALID_APPROVAL_MODES.includes(mode as GadgetApprovalMode)) {
+      throw new ConfigError(
+        `[${section}].gadget-approval.${gadgetName} must be one of: ${VALID_APPROVAL_MODES.join(", ")}`,
+      );
+    }
+    result[gadgetName] = mode as GadgetApprovalMode;
+  }
+  return result;
 }
 
 /**
@@ -438,6 +487,9 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
       section,
     );
   }
+  if ("gadget-approval" in rawObj) {
+    result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
+  }
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
@@ -546,6 +598,9 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
       "gadget-arg-prefix",
       section,
     );
+  }
+  if ("gadget-approval" in rawObj) {
+    result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
   }
 
   // Complete-specific fields
