@@ -117,8 +117,9 @@ export class DefaultContextProvider implements ApprovalContextProvider {
 
     // Truncate long parameter values
     const formatValue = (value: unknown): string => {
+      const MAX_LEN = 50;
       const str = JSON.stringify(value);
-      return str.length > 50 ? `${str.slice(0, 47)}...` : str;
+      return str.length > MAX_LEN ? `${str.slice(0, MAX_LEN - 3)}...` : str;
     };
 
     const paramStr = paramEntries.map(([k, v]) => `${k}=${formatValue(v)}`).join(", ");
