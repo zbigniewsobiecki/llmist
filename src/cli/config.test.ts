@@ -472,16 +472,142 @@ describe("config", () => {
       expect(cmd.temperature).toBe(0.9); // own value overrides all
     });
 
-    it("should replace arrays, not merge them", () => {
+    it("should replace arrays with gadgets (plural) full replacement", () => {
       const config: CLIConfig = {
-        agent: { gadget: ["base-gadget.ts", "common.ts"] },
-        "my-command": { inherits: "agent", gadget: ["my-gadget.ts"] },
+        agent: { gadgets: ["base-gadget.ts", "common.ts"] },
+        "my-command": { inherits: "agent", gadgets: ["my-gadget.ts"] },
       };
 
       const result = resolveInheritance(config);
       const cmd = result["my-command"] as Record<string, unknown>;
 
-      expect(cmd.gadget).toEqual(["my-gadget.ts"]); // replaced, not merged
+      expect(cmd.gadgets).toEqual(["my-gadget.ts"]); // replaced, not merged
+    });
+
+    describe("gadget inheritance with add/remove", () => {
+      it("should inherit gadgets when no gadget fields specified", () => {
+        const config: CLIConfig = {
+          agent: { gadgets: ["ListDirectory", "ReadFile"] },
+          "my-command": { inherits: "agent", model: "test" },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["my-command"] as Record<string, unknown>;
+
+        expect(cmd.gadgets).toEqual(["ListDirectory", "ReadFile"]);
+      });
+
+      it("should append gadgets with gadget-add", () => {
+        const config: CLIConfig = {
+          agent: { gadgets: ["ListDirectory", "ReadFile"] },
+          "my-command": { inherits: "agent", "gadget-add": ["WriteFile", "EditFile"] },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["my-command"] as Record<string, unknown>;
+
+        expect(cmd.gadgets).toEqual(["ListDirectory", "ReadFile", "WriteFile", "EditFile"]);
+        expect(cmd["gadget-add"]).toBeUndefined(); // cleaned up
+      });
+
+      it("should remove gadgets with gadget-remove", () => {
+        const config: CLIConfig = {
+          agent: { gadgets: ["ListDirectory", "ReadFile", "RunCommand"] },
+          "my-command": { inherits: "agent", "gadget-remove": ["RunCommand"] },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["my-command"] as Record<string, unknown>;
+
+        expect(cmd.gadgets).toEqual(["ListDirectory", "ReadFile"]);
+        expect(cmd["gadget-remove"]).toBeUndefined(); // cleaned up
+      });
+
+      it("should apply both gadget-add and gadget-remove (remove first)", () => {
+        const config: CLIConfig = {
+          agent: { gadgets: ["ListDirectory", "ReadFile", "RunCommand"] },
+          "my-command": {
+            inherits: "agent",
+            "gadget-remove": ["RunCommand"],
+            "gadget-add": ["WriteFile"],
+          },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["my-command"] as Record<string, unknown>;
+
+        expect(cmd.gadgets).toEqual(["ListDirectory", "ReadFile", "WriteFile"]);
+      });
+
+      it("should chain gadget inheritance through multiple levels", () => {
+        const config: CLIConfig = {
+          agent: { gadgets: ["ListDirectory"] },
+          "profile-readonly": { inherits: "agent", "gadget-add": ["ReadFile", "RunCommand"] },
+          "profile-readwrite": { inherits: "profile-readonly", "gadget-add": ["WriteFile"] },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["profile-readwrite"] as Record<string, unknown>;
+
+        expect(cmd.gadgets).toEqual(["ListDirectory", "ReadFile", "RunCommand", "WriteFile"]);
+      });
+
+      it("should error when mixing gadgets with gadget-add", () => {
+        const config = {
+          agent: { gadgets: ["ListDirectory"] },
+          "my-command": { inherits: "agent", gadgets: ["ReadFile"], "gadget-add": ["WriteFile"] },
+        } as unknown as CLIConfig;
+
+        expect(() => resolveInheritance(config)).toThrow(ConfigError);
+        expect(() => resolveInheritance(config)).toThrow("Cannot use 'gadgets' with 'gadget-add'");
+      });
+
+      it("should error when mixing gadgets with gadget-remove", () => {
+        const config = {
+          agent: { gadgets: ["ListDirectory"] },
+          "my-command": { inherits: "agent", gadgets: ["ReadFile"], "gadget-remove": ["ListDirectory"] },
+        } as unknown as CLIConfig;
+
+        expect(() => resolveInheritance(config)).toThrow(ConfigError);
+        expect(() => resolveInheritance(config)).toThrow("Cannot use 'gadgets' with");
+      });
+
+      it("should handle gadget-add without inheritance (empty base)", () => {
+        const config: CLIConfig = {
+          "my-command": { "gadget-add": ["WriteFile"] },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["my-command"] as Record<string, unknown>;
+
+        expect(cmd.gadgets).toEqual(["WriteFile"]);
+      });
+
+      it("should not set gadgets if result is empty", () => {
+        const config: CLIConfig = {
+          "my-command": { model: "test" },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["my-command"] as Record<string, unknown>;
+
+        expect(cmd.gadgets).toBeUndefined();
+      });
+
+      it("should support legacy gadget (singular) field", () => {
+        // Using console.warn spy would be needed to test warning
+        const config: CLIConfig = {
+          agent: { gadget: ["ListDirectory", "ReadFile"] },
+          "my-command": { inherits: "agent" },
+        };
+
+        const result = resolveInheritance(config);
+        const cmd = result["my-command"] as Record<string, unknown>;
+
+        // Legacy gadget should be normalized to gadgets
+        expect(cmd.gadgets).toEqual(["ListDirectory", "ReadFile"]);
+        expect(cmd.gadget).toBeUndefined(); // cleaned up
+      });
     });
 
     it("should handle inherits as array with single element", () => {
