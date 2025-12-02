@@ -175,6 +175,77 @@ export function createEscKeyListener(
   };
 }
 
+/**
+ * Timeout window for detecting double Ctrl+C press (in milliseconds).
+ *
+ * When no operation is active, pressing Ctrl+C once shows a hint message.
+ * If a second Ctrl+C is pressed within this window, the CLI exits gracefully.
+ * This pattern is familiar from many CLI tools (npm, vim, etc.).
+ */
+const SIGINT_DOUBLE_PRESS_MS = 1000;
+
+/**
+ * Creates a SIGINT (Ctrl+C) listener with double-press detection.
+ *
+ * Behavior:
+ * - If an operation is active: cancels the operation via `onCancel`
+ * - If no operation active and first press: shows hint message
+ * - If no operation active and second press within 1 second: calls `onQuit`
+ *
+ * @param onCancel - Callback when Ctrl+C pressed during an active operation
+ * @param onQuit - Callback when double Ctrl+C pressed (quit CLI)
+ * @param isOperationActive - Function that returns true if an operation is in progress
+ * @param stderr - Stream to write hint messages to (defaults to process.stderr)
+ * @returns Cleanup function to remove the listener
+ *
+ * @example
+ * ```typescript
+ * const cleanup = createSigintListener(
+ *   () => abortController.abort(),
+ *   () => process.exit(0),
+ *   () => isStreaming,
+ * );
+ *
+ * // When done:
+ * cleanup();
+ * ```
+ */
+export function createSigintListener(
+  onCancel: () => void,
+  onQuit: () => void,
+  isOperationActive: () => boolean,
+  stderr: NodeJS.WritableStream = process.stderr,
+): () => void {
+  let lastSigintTime = 0;
+
+  const handler = () => {
+    const now = Date.now();
+
+    if (isOperationActive()) {
+      // Cancel the current operation
+      onCancel();
+      lastSigintTime = 0; // Reset double-press timer
+      return;
+    }
+
+    // Check for double-press
+    if (now - lastSigintTime < SIGINT_DOUBLE_PRESS_MS) {
+      onQuit();
+      return;
+    }
+
+    // First press when no operation is active
+    lastSigintTime = now;
+    stderr.write(chalk.dim("\n[Press Ctrl+C again to quit]\n"));
+  };
+
+  process.on("SIGINT", handler);
+
+  return () => {
+    process.removeListener("SIGINT", handler);
+  };
+}
+
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_DELAY_MS = 500; // Don't show spinner for fast responses
 

@@ -17,6 +17,7 @@ import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js"
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
   createEscKeyListener,
+  createSigintListener,
   executeAction,
   isInteractive,
   renderSummary,
@@ -31,11 +32,12 @@ import {
 } from "./ui/formatters.js";
 
 /**
- * Keyboard listener management for ESC key handling.
- * Allows pausing and restoring the listener during readline operations.
+ * Keyboard/signal listener management for ESC key and Ctrl+C (SIGINT) handling.
+ * Allows pausing and restoring the ESC listener during readline operations.
  */
 interface KeyboardManager {
-  cleanup: (() => void) | null;
+  cleanupEsc: (() => void) | null;
+  cleanupSigint: (() => void) | null;
   restore: () => void;
 }
 
@@ -62,9 +64,9 @@ function createHumanInputHandler(
     progress.pause(); // Pause progress indicator during human input
 
     // Temporarily disable ESC listener for readline (raw mode conflict)
-    if (keyboard.cleanup) {
-      keyboard.cleanup();
-      keyboard.cleanup = null;
+    if (keyboard.cleanupEsc) {
+      keyboard.cleanupEsc();
+      keyboard.cleanupEsc = null;
     }
 
     const rl = createInterface({ input: env.stdin, output: env.stdout });
@@ -171,40 +173,72 @@ export async function executeAgent(
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
   const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
 
-  // Set up cancellation support for ESC key handling
+  // Set up cancellation support for ESC key and Ctrl+C (SIGINT) handling
   const abortController = new AbortController();
   let wasCancelled = false;
+  let isStreaming = false; // Track if LLM call is in progress
   const stdinStream = env.stdin as NodeJS.ReadStream;
 
-  // Create keyboard manager for ESC listener coordination with readline
+  // Shared cancel handler for both ESC and Ctrl+C
+  const handleCancel = () => {
+    if (!abortController.signal.aborted) {
+      wasCancelled = true;
+      abortController.abort();
+      progress.pause();
+      env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
+    }
+  };
+
+  // Create keyboard manager for ESC/SIGINT listener coordination with readline
   const keyboard: KeyboardManager = {
-    cleanup: null,
+    cleanupEsc: null,
+    cleanupSigint: null,
     restore: () => {
       // Restore ESC listener if it was previously active
       if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
-        keyboard.cleanup = createEscKeyListener(stdinStream, () => {
-          if (!abortController.signal.aborted) {
-            wasCancelled = true;
-            abortController.abort();
-            progress.pause();
-            env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
-          }
-        });
+        keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
       }
     },
   };
 
+  // Quit handler for double Ctrl+C - shows summary and exits
+  const handleQuit = () => {
+    // Clean up listeners
+    keyboard.cleanupEsc?.();
+    keyboard.cleanupSigint?.();
+
+    progress.complete();
+    printer.ensureNewline();
+
+    // Show final summary
+    const summary = renderOverallSummary({
+      totalTokens: usage?.totalTokens,
+      iterations,
+      elapsedSeconds: progress.getTotalElapsedSeconds(),
+      cost: progress.getTotalCost(),
+    });
+
+    if (summary) {
+      env.stderr.write(`${chalk.dim("─".repeat(40))}\n`);
+      env.stderr.write(`${summary}\n`);
+    }
+
+    env.stderr.write(chalk.dim("[Quit]\n"));
+    process.exit(0);
+  };
+
   // Set up ESC key listener if in interactive TTY mode
   if (stdinIsInteractive && stdinStream.isTTY) {
-    keyboard.cleanup = createEscKeyListener(stdinStream, () => {
-      if (!abortController.signal.aborted) {
-        wasCancelled = true;
-        abortController.abort();
-        progress.pause();
-        env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
-      }
-    });
+    keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
   }
+
+  // Set up SIGINT (Ctrl+C) listener - always active for graceful cancellation
+  keyboard.cleanupSigint = createSigintListener(
+    handleCancel,
+    handleQuit,
+    () => isStreaming && !abortController.signal.aborted,
+    env.stderr,
+  );
 
   // Set up gadget approval manager
   // Default: RunCommand, WriteFile, EditFile require approval unless overridden by config
@@ -282,6 +316,7 @@ export async function executeAgent(
         // onLLMCallStart: Start progress indicator for each LLM call
         // This showcases how to react to agent lifecycle events
         onLLMCallStart: async (context) => {
+          isStreaming = true; // Mark that we're actively streaming (for SIGINT handling)
           llmCallCounter++;
 
           // Count input tokens accurately using provider-specific methods
@@ -327,6 +362,8 @@ export async function executeAgent(
         // onLLMCallComplete: Finalize metrics after each LLM call
         // This is where you'd typically log metrics or update dashboards
         onLLMCallComplete: async (context) => {
+          isStreaming = false; // Mark that streaming is complete (for SIGINT handling)
+
           // Capture completion metadata for final summary
           usage = context.usage;
           iterations = Math.max(iterations, context.iteration + 1);
@@ -574,10 +611,10 @@ export async function executeAgent(
     }
     // Keep partial response in buffer for flushing below
   } finally {
-    // Always cleanup keyboard listener
-    if (keyboard.cleanup) {
-      keyboard.cleanup();
-    }
+    // Always cleanup keyboard and signal listeners
+    isStreaming = false;
+    keyboard.cleanupEsc?.();
+    keyboard.cleanupSigint?.();
   }
 
   // Flush any remaining buffered text with markdown rendering (includes partial on cancel)

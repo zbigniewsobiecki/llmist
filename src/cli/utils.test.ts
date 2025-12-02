@@ -2,7 +2,7 @@ import { describe, expect, test, mock, beforeEach, afterEach } from "bun:test";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import type { ModelRegistry } from "../core/model-registry.js";
-import { StreamProgress, createEscKeyListener } from "./utils.js";
+import { StreamProgress, createEscKeyListener, createSigintListener } from "./utils.js";
 import { formatCost } from "./ui/formatters.js";
 
 /**
@@ -566,6 +566,192 @@ describe("createEscKeyListener", () => {
 
       // Callback should NOT be called
       expect(onEsc).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("createSigintListener", () => {
+  // Store original process methods
+  let originalProcessOn: typeof process.on;
+  let originalProcessRemoveListener: typeof process.removeListener;
+  let sigintHandlers: Array<() => void>;
+  let mockStderr: MockWritableStream;
+
+  beforeEach(() => {
+    // Store originals
+    originalProcessOn = process.on;
+    originalProcessRemoveListener = process.removeListener;
+    sigintHandlers = [];
+    mockStderr = new MockWritableStream();
+
+    // Mock process.on to capture SIGINT handlers
+    process.on = ((event: string, handler: () => void) => {
+      if (event === "SIGINT") {
+        sigintHandlers.push(handler);
+      }
+      return process;
+    }) as typeof process.on;
+
+    // Mock process.removeListener to remove SIGINT handlers
+    process.removeListener = ((event: string, handler: () => void) => {
+      if (event === "SIGINT") {
+        const index = sigintHandlers.indexOf(handler);
+        if (index !== -1) {
+          sigintHandlers.splice(index, 1);
+        }
+      }
+      return process;
+    }) as typeof process.removeListener;
+  });
+
+  afterEach(() => {
+    // Restore originals
+    process.on = originalProcessOn;
+    process.removeListener = originalProcessRemoveListener;
+  });
+
+  /**
+   * Simulate a SIGINT signal by calling all registered handlers.
+   */
+  function simulateSigint(): void {
+    for (const handler of sigintHandlers) {
+      handler();
+    }
+  }
+
+  describe("operation active behavior", () => {
+    test("calls onCancel when operation is active and SIGINT received", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => true;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      simulateSigint();
+
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      expect(onQuit).not.toHaveBeenCalled();
+
+      cleanup();
+    });
+
+    test("does NOT call onQuit when operation is active (even on double press)", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => true;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // First SIGINT
+      simulateSigint();
+      // Second SIGINT immediately
+      simulateSigint();
+
+      expect(onCancel).toHaveBeenCalledTimes(2);
+      expect(onQuit).not.toHaveBeenCalled();
+
+      cleanup();
+    });
+  });
+
+  describe("operation inactive behavior", () => {
+    test("shows hint message when no operation active and first SIGINT", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      simulateSigint();
+
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(onQuit).not.toHaveBeenCalled();
+      expect(mockStderr.output).toContain("Press Ctrl+C again to quit");
+
+      cleanup();
+    });
+
+    test("calls onQuit on double SIGINT within timeout window", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // First SIGINT
+      simulateSigint();
+
+      // Second SIGINT immediately (within 1 second window)
+      simulateSigint();
+
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(onQuit).toHaveBeenCalledTimes(1);
+
+      cleanup();
+    });
+  });
+
+  describe("cleanup function", () => {
+    test("removes SIGINT listener", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // Verify handler was registered
+      expect(sigintHandlers.length).toBe(1);
+
+      // Run cleanup
+      cleanup();
+
+      // Verify handler was removed
+      expect(sigintHandlers.length).toBe(0);
+    });
+
+    test("SIGINT has no effect after cleanup", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+      cleanup();
+
+      // Simulate SIGINT after cleanup
+      simulateSigint();
+
+      // Nothing should happen
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(onQuit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("state transitions", () => {
+    test("resets double-press timer after cancelling an operation", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      let operationActive = true;
+      const isOperationActive = () => operationActive;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // First SIGINT while operation active - cancels it
+      simulateSigint();
+      expect(onCancel).toHaveBeenCalledTimes(1);
+
+      // Operation now inactive
+      operationActive = false;
+
+      // Second SIGINT - should show hint (not quit, because timer was reset)
+      simulateSigint();
+      expect(mockStderr.output).toContain("Press Ctrl+C again to quit");
+      expect(onQuit).not.toHaveBeenCalled();
+
+      // Third SIGINT - should quit (double-press)
+      simulateSigint();
+      expect(onQuit).toHaveBeenCalledTimes(1);
+
+      cleanup();
     });
   });
 });
