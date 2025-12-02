@@ -194,6 +194,49 @@ describe("GeminiGenerativeProvider", () => {
     );
   });
 
+  describe("abort signal propagation", () => {
+    it("passes abort signal to SDK in config when provided", async () => {
+      const { client, generateContentStream } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const controller = new AbortController();
+      const options = {
+        model: "gemini-1.5-flash",
+        messages: [{ role: "user" as const, content: "Test" }],
+        signal: controller.signal,
+      };
+
+      await provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" }).next();
+
+      // Gemini SDK expects signal in config.abortSignal
+      expect(generateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({
+            abortSignal: controller.signal,
+          }),
+        }),
+      );
+    });
+
+    it("does not include abortSignal in config when signal is not provided", async () => {
+      const { client, generateContentStream } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-1.5-flash",
+        messages: [{ role: "user" as const, content: "Test" }],
+      };
+
+      await provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" }).next();
+
+      // Verify abortSignal is not in the config
+      const callArgs = generateContentStream.mock.calls[0]?.[0] as {
+        config?: { abortSignal?: AbortSignal };
+      };
+      expect(callArgs?.config?.abortSignal).toBeUndefined();
+    });
+  });
+
   describe("countTokens", () => {
     it("counts tokens for simple messages", async () => {
       const mockCountTokens = mock().mockResolvedValue({

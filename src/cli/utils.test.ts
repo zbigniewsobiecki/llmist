@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, mock, beforeEach, afterEach } from "bun:test";
+import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import type { ModelRegistry } from "../core/model-registry.js";
-import { StreamProgress } from "./utils.js";
+import { StreamProgress, createEscKeyListener, createSigintListener } from "./utils.js";
 import { formatCost } from "./ui/formatters.js";
 
 /**
@@ -308,6 +309,445 @@ describe("StreamProgress", () => {
       // Should contain the real token counts
       expect(prompt).toContain("896");
       expect(prompt).toContain("118");
+    });
+  });
+});
+
+/**
+ * Mock readable stream that simulates stdin with TTY capabilities.
+ * Extends EventEmitter to support on/removeListener for data events.
+ */
+class MockStdin extends EventEmitter {
+  isTTY = true;
+  setRawMode = mock(() => this);
+  resume = mock(() => this);
+  pause = mock(() => this);
+
+  /**
+   * Simulates pressing a key by emitting a data event with the key's byte sequence.
+   */
+  pressKey(bytes: number[]): void {
+    this.emit("data", Buffer.from(bytes));
+  }
+}
+
+describe("createEscKeyListener", () => {
+  let originalSetTimeout: typeof setTimeout;
+  let originalClearTimeout: typeof clearTimeout;
+  let timeoutCallbacks: Map<number, () => void>;
+  let timeoutCounter: number;
+
+  beforeEach(() => {
+    // Store original timer functions
+    originalSetTimeout = globalThis.setTimeout;
+    originalClearTimeout = globalThis.clearTimeout;
+    timeoutCallbacks = new Map();
+    timeoutCounter = 0;
+
+    // Mock setTimeout to capture callbacks
+    globalThis.setTimeout = ((callback: () => void, _delay?: number) => {
+      const id = ++timeoutCounter;
+      timeoutCallbacks.set(id, callback);
+      return id as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    // Mock clearTimeout to remove callbacks
+    globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
+      timeoutCallbacks.delete(id as unknown as number);
+    }) as typeof clearTimeout;
+  });
+
+  afterEach(() => {
+    // Restore original timer functions
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  });
+
+  /**
+   * Manually fire all pending timeouts (simulates time passing).
+   */
+  function flushTimeouts(): void {
+    for (const callback of timeoutCallbacks.values()) {
+      callback();
+    }
+    timeoutCallbacks.clear();
+  }
+
+  describe("TTY detection", () => {
+    test("returns null when stdin is not a TTY", () => {
+      const stdin = new MockStdin();
+      stdin.isTTY = false;
+
+      const onEsc = mock();
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      expect(cleanup).toBeNull();
+      expect(stdin.setRawMode).not.toHaveBeenCalled();
+    });
+
+    test("returns null when setRawMode is not a function", () => {
+      const stdin = {
+        isTTY: true,
+        setRawMode: undefined, // Missing setRawMode function
+        resume: mock(),
+        on: mock(),
+      };
+
+      const onEsc = mock();
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      expect(cleanup).toBeNull();
+    });
+
+    test("returns cleanup function when stdin is valid TTY", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      expect(cleanup).toBeInstanceOf(Function);
+      expect(stdin.setRawMode).toHaveBeenCalledWith(true);
+      expect(stdin.resume).toHaveBeenCalled();
+
+      // Clean up
+      cleanup?.();
+    });
+  });
+
+  describe("ESC key detection", () => {
+    test("calls onEsc callback when standalone ESC key is pressed", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      // Press ESC (0x1B) as a single byte
+      stdin.pressKey([0x1b]);
+
+      // Callback should not be called immediately (timeout not fired yet)
+      expect(onEsc).not.toHaveBeenCalled();
+
+      // Fire the timeout
+      flushTimeouts();
+
+      // Now callback should be called
+      expect(onEsc).toHaveBeenCalledTimes(1);
+
+      cleanup?.();
+    });
+
+    test("does NOT call onEsc when escape sequence is detected (arrow key up)", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      // Press up arrow: ESC [ A (0x1B 0x5B 0x41) - arrives as multi-byte sequence
+      stdin.pressKey([0x1b, 0x5b, 0x41]);
+
+      // Fire any pending timeouts
+      flushTimeouts();
+
+      // Callback should NOT be called because it was part of escape sequence
+      expect(onEsc).not.toHaveBeenCalled();
+
+      cleanup?.();
+    });
+
+    test("does NOT call onEsc when another key arrives after ESC", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      // Press ESC alone
+      stdin.pressKey([0x1b]);
+      expect(timeoutCallbacks.size).toBe(1);
+
+      // Then press 'a' before timeout fires
+      stdin.pressKey([0x61]);
+
+      // Timeout should have been cancelled
+      expect(timeoutCallbacks.size).toBe(0);
+
+      // Fire any remaining timeouts (should be none)
+      flushTimeouts();
+
+      // Callback should NOT be called
+      expect(onEsc).not.toHaveBeenCalled();
+
+      cleanup?.();
+    });
+
+    test("handles multiple standalone ESC presses", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      // First ESC
+      stdin.pressKey([0x1b]);
+      flushTimeouts();
+
+      // Second ESC
+      stdin.pressKey([0x1b]);
+      flushTimeouts();
+
+      // Both should trigger
+      expect(onEsc).toHaveBeenCalledTimes(2);
+
+      cleanup?.();
+    });
+  });
+
+  describe("cleanup function", () => {
+    test("removes data listener from stdin", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      // Verify listener was added
+      expect(stdin.listenerCount("data")).toBe(1);
+
+      // Run cleanup
+      cleanup?.();
+
+      // Verify listener was removed
+      expect(stdin.listenerCount("data")).toBe(0);
+    });
+
+    test("restores raw mode to false", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      // Raw mode was enabled
+      expect(stdin.setRawMode).toHaveBeenCalledWith(true);
+      stdin.setRawMode.mockClear();
+
+      // Run cleanup
+      cleanup?.();
+
+      // Raw mode should be disabled
+      expect(stdin.setRawMode).toHaveBeenCalledWith(false);
+    });
+
+    test("pauses stdin", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+      stdin.pause.mockClear();
+
+      // Run cleanup
+      cleanup?.();
+
+      // Stdin should be paused
+      expect(stdin.pause).toHaveBeenCalled();
+    });
+
+    test("clears pending timeout", () => {
+      const stdin = new MockStdin();
+      const onEsc = mock();
+
+      const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
+
+      // Press ESC to start a timeout
+      stdin.pressKey([0x1b]);
+      expect(timeoutCallbacks.size).toBe(1);
+
+      // Run cleanup before timeout fires
+      cleanup?.();
+
+      // Timeout should be cleared
+      expect(timeoutCallbacks.size).toBe(0);
+
+      // Callback should NOT be called
+      expect(onEsc).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("createSigintListener", () => {
+  // Store original process methods
+  let originalProcessOn: typeof process.on;
+  let originalProcessRemoveListener: typeof process.removeListener;
+  let sigintHandlers: Array<() => void>;
+  let mockStderr: MockWritableStream;
+
+  beforeEach(() => {
+    // Store originals
+    originalProcessOn = process.on;
+    originalProcessRemoveListener = process.removeListener;
+    sigintHandlers = [];
+    mockStderr = new MockWritableStream();
+
+    // Mock process.on to capture SIGINT handlers
+    process.on = ((event: string, handler: () => void) => {
+      if (event === "SIGINT") {
+        sigintHandlers.push(handler);
+      }
+      return process;
+    }) as typeof process.on;
+
+    // Mock process.removeListener to remove SIGINT handlers
+    process.removeListener = ((event: string, handler: () => void) => {
+      if (event === "SIGINT") {
+        const index = sigintHandlers.indexOf(handler);
+        if (index !== -1) {
+          sigintHandlers.splice(index, 1);
+        }
+      }
+      return process;
+    }) as typeof process.removeListener;
+  });
+
+  afterEach(() => {
+    // Restore originals
+    process.on = originalProcessOn;
+    process.removeListener = originalProcessRemoveListener;
+  });
+
+  /**
+   * Simulate a SIGINT signal by calling all registered handlers.
+   */
+  function simulateSigint(): void {
+    for (const handler of sigintHandlers) {
+      handler();
+    }
+  }
+
+  describe("operation active behavior", () => {
+    test("calls onCancel when operation is active and SIGINT received", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => true;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      simulateSigint();
+
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      expect(onQuit).not.toHaveBeenCalled();
+
+      cleanup();
+    });
+
+    test("does NOT call onQuit when operation is active (even on double press)", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => true;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // First SIGINT
+      simulateSigint();
+      // Second SIGINT immediately
+      simulateSigint();
+
+      expect(onCancel).toHaveBeenCalledTimes(2);
+      expect(onQuit).not.toHaveBeenCalled();
+
+      cleanup();
+    });
+  });
+
+  describe("operation inactive behavior", () => {
+    test("shows hint message when no operation active and first SIGINT", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      simulateSigint();
+
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(onQuit).not.toHaveBeenCalled();
+      expect(mockStderr.output).toContain("Press Ctrl+C again to quit");
+
+      cleanup();
+    });
+
+    test("calls onQuit on double SIGINT within timeout window", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // First SIGINT
+      simulateSigint();
+
+      // Second SIGINT immediately (within 1 second window)
+      simulateSigint();
+
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(onQuit).toHaveBeenCalledTimes(1);
+
+      cleanup();
+    });
+  });
+
+  describe("cleanup function", () => {
+    test("removes SIGINT listener", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // Verify handler was registered
+      expect(sigintHandlers.length).toBe(1);
+
+      // Run cleanup
+      cleanup();
+
+      // Verify handler was removed
+      expect(sigintHandlers.length).toBe(0);
+    });
+
+    test("SIGINT has no effect after cleanup", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      const isOperationActive = () => false;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+      cleanup();
+
+      // Simulate SIGINT after cleanup
+      simulateSigint();
+
+      // Nothing should happen
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(onQuit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("state transitions", () => {
+    test("allows double-press quit after cancelling an operation", () => {
+      const onCancel = mock();
+      const onQuit = mock();
+      let operationActive = true;
+      const isOperationActive = () => operationActive;
+
+      const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
+
+      // First SIGINT while operation active - cancels it and sets timer to now
+      simulateSigint();
+      expect(onCancel).toHaveBeenCalledTimes(1);
+
+      // Operation now inactive
+      operationActive = false;
+
+      // Second SIGINT (within 1 second) - should trigger quit (double-press detected)
+      simulateSigint();
+      expect(onQuit).toHaveBeenCalledTimes(1);
+      expect(mockStderr.output).not.toContain("Press Ctrl+C again to quit");
+
+      cleanup();
     });
   });
 });

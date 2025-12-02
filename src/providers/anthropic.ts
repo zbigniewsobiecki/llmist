@@ -92,9 +92,11 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
 
   protected async executeStreamRequest(
     payload: MessageCreateParamsStreaming,
+    signal?: AbortSignal,
   ): Promise<AsyncIterable<MessageStreamEvent>> {
     const client = this.client as Anthropic;
-    const stream = await client.messages.create(payload);
+    // Pass abort signal to SDK via request options
+    const stream = await client.messages.create(payload, signal ? { signal } : undefined);
     return stream as unknown as AsyncIterable<MessageStreamEvent>;
   }
 

@@ -134,6 +134,9 @@ export interface AgentOptions {
 
   /** Context compaction configuration (enabled by default) */
   compactionConfig?: CompactionConfig;
+
+  /** Optional abort signal for cancelling requests mid-flight */
+  signal?: AbortSignal;
 }
 
 /**
@@ -188,6 +191,9 @@ export class Agent {
 
   // Context compaction
   private readonly compactionManager?: CompactionManager;
+
+  // Cancellation
+  private readonly signal?: AbortSignal;
 
   /**
    * Creates a new Agent instance.
@@ -272,6 +278,9 @@ export class Agent {
         options.compactionConfig,
       );
     }
+
+    // Store abort signal for cancellation
+    this.signal = options.signal;
   }
 
   /**
@@ -404,6 +413,7 @@ export class Agent {
           messages: this.conversation.getMessages(),
           temperature: this.temperature,
           maxTokens: this.defaultMaxTokens,
+          signal: this.signal,
         };
 
         // Observer: LLM call start

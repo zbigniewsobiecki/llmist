@@ -80,13 +80,23 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     };
   }
 
-  protected async executeStreamRequest(payload: {
-    model: string;
-    contents: Array<{ role: string; parts: Array<{ text: string }> }>;
-    config: Record<string, unknown>;
-  }): Promise<AsyncIterable<GeminiChunk>> {
+  protected async executeStreamRequest(
+    payload: {
+      model: string;
+      contents: Array<{ role: string; parts: Array<{ text: string }> }>;
+      config: Record<string, unknown>;
+    },
+    signal?: AbortSignal,
+  ): Promise<AsyncIterable<GeminiChunk>> {
     const client = this.client as GoogleGenAI;
-    const streamResponse = await client.models.generateContentStream(payload);
+    // Gemini SDK uses abortSignal in the config object
+    const streamResponse = await client.models.generateContentStream({
+      ...payload,
+      config: {
+        ...payload.config,
+        ...(signal ? { abortSignal: signal } : {}),
+      },
+    });
     return streamResponse as unknown as AsyncIterable<GeminiChunk>;
   }
 
