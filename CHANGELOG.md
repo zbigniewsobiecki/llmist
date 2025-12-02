@@ -1,3 +1,13 @@
+## 1.4.0 (2025-12-02)
+
+* chore: sync dev with main after release [skip ci] ([081ccec](https://github.com/zbigniewsobiecki/llmist/commit/081ccec))
+* chore(release): merge dev to main (#133) ([e405dcd](https://github.com/zbigniewsobiecki/llmist/commit/e405dcd)), closes [#133](https://github.com/zbigniewsobiecki/llmist/issues/133) [#129](https://github.com/zbigniewsobiecki/llmist/issues/129)
+* chore(release): merge dev to main for release ([f0ff593](https://github.com/zbigniewsobiecki/llmist/commit/f0ff593))
+* feat(cli): add built-in gadget specifier system (#130) ([87cb244](https://github.com/zbigniewsobiecki/llmist/commit/87cb244)), closes [#130](https://github.com/zbigniewsobiecki/llmist/issues/130)
+* feat(cli): add configurable gadget approval system with diff display (#129) ([8781749](https://github.com/zbigniewsobiecki/llmist/commit/8781749)), closes [#129](https://github.com/zbigniewsobiecki/llmist/issues/129)
+* feat(cli): add ESC key cancellation for LLM requests (#132) ([eec210e](https://github.com/zbigniewsobiecki/llmist/commit/eec210e)), closes [#132](https://github.com/zbigniewsobiecki/llmist/issues/132)
+* feat(cli): add gadget inheritance with add/remove support (#131) ([4aeb778](https://github.com/zbigniewsobiecki/llmist/commit/4aeb778)), closes [#131](https://github.com/zbigniewsobiecki/llmist/issues/131)
+
 ## <small>1.3.1 (2025-12-02)</small>
 
 * Merge pull request #126 from zbigniewsobiecki/feat/test-coverage-improvements ([59ac763](https://github.com/zbigniewsobiecki/llmist/commit/59ac763)), closes [#126](https://github.com/zbigniewsobiecki/llmist/issues/126)
