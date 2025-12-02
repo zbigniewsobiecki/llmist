@@ -1,0 +1,152 @@
+import { describe, expect, it } from "bun:test";
+
+import { BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
+
+describe("BreakLoopException", () => {
+  it("creates with custom message", () => {
+    const exception = new BreakLoopException("Task completed successfully");
+
+    expect(exception.message).toBe("Task completed successfully");
+  });
+
+  it("creates with default message when no message provided", () => {
+    const exception = new BreakLoopException();
+
+    expect(exception.message).toBe("Agent loop terminated by gadget");
+  });
+
+  it("creates with default message when undefined passed", () => {
+    const exception = new BreakLoopException(undefined);
+
+    expect(exception.message).toBe("Agent loop terminated by gadget");
+  });
+
+  it("has correct name property", () => {
+    const exception = new BreakLoopException();
+
+    expect(exception.name).toBe("BreakLoopException");
+  });
+
+  it("is instanceof Error", () => {
+    const exception = new BreakLoopException();
+
+    expect(exception).toBeInstanceOf(Error);
+  });
+
+  it("has a stack trace", () => {
+    const exception = new BreakLoopException();
+
+    expect(exception.stack).toBeDefined();
+    expect(exception.stack).toContain("BreakLoopException");
+  });
+});
+
+describe("HumanInputException", () => {
+  it("creates with question", () => {
+    const exception = new HumanInputException("What is your name?");
+
+    expect(exception.question).toBe("What is your name?");
+  });
+
+  it("has correct message format", () => {
+    const exception = new HumanInputException("What is your name?");
+
+    expect(exception.message).toBe("Human input required: What is your name?");
+  });
+
+  it("has correct name property", () => {
+    const exception = new HumanInputException("test");
+
+    expect(exception.name).toBe("HumanInputException");
+  });
+
+  it("is instanceof Error", () => {
+    const exception = new HumanInputException("test");
+
+    expect(exception).toBeInstanceOf(Error);
+  });
+
+  it("stores the question property separately from message", () => {
+    const question = "Do you want to continue?";
+    const exception = new HumanInputException(question);
+
+    expect(exception.question).toBe(question);
+    expect(exception.message).toContain(question);
+    expect(exception.message).not.toBe(question);
+  });
+
+  it("handles empty question", () => {
+    const exception = new HumanInputException("");
+
+    expect(exception.question).toBe("");
+    expect(exception.message).toBe("Human input required: ");
+  });
+
+  it("handles question with special characters", () => {
+    const question = "Are you sure? (yes/no)";
+    const exception = new HumanInputException(question);
+
+    expect(exception.question).toBe(question);
+    expect(exception.message).toBe(`Human input required: ${question}`);
+  });
+});
+
+describe("TimeoutException", () => {
+  it("creates with gadgetName and timeoutMs", () => {
+    const exception = new TimeoutException("SlowGadget", 5000);
+
+    expect(exception.gadgetName).toBe("SlowGadget");
+    expect(exception.timeoutMs).toBe(5000);
+  });
+
+  it("has correct message format", () => {
+    const exception = new TimeoutException("FetchData", 10000);
+
+    expect(exception.message).toBe("Gadget 'FetchData' execution exceeded timeout of 10000ms");
+  });
+
+  it("has correct name property", () => {
+    const exception = new TimeoutException("test", 1000);
+
+    expect(exception.name).toBe("TimeoutException");
+  });
+
+  it("is instanceof Error", () => {
+    const exception = new TimeoutException("test", 1000);
+
+    expect(exception).toBeInstanceOf(Error);
+  });
+
+  it("stores gadgetName property", () => {
+    const exception = new TimeoutException("MyGadget", 3000);
+
+    expect(exception.gadgetName).toBe("MyGadget");
+  });
+
+  it("stores timeoutMs property", () => {
+    const exception = new TimeoutException("MyGadget", 7500);
+
+    expect(exception.timeoutMs).toBe(7500);
+  });
+
+  it("handles zero timeout", () => {
+    const exception = new TimeoutException("InstantGadget", 0);
+
+    expect(exception.timeoutMs).toBe(0);
+    expect(exception.message).toBe("Gadget 'InstantGadget' execution exceeded timeout of 0ms");
+  });
+
+  it("handles very large timeout values", () => {
+    const exception = new TimeoutException("LongRunning", 600000);
+
+    expect(exception.timeoutMs).toBe(600000);
+    expect(exception.message).toContain("600000ms");
+  });
+
+  it("handles gadget names with special characters", () => {
+    const exception = new TimeoutException("My-Gadget_v2", 1000);
+
+    expect(exception.gadgetName).toBe("My-Gadget_v2");
+    expect(exception.message).toContain("'My-Gadget_v2'");
+  });
+});
