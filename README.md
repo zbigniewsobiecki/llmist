@@ -1,11 +1,11 @@
 # llmist
 
 [![CI](https://github.com/zbigniewsobiecki/llmist/actions/workflows/ci.yml/badge.svg)](https://github.com/zbigniewsobiecki/llmist/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/zbigniewsobiecki/llmist/graph/badge.svg)](https://codecov.io/gh/zbigniewsobiecki/llmist)
+[![codecov](https://codecov.io/gh/zbigniewsobiecki/llmist/graph/badge.svg?branch=dev)](https://codecov.io/gh/zbigniewsobiecki/llmist)
 [![npm version](https://img.shields.io/npm/v/llmist.svg)](https://www.npmjs.com/package/llmist)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-> **Universal TypeScript LLM client with streaming-first tool execution and simple, extensible agent framework**
+> **Universal TypeScript LLM client with own function calling grammar, streaming-first tool execution and simple, extensible agent framework**
 
 > **⚠️ EARLY WORK IN PROGRESS** - This library is under active development. APIs may change without notice. Use in production at your own risk.
 
@@ -15,12 +15,13 @@ llmist is an asynchonous, streaming-first, provider-agnostic LLM client that mak
 
 ## 🎯 Why llmist?
 
-- **🌍 Universal** - Works with any LLM provider (OpenAI, Anthropic, Gemini, custom)
-- **📝 No Structured Outputs** - Simple block format with `!!!ARG:` markers works with any text model
-- **⚡ Streaming-First** - Built for real-time responses and efficient error handling
-- **🪝 Powerful Hooks** - Monitor, customize, and control every step of execution
-- **🎨 Beautiful API** - Fluent builder pattern with model shortcuts and presets
-- **🧪 Testing-Friendly** - Built-in mocking system for zero-cost testing
+- **🌍 Universal** - Works with [any LLM provider](./docs/PROVIDERS.md) (OpenAI, Anthropic, Gemini, [custom](./docs/CUSTOM_MODELS.md)) and easy to integrate more
+- **📝 No Structured Outputs** - Simple [block format](./docs/BLOCK_FORMAT.md) with streaming oriented tool calling
+- **🪝 Powerful Hooks** - Monitor, customize, and control [every step of execution](./docs/HOOKS.md)
+- **🎨 Fluent API** - [Builder pattern](./docs/CONFIGURATION.md) with model shortcuts and presets
+- **🧪 Testing-Friendly** - Built-in [mocking system](./docs/TESTING.md) for zero-cost testing
+- **⌨️ Convenient CLI** - [Capable CLI](./docs/CLI.md) showcasing how to build on top of llmist
+- **🏦 Cost-aware** - [Cost APIs per model](./docs/MODEL_CATALOG.md) + prompt-caching aware accounting
 
 ---
 
@@ -47,15 +48,6 @@ bunx llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 
 # Pipe input
 cat document.txt | llmist complete "Summarize" --model gpt-5-nano
-```
-
-**Built-in gadgets** are included by default in agent mode:
-- `AskUser` - Prompts for user input when clarification is needed
-- `TellUser` - Displays important messages (info/success/warning/error) and can end conversations
-
-```bash
-# Disable built-in gadgets
-bunx llmist agent "Task" --no-builtins -g ./my-tools.ts
 ```
 
 📖 **[CLI Reference](./docs/CLI.md)** | **[CLI Gadgets Guide](./docs/CLI_GADGETS.md)**
@@ -97,7 +89,7 @@ const answer = await LLMist.createAgent()
 console.log(answer); // "15 times 23 equals 345"
 ```
 
-**That's it!** N
+**That's it!**
 
 📖 **[Getting Started Guide](./docs/GETTING_STARTED.md)** - Learn more in 5 minutes
 
