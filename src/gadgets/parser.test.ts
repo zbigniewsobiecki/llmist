@@ -807,4 +807,149 @@ ${GADGET_END_PREFIX}`;
       expect(events[0].call.parametersRaw).toContain("duplicate");
     }
   });
+
+  describe("edge cases", () => {
+    it("handles very long multiline content (>10KB)", () => {
+      // Generate content larger than 10KB
+      const longContent = "x".repeat(15000);
+      const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}content
+${longContent}
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      if (events[0]?.type === "gadget_call") {
+        expect(events[0].call.parameters?.content).toBe(longContent);
+      }
+    });
+
+    it("handles interleaved feed/reset sequences", () => {
+      // Feed partial gadget
+      parser.feed(`${GADGET_START_PREFIX}Gadget1\n${GADGET_ARG_PREFIX}arg1\nval`);
+
+      // Reset mid-stream
+      parser.reset();
+
+      // Feed new complete gadget
+      const events = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}Gadget2
+${GADGET_ARG_PREFIX}arg2
+value2
+${GADGET_END_PREFIX}`),
+      );
+
+      expect(events).toHaveLength(1);
+      if (events[0]?.type === "gadget_call") {
+        // Should only see Gadget2, not Gadget1
+        expect(events[0].call.gadgetName).toBe("Gadget2");
+        expect(events[0].call.parameters?.arg2).toBe("value2");
+      }
+    });
+
+    it("handles partial -> complete -> partial transitions", () => {
+      // Partial feed
+      collectSyncEvents(parser.feed(`${GADGET_START_PREFIX}First\n${GADGET_ARG_PREFIX}a\n`));
+
+      // Complete the first gadget and start a new partial
+      const events = collectSyncEvents(
+        parser.feed(`value1\n${GADGET_END_PREFIX}\nSome text\n${GADGET_START_PREFIX}Second\n${GADGET_ARG_PREFIX}b\nval`),
+      );
+
+      // Should have the completed first gadget
+      expect(events.some((e) => e.type === "gadget_call" && e.call.gadgetName === "First")).toBe(true);
+
+      // Finalize to complete the second gadget
+      const finalEvents = collectSyncEvents(parser.finalize());
+
+      // Should have text and incomplete marker
+      expect(finalEvents.length).toBeGreaterThan(0);
+    });
+
+    it("handles content with special characters", () => {
+      const specialContent = `Line with "quotes"\nLine with 'apostrophes'\nLine with <brackets>\nLine with {braces}`;
+      const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}content
+${specialContent}
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      if (events[0]?.type === "gadget_call") {
+        expect(events[0].call.parameters?.content).toBe(specialContent);
+      }
+    });
+
+    it("handles empty parameter value", () => {
+      const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}emptyParam
+
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      if (events[0]?.type === "gadget_call") {
+        expect(events[0].call.parameters?.emptyParam).toBe("");
+      }
+    });
+
+    it("handles rapid consecutive feeds", () => {
+      // Simulate character-by-character streaming
+      const fullInput = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}msg
+hello
+${GADGET_END_PREFIX}`;
+
+      let allEvents: StreamEvent[] = [];
+      for (const char of fullInput) {
+        allEvents = allEvents.concat(collectSyncEvents(parser.feed(char)));
+      }
+
+      const gadgetCalls = allEvents.filter((e) => e.type === "gadget_call");
+      expect(gadgetCalls).toHaveLength(1);
+      if (gadgetCalls[0]?.type === "gadget_call") {
+        expect(gadgetCalls[0].call.gadgetName).toBe("TestGadget");
+        expect(gadgetCalls[0].call.parameters?.msg).toBe("hello");
+      }
+    });
+
+    it("handles unicode content correctly", () => {
+      const unicodeContent = "こんにちは 🌍 مرحبا 中文";
+      const input = `${GADGET_START_PREFIX}TestGadget
+${GADGET_ARG_PREFIX}message
+${unicodeContent}
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      if (events[0]?.type === "gadget_call") {
+        expect(events[0].call.parameters?.message).toBe(unicodeContent);
+      }
+    });
+
+    it("clears state properly after reset", () => {
+      // Feed partial content
+      parser.feed(`${GADGET_START_PREFIX}Partial\n${GADGET_ARG_PREFIX}arg\nvalue`);
+
+      // Reset
+      parser.reset();
+
+      // Feed complete new content
+      const events = collectSyncEvents(
+        parser.feed(`Just plain text`),
+      );
+
+      // Should have no events (plain text buffered)
+      expect(events).toHaveLength(0);
+
+      // Finalize should give us only the plain text
+      const finalEvents = collectSyncEvents(parser.finalize());
+      expect(finalEvents).toHaveLength(1);
+      expect(finalEvents[0]).toEqual({ type: "text", content: "Just plain text" });
+    });
+  });
 });
