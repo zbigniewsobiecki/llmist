@@ -124,7 +124,8 @@ describe("MockManager", () => {
     expect(manager.getCount()).toBe(0);
   });
 
-  test("should record stats", async () => {
+  test("should record stats with accurate timestamps", async () => {
+    const beforeRegister = Date.now();
     const mockId = manager.register({
       matcher: () => true,
       response: { text: "test" },
@@ -139,11 +140,66 @@ describe("MockManager", () => {
     };
 
     await manager.findMatch(context);
+    const afterFirstMatch = Date.now();
+
     await manager.findMatch(context);
+    const afterSecondMatch = Date.now();
 
     const stats = manager.getStats(mockId);
     expect(stats?.matchCount).toBe(2);
-    expect(stats?.lastUsed).toBeDefined();
+    // Validate lastUsed is a Date object with a recent timestamp
+    expect(stats?.lastUsed).toBeInstanceOf(Date);
+    const lastUsedTime = stats!.lastUsed!.getTime();
+    expect(lastUsedTime).toBeGreaterThanOrEqual(beforeRegister);
+    expect(lastUsedTime).toBeLessThanOrEqual(afterSecondMatch);
+  });
+
+  test("should handle many registered mocks (stress test)", async () => {
+    // Register 50 mocks with different model conditions
+    for (let i = 0; i < 50; i++) {
+      manager.register({
+        label: `mock-${i}`,
+        matcher: (ctx) => ctx.modelName === `model-${i}`,
+        response: { text: `response-${i}` },
+      });
+    }
+
+    expect(manager.getCount()).toBe(50);
+
+    // Test that we can find a specific mock in the middle
+    const context: MockMatcherContext = {
+      model: "mock:model-25",
+      provider: "mock",
+      modelName: "model-25",
+      options: { model: "mock:model-25", messages: [] },
+      messages: [],
+    };
+
+    const response = await manager.findMatch(context);
+    expect(response?.text).toBe("response-25");
+  });
+
+  test("should accumulate stats across multiple matches", async () => {
+    const mockId = manager.register({
+      matcher: () => true,
+      response: { text: "test" },
+    });
+
+    const context: MockMatcherContext = {
+      model: "mock:test",
+      provider: "mock",
+      modelName: "test",
+      options: { model: "mock:test", messages: [] },
+      messages: [],
+    };
+
+    // Match 5 times
+    for (let i = 0; i < 5; i++) {
+      await manager.findMatch(context);
+    }
+
+    const stats = manager.getStats(mockId);
+    expect(stats?.matchCount).toBe(5);
   });
 
   test("should support async matchers", async () => {
