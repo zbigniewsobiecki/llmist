@@ -3,15 +3,36 @@
  */
 
 /**
- * Detects if an error is an abort-related error from any provider SDK.
+ * Detects if an error is an abort/cancellation error from any provider.
  *
  * Different providers throw different error types when a request is aborted:
- * - Standard: AbortError (from fetch/AbortController)
- * - Anthropic: APIConnectionAbortedError
- * - OpenAI: APIUserAbortError
+ * - Standard: `AbortError` (name) - from fetch/AbortController
+ * - Anthropic SDK: `APIConnectionAbortedError`
+ * - OpenAI SDK: `APIUserAbortError`
+ * - Generic: errors with "abort", "cancelled", or "canceled" in the message
  *
  * @param error - The error to check
- * @returns true if the error is an abort-related error
+ * @returns `true` if the error is an abort-related error, `false` otherwise
+ *
+ * @example
+ * ```typescript
+ * import { isAbortError } from "@llmist/core/errors";
+ *
+ * const controller = new AbortController();
+ *
+ * try {
+ *   for await (const chunk of client.stream({ signal: controller.signal, ... })) {
+ *     // Process chunks...
+ *   }
+ * } catch (error) {
+ *   if (isAbortError(error)) {
+ *     console.log("Request was cancelled - this is expected");
+ *     return; // Graceful exit
+ *   }
+ *   // Re-throw unexpected errors
+ *   throw error;
+ * }
+ * ```
  */
 export function isAbortError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;

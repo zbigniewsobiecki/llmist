@@ -95,8 +95,24 @@ export function isInteractive(stream: TTYStream): boolean {
   return Boolean(stream.isTTY);
 }
 
+/** ESC key byte code */
 const ESC_KEY = 0x1b;
-const ESC_TIMEOUT_MS = 50; // Distinguish standalone ESC from escape sequences
+
+/**
+ * Timeout in milliseconds to distinguish standalone ESC key from escape sequences.
+ *
+ * When a user presses the ESC key alone, only byte 0x1B is sent. However, arrow keys
+ * and other special keys send escape sequences that START with 0x1B followed by
+ * additional bytes (e.g., `ESC[A` for up arrow, `ESC[B` for down arrow).
+ *
+ * These additional bytes typically arrive within 10-20ms on most terminals and SSH
+ * connections. The 50ms timeout provides a safe buffer to detect escape sequences
+ * while keeping the standalone ESC key responsive to user input.
+ *
+ * If no additional bytes arrive within this window after an initial ESC byte,
+ * we treat it as a standalone ESC key press.
+ */
+const ESC_TIMEOUT_MS = 50;
 
 /**
  * Creates a keyboard listener for ESC key detection in TTY mode.

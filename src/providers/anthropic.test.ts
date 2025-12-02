@@ -347,6 +347,56 @@ describe("AnthropicMessagesProvider", () => {
     });
   });
 
+  describe("abort signal propagation", () => {
+    it("passes abort signal to SDK when provided", async () => {
+      const createSpy = mock().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const controller = new AbortController();
+      const options = {
+        model: "claude-3",
+        messages: [{ role: "user" as const, content: "Test" }],
+        signal: controller.signal,
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ signal: controller.signal }),
+      );
+    });
+
+    it("does not pass signal options when signal is not provided", async () => {
+      const createSpy = mock().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const options = {
+        model: "claude-3",
+        messages: [{ role: "user" as const, content: "Test" }],
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      // When no signal is provided, second argument should be undefined
+      expect(createSpy).toHaveBeenCalledWith(expect.any(Object), undefined);
+    });
+  });
+
   describe("countTokens", () => {
     it("counts tokens for simple messages", async () => {
       const mockCountTokens = mock().mockResolvedValue({
