@@ -1,3 +1,7 @@
+## 1.5.0 (2025-12-03)
+
+* feat(gadgets): improve parameter documentation for better LLM comprehension (#134) (#135) ([045250b](https://github.com/zbigniewsobiecki/llmist/commit/045250b)), closes [#134](https://github.com/zbigniewsobiecki/llmist/issues/134) [#135](https://github.com/zbigniewsobiecki/llmist/issues/135)
+
 ## 1.4.0 (2025-12-02)
 
 * chore: sync dev with main after release [skip ci] ([081ccec](https://github.com/zbigniewsobiecki/llmist/commit/081ccec))
