@@ -177,12 +177,15 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
       const gadget = new CreateSectionGadget();
       const instruction = gadget.getInstruction();
 
-      // Now uses plain text format for all formats
+      // Now uses plain text format with required/optional sections
       expect(instruction).toContain("Parameters:");
+      expect(instruction).toContain("1 required, 2 optional");
+      expect(instruction).toContain("REQUIRED Parameters:");
+      expect(instruction).toContain("OPTIONAL Parameters:");
       expect(instruction).toContain("The title for the new section");
 
       // Verify all properties are listed in plain text format
-      expect(instruction).toContain("- title (string) [required]: The title for the new section");
+      expect(instruction).toContain("- title (string): The title for the new section");
       expect(instruction).toContain("- parentSectionId");
       expect(instruction).toContain("- content (string): Initial content for the section");
     });

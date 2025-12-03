@@ -22,10 +22,12 @@ describe("BaseGadget", () => {
     const gadget = new SchemaGadget();
     const instruction = gadget.instruction;
 
-    // Should use plain text format for all formats
+    // Should use plain text format with required/optional sections
     expect(instruction).toContain("Parameters:");
-    expect(instruction).toContain("- count (integer) [required]: Number of items to process");
-    expect(instruction).toContain("- tags (array of string) [required]: Optional tags to apply");
+    expect(instruction).toContain("2 required");
+    expect(instruction).toContain("REQUIRED Parameters:");
+    expect(instruction).toContain("- count (integer): Number of items to process");
+    expect(instruction).toContain("- tags (array of string): Optional tags to apply");
   });
 
   it("includes parameters in plain text format", () => {
@@ -34,8 +36,10 @@ describe("BaseGadget", () => {
 
     expect(instruction).toContain("Processes items with structured input.");
     expect(instruction).toContain("Parameters:");
-    expect(instruction).toContain("- count (integer) [required]: Number of items to process");
-    expect(instruction).toContain("- tags (array of string) [required]: Optional tags to apply");
+    expect(instruction).toContain("2 required");
+    expect(instruction).toContain("REQUIRED Parameters:");
+    expect(instruction).toContain("- count (integer): Number of items to process");
+    expect(instruction).toContain("- tags (array of string): Optional tags to apply");
   });
 
   it("includes all nested properties in plain text schema for complex objects", () => {
@@ -70,13 +74,15 @@ describe("BaseGadget", () => {
     const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("Parameters:");
+    expect(instruction).toContain("3 required");
+    expect(instruction).toContain("REQUIRED Parameters:");
 
-    // Verify top-level properties with their descriptions
-    expect(instruction).toContain("- user (object) [required]: User information");
-    expect(instruction).toContain("- items (array of object) [required]: List of items");
-    expect(instruction).toContain("- metadata (object) [required]: Additional metadata");
+    // Verify top-level properties without [required] marker (section indicates it)
+    expect(instruction).toContain("- user (object): User information");
+    expect(instruction).toContain("- items (array of object): List of items");
+    expect(instruction).toContain("- metadata (object): Additional metadata");
 
-    // Verify nested user properties (indented)
+    // Verify nested user properties (indented, still have [required] marker for nested fields)
     expect(instruction).toContain("  - name (string) [required]: User name");
     expect(instruction).toContain("  - email (string) [required]: User email");
     expect(instruction).toContain("  - age (number): User age");
@@ -149,10 +155,11 @@ describe("BaseGadget examples", () => {
 
     expect(instruction).toContain("Examples:");
     expect(instruction).toContain("# Basic usage");
-    expect(instruction).toContain("Input:");
+    expect(instruction).toContain("!!!GADGET_START:ExampleGadget");
     expect(instruction).toContain("!!!ARG:value");
     expect(instruction).toContain("42");
-    expect(instruction).toContain("Output:");
+    expect(instruction).toContain("!!!GADGET_END");
+    expect(instruction).toContain("Expected Output:");
     expect(instruction).toContain("Result: 42");
   });
 
@@ -174,9 +181,12 @@ describe("BaseGadget examples", () => {
     const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("# First example");
+    expect(instruction).toContain("!!!GADGET_START:MultiExampleGadget");
+    expect(instruction).toContain("!!!GADGET_END");
     expect(instruction).toContain("# Second example");
-    // Verify blank line between examples (multiple newlines)
-    expect(instruction).toMatch(/first[\s\S]*?\n\n# Second/);
+    // Verify horizontal rule between examples
+    expect(instruction).toContain("---");
+    expect(instruction).toMatch(/first[\s\S]*?---[\s\S]*?# Second/);
   });
 
   it("omits Examples section when no examples provided", () => {
@@ -228,8 +238,9 @@ describe("BaseGadget examples", () => {
 
     expect(instruction).toContain("Examples:");
     expect(instruction).toContain("# Just input");
-    expect(instruction).toContain("Input:");
-    expect(instruction).not.toContain("Output:");
+    expect(instruction).toContain("!!!GADGET_START:NoOutputGadget");
+    expect(instruction).toContain("!!!GADGET_END");
+    expect(instruction).not.toContain("Expected Output:");
   });
 
   it("renders example without comment", () => {
@@ -247,10 +258,11 @@ describe("BaseGadget examples", () => {
     const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("Examples:");
-    expect(instruction).toContain("Input:");
+    expect(instruction).toContain("!!!GADGET_START:NoCommentGadget");
     expect(instruction).toContain("!!!ARG:x");
     expect(instruction).toContain("5");
-    expect(instruction).toContain("Output:");
+    expect(instruction).toContain("!!!GADGET_END");
+    expect(instruction).toContain("Expected Output:");
     expect(instruction).toContain("five");
     // Should not have a # line since no comment
     expect(instruction).not.toMatch(/Examples:\n#/);
@@ -338,8 +350,44 @@ describe("BaseGadget examples with custom argPrefix", () => {
     const gadget = new CustomPrefixGadget();
     const instruction = gadget.getInstruction("@param:");
 
+    // Verify custom arg prefix
     expect(instruction).toContain("@param:value");
     expect(instruction).not.toContain("!!!ARG:");
+
+    // When only argPrefix is customized, START/END use defaults
+    expect(instruction).toContain("!!!GADGET_START:");
+    expect(instruction).toContain("!!!GADGET_END");
+  });
+
+  it("uses all custom prefixes when provided as options", () => {
+    class FullyCustomGadget extends Gadget({
+      description: "Test gadget with all custom prefixes",
+      schema: z.object({
+        value: z.number(),
+      }),
+      examples: [{ params: { value: 42 }, output: "Result: 42", comment: "Full custom" }],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new FullyCustomGadget();
+    const instruction = gadget.getInstruction({
+      argPrefix: "@param:",
+      startPrefix: "@BEGIN:",
+      endPrefix: "@END",
+    });
+
+    // Verify all custom prefixes
+    expect(instruction).toContain("@param:value");
+    expect(instruction).toContain("@BEGIN:FullyCustomGadget");
+    expect(instruction).toContain("@END");
+
+    // Verify defaults are not used
+    expect(instruction).not.toContain("!!!ARG:");
+    expect(instruction).not.toContain("!!!GADGET_START");
+    expect(instruction).not.toContain("!!!GADGET_END");
   });
 
   it("uses custom argPrefix for nested objects", () => {
@@ -414,5 +462,121 @@ describe("BaseGadget examples with custom argPrefix", () => {
     const instruction = gadget.getInstruction();
 
     expect(instruction).toContain("!!!ARG:x");
+  });
+});
+
+describe("BaseGadget parameter sections", () => {
+  it("shows only REQUIRED section when all parameters are required", () => {
+    class AllRequiredGadget extends Gadget({
+      description: "Test gadget with all required params",
+      schema: z.object({
+        name: z.string().describe("User name"),
+        email: z.string().describe("User email"),
+        age: z.number().describe("User age"),
+      }),
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new AllRequiredGadget();
+    const instruction = gadget.getInstruction();
+
+    expect(instruction).toContain("3 required");
+    expect(instruction).not.toContain("optional");
+    expect(instruction).toContain("REQUIRED Parameters:");
+    expect(instruction).not.toContain("OPTIONAL Parameters:");
+    expect(instruction).toContain("- name (string): User name");
+    expect(instruction).toContain("- email (string): User email");
+    expect(instruction).toContain("- age (number): User age");
+  });
+
+  it("shows only OPTIONAL section when all parameters are optional", () => {
+    class AllOptionalGadget extends Gadget({
+      description: "Test gadget with all optional params",
+      schema: z.object({
+        name: z.string().optional().describe("User name"),
+        email: z.string().optional().describe("User email"),
+        age: z.number().optional().describe("User age"),
+      }),
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new AllOptionalGadget();
+    const instruction = gadget.getInstruction();
+
+    expect(instruction).toContain("3 optional");
+    expect(instruction).not.toContain("required");
+    expect(instruction).toContain("OPTIONAL Parameters:");
+    expect(instruction).not.toContain("REQUIRED Parameters:");
+    expect(instruction).toContain("- name (string): User name");
+    expect(instruction).toContain("- email (string): User email");
+    expect(instruction).toContain("- age (number): User age");
+  });
+
+  it("shows both REQUIRED and OPTIONAL sections for mixed parameters", () => {
+    class MixedGadget extends Gadget({
+      description: "Test gadget with mixed params",
+      schema: z.object({
+        name: z.string().describe("User name (required)"),
+        email: z.string().describe("User email (required)"),
+        age: z.number().optional().describe("User age (optional)"),
+      }),
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new MixedGadget();
+    const instruction = gadget.getInstruction();
+
+    expect(instruction).toContain("2 required, 1 optional");
+    expect(instruction).toContain("REQUIRED Parameters:");
+    expect(instruction).toContain("OPTIONAL Parameters:");
+
+    // Verify params are in correct sections
+    const requiredSection = instruction.split("OPTIONAL Parameters:")[0];
+    const optionalSection = instruction.split("OPTIONAL Parameters:")[1];
+
+    expect(requiredSection).toContain("- name (string): User name (required)");
+    expect(requiredSection).toContain("- email (string): User email (required)");
+    expect(optionalSection).toContain("- age (number): User age (optional)");
+  });
+
+  it("separates three examples with horizontal rules", () => {
+    class ThreeExamplesGadget extends Gadget({
+      description: "Test gadget with three examples",
+      schema: z.object({ value: z.number() }),
+      examples: [
+        { params: { value: 1 }, output: "first", comment: "First" },
+        { params: { value: 2 }, output: "second", comment: "Second" },
+        { params: { value: 3 }, output: "third", comment: "Third" },
+      ],
+    }) {
+      execute(): string {
+        return "done";
+      }
+    }
+
+    const gadget = new ThreeExamplesGadget();
+    const instruction = gadget.getInstruction();
+
+    // Count occurrences of horizontal rule
+    const ruleCount = (instruction.match(/---/g) || []).length;
+    expect(ruleCount).toBe(2); // 2 rules between 3 examples
+
+    // Verify order and spacing
+    expect(instruction).toMatch(/# First[\s\S]*?---[\s\S]*?# Second[\s\S]*?---[\s\S]*?# Third/);
+
+    // Verify all examples have START/END markers
+    const startCount = (instruction.match(/!!!GADGET_START:/g) || []).length;
+    const endCount = (instruction.match(/!!!GADGET_END/g) || []).length;
+    expect(startCount).toBe(3);
+    expect(endCount).toBe(3);
   });
 });
