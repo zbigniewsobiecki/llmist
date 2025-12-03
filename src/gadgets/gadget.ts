@@ -1,6 +1,6 @@
 import type { ZodTypeAny } from "zod";
 
-import { GADGET_ARG_PREFIX } from "../core/constants.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
 import type { GadgetExample } from "./types.js";
@@ -49,56 +49,123 @@ function formatParamsAsBlock(
 }
 
 /**
+ * Format a single parameter line with type info and description.
+ * Helper function for formatSchemaAsPlainText.
+ */
+function formatParamLine(
+  key: string,
+  propObj: Record<string, unknown>,
+  isRequired: boolean,
+  indent = "",
+): string {
+  const type = propObj.type as string;
+  const description = propObj.description as string | undefined;
+  const enumValues = propObj.enum as string[] | undefined;
+
+  let line = `${indent}- ${key}`;
+
+  // Add type info
+  if (type === "array") {
+    const items = propObj.items as Record<string, unknown> | undefined;
+    const itemType = items?.type || "any";
+    line += ` (array of ${itemType})`;
+  } else if (type === "object" && propObj.properties) {
+    line += " (object)";
+  } else {
+    line += ` (${type})`;
+  }
+
+  // Add required marker only for nested objects (not at root level where sections indicate this)
+  if (isRequired && indent !== "") {
+    line += " [required]";
+  }
+
+  // Add description
+  if (description) {
+    line += `: ${description}`;
+  }
+
+  // Add enum values if present
+  if (enumValues) {
+    line += ` - one of: ${enumValues.map((v) => `"${v}"`).join(", ")}`;
+  }
+
+  return line;
+}
+
+/**
  * Format JSON Schema as plain text description.
  * This presents parameters in a neutral, human-readable format
  * that complements the block format used for gadget invocation.
  */
-function formatSchemaAsPlainText(schema: Record<string, unknown>, indent = ""): string {
+function formatSchemaAsPlainText(schema: Record<string, unknown>, indent = "", atRoot = true): string {
   const lines: string[] = [];
   const properties = (schema.properties || {}) as Record<string, unknown>;
   const required = (schema.required || []) as string[];
 
+  // At root level: split required/optional
+  if (atRoot && indent === "") {
+    const requiredProps: [string, unknown][] = [];
+    const optionalProps: [string, unknown][] = [];
+
+    for (const [key, prop] of Object.entries(properties)) {
+      if (required.includes(key)) {
+        requiredProps.push([key, prop]);
+      } else {
+        optionalProps.push([key, prop]);
+      }
+    }
+
+    const reqCount = requiredProps.length;
+    const optCount = optionalProps.length;
+
+    // Add count summary
+    if (reqCount > 0 || optCount > 0) {
+      const parts: string[] = [];
+      if (reqCount > 0) parts.push(`${reqCount} required`);
+      if (optCount > 0) parts.push(`${optCount} optional`);
+      lines.push(parts.join(", "));
+      lines.push(""); // Blank line
+    }
+
+    // Render REQUIRED section
+    if (reqCount > 0) {
+      lines.push("REQUIRED Parameters:");
+      for (const [key, prop] of requiredProps) {
+        lines.push(formatParamLine(key, prop as Record<string, unknown>, true, ""));
+        // Handle nested objects
+        const propObj = prop as Record<string, unknown>;
+        if (propObj.type === "object" && propObj.properties) {
+          lines.push(formatSchemaAsPlainText(propObj, "  ", false));
+        }
+      }
+    }
+
+    // Render OPTIONAL section
+    if (optCount > 0) {
+      if (reqCount > 0) lines.push(""); // Blank line between sections
+      lines.push("OPTIONAL Parameters:");
+      for (const [key, prop] of optionalProps) {
+        lines.push(formatParamLine(key, prop as Record<string, unknown>, false, ""));
+        // Handle nested objects
+        const propObj = prop as Record<string, unknown>;
+        if (propObj.type === "object" && propObj.properties) {
+          lines.push(formatSchemaAsPlainText(propObj, "  ", false));
+        }
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  // Nested objects: use current behavior (no split)
   for (const [key, prop] of Object.entries(properties)) {
-    const propObj = prop as Record<string, unknown>;
-    const type = propObj.type as string;
-    const description = propObj.description as string | undefined;
     const isRequired = required.includes(key);
-    const enumValues = propObj.enum as string[] | undefined;
+    lines.push(formatParamLine(key, prop as Record<string, unknown>, isRequired, indent));
 
-    // Build the line
-    let line = `${indent}- ${key}`;
-
-    // Add type info
-    if (type === "array") {
-      const items = propObj.items as Record<string, unknown> | undefined;
-      const itemType = items?.type || "any";
-      line += ` (array of ${itemType})`;
-    } else if (type === "object" && propObj.properties) {
-      line += " (object)";
-    } else {
-      line += ` (${type})`;
-    }
-
-    // Add required marker
-    if (isRequired) {
-      line += " [required]";
-    }
-
-    // Add description
-    if (description) {
-      line += `: ${description}`;
-    }
-
-    // Add enum values if present
-    if (enumValues) {
-      line += ` - one of: ${enumValues.map((v) => `"${v}"`).join(", ")}`;
-    }
-
-    lines.push(line);
-
-    // Recurse for nested objects
-    if (type === "object" && propObj.properties) {
-      lines.push(formatSchemaAsPlainText(propObj, indent + "  "));
+    const propObj = prop as Record<string, unknown>;
+    if (propObj.type === "object" && propObj.properties) {
+      lines.push(formatSchemaAsPlainText(propObj, indent + "  ", false));
     }
   }
 
@@ -170,10 +237,14 @@ export abstract class BaseGadget {
    * Generate instruction text for the LLM.
    * Combines name, description, and parameter schema into a formatted instruction.
    *
-   * @param argPrefix - Optional custom argument prefix for block format examples
+   * @param optionsOrArgPrefix - Optional custom prefixes for examples, or just argPrefix string for backwards compatibility
    * @returns Formatted instruction string
    */
-  getInstruction(argPrefix?: string): string {
+  getInstruction(optionsOrArgPrefix?: string | { argPrefix?: string; startPrefix?: string; endPrefix?: string }): string {
+    // Handle backwards compatibility: if string is passed, treat it as argPrefix
+    const options = typeof optionsOrArgPrefix === "string"
+      ? { argPrefix: optionsOrArgPrefix }
+      : optionsOrArgPrefix;
     const parts: string[] = [];
 
     // Add description
@@ -197,12 +268,17 @@ export abstract class BaseGadget {
     if (this.examples && this.examples.length > 0) {
       parts.push("\n\nExamples:");
 
-      // Use custom argPrefix if provided, otherwise use default
-      const effectiveArgPrefix = argPrefix ?? GADGET_ARG_PREFIX;
+      // Use custom prefixes if provided, otherwise use defaults
+      const effectiveArgPrefix = options?.argPrefix ?? GADGET_ARG_PREFIX;
+      const effectiveStartPrefix = options?.startPrefix ?? GADGET_START_PREFIX;
+      const effectiveEndPrefix = options?.endPrefix ?? GADGET_END_PREFIX;
+      const gadgetName = this.name || this.constructor.name;
 
       this.examples.forEach((example, index) => {
-        // Add blank line between examples (but not before the first one)
+        // Add horizontal rule between examples (but not before the first one)
         if (index > 0) {
+          parts.push("");
+          parts.push("---");
           parts.push("");
         }
 
@@ -211,13 +287,19 @@ export abstract class BaseGadget {
           parts.push(`# ${example.comment}`);
         }
 
+        // Add GADGET_START marker
+        parts.push(`${effectiveStartPrefix}${gadgetName}`);
+
         // Render params in block format
-        parts.push("Input:");
         parts.push(formatParamsAsBlock(example.params as Record<string, unknown>, "", effectiveArgPrefix));
+
+        // Add GADGET_END marker
+        parts.push(effectiveEndPrefix);
 
         // Render output if provided
         if (example.output !== undefined) {
-          parts.push("Output:");
+          parts.push(""); // Blank line before output
+          parts.push("Expected Output:");
           parts.push(example.output);
         }
       });
