@@ -38,8 +38,12 @@ function createCommandEnvironment(
     logReset: config["log-reset"] ?? baseEnv.loggerConfig?.logReset,
   };
 
-  // Create new environment with merged logging config
-  return createDefaultEnvironment(loggerConfig);
+  // Create new environment with merged logging config, preserving dockerConfig
+  const newEnv = createDefaultEnvironment(loggerConfig);
+  return {
+    ...newEnv,
+    dockerConfig: baseEnv.dockerConfig,
+  };
 }
 
 /**
