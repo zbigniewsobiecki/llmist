@@ -6,7 +6,7 @@ import { GadgetErrorFormatter, type ErrorFormatterOptions } from "./error-format
 import { BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
 import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
-import type { GadgetExecutionResult, ParsedGadgetCall } from "./types.js";
+import type { GadgetExecuteResult, GadgetExecutionResult, ParsedGadgetCall } from "./types.js";
 
 export class GadgetExecutor {
   private readonly logger: Logger<ILogObj>;
@@ -34,6 +34,17 @@ export class GadgetExecutor {
         reject(new TimeoutException(gadgetName, timeoutMs));
       }, timeoutMs);
     });
+  }
+
+  /**
+   * Normalizes gadget execute result to consistent format.
+   * Handles both string returns (backwards compat) and object returns with cost.
+   */
+  private normalizeExecuteResult(raw: string | GadgetExecuteResult): { result: string; cost: number } {
+    if (typeof raw === "string") {
+      return { result: raw, cost: 0 };
+    }
+    return { result: raw.result, cost: raw.cost ?? 0 };
   }
 
   // Execute a gadget call asynchronously
@@ -162,27 +173,31 @@ export class GadgetExecutor {
       const timeoutMs = gadget.timeoutMs ?? this.defaultGadgetTimeoutMs;
 
       // Execute gadget (handle both sync and async)
-      let result: string;
+      let rawResult: string | GadgetExecuteResult;
       if (timeoutMs && timeoutMs > 0) {
         // Execute with timeout
         this.logger.debug("Executing gadget with timeout", {
           gadgetName: call.gadgetName,
           timeoutMs,
         });
-        result = await Promise.race([
+        rawResult = await Promise.race([
           Promise.resolve(gadget.execute(validatedParameters)),
           this.createTimeoutPromise(call.gadgetName, timeoutMs),
         ]);
       } else {
         // Execute without timeout
-        result = await Promise.resolve(gadget.execute(validatedParameters));
+        rawResult = await Promise.resolve(gadget.execute(validatedParameters));
       }
+
+      // Normalize result: handle both string returns (legacy) and object returns with cost
+      const { result, cost } = this.normalizeExecuteResult(rawResult);
 
       const executionTimeMs = Date.now() - startTime;
       this.logger.info("Gadget executed successfully", {
         gadgetName: call.gadgetName,
         invocationId: call.invocationId,
         executionTimeMs,
+        cost: cost > 0 ? cost : undefined,
       });
 
       this.logger.debug("Gadget result", {
@@ -190,6 +205,7 @@ export class GadgetExecutor {
         invocationId: call.invocationId,
         parameters: validatedParameters,
         result,
+        cost,
         executionTimeMs,
       });
 
@@ -199,6 +215,7 @@ export class GadgetExecutor {
         parameters: validatedParameters,
         result,
         executionTimeMs,
+        cost,
       };
     } catch (error) {
       // Check if this is a BreakLoopException

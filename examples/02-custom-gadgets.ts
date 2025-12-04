@@ -4,7 +4,7 @@
  * Run: bunx tsx examples/02-custom-gadgets.ts
  */
 
-import { BreakLoopException, createGadget, Gadget, LLMist } from "llmist";
+import { BreakLoopException, createGadget, Gadget, HookPresets, LLMist, ModelRegistry } from "llmist";
 import { z } from "zod";
 
 // =============================================================================
@@ -137,6 +137,97 @@ class TaskComplete extends Gadget({
 }
 
 // =============================================================================
+// GADGET WITH COST REPORTING
+// =============================================================================
+
+// Simulates a paid API call - returns { result, cost } instead of just string
+const paidApiGadget = createGadget({
+  name: "PaidAPI",
+  description: "Simulates a paid API call that costs $0.001 per request",
+  schema: z.object({
+    query: z.string().describe("The query to send to the API"),
+  }),
+  execute: ({ query }) => {
+    // Simulate API response
+    const response = `API response for: "${query}"`;
+
+    // Return result with cost - this will be tracked in progressTracking
+    return {
+      result: response,
+      cost: 0.001, // $0.001 per API call
+    };
+  },
+});
+
+// Class-based gadget with cost reporting
+class PremiumCalculator extends Gadget({
+  description: "Premium calculator that costs $0.0005 per calculation",
+  schema: z.object({
+    expression: z.string().describe("Math expression to evaluate (e.g., '2 + 2')"),
+  }),
+}) {
+  execute(params: this["params"]) {
+    const { expression } = params;
+    // Simple eval for demo - in production, use a safe math parser
+    const evalResult = Function(`"use strict"; return (${expression})`)();
+
+    return {
+      result: `${expression} = ${evalResult}`,
+      cost: 0.0005, // $0.0005 per calculation
+    };
+  }
+}
+
+// =============================================================================
+// LLM-POWERED GADGET (passes internal LLM costs as gadget costs)
+// =============================================================================
+
+// This gadget uses an internal LLM call and reports those costs
+class Summarizer extends Gadget({
+  description: "Summarizes text using an internal LLM call",
+  schema: z.object({
+    text: z.string().describe("Text to summarize"),
+  }),
+}) {
+  private client = new LLMist();
+  private modelRegistry = new ModelRegistry();
+
+  async execute(params: this["params"]) {
+    const { text } = params;
+
+    // Track tokens for cost calculation
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let summary = "";
+
+    // Use LLMist.complete() for the internal LLM call
+    for await (const chunk of this.client.complete({
+      model: "haiku", // Use a fast, cheap model
+      messages: [{ role: "user", content: `Summarize briefly: ${text}` }],
+    })) {
+      summary += chunk.text;
+      if (chunk.usage) {
+        inputTokens = chunk.usage.inputTokens;
+        outputTokens = chunk.usage.outputTokens;
+      }
+    }
+
+    // Calculate the internal LLM cost
+    const costEstimate = this.modelRegistry.estimateCost(
+      "claude-3-5-haiku-20241022",
+      inputTokens,
+      outputTokens,
+    );
+
+    // Return result with the LLM cost passed through
+    return {
+      result: summary.trim(),
+      cost: costEstimate?.totalCost ?? 0,
+    };
+  }
+}
+
+// =============================================================================
 // MAIN
 // =============================================================================
 
@@ -182,6 +273,27 @@ async function main() {
     .askAndCollect("Calculate 5+5, then mark the task as complete with a summary.");
 
   console.log(`   ${answer4}\n`);
+
+  // Example 5: Gadgets with cost reporting
+  console.log("5. Gadgets with cost tracking:");
+  let totalCost = 0;
+  const modelRegistry = new ModelRegistry();
+
+  const answer5 = await LLMist.createAgent()
+    .withModel("haiku")
+    .withGadgets(paidApiGadget, PremiumCalculator)
+    .withHooks(
+      HookPresets.progressTracking({
+        modelRegistry,
+        onProgress: (stats) => {
+          totalCost = stats.totalCost;
+        },
+      }),
+    )
+    .askAndCollect("Query the API for 'weather' and calculate 10 * 5 + 3");
+
+  console.log(`   ${answer5}`);
+  console.log(`   Total cost (LLM + gadgets): $${totalCost.toFixed(6)}\n`);
 
   console.log("=== Done ===");
 }

@@ -97,7 +97,9 @@ export async function testGadget(
 
   // Execute the gadget
   try {
-    const result = await Promise.resolve(gadget.execute(validatedParams));
+    const rawResult = await Promise.resolve(gadget.execute(validatedParams));
+    // Normalize result: handle both string and { result, cost } return types
+    const result = typeof rawResult === "string" ? rawResult : rawResult.result;
     return {
       result,
       validatedParams,

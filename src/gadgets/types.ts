@@ -37,7 +37,36 @@ export interface GadgetExecutionResult {
   error?: string;
   executionTimeMs: number;
   breaksLoop?: boolean;
+  /** Cost of gadget execution in USD. Defaults to 0 if not provided by gadget. */
+  cost?: number;
 }
+
+/**
+ * Result returned by gadget execute() method.
+ * Can be a simple string or an object with result and optional cost.
+ *
+ * @example
+ * ```typescript
+ * // Simple string return (free gadget)
+ * execute: () => "result"
+ *
+ * // Object return with cost
+ * execute: () => ({ result: "data", cost: 0.001 })
+ * ```
+ */
+export interface GadgetExecuteResult {
+  /** The execution result as a string */
+  result: string;
+  /** Optional cost in USD (e.g., 0.001 for $0.001) */
+  cost?: number;
+}
+
+/**
+ * Union type for backwards-compatible execute() return type.
+ * Gadgets can return either a string (legacy, cost = 0) or
+ * an object with result and optional cost.
+ */
+export type GadgetExecuteReturn = string | GadgetExecuteResult
 
 // Parsed gadget call from LLM stream
 export interface ParsedGadgetCall {

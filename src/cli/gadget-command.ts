@@ -149,8 +149,9 @@ async function executeGadgetRun(
   let result: string;
 
   try {
+    let rawResult: string | { result: string; cost?: number };
     if (gadget.timeoutMs && gadget.timeoutMs > 0) {
-      result = await Promise.race([
+      rawResult = await Promise.race([
         Promise.resolve(gadget.execute(params)),
         new Promise<never>((_, reject) =>
           setTimeout(
@@ -160,8 +161,10 @@ async function executeGadgetRun(
         ),
       ]);
     } else {
-      result = await Promise.resolve(gadget.execute(params));
+      rawResult = await Promise.resolve(gadget.execute(params));
     }
+    // Normalize result: handle both string and { result, cost } return types
+    result = typeof rawResult === "string" ? rawResult : rawResult.result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Execution failed: ${message}`);

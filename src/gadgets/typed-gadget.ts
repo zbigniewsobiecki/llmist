@@ -25,7 +25,7 @@
 
 import type { ZodType } from "zod";
 import { BaseGadget } from "./gadget.js";
-import type { GadgetExample } from "./types.js";
+import type { GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
  * Infer the TypeScript type from a Zod schema.
@@ -128,18 +128,24 @@ export function Gadget<TSchema extends ZodType>(config: GadgetConfig<TSchema>) {
      * Execute the gadget. Subclasses should cast params to this['params'].
      *
      * @param params - Validated parameters from the LLM
-     * @returns Result as a string (or Promise<string> for async gadgets)
+     * @returns Result as a string, or an object with result and optional cost
      *
      * @example
      * ```typescript
+     * // Simple string return (free gadget)
      * execute(params: Record<string, unknown>): string {
      *   const typed = params as this['params'];
-     *   // Now 'typed' is fully typed!
      *   return String(typed.a + typed.b);
+     * }
+     *
+     * // Object return with cost tracking
+     * execute(params: Record<string, unknown>) {
+     *   const typed = params as this['params'];
+     *   return { result: "data", cost: 0.001 };
      * }
      * ```
      */
-    abstract execute(params: Record<string, unknown>): string | Promise<string>;
+    abstract execute(params: Record<string, unknown>): GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
   }
 
   return GadgetBase as {

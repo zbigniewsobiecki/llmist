@@ -3,7 +3,7 @@ import type { ZodTypeAny } from "zod";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
-import type { GadgetExample } from "./types.js";
+import type { GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
  * Format parameters object as Block format.
@@ -220,9 +220,22 @@ export abstract class BaseGadget {
    * Can be synchronous or asynchronous.
    *
    * @param params - Parameters passed from the LLM
-   * @returns Result as a string
+   * @returns Result as a string, or an object with result and optional cost
+   *
+   * @example
+   * ```typescript
+   * // Simple string return (free gadget)
+   * execute(params) {
+   *   return "result";
+   * }
+   *
+   * // Object return with cost tracking
+   * execute(params) {
+   *   return { result: "data", cost: 0.001 };
+   * }
+   * ```
    */
-  abstract execute(params: Record<string, unknown>): string | Promise<string>;
+  abstract execute(params: Record<string, unknown>): GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
 
   /**
    * Auto-generated instruction text for the LLM.

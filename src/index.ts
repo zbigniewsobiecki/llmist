@@ -141,6 +141,8 @@ export type { GadgetConfig } from "./gadgets/typed-gadget.js";
 export { Gadget } from "./gadgets/typed-gadget.js";
 export type {
   GadgetExample,
+  GadgetExecuteResult,
+  GadgetExecuteReturn,
   GadgetExecutionResult,
   ParsedGadgetCall,
   StreamEvent,

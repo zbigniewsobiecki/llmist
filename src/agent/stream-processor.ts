@@ -497,6 +497,7 @@ export class StreamProcessor {
           error: result.error,
           executionTimeMs: result.executionTimeMs,
           breaksLoop: result.breaksLoop,
+          cost: result.cost,
           logger: this.logger,
         };
         await this.hooks.observers!.onGadgetExecutionComplete!(context);

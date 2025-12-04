@@ -196,6 +196,8 @@ export interface ObserveGadgetCompleteContext {
   error?: string;
   executionTimeMs: number;
   breaksLoop?: boolean;
+  /** Cost of gadget execution in USD. 0 if gadget didn't report cost. */
+  cost?: number;
   logger: Logger<ILogObj>;
 }
 
