@@ -318,6 +318,23 @@ max-iterations = 3
 | `inherits` | string or string[] | Section(s) to inherit settings from |
 | `log-llm-requests` | string or boolean | Save raw LLM requests. `true` = default dir, string = custom path |
 | `log-llm-responses` | string or boolean | Save raw LLM responses. `true` = default dir, string = custom path |
+| `docker` | boolean | Enable Docker sandboxing for this command |
+| `docker-cwd-permission` | string | Override CWD mount permission: `"ro"` or `"rw"` |
+
+#### Options for `[docker]` section
+
+See [Docker Sandboxing](./DOCKER.md) for full documentation.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `enabled` | boolean | Enable Docker sandboxing globally |
+| `dev-mode` | boolean | Use local source instead of npm |
+| `dev-source` | string | Path to llmist source (for dev mode) |
+| `cwd-permission` | string | CWD mount permission: `"ro"` or `"rw"` (default) |
+| `config-permission` | string | Config mount permission: `"ro"` (default) or `"rw"` |
+| `env-vars` | string[] | Additional env vars to forward |
+| `image-name` | string | Custom Docker image name |
+| `dockerfile` | string | Custom Dockerfile content |
 
 #### Options for custom command sections
 
@@ -441,6 +458,12 @@ llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 | `--quiet` | `-q` | Suppress output except TellUser messages | false |
 | `--log-llm-requests [dir]` | | Save raw LLM requests | disabled |
 | `--log-llm-responses [dir]` | | Save raw LLM responses | disabled |
+| `--docker` | | Run in Docker sandbox container | config |
+| `--docker-ro` | | Run in Docker with read-only CWD | false |
+| `--docker-dev` | | Run in Docker dev mode (mount source) | false |
+| `--no-docker` | | Disable Docker (override config) | false |
+
+See [Docker Sandboxing](./DOCKER.md) for full documentation on Docker options.
 
 #### Built-in Gadgets
 
