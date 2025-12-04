@@ -75,11 +75,30 @@ export async function checkDockerAvailable(): Promise<boolean> {
 /**
  * Checks if we're already running inside a Docker container.
  *
- * Uses the LLMIST_UNSAFE_ENVIRONMENT env var to detect nesting.
+ * Detection methods (in order):
+ * 1. /.dockerenv file - Docker creates this in all containers
+ * 2. /proc/1/cgroup contains "docker" - Linux cgroup detection
+ * 3. LLMIST_UNSAFE_ENVIRONMENT env var - explicit override (legacy)
  *
  * @returns true if running inside a container
  */
 export function isInsideContainer(): boolean {
+  // Method 1: Check for /.dockerenv (most reliable)
+  if (existsSync("/.dockerenv")) {
+    return true;
+  }
+
+  // Method 2: Check cgroup for docker/containerd (Linux)
+  try {
+    const cgroup = readFileSync("/proc/1/cgroup", "utf-8");
+    if (cgroup.includes("docker") || cgroup.includes("containerd")) {
+      return true;
+    }
+  } catch {
+    // Not on Linux or no access to /proc
+  }
+
+  // Method 3: Explicit env var (legacy fallback)
   return process.env[LLMIST_UNSAFE_ENV] === "1";
 }
 
