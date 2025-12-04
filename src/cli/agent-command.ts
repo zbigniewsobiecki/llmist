@@ -32,6 +32,7 @@ import {
 } from "./ui/formatters.js";
 import {
   createDockerContext,
+  DockerSkipError,
   executeInDocker,
   resolveDevMode,
   resolveDockerEnabled,
@@ -163,8 +164,8 @@ export async function executeAgent(
       await executeInDocker(ctx, devMode);
       // executeInDocker calls process.exit(), so we won't reach here
     } catch (error) {
-      // "SKIP_DOCKER" means we're already inside a container, continue normally
-      if (error instanceof Error && error.message === "SKIP_DOCKER") {
+      // DockerSkipError means we're already inside a container, continue normally
+      if (error instanceof DockerSkipError) {
         // Continue with normal execution
       } else {
         throw error;
