@@ -1,3 +1,7 @@
+## <small>1.6.1 (2025-12-04)</small>
+
+* fix(docker): use DockerSkipError instanceof check instead of message string (#138) (#139) ([d623c97](https://github.com/zbigniewsobiecki/llmist/commit/d623c97)), closes [#138](https://github.com/zbigniewsobiecki/llmist/issues/138) [#139](https://github.com/zbigniewsobiecki/llmist/issues/139)
+
 ## 1.6.0 (2025-12-04)
 
 * Merge pull request #137 from zbigniewsobiecki/dev ([e17f61c](https://github.com/zbigniewsobiecki/llmist/commit/e17f61c)), closes [#137](https://github.com/zbigniewsobiecki/llmist/issues/137)
