@@ -767,4 +767,166 @@ describe("AgentBuilder", () => {
       expect(result).toBe(builder);
     });
   });
+
+  describe("withTrailingMessage", () => {
+    it("returns this for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withTrailingMessage("Always respond in JSON format.");
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts a static string message", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withTrailingMessage("Be concise.");
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts a function that generates the message", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withTrailingMessage((ctx) => `Iteration ${ctx.iteration}`);
+
+      expect(result).toBe(builder);
+    });
+
+    it("chains correctly with other builder methods", () => {
+      const builder = new AgentBuilder();
+      const result = builder
+        .withModel("sonnet")
+        .withSystem("You are helpful")
+        .withTrailingMessage("Stay focused.")
+        .withMaxIterations(10);
+
+      expect(result).toBe(builder);
+    });
+
+    it("creates hooks with beforeLLMCall controller when trailing message is set", () => {
+      const builder = new AgentBuilder();
+      builder.withTrailingMessage("Test message");
+
+      // Access private composeHooks via type assertion
+      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: unknown } } }).composeHooks();
+
+      expect(composedHooks).toBeDefined();
+      expect(composedHooks?.controllers?.beforeLLMCall).toBeDefined();
+      expect(typeof composedHooks?.controllers?.beforeLLMCall).toBe("function");
+    });
+
+    it("returns undefined hooks when no trailing message is set", () => {
+      const builder = new AgentBuilder();
+
+      const composedHooks = (builder as unknown as { composeHooks: () => undefined | object }).composeHooks();
+
+      expect(composedHooks).toBeUndefined();
+    });
+
+    it("preserves existing hooks when trailing message is added", () => {
+      const onLLMCallStart = vi.fn();
+      const builder = new AgentBuilder();
+      builder.withHooks({
+        observers: { onLLMCallStart },
+      });
+      builder.withTrailingMessage("Test message");
+
+      const composedHooks = (builder as unknown as { composeHooks: () => { observers?: { onLLMCallStart?: unknown }; controllers?: { beforeLLMCall?: unknown } } }).composeHooks();
+
+      // Should have both the observer and the controller
+      expect(composedHooks?.observers?.onLLMCallStart).toBe(onLLMCallStart);
+      expect(composedHooks?.controllers?.beforeLLMCall).toBeDefined();
+    });
+
+    it("composes with existing beforeLLMCall controller", async () => {
+      const existingController = vi.fn(async () => ({
+        action: "proceed" as const,
+        modifiedOptions: { temperature: 0.5 },
+      }));
+
+      const builder = new AgentBuilder();
+      builder.withHooks({
+        controllers: { beforeLLMCall: existingController },
+      });
+      builder.withTrailingMessage("Test message");
+
+      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> } } }).composeHooks();
+      const controller = composedHooks?.controllers?.beforeLLMCall;
+
+      // Call the composed controller
+      const mockContext = {
+        iteration: 1,
+        maxIterations: 10,
+        options: { messages: [{ role: "user", content: "Hello" }] },
+        logger: {} as never,
+      };
+
+      const result = await controller?.(mockContext) as { action: string; modifiedOptions?: { messages?: unknown[]; temperature?: number } };
+
+      // Existing controller should have been called
+      expect(existingController).toHaveBeenCalledWith(mockContext);
+
+      // Result should include both the existing modification and the trailing message
+      expect(result.action).toBe("proceed");
+      expect(result.modifiedOptions?.temperature).toBe(0.5);
+      expect(result.modifiedOptions?.messages).toHaveLength(2);
+      expect((result.modifiedOptions?.messages?.[1] as { content: string }).content).toBe("Test message");
+    });
+
+    it("does not add trailing message when existing controller returns skip", async () => {
+      const existingController = vi.fn(async () => ({
+        action: "skip" as const,
+        syntheticResponse: "Cached response",
+      }));
+
+      const builder = new AgentBuilder();
+      builder.withHooks({
+        controllers: { beforeLLMCall: existingController },
+      });
+      builder.withTrailingMessage("Test message");
+
+      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> } } }).composeHooks();
+      const controller = composedHooks?.controllers?.beforeLLMCall;
+
+      const mockContext = {
+        iteration: 1,
+        maxIterations: 10,
+        options: { messages: [{ role: "user", content: "Hello" }] },
+        logger: {} as never,
+      };
+
+      const result = await controller?.(mockContext) as { action: string; syntheticResponse?: string };
+
+      // Should return the skip action unchanged
+      expect(result.action).toBe("skip");
+      expect(result.syntheticResponse).toBe("Cached response");
+    });
+
+    it("calls dynamic message function with correct context", async () => {
+      const messageFn = vi.fn((ctx: { iteration: number; maxIterations: number }) =>
+        `Iteration ${ctx.iteration}/${ctx.maxIterations}`
+      );
+
+      const builder = new AgentBuilder();
+      builder.withTrailingMessage(messageFn);
+
+      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> } } }).composeHooks();
+      const controller = composedHooks?.controllers?.beforeLLMCall;
+
+      const mockContext = {
+        iteration: 3,
+        maxIterations: 10,
+        options: { messages: [{ role: "user", content: "Hello" }] },
+        logger: {} as never,
+      };
+
+      const result = await controller?.(mockContext) as { modifiedOptions?: { messages?: Array<{ role: string; content: string }> } };
+
+      // Message function should have been called with iteration context
+      expect(messageFn).toHaveBeenCalledWith({ iteration: 3, maxIterations: 10 });
+
+      // Result should include the generated message
+      const trailingMessage = result.modifiedOptions?.messages?.[1];
+      expect(trailingMessage?.content).toBe("Iteration 3/10");
+      expect(trailingMessage?.role).toBe("user");
+    });
+  });
 });

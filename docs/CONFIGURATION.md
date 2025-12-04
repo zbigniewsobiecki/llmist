@@ -93,6 +93,43 @@ LLMist.createAgent()
 | `.withHooks(hooks)` | `AgentHooks` | Lifecycle hooks |
 | `.withLogger(logger)` | `Logger` | Custom tslog logger |
 | `.onHumanInput(handler)` | Function | Human input handler |
+| `.withTrailingMessage(message)` | `string \| Function` | Ephemeral message appended to each request |
+
+#### Trailing Messages
+
+Add an ephemeral message that appears at the end of each LLM request but is **not** persisted to conversation history. This is useful for:
+
+- **Reminders**: Instructions that need to be reinforced on every turn
+- **Context injection**: Current state or status that changes independently
+- **Format enforcement**: "Always respond in JSON format"
+
+```typescript
+// Static message
+LLMist.createAgent()
+  .withTrailingMessage("Always respond in JSON format.")
+  .ask("List users");
+
+// Dynamic message based on iteration
+LLMist.createAgent()
+  .withTrailingMessage((ctx) =>
+    `[Iteration ${ctx.iteration}/${ctx.maxIterations}] Focus on completing the current task.`
+  )
+  .ask("Build a web app");
+
+// Inject current status/state
+let taskStatus = "pending";
+LLMist.createAgent()
+  .withTrailingMessage(() =>
+    `[Current task status: ${taskStatus}] Adjust your approach based on this status.`
+  )
+  .ask("Process tasks");
+```
+
+**Key behavior:**
+- Message is ephemeral - only appears in the current LLM request
+- Not persisted to conversation history
+- Composes with existing `beforeLLMCall` hooks
+- Respects "skip" action from existing controllers
 
 ### Advanced
 

@@ -28,12 +28,28 @@ import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
-import type { AgentHooks } from "./hooks.js";
+import type {
+  AgentHooks,
+  BeforeLLMCallAction,
+  LLMCallControllerContext,
+} from "./hooks.js";
 
 /**
  * Message for conversation history.
  */
 export type HistoryMessage = { user: string } | { assistant: string } | { system: string };
+
+/**
+ * Context available to trailing message functions.
+ * Provides iteration information for dynamic message generation.
+ */
+export type TrailingMessageContext = Pick<LLMCallControllerContext, "iteration" | "maxIterations">;
+
+/**
+ * Trailing message can be a static string or a function that generates the message.
+ * The function receives context about the current iteration.
+ */
+export type TrailingMessage = string | ((ctx: TrailingMessageContext) => string);
 
 /**
  * Fluent builder for creating agents.
@@ -77,6 +93,7 @@ export class AgentBuilder {
   private gadgetOutputLimitPercent?: number;
   private compactionConfig?: CompactionConfig;
   private signal?: AbortSignal;
+  private trailingMessage?: TrailingMessage;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -590,6 +607,32 @@ export class AgentBuilder {
   }
 
   /**
+   * Add an ephemeral trailing message that appears at the end of each LLM request.
+   *
+   * The message is NOT persisted to conversation history - it only appears in the
+   * current LLM call. This is useful for injecting context-specific instructions
+   * or reminders without polluting the conversation history.
+   *
+   * @param message - Static string or function that generates the message
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Static message
+   * .withTrailingMessage("Always respond in JSON format.")
+   *
+   * // Dynamic message based on iteration
+   * .withTrailingMessage((ctx) =>
+   *   `[Iteration ${ctx.iteration}/${ctx.maxIterations}] Stay focused on the task.`
+   * )
+   * ```
+   */
+  withTrailingMessage(message: TrailingMessage): this {
+    this.trailingMessage = message;
+    return this;
+  }
+
+  /**
    * Add a synthetic gadget call to the conversation history.
    *
    * This is useful for in-context learning - showing the LLM what "past self"
@@ -637,6 +680,57 @@ export class AgentBuilder {
     });
 
     return this;
+  }
+
+  /**
+   * Compose the final hooks, including trailing message if configured.
+   */
+  private composeHooks(): AgentHooks | undefined {
+    if (!this.trailingMessage) {
+      return this.hooks;
+    }
+
+    const trailingMsg = this.trailingMessage;
+    const existingBeforeLLMCall = this.hooks?.controllers?.beforeLLMCall;
+
+    const trailingMessageController = async (
+      ctx: LLMCallControllerContext,
+    ): Promise<BeforeLLMCallAction> => {
+      // Run existing beforeLLMCall first if present
+      const result: BeforeLLMCallAction = existingBeforeLLMCall
+        ? await existingBeforeLLMCall(ctx)
+        : { action: "proceed" };
+
+      // If action is "skip", don't inject trailing message
+      if (result.action === "skip") {
+        return result;
+      }
+
+      // Get messages (possibly already modified by existing controller)
+      const messages = [...(result.modifiedOptions?.messages || ctx.options.messages)];
+
+      // Generate trailing message content
+      const content =
+        typeof trailingMsg === "function"
+          ? trailingMsg({ iteration: ctx.iteration, maxIterations: ctx.maxIterations })
+          : trailingMsg;
+
+      // Append as ephemeral user message
+      messages.push({ role: "user", content });
+
+      return {
+        action: "proceed",
+        modifiedOptions: { ...result.modifiedOptions, messages },
+      };
+    };
+
+    return {
+      ...this.hooks,
+      controllers: {
+        ...this.hooks?.controllers,
+        beforeLLMCall: trailingMessageController,
+      },
+    };
   }
 
   /**
@@ -707,7 +801,7 @@ export class AgentBuilder {
       maxIterations: this.maxIterations,
       temperature: this.temperature,
       logger: this.logger,
-      hooks: this.hooks,
+      hooks: this.composeHooks(),
       promptConfig: this.promptConfig,
       initialMessages: this.initialMessages,
       onHumanInputRequired: this.onHumanInputRequired,
@@ -818,7 +912,7 @@ export class AgentBuilder {
       maxIterations: this.maxIterations,
       temperature: this.temperature,
       logger: this.logger,
-      hooks: this.hooks,
+      hooks: this.composeHooks(),
       promptConfig: this.promptConfig,
       initialMessages: this.initialMessages,
       onHumanInputRequired: this.onHumanInputRequired,
