@@ -35,6 +35,10 @@ export const OPTION_FLAGS = {
   noBuiltins: "--no-builtins",
   noBuiltinInteraction: "--no-builtin-interaction",
   quiet: "-q, --quiet",
+  docker: "--docker",
+  dockerRo: "--docker-ro",
+  noDocker: "--no-docker",
+  dockerDev: "--docker-dev",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -54,6 +58,10 @@ export const OPTION_DESCRIPTIONS = {
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
   noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
   quiet: "Suppress all output except content (text and TellUser messages).",
+  docker: "Run agent in a Docker sandbox container for security isolation.",
+  dockerRo: "Run in Docker with current directory mounted read-only.",
+  noDocker: "Disable Docker sandboxing (override config).",
+  dockerDev: "Run in Docker dev mode (mount local source instead of npm install).",
 } as const;
 
 /** Prefix for summary output written to stderr */
