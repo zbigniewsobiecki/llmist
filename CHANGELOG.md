@@ -1,3 +1,13 @@
+## 1.7.0 (2025-12-04)
+
+* Merge pull request #143 from zbigniewsobiecki/dev ([8a11d1d](https://github.com/zbigniewsobiecki/llmist/commit/8a11d1d)), closes [#143](https://github.com/zbigniewsobiecki/llmist/issues/143)
+* feat(agent): add withTrailingMessage() for ephemeral message injection (#142) ([d17933a](https://github.com/zbigniewsobiecki/llmist/commit/d17933a)), closes [#142](https://github.com/zbigniewsobiecki/llmist/issues/142)
+* chore: sync dev with main after release [skip ci] ([28f8204](https://github.com/zbigniewsobiecki/llmist/commit/28f8204))
+* chore: sync dev with main after release [skip ci] ([dac7104](https://github.com/zbigniewsobiecki/llmist/commit/dac7104))
+* chore: sync dev with main after release [skip ci] ([237ea7a](https://github.com/zbigniewsobiecki/llmist/commit/237ea7a))
+* fix(docker): use DockerSkipError instanceof check instead of message string (#138) ([b4ce313](https://github.com/zbigniewsobiecki/llmist/commit/b4ce313)), closes [#138](https://github.com/zbigniewsobiecki/llmist/issues/138)
+* fix(gadgets): add output size limiting to GadgetOutputViewer (#140) ([20e972b](https://github.com/zbigniewsobiecki/llmist/commit/20e972b)), closes [#140](https://github.com/zbigniewsobiecki/llmist/issues/140)
+
 ## <small>1.6.2 (2025-12-04)</small>
 
 * fix(gadgets): add output size limiting to GadgetOutputViewer ([e628d95](https://github.com/zbigniewsobiecki/llmist/commit/e628d95))
