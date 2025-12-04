@@ -1,3 +1,10 @@
+## 1.6.0 (2025-12-04)
+
+* Merge pull request #137 from zbigniewsobiecki/dev ([e17f61c](https://github.com/zbigniewsobiecki/llmist/commit/e17f61c)), closes [#137](https://github.com/zbigniewsobiecki/llmist/issues/137)
+* feat(cli): add Docker sandboxing for secure agent execution (#136) ([c948b03](https://github.com/zbigniewsobiecki/llmist/commit/c948b03)), closes [#136](https://github.com/zbigniewsobiecki/llmist/issues/136)
+* feat(gadgets): improve parameter documentation for better LLM comprehension (#134) ([c49e423](https://github.com/zbigniewsobiecki/llmist/commit/c49e423)), closes [#134](https://github.com/zbigniewsobiecki/llmist/issues/134)
+* chore: sync dev with main after release [skip ci] ([c73a8d6](https://github.com/zbigniewsobiecki/llmist/commit/c73a8d6))
+
 ## 1.5.0 (2025-12-03)
 
 * feat(gadgets): improve parameter documentation for better LLM comprehension (#134) (#135) ([045250b](https://github.com/zbigniewsobiecki/llmist/commit/045250b)), closes [#134](https://github.com/zbigniewsobiecki/llmist/issues/134) [#135](https://github.com/zbigniewsobiecki/llmist/issues/135)
