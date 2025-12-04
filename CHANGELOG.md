@@ -1,3 +1,8 @@
+## <small>1.6.2 (2025-12-04)</small>
+
+* fix(gadgets): add output size limiting to GadgetOutputViewer ([e628d95](https://github.com/zbigniewsobiecki/llmist/commit/e628d95))
+* chore(release): merge dev to main (#141) ([77e5e09](https://github.com/zbigniewsobiecki/llmist/commit/77e5e09)), closes [#141](https://github.com/zbigniewsobiecki/llmist/issues/141) [#138](https://github.com/zbigniewsobiecki/llmist/issues/138) [#140](https://github.com/zbigniewsobiecki/llmist/issues/140)
+
 ## <small>1.6.1 (2025-12-04)</small>
 
 * fix(docker): use DockerSkipError instanceof check instead of message string (#138) (#139) ([d623c97](https://github.com/zbigniewsobiecki/llmist/commit/d623c97)), closes [#138](https://github.com/zbigniewsobiecki/llmist/issues/138) [#139](https://github.com/zbigniewsobiecki/llmist/issues/139)
