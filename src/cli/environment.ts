@@ -55,7 +55,7 @@ const LOG_LEVEL_MAP: Record<string, number> = {
  * Creates a logger factory based on CLI configuration.
  * Priority: CLI options > environment variables > defaults
  */
-function createLoggerFactory(config?: CLILoggerConfig): (name: string) => Logger<ILogObj> {
+export function createLoggerFactory(config?: CLILoggerConfig): (name: string) => Logger<ILogObj> {
   return (name: string) => {
     const options: LoggerOptions = { name };
 

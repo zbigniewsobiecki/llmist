@@ -54,6 +54,17 @@ export class DockerRunError extends Error {
 }
 
 /**
+ * Error thrown when Docker execution should be skipped.
+ * This occurs when already running inside a container.
+ */
+export class DockerSkipError extends Error {
+  constructor() {
+    super("Docker execution skipped - already inside container");
+    this.name = "DockerSkipError";
+  }
+}
+
+/**
  * Checks if Docker is available and running.
  *
  * @returns true if Docker is available
@@ -345,9 +356,8 @@ export async function executeInDocker(
       "Warning: Docker mode requested but already inside a container. " +
         "Proceeding without re-containerization.",
     );
-    // Fall through to normal execution by NOT exiting
-    // This requires the caller to handle this case
-    throw new Error("SKIP_DOCKER");
+    // Signal to caller that Docker should be skipped
+    throw new DockerSkipError();
   }
 
   // Check Docker availability

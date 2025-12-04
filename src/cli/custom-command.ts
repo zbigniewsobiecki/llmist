@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { executeAgent } from "./agent-command.js";
 import { executeComplete } from "./complete-command.js";
 import type { CustomCommandConfig } from "./config.js";
-import { createDefaultEnvironment, type CLIEnvironment, type CLILoggerConfig } from "./environment.js";
+import { createLoggerFactory, type CLIEnvironment, type CLILoggerConfig } from "./environment.js";
 import {
   addAgentOptions,
   addCompleteOptions,
@@ -38,11 +38,11 @@ function createCommandEnvironment(
     logReset: config["log-reset"] ?? baseEnv.loggerConfig?.logReset,
   };
 
-  // Create new environment with merged logging config, preserving dockerConfig
-  const newEnv = createDefaultEnvironment(loggerConfig);
+  // Preserve all baseEnv properties, only override logging config
   return {
-    ...newEnv,
-    dockerConfig: baseEnv.dockerConfig,
+    ...baseEnv,
+    loggerConfig,
+    createLogger: createLoggerFactory(loggerConfig),
   };
 }
 

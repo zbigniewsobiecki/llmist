@@ -56,5 +56,6 @@ export {
   resolveDevMode,
   resolveDockerEnabled,
   DockerRunError,
+  DockerSkipError,
   DockerUnavailableError,
 } from "./docker-wrapper.js";

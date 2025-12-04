@@ -146,6 +146,14 @@ ENTRYPOINT ["llmist"]
 
 After changing the Dockerfile, the image rebuilds automatically on next run.
 
+### Security Considerations
+
+> **⚠️ Warning:** The default Dockerfile installs ast-grep via `curl | bash`, which
+> trusts the remote script. For production use, consider:
+> - Pinning a specific ast-grep version
+> - Downloading and verifying checksums before execution
+> - Using a package manager if available
+
 ### Forcing a Rebuild
 
 If you need to force a rebuild (e.g., to get latest llmist version):
@@ -198,9 +206,9 @@ env-vars = ["GH_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"]
 ```
 
 By default, these API keys are always forwarded:
-- `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
-- `GOOGLE_AI_API_KEY` / `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
 
 ## Container Detection
 

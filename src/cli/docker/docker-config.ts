@@ -75,7 +75,7 @@ function validateMountConfig(value: unknown, index: number, section: string): Mo
   }
 
   const rawObj = value as Record<string, unknown>;
-  const mountSection = `${section}].mounts[${index}`;
+  const mountSection = `${section}.mounts[${index}]`;
 
   // Check for unknown keys
   for (const key of Object.keys(rawObj)) {
