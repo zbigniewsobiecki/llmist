@@ -308,4 +308,88 @@ describe("createGadgetOutputViewer", () => {
     expect(result).toContain("No lines matched the filters");
     expect(result).toContain("3 lines");
   });
+
+  describe("output size limiting", () => {
+    it("should truncate output when exceeding maxOutputChars", () => {
+      const store = new GadgetOutputStore();
+      // Create content larger than 100 chars
+      const content = Array.from({ length: 50 }, (_, i) => `line ${i + 1}: some content here`).join(
+        "\n",
+      );
+      const id = store.store("Test", content);
+
+      // Create viewer with very small limit (100 chars)
+      const viewer = createGadgetOutputViewer(store, 100);
+
+      const result = viewer.execute({ id });
+
+      expect(result).toContain("truncated due to size limit");
+      expect(result).toContain("more lines. Use limit parameter to paginate");
+      // Should not contain all 50 lines
+      expect(result.length).toBeLessThan(content.length);
+    });
+
+    it("should not truncate when within limit", () => {
+      const store = new GadgetOutputStore();
+      const content = "line 1\nline 2\nline 3";
+      const id = store.store("Test", content);
+
+      // Create viewer with large limit
+      const viewer = createGadgetOutputViewer(store, 10000);
+
+      const result = viewer.execute({ id });
+
+      expect(result).toContain("[Showing all 3 lines]");
+      expect(result).not.toContain("truncated");
+      expect(result).toContain("line 1");
+      expect(result).toContain("line 2");
+      expect(result).toContain("line 3");
+    });
+
+    it("should provide pagination hint when truncated", () => {
+      const store = new GadgetOutputStore();
+      const content = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`).join("\n");
+      const id = store.store("Test", content);
+
+      // Create viewer with small limit that will truncate
+      const viewer = createGadgetOutputViewer(store, 50);
+
+      const result = viewer.execute({ id });
+
+      // Should include pagination hint with correct line numbers
+      expect(result).toMatch(/limit: "\d+-\d+"/);
+    });
+
+    it("should use default limit when not specified", () => {
+      const store = new GadgetOutputStore();
+      const content = "small content";
+      const id = store.store("Test", content);
+
+      // Create without specifying maxOutputChars
+      const viewer = createGadgetOutputViewer(store);
+
+      const result = viewer.execute({ id });
+
+      // Should work normally - default is 76,800 chars
+      expect(result).toContain("small content");
+    });
+
+    it("should truncate after applying patterns and limit", () => {
+      const store = new GadgetOutputStore();
+      // Create 100 TODO lines
+      const content = Array.from({ length: 100 }, (_, i) => `TODO item ${i + 1}`).join("\n");
+      const id = store.store("Test", content);
+
+      // Create viewer with small limit
+      const viewer = createGadgetOutputViewer(store, 80);
+
+      const result = viewer.execute({
+        id,
+        patterns: [{ regex: "TODO", include: true, before: 0, after: 0 }],
+      });
+
+      // Should be truncated due to size even though pattern matched all lines
+      expect(result).toContain("truncated due to size limit");
+    });
+  });
 });

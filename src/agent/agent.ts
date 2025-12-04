@@ -234,8 +234,12 @@ export class Agent {
     this.outputLimitCharLimit = Math.floor(contextWindow * (limitPercent / 100) * CHARS_PER_TOKEN);
 
     // Auto-register GadgetOutputViewer when limiting is enabled
+    // Pass the same character limit so viewer output is also bounded
     if (this.outputLimitEnabled) {
-      this.registry.register("GadgetOutputViewer", createGadgetOutputViewer(this.outputStore));
+      this.registry.register(
+        "GadgetOutputViewer",
+        createGadgetOutputViewer(this.outputStore, this.outputLimitCharLimit),
+      );
     }
 
     // Merge output limiter interceptor into hooks
