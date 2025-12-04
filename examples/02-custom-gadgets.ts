@@ -163,16 +163,32 @@ const paidApiGadget = createGadget({
 class PremiumCalculator extends Gadget({
   description: "Premium calculator that costs $0.0005 per calculation",
   schema: z.object({
-    expression: z.string().describe("Math expression to evaluate (e.g., '2 + 2')"),
+    a: z.number().describe("First number"),
+    b: z.number().describe("Second number"),
+    operation: z.enum(["add", "subtract", "multiply", "divide"]).describe("Operation to perform"),
   }),
 }) {
   execute(params: this["params"]) {
-    const { expression } = params;
-    // Simple eval for demo - in production, use a safe math parser
-    const evalResult = Function(`"use strict"; return (${expression})`)();
+    const { a, b, operation } = params;
+
+    let result: number;
+    switch (operation) {
+      case "add":
+        result = a + b;
+        break;
+      case "subtract":
+        result = a - b;
+        break;
+      case "multiply":
+        result = a * b;
+        break;
+      case "divide":
+        result = b !== 0 ? a / b : NaN;
+        break;
+    }
 
     return {
-      result: `${expression} = ${evalResult}`,
+      result: `${a} ${operation} ${b} = ${result}`,
       cost: 0.0005, // $0.0005 per calculation
     };
   }
@@ -290,7 +306,7 @@ async function main() {
         },
       }),
     )
-    .askAndCollect("Query the API for 'weather' and calculate 10 * 5 + 3");
+    .askAndCollect("Query the API for 'weather' and multiply 10 by 5");
 
   console.log(`   ${answer5}`);
   console.log(`   Total cost (LLM + gadgets): $${totalCost.toFixed(6)}\n`);

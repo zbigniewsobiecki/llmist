@@ -293,14 +293,19 @@ const paidApiGadget = createGadget({
 class PremiumCalculator extends Gadget({
   description: 'Premium calculator service ($0.0005 per calculation)',
   schema: z.object({
-    expression: z.string().describe('Math expression to evaluate'),
+    a: z.number().describe('First number'),
+    b: z.number().describe('Second number'),
+    operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
   }),
 }) {
   execute(params: this['params']) {
-    const result = evaluateExpression(params.expression);
+    const { a, b, operation } = params;
+    const result = operation === 'add' ? a + b :
+                   operation === 'subtract' ? a - b :
+                   operation === 'multiply' ? a * b : a / b;
 
     return {
-      result: String(result),
+      result: `${a} ${operation} ${b} = ${result}`,
       cost: 0.0005, // $0.0005 per calculation
     };
   }

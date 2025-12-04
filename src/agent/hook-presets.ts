@@ -85,7 +85,7 @@ export interface ProgressStats {
   /** Total tokens (input + output) */
   totalTokens: number;
 
-  /** Cumulative cost in USD (requires modelRegistry) */
+  /** Cumulative cost in USD (includes LLM and gadget costs; requires modelRegistry for LLM cost estimation) */
   totalCost: number;
 
   /** Elapsed time in seconds since first call */

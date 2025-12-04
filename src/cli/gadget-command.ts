@@ -147,6 +147,7 @@ async function executeGadgetRun(
   // Execute with timeout if configured
   const startTime = Date.now();
   let result: string;
+  let cost: number | undefined;
 
   try {
     let rawResult: string | { result: string; cost?: number };
@@ -165,13 +166,15 @@ async function executeGadgetRun(
     }
     // Normalize result: handle both string and { result, cost } return types
     result = typeof rawResult === "string" ? rawResult : rawResult.result;
+    cost = typeof rawResult === "object" ? rawResult.cost : undefined;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Execution failed: ${message}`);
   }
 
   const elapsed = Date.now() - startTime;
-  env.stderr.write(chalk.green(`\n✓ Completed in ${elapsed}ms\n\n`));
+  const costInfo = cost !== undefined && cost > 0 ? ` (Cost: $${cost.toFixed(6)})` : "";
+  env.stderr.write(chalk.green(`\n✓ Completed in ${elapsed}ms${costInfo}\n\n`));
 
   // Output result
   formatOutput(result, options, env.stdout);
