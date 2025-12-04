@@ -2,7 +2,7 @@
 // Using llmist's z ensures .describe() metadata is preserved in JSON schemas
 export { z } from "zod";
 // Syntactic sugar: Agent builder and event handlers
-export type { HistoryMessage } from "./agent/builder.js";
+export type { HistoryMessage, TrailingMessage, TrailingMessageContext } from "./agent/builder.js";
 export { AgentBuilder } from "./agent/builder.js";
 export type { EventHandlers } from "./agent/event-handlers.js";
 export { collectEvents, collectText, runWithHandlers } from "./agent/event-handlers.js";
