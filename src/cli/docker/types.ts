@@ -121,13 +121,6 @@ export interface DockerExecutionContext {
 }
 
 /**
- * Environment variable that indicates we're running inside an unsafe/sandboxed environment.
- * Used to prevent infinite nesting when agent tries to run llmist again.
- * Named "unsafe" because the environment has restricted permissions and capabilities.
- */
-export const LLMIST_UNSAFE_ENV = "LLMIST_UNSAFE_ENVIRONMENT";
-
-/**
  * Default Docker image name.
  */
 export const DEFAULT_IMAGE_NAME = "llmist-sandbox";

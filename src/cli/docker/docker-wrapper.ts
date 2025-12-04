@@ -25,7 +25,6 @@ import {
   DEV_IMAGE_NAME,
   DEV_SOURCE_MOUNT_TARGET,
   FORWARDED_API_KEYS,
-  LLMIST_UNSAFE_ENV,
 } from "./types.js";
 
 /**
@@ -75,10 +74,9 @@ export async function checkDockerAvailable(): Promise<boolean> {
 /**
  * Checks if we're already running inside a Docker container.
  *
- * Detection methods (in order):
+ * Detection methods:
  * 1. /.dockerenv file - Docker creates this in all containers
- * 2. /proc/1/cgroup contains "docker" - Linux cgroup detection
- * 3. LLMIST_UNSAFE_ENVIRONMENT env var - explicit override (legacy)
+ * 2. /proc/1/cgroup contains "docker" or "containerd" - Linux cgroup detection
  *
  * @returns true if running inside a container
  */
@@ -98,8 +96,7 @@ export function isInsideContainer(): boolean {
     // Not on Linux or no access to /proc
   }
 
-  // Method 3: Explicit env var (legacy fallback)
-  return process.env[LLMIST_UNSAFE_ENV] === "1";
+  return false;
 }
 
 /**
@@ -260,9 +257,6 @@ function buildDockerRunArgs(
       }
     }
   }
-
-  // Set the unsafe environment marker to prevent nesting
-  args.push("-e", `${LLMIST_UNSAFE_ENV}=1`);
 
   // Image name
   args.push(imageName);
