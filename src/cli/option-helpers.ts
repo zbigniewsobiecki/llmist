@@ -34,6 +34,12 @@ export interface AgentCommandOptions {
   quiet?: boolean;
   logLlmRequests?: string | boolean;
   logLlmResponses?: string | boolean;
+  /** Enable Docker sandboxing */
+  docker?: boolean;
+  /** Enable Docker with read-only CWD mount */
+  dockerRo?: boolean;
+  /** Disable Docker (override config) */
+  noDocker?: boolean;
 }
 
 /**
@@ -105,7 +111,10 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
     )
     .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet)
     .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"])
-    .option(OPTION_FLAGS.logLlmResponses, OPTION_DESCRIPTIONS.logLlmResponses, defaults?.["log-llm-responses"]);
+    .option(OPTION_FLAGS.logLlmResponses, OPTION_DESCRIPTIONS.logLlmResponses, defaults?.["log-llm-responses"])
+    .option(OPTION_FLAGS.docker, OPTION_DESCRIPTIONS.docker)
+    .option(OPTION_FLAGS.dockerRo, OPTION_DESCRIPTIONS.dockerRo)
+    .option(OPTION_FLAGS.noDocker, OPTION_DESCRIPTIONS.noDocker);
 }
 
 /**
@@ -149,5 +158,6 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
   if (config.quiet !== undefined) result.quiet = config.quiet;
   if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
   if (config["log-llm-responses"] !== undefined) result.logLlmResponses = config["log-llm-responses"];
+  if (config.docker !== undefined) result.docker = config.docker;
   return result;
 }

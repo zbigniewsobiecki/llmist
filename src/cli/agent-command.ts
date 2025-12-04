@@ -30,6 +30,12 @@ import {
   renderMarkdownWithSeparators,
   renderOverallSummary,
 } from "./ui/formatters.js";
+import {
+  createDockerContext,
+  executeInDocker,
+  resolveDockerEnabled,
+  type DockerOptions,
+} from "./docker/index.js";
 
 /**
  * Keyboard/signal listener management for ESC key and Ctrl+C (SIGINT) handling.
@@ -125,6 +131,41 @@ export async function executeAgent(
   options: AgentCommandOptions,
   env: CLIEnvironment,
 ): Promise<void> {
+  // Check if Docker sandboxing is enabled
+  const dockerOptions: DockerOptions = {
+    docker: options.docker ?? false,
+    dockerRo: options.dockerRo ?? false,
+    noDocker: options.noDocker ?? false,
+  };
+
+  const dockerEnabled = resolveDockerEnabled(
+    env.dockerConfig,
+    dockerOptions,
+    options.docker, // Profile-level docker: true/false
+  );
+
+  if (dockerEnabled) {
+    // Execute inside Docker container
+    const ctx = createDockerContext(
+      env.dockerConfig,
+      dockerOptions,
+      env.argv.slice(2), // Remove 'node' and script path
+      process.cwd(),
+    );
+
+    try {
+      await executeInDocker(ctx);
+      // executeInDocker calls process.exit(), so we won't reach here
+    } catch (error) {
+      // "SKIP_DOCKER" means we're already inside a container, continue normally
+      if (error instanceof Error && error.message === "SKIP_DOCKER") {
+        // Continue with normal execution
+      } else {
+        throw error;
+      }
+    }
+  }
+
   const prompt = await resolvePrompt(promptArg, env);
   const client = env.createClient();
 

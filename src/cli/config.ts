@@ -11,6 +11,8 @@ import {
   validateEnvVars,
   validatePrompts,
 } from "./templates.js";
+import type { DockerConfig } from "./docker/types.js";
+import { validateDockerConfig } from "./docker/docker-config.js";
 
 // Re-export PromptsConfig for consumers
 export type { PromptsConfig } from "./templates.js";
@@ -57,6 +59,8 @@ export interface BaseCommandConfig {
   system?: string;
   temperature?: number;
   inherits?: string | string[];
+  /** Enable Docker sandboxing for this profile/command */
+  docker?: boolean;
 }
 
 /**
@@ -117,14 +121,19 @@ export interface CLIConfig {
   complete?: CompleteConfig;
   agent?: AgentConfig;
   prompts?: PromptsConfig;
+  docker?: DockerConfig;
   [customCommand: string]:
     | CustomCommandConfig
     | CompleteConfig
     | AgentConfig
     | GlobalConfig
     | PromptsConfig
+    | DockerConfig
     | undefined;
 }
+
+// Re-export DockerConfig for consumers
+export type { DockerConfig } from "./docker/types.js";
 
 /** Valid keys for global config */
 const GLOBAL_CONFIG_KEYS = new Set(["log-level", "log-file", "log-reset"]);
@@ -146,6 +155,7 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "log-llm-requests",
   "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
+  "docker", // Enable Docker sandboxing (only effective for agent type)
 ]);
 
 /** Valid keys for agent command config */
@@ -172,6 +182,7 @@ const AGENT_CONFIG_KEYS = new Set([
   "log-llm-requests",
   "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
+  "docker", // Enable Docker sandboxing for this profile
 ]);
 
 /** Valid keys for custom command config (union of complete + agent + type + description) */
@@ -357,6 +368,9 @@ function validateBaseConfig(
   }
   if ("inherits" in raw) {
     result.inherits = validateInherits(raw.inherits, section);
+  }
+  if ("docker" in raw) {
+    result.docker = validateBoolean(raw.docker, "docker", section);
   }
 
   return result;
@@ -692,6 +706,8 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.agent = validateAgentConfig(value, key);
       } else if (key === "prompts") {
         result.prompts = validatePromptsConfig(value, key);
+      } else if (key === "docker") {
+        result.docker = validateDockerConfig(value, key);
       } else {
         // Custom command section
         result[key] = validateCustomConfig(value, key);
@@ -749,7 +765,7 @@ export function loadConfig(): CLIConfig {
  * Gets list of custom command names from config (excludes built-in sections).
  */
 export function getCustomCommandNames(config: CLIConfig): string[] {
-  const reserved = new Set(["global", "complete", "agent", "prompts"]);
+  const reserved = new Set(["global", "complete", "agent", "prompts", "docker"]);
   return Object.keys(config).filter((key) => !reserved.has(key));
 }
 

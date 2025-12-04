@@ -136,7 +136,12 @@ export async function runCLI(
   };
 
   const defaultEnv = createDefaultEnvironment(loggerConfig);
-  const env: CLIEnvironment = { ...defaultEnv, ...envOverrides };
+  const env: CLIEnvironment = {
+    ...defaultEnv,
+    ...envOverrides,
+    // Pass Docker config from [docker] section
+    dockerConfig: config.docker,
+  };
   const program = createProgram(env, config);
   await program.parseAsync(env.argv);
 }
