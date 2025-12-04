@@ -7,6 +7,7 @@
 
 // Types
 export type {
+  DevModeSettings,
   DockerConfig,
   DockerExecutionContext,
   DockerOptions,
@@ -18,6 +19,8 @@ export {
   DEFAULT_IMAGE_NAME,
   DEFAULT_CWD_PERMISSION,
   DEFAULT_CONFIG_PERMISSION,
+  DEV_IMAGE_NAME,
+  DEV_SOURCE_MOUNT_TARGET,
   DOCKER_CONFIG_KEYS,
   FORWARDED_API_KEYS,
   LLMIST_UNSAFE_ENV,
@@ -28,7 +31,12 @@ export {
 export { validateDockerConfig } from "./docker-config.js";
 
 // Dockerfile handling
-export { DEFAULT_DOCKERFILE, resolveDockerfile, computeDockerfileHash } from "./dockerfile.js";
+export {
+  DEFAULT_DOCKERFILE,
+  DEV_DOCKERFILE,
+  resolveDockerfile,
+  computeDockerfileHash,
+} from "./dockerfile.js";
 
 // Image management
 export {
@@ -40,12 +48,14 @@ export {
 
 // Docker execution
 export {
+  autoDetectDevSource,
   checkDockerAvailable,
-  isInsideContainer,
-  executeInDocker,
   createDockerContext,
-  resolveDockerEnabled,
+  executeInDocker,
   filterDockerArgs,
-  DockerUnavailableError,
+  isInsideContainer,
+  resolveDevMode,
+  resolveDockerEnabled,
   DockerRunError,
+  DockerUnavailableError,
 } from "./docker-wrapper.js";

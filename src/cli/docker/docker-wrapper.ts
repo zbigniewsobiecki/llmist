@@ -8,10 +8,13 @@
  * - Forwarding environment variables and mounts
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { resolveDockerfile } from "./dockerfile.js";
 import { ensureImage, DockerBuildError } from "./image-manager.js";
 import {
+  type DevModeSettings,
   type DockerConfig,
   type DockerExecutionContext,
   type DockerOptions,
@@ -19,6 +22,8 @@ import {
   DEFAULT_IMAGE_NAME,
   DEFAULT_CWD_PERMISSION,
   DEFAULT_CONFIG_PERMISSION,
+  DEV_IMAGE_NAME,
+  DEV_SOURCE_MOUNT_TARGET,
   FORWARDED_API_KEYS,
   LLMIST_UNSAFE_ENV,
 } from "./types.js";
@@ -79,6 +84,86 @@ export function isInsideContainer(): boolean {
 }
 
 /**
+ * Attempts to auto-detect the llmist source directory.
+ *
+ * Checks if the current script is being run from an llmist source tree
+ * by examining the script path and verifying package.json.
+ *
+ * @returns Path to llmist source directory, or undefined if not detectable
+ */
+export function autoDetectDevSource(): string | undefined {
+  // Check if running from source via bun (e.g., `bun src/cli.ts`)
+  const scriptPath = process.argv[1];
+  if (!scriptPath || !scriptPath.endsWith("src/cli.ts")) {
+    return undefined;
+  }
+
+  const srcDir = dirname(scriptPath);
+  const projectDir = dirname(srcDir);
+
+  // Verify it's the llmist project by checking package.json
+  const packageJsonPath = join(projectDir, "package.json");
+  if (!existsSync(packageJsonPath)) {
+    return undefined;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+    if (pkg.name === "llmist") {
+      return projectDir;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolves dev mode settings.
+ *
+ * Priority for enablement:
+ * 1. CLI --docker-dev flag
+ * 2. Config [docker].dev-mode
+ * 3. LLMIST_DEV_MODE environment variable
+ *
+ * Priority for source path:
+ * 1. Config [docker].dev-source
+ * 2. LLMIST_DEV_SOURCE environment variable
+ * 3. Auto-detect from script path
+ *
+ * @param config - Docker configuration
+ * @param cliDevMode - Whether --docker-dev flag was used
+ * @returns Resolved dev mode settings
+ * @throws Error if dev mode is enabled but source path cannot be found
+ */
+export function resolveDevMode(
+  config: DockerConfig | undefined,
+  cliDevMode: boolean,
+): DevModeSettings {
+  // Check if dev mode is enabled
+  const enabled = cliDevMode || config?.["dev-mode"] || process.env.LLMIST_DEV_MODE === "1";
+
+  if (!enabled) {
+    return { enabled: false, sourcePath: undefined };
+  }
+
+  // Resolve source path
+  const sourcePath =
+    config?.["dev-source"] || process.env.LLMIST_DEV_SOURCE || autoDetectDevSource();
+
+  if (!sourcePath) {
+    throw new Error(
+      "Docker dev mode enabled but llmist source path not found. " +
+        "Set [docker].dev-source in config, LLMIST_DEV_SOURCE env var, " +
+        "or run from the llmist source directory (bun src/cli.ts).",
+    );
+  }
+
+  return { enabled: true, sourcePath };
+}
+
+/**
  * Expands ~ to home directory in a path.
  */
 function expandHome(path: string): string {
@@ -93,11 +178,13 @@ function expandHome(path: string): string {
  *
  * @param ctx - Docker execution context
  * @param imageName - Docker image name to run
+ * @param devMode - Dev mode settings (for source mounting)
  * @returns Array of arguments for docker run
  */
 function buildDockerRunArgs(
   ctx: DockerExecutionContext,
   imageName: string,
+  devMode: DevModeSettings,
 ): string[] {
   const args: string[] = ["run", "--rm"];
 
@@ -124,6 +211,12 @@ function buildDockerRunArgs(
   const configPermission = ctx.config["config-permission"] ?? DEFAULT_CONFIG_PERMISSION;
   const llmistDir = expandHome("~/.llmist");
   args.push("-v", `${llmistDir}:/root/.llmist:${configPermission}`);
+
+  // Mount llmist source in dev mode (read-only to prevent accidental modifications)
+  if (devMode.enabled && devMode.sourcePath) {
+    const expandedSource = expandHome(devMode.sourcePath);
+    args.push("-v", `${expandedSource}:${DEV_SOURCE_MOUNT_TARGET}:ro`);
+  }
 
   // Additional mounts from config
   if (ctx.config.mounts) {
@@ -171,7 +264,7 @@ function buildDockerRunArgs(
  * @returns Filtered arguments without Docker flags
  */
 export function filterDockerArgs(argv: string[]): string[] {
-  const dockerFlags = new Set(["--docker", "--docker-ro", "--no-docker"]);
+  const dockerFlags = new Set(["--docker", "--docker-ro", "--no-docker", "--docker-dev"]);
   return argv.filter((arg) => !dockerFlags.has(arg));
 }
 
@@ -219,16 +312,20 @@ export function resolveDockerEnabled(
  * This function:
  * 1. Checks if already inside a container (prevents nesting)
  * 2. Verifies Docker is available
- * 3. Builds/caches the image
+ * 3. Builds/caches the image (dev or production)
  * 4. Runs the container with appropriate mounts and env vars
  * 5. Exits with the container's exit code
  *
  * @param ctx - Docker execution context
+ * @param devMode - Dev mode settings
  * @throws DockerUnavailableError if Docker is not available
  * @throws DockerBuildError if image building fails
  * @throws DockerRunError if container execution fails
  */
-export async function executeInDocker(ctx: DockerExecutionContext): Promise<never> {
+export async function executeInDocker(
+  ctx: DockerExecutionContext,
+  devMode: DevModeSettings,
+): Promise<never> {
   // Check if we're already inside a container
   if (isInsideContainer()) {
     console.error(
@@ -246,9 +343,16 @@ export async function executeInDocker(ctx: DockerExecutionContext): Promise<neve
     throw new DockerUnavailableError();
   }
 
-  // Resolve Dockerfile and ensure image is built
-  const dockerfile = resolveDockerfile(ctx.config);
-  const imageName = ctx.config["image-name"] ?? DEFAULT_IMAGE_NAME;
+  // Resolve Dockerfile and image name based on dev mode
+  const dockerfile = resolveDockerfile(ctx.config, devMode.enabled);
+  const imageName = devMode.enabled
+    ? DEV_IMAGE_NAME
+    : (ctx.config["image-name"] ?? DEFAULT_IMAGE_NAME);
+
+  // Show dev mode feedback
+  if (devMode.enabled) {
+    console.error(`[dev mode] Mounting source from ${devMode.sourcePath}`);
+  }
 
   try {
     await ensureImage(imageName, dockerfile);
@@ -262,7 +366,7 @@ export async function executeInDocker(ctx: DockerExecutionContext): Promise<neve
   }
 
   // Build docker run command
-  const dockerArgs = buildDockerRunArgs(ctx, imageName);
+  const dockerArgs = buildDockerRunArgs(ctx, imageName, devMode);
 
   // Execute container
   const proc = Bun.spawn(["docker", ...dockerArgs], {

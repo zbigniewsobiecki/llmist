@@ -177,5 +177,13 @@ export function validateDockerConfig(raw: unknown, section: string): DockerConfi
     result["image-name"] = validateString(rawObj["image-name"], "image-name", section);
   }
 
+  if ("dev-mode" in rawObj) {
+    result["dev-mode"] = validateBoolean(rawObj["dev-mode"], "dev-mode", section);
+  }
+
+  if ("dev-source" in rawObj) {
+    result["dev-source"] = validateString(rawObj["dev-source"], "dev-source", section);
+  }
+
   return result;
 }

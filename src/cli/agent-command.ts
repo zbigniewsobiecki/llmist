@@ -33,6 +33,7 @@ import {
 import {
   createDockerContext,
   executeInDocker,
+  resolveDevMode,
   resolveDockerEnabled,
   type DockerOptions,
 } from "./docker/index.js";
@@ -136,6 +137,7 @@ export async function executeAgent(
     docker: options.docker ?? false,
     dockerRo: options.dockerRo ?? false,
     noDocker: options.noDocker ?? false,
+    dockerDev: options.dockerDev ?? false,
   };
 
   const dockerEnabled = resolveDockerEnabled(
@@ -145,6 +147,9 @@ export async function executeAgent(
   );
 
   if (dockerEnabled) {
+    // Resolve dev mode settings (for mounting local source)
+    const devMode = resolveDevMode(env.dockerConfig, dockerOptions.dockerDev);
+
     // Execute inside Docker container
     const ctx = createDockerContext(
       env.dockerConfig,
@@ -155,7 +160,7 @@ export async function executeAgent(
     );
 
     try {
-      await executeInDocker(ctx);
+      await executeInDocker(ctx, devMode);
       // executeInDocker calls process.exit(), so we won't reach here
     } catch (error) {
       // "SKIP_DOCKER" means we're already inside a container, continue normally

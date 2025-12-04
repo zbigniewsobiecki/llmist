@@ -67,6 +67,12 @@ export interface DockerConfig {
 
   /** Custom Docker image name (default: "llmist-sandbox") */
   "image-name"?: string;
+
+  /** Enable dev mode - mount local source instead of npm install */
+  "dev-mode"?: boolean;
+
+  /** Path to llmist source for dev mode (supports ~ for home directory) */
+  "dev-source"?: string;
 }
 
 /**
@@ -80,6 +86,8 @@ export const DOCKER_CONFIG_KEYS = new Set([
   "mounts",
   "env-vars",
   "image-name",
+  "dev-mode",
+  "dev-source",
 ]);
 
 /**
@@ -92,6 +100,8 @@ export interface DockerOptions {
   dockerRo: boolean;
   /** Explicitly disabled via --no-docker flag */
   noDocker: boolean;
+  /** Dev mode - mount local source instead of npm install */
+  dockerDev: boolean;
 }
 
 /**
@@ -136,3 +146,23 @@ export const FORWARDED_API_KEYS = [
   "OPENAI_API_KEY",
   "GEMINI_API_KEY",
 ] as const;
+
+/**
+ * Dev mode Docker image name (separate from production).
+ */
+export const DEV_IMAGE_NAME = "llmist-dev-sandbox";
+
+/**
+ * Mount target for llmist source in dev mode.
+ */
+export const DEV_SOURCE_MOUNT_TARGET = "/llmist-src";
+
+/**
+ * Resolved dev mode settings.
+ */
+export interface DevModeSettings {
+  /** Whether dev mode is enabled */
+  enabled: boolean;
+  /** Path to llmist source directory (undefined if not enabled) */
+  sourcePath: string | undefined;
+}

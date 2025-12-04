@@ -38,6 +38,7 @@ export const OPTION_FLAGS = {
   docker: "--docker",
   dockerRo: "--docker-ro",
   noDocker: "--no-docker",
+  dockerDev: "--docker-dev",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -60,6 +61,7 @@ export const OPTION_DESCRIPTIONS = {
   docker: "Run agent in a Docker sandbox container for security isolation.",
   dockerRo: "Run in Docker with current directory mounted read-only.",
   noDocker: "Disable Docker sandboxing (override config).",
+  dockerDev: "Run in Docker dev mode (mount local source instead of npm install).",
 } as const;
 
 /** Prefix for summary output written to stderr */
