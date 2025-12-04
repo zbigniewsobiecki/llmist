@@ -132,6 +132,9 @@ const patternSchema = z.object({
     .describe("Context lines after each match (like grep -A)"),
 });
 
+/** Default max output in characters (~19k tokens at 4 chars/token) */
+const DEFAULT_MAX_OUTPUT_CHARS = 76_800;
+
 /**
  * Create a GadgetOutputViewer gadget instance bound to a specific output store.
  *
@@ -139,16 +142,20 @@ const patternSchema = z.object({
  * which is created per-agent-run.
  *
  * @param store - The GadgetOutputStore to read outputs from
+ * @param maxOutputChars - Maximum characters to return (default: 76,800 = ~19k tokens)
  * @returns A GadgetOutputViewer gadget instance
  *
  * @example
  * ```typescript
  * const store = new GadgetOutputStore();
- * const viewer = createGadgetOutputViewer(store);
+ * const viewer = createGadgetOutputViewer(store, 76_800);
  * registry.register("GadgetOutputViewer", viewer);
  * ```
  */
-export function createGadgetOutputViewer(store: GadgetOutputStore) {
+export function createGadgetOutputViewer(
+  store: GadgetOutputStore,
+  maxOutputChars: number = DEFAULT_MAX_OUTPUT_CHARS,
+) {
   return createGadget({
     name: "GadgetOutputViewer",
     description:
@@ -230,7 +237,8 @@ export function createGadgetOutputViewer(store: GadgetOutputStore) {
         lines = applyLineLimit(lines, limit);
       }
 
-      // Return result with metadata
+      // Step 3: Build output string
+      let output = lines.join("\n");
       const totalLines = stored.lineCount;
       const returnedLines = lines.length;
 
@@ -238,12 +246,37 @@ export function createGadgetOutputViewer(store: GadgetOutputStore) {
         return `No lines matched the filters. Original output had ${totalLines} lines.`;
       }
 
-      const header =
-        returnedLines < totalLines
-          ? `[Showing ${returnedLines} of ${totalLines} lines]\n`
-          : `[Showing all ${totalLines} lines]\n`;
+      // Step 4: Apply output size limit to prevent context explosion
+      let truncatedBySize = false;
+      let linesIncluded = returnedLines;
+      if (output.length > maxOutputChars) {
+        truncatedBySize = true;
+        let truncatedOutput = "";
+        linesIncluded = 0;
 
-      return header + lines.join("\n");
+        for (const line of lines) {
+          if (truncatedOutput.length + line.length + 1 > maxOutputChars) break;
+          truncatedOutput += line + "\n";
+          linesIncluded++;
+        }
+
+        output = truncatedOutput;
+      }
+
+      // Build header with appropriate messaging
+      let header: string;
+      if (truncatedBySize) {
+        const remainingLines = returnedLines - linesIncluded;
+        header =
+          `[Showing ${linesIncluded} of ${totalLines} lines (truncated due to size limit)]\n` +
+          `[... ${remainingLines.toLocaleString()} more lines. Use limit parameter to paginate, e.g., limit: "${linesIncluded + 1}-${linesIncluded + 200}"]\n`;
+      } else if (returnedLines < totalLines) {
+        header = `[Showing ${returnedLines} of ${totalLines} lines]\n`;
+      } else {
+        header = `[Showing all ${totalLines} lines]\n`;
+      }
+
+      return header + output;
     },
   });
 }
