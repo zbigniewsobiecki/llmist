@@ -61,6 +61,8 @@ export interface BaseCommandConfig {
   inherits?: string | string[];
   /** Enable Docker sandboxing for this profile/command */
   docker?: boolean;
+  /** Override CWD mount permission for this profile ("ro" or "rw") */
+  "docker-cwd-permission"?: "ro" | "rw";
 }
 
 /**
@@ -156,6 +158,7 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
   "docker", // Enable Docker sandboxing (only effective for agent type)
+  "docker-cwd-permission", // Override CWD mount permission for this profile
 ]);
 
 /** Valid keys for agent command config */
@@ -183,6 +186,7 @@ const AGENT_CONFIG_KEYS = new Set([
   "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
   "docker", // Enable Docker sandboxing for this profile
+  "docker-cwd-permission", // Override CWD mount permission for this profile
 ]);
 
 /** Valid keys for custom command config (union of complete + agent + type + description) */
@@ -371,6 +375,13 @@ function validateBaseConfig(
   }
   if ("docker" in raw) {
     result.docker = validateBoolean(raw.docker, "docker", section);
+  }
+  if ("docker-cwd-permission" in raw) {
+    const perm = validateString(raw["docker-cwd-permission"], "docker-cwd-permission", section);
+    if (perm !== "ro" && perm !== "rw") {
+      throw new ConfigError(`[${section}].docker-cwd-permission must be "ro" or "rw"`);
+    }
+    result["docker-cwd-permission"] = perm as "ro" | "rw";
   }
 
   return result;

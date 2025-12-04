@@ -151,6 +151,7 @@ export async function executeAgent(
       dockerOptions,
       env.argv.slice(2), // Remove 'node' and script path
       process.cwd(),
+      options.dockerCwdPermission, // Profile-level CWD permission override
     );
 
     try {

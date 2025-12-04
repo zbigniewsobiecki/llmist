@@ -40,6 +40,8 @@ export interface AgentCommandOptions {
   dockerRo?: boolean;
   /** Disable Docker (override config) */
   noDocker?: boolean;
+  /** Per-profile CWD mount permission override */
+  dockerCwdPermission?: "ro" | "rw";
 }
 
 /**
@@ -159,5 +161,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
   if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
   if (config["log-llm-responses"] !== undefined) result.logLlmResponses = config["log-llm-responses"];
   if (config.docker !== undefined) result.docker = config.docker;
+  if (config["docker-cwd-permission"] !== undefined)
+    result.dockerCwdPermission = config["docker-cwd-permission"];
   return result;
 }

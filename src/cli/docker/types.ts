@@ -106,6 +106,8 @@ export interface DockerExecutionContext {
   forwardArgs: string[];
   /** Current working directory on host */
   cwd: string;
+  /** Profile-level CWD permission override (takes precedence over config) */
+  profileCwdPermission?: MountPermission;
 }
 
 /**

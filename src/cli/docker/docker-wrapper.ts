@@ -113,9 +113,10 @@ function buildDockerRunArgs(
   }
 
   // Mount current working directory
+  // Priority: --docker-ro flag > profile-level > config-level > default
   const cwdPermission: MountPermission = ctx.options.dockerRo
     ? "ro"
-    : (ctx.config["cwd-permission"] ?? DEFAULT_CWD_PERMISSION);
+    : (ctx.profileCwdPermission ?? ctx.config["cwd-permission"] ?? DEFAULT_CWD_PERMISSION);
   args.push("-v", `${ctx.cwd}:/workspace:${cwdPermission}`);
   args.push("-w", "/workspace");
 
@@ -281,6 +282,7 @@ export async function executeInDocker(ctx: DockerExecutionContext): Promise<neve
  * @param options - CLI options
  * @param argv - Original CLI arguments (without 'node' and script name)
  * @param cwd - Current working directory
+ * @param profileCwdPermission - Profile-level CWD permission override
  * @returns Docker execution context
  */
 export function createDockerContext(
@@ -288,12 +290,14 @@ export function createDockerContext(
   options: DockerOptions,
   argv: string[],
   cwd: string,
+  profileCwdPermission?: "ro" | "rw",
 ): DockerExecutionContext {
   return {
     config: config ?? {},
     options,
     forwardArgs: filterDockerArgs(argv),
     cwd,
+    profileCwdPermission,
   };
 }
 
