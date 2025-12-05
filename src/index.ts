@@ -140,6 +140,8 @@ export { GadgetRegistry } from "./gadgets/registry.js";
 export type { GadgetConfig } from "./gadgets/typed-gadget.js";
 export { Gadget } from "./gadgets/typed-gadget.js";
 export type {
+  CostReportingLLMist,
+  ExecutionContext,
   GadgetExample,
   GadgetExecuteResult,
   GadgetExecuteReturn,

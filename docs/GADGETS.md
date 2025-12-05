@@ -264,9 +264,88 @@ class APIGadget extends Gadget({
 
 Gadgets that call paid APIs or consume resources can report their costs. These costs are tracked alongside LLM costs and included in the total cost reported by `HookPresets.progressTracking()`.
 
-### Basic Cost Reporting
+### Callback-Based Cost Reporting (Recommended)
 
-Return an object with `result` and `cost` instead of a plain string:
+Gadgets receive an optional `ExecutionContext` that provides `reportCost()` for incremental cost reporting:
+
+```typescript
+const multiStepApiGadget = createGadget({
+  name: 'MultiStepAPI',
+  description: 'Calls multiple paid APIs',
+  schema: z.object({
+    query: z.string().describe('Query to process'),
+  }),
+  execute: async ({ query }, ctx) => {
+    // First API call
+    const step1 = await callApi1(query);
+    ctx.reportCost(0.001); // $0.001
+
+    // Second API call
+    const step2 = await callApi2(step1);
+    ctx.reportCost(0.002); // $0.002
+
+    return `Processed: ${step2}`;
+    // Total: $0.003
+  },
+});
+```
+
+### Automatic LLM Cost Tracking
+
+The execution context provides a wrapped LLMist client (`ctx.llmist`) that automatically reports LLM costs:
+
+```typescript
+const summarizer = createGadget({
+  name: 'Summarizer',
+  description: 'Summarizes text using an internal LLM',
+  schema: z.object({
+    text: z.string().describe('Text to summarize'),
+  }),
+  execute: async ({ text }, ctx) => {
+    // LLM costs are automatically reported!
+    const summary = await ctx.llmist.complete(
+      `Summarize briefly: ${text}`,
+      { model: 'haiku' }
+    );
+    return summary;
+  },
+});
+```
+
+The wrapped client supports:
+- `ctx.llmist.complete(prompt, options?)` - Quick completion
+- `ctx.llmist.streamText(prompt, options?)` - Streaming text
+- `ctx.llmist.stream(options)` - Low-level stream access
+- `ctx.llmist.modelRegistry` - Access to model registry
+
+### Combining All Cost Sources
+
+You can combine callback-based, automatic LLM, and return-based costs:
+
+```typescript
+const complexGadget = createGadget({
+  description: 'Complex processing with multiple cost sources',
+  schema: z.object({ data: z.string() }),
+  execute: async ({ data }, ctx) => {
+    // Source 1: Manual callback
+    await callExternalApi(data);
+    ctx.reportCost(0.001);
+
+    // Source 2: Automatic from wrapped LLMist
+    const analysis = await ctx.llmist.complete('Analyze: ' + data);
+
+    // Source 3: Return value (all three are summed)
+    return {
+      result: analysis,
+      cost: 0.0005, // Processing overhead
+    };
+  },
+});
+```
+
+### Return-Based Cost Reporting
+
+For simpler cases, return an object with `result` and `cost`:
 
 ```typescript
 const paidApiGadget = createGadget({
@@ -278,38 +357,12 @@ const paidApiGadget = createGadget({
   execute: async ({ query }) => {
     const response = await callExternalApi(query);
 
-    // Return { result, cost } instead of just string
     return {
       result: JSON.stringify(response),
       cost: 0.001, // $0.001 per API call
     };
   },
 });
-```
-
-### Class-Based Cost Reporting
-
-```typescript
-class PremiumCalculator extends Gadget({
-  description: 'Premium calculator service ($0.0005 per calculation)',
-  schema: z.object({
-    a: z.number().describe('First number'),
-    b: z.number().describe('Second number'),
-    operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-  }),
-}) {
-  execute(params: this['params']) {
-    const { a, b, operation } = params;
-    const result = operation === 'add' ? a + b :
-                   operation === 'subtract' ? a - b :
-                   operation === 'multiply' ? a * b : a / b;
-
-    return {
-      result: `${a} ${operation} ${b} = ${result}`,
-      cost: 0.0005, // $0.0005 per calculation
-    };
-  }
-}
 ```
 
 ### Tracking Total Costs
@@ -324,7 +377,7 @@ const modelRegistry = new ModelRegistry();
 
 await LLMist.createAgent()
   .withModel('haiku')
-  .withGadgets(paidApiGadget, PremiumCalculator)
+  .withGadgets(paidApiGadget, summarizer)
   .withHooks(
     HookPresets.progressTracking({
       modelRegistry,
@@ -333,90 +386,24 @@ await LLMist.createAgent()
       },
     }),
   )
-  .askAndCollect('Calculate something and query the API');
+  .askAndCollect('Process this data');
 
 console.log(`Total cost: $${finalCost.toFixed(6)}`);
 ```
 
-### Return Type Reference
+### Cost Reporting Methods
 
-| Return Type | Cost | Example |
-|-------------|------|---------|
-| `string` | $0 (free) | `return "result"` |
-| `{ result: string }` | $0 (free) | `return { result: "data" }` |
-| `{ result: string, cost: number }` | Reported cost | `return { result: "data", cost: 0.001 }` |
+| Method | When to Use | Example |
+|--------|-------------|---------|
+| `ctx.reportCost(amount)` | Multiple cost events during execution | `ctx.reportCost(0.001)` |
+| `ctx.llmist.complete()` | Internal LLM calls (auto-tracked) | `await ctx.llmist.complete(prompt)` |
+| `return { result, cost }` | Single cost at end of execution | `return { result: "...", cost: 0.001 }` |
 
 **Notes:**
+- All three methods can be combined - costs are summed
 - Cost is in USD (e.g., `0.001` = $0.001)
+- The context parameter (`ctx`) is optional for backwards compatibility
 - Existing gadgets returning strings continue to work (free by default)
-- Costs are accumulated in real-time via the `onGadgetExecutionComplete` observer
-
-### Advanced: LLM-Powered Gadgets
-
-When a gadget internally calls an LLM (e.g., for summarization, translation, or specialized reasoning), you can pass through the LLM costs as gadget costs:
-
-```typescript
-import { LLMist, Gadget, ModelRegistry, z } from 'llmist';
-
-const modelRegistry = new ModelRegistry();
-
-class Summarizer extends Gadget({
-  description: 'Summarizes text using a fast LLM',
-  schema: z.object({
-    text: z.string().describe('Text to summarize'),
-    maxLength: z.number().optional().describe('Max summary length in words'),
-  }),
-}) {
-  private client = new LLMist();
-
-  async execute(params: this['params']) {
-    const { text, maxLength = 100 } = params;
-
-    // Track tokens for cost calculation
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let summary = '';
-
-    // Use LLMist.complete() for the internal LLM call
-    for await (const chunk of this.client.complete({
-      model: 'haiku', // Use a fast, cheap model
-      messages: [
-        {
-          role: 'user',
-          content: `Summarize in ${maxLength} words or less:\n\n${text}`,
-        },
-      ],
-    })) {
-      summary += chunk.text;
-      if (chunk.usage) {
-        inputTokens = chunk.usage.inputTokens;
-        outputTokens = chunk.usage.outputTokens;
-      }
-    }
-
-    // Calculate cost using ModelRegistry
-    const costEstimate = modelRegistry.estimateCost(
-      'claude-3-5-haiku-20241022',
-      inputTokens,
-      outputTokens,
-    );
-
-    // Return result with the LLM cost
-    return {
-      result: summary.trim(),
-      cost: costEstimate?.totalCost ?? 0,
-    };
-  }
-}
-```
-
-This pattern is useful for:
-- **Specialized sub-agents** - Using different models for different tasks
-- **Chunked processing** - Breaking large inputs into smaller LLM calls
-- **Multi-step reasoning** - Chain-of-thought with cost tracking
-- **Translation/summarization** - Dedicated models for specific tasks
-
-The gadget's cost will be included in the parent agent's total cost tracked by `progressTracking()`.
 
 ## Special Exceptions
 

@@ -91,6 +91,9 @@ export type StreamEvent =
 // Imports for text-only handlers
 import type { ILogObj, Logger } from "tslog";
 import type { LLMMessage } from "../core/messages.js";
+import type { ModelRegistry } from "../core/model-registry.js";
+import type { LLMGenerationOptions, LLMStream } from "../core/options.js";
+import type { QuickOptions } from "../core/quick-methods.js";
 
 // Text-only response handler types
 export type TextOnlyHandler =
@@ -149,3 +152,133 @@ export type TextOnlyAction =
   | { action: "terminate" }
   | { action: "wait_for_input"; question?: string }
   | { action: "trigger_gadget"; name: string; parameters: Record<string, unknown> };
+
+// =============================================================================
+// Execution Context for Gadgets
+// =============================================================================
+
+/**
+ * LLMist client interface for use within gadgets.
+ *
+ * Provides LLM completion methods that automatically report costs
+ * via the execution context. All LLM calls made through this client
+ * will have their costs tracked and included in the gadget's total cost.
+ *
+ * @example
+ * ```typescript
+ * execute: async ({ text }, ctx) => {
+ *   // LLM costs are automatically reported
+ *   const summary = await ctx.llmist.complete('Summarize: ' + text, {
+ *     model: 'haiku',
+ *   });
+ *   return summary;
+ * }
+ * ```
+ */
+export interface CostReportingLLMist {
+  /**
+   * Quick completion - returns final text response.
+   * Costs are automatically reported to the execution context.
+   */
+  complete(prompt: string, options?: QuickOptions): Promise<string>;
+
+  /**
+   * Quick streaming - returns async generator of text chunks.
+   * Costs are automatically reported when the stream completes.
+   */
+  streamText(prompt: string, options?: QuickOptions): AsyncGenerator<string>;
+
+  /**
+   * Low-level stream access for full control.
+   * Costs are automatically reported based on usage metadata in chunks.
+   */
+  stream(options: LLMGenerationOptions): LLMStream;
+
+  /**
+   * Access to model registry for cost estimation.
+   */
+  readonly modelRegistry: ModelRegistry;
+}
+
+/**
+ * Execution context provided to gadgets during execution.
+ *
+ * Contains utilities for cost reporting and LLM access.
+ * This parameter is optional for backwards compatibility -
+ * existing gadgets without the context parameter continue to work.
+ *
+ * @example
+ * ```typescript
+ * // Using reportCost() for manual cost reporting
+ * const apiGadget = createGadget({
+ *   description: 'Calls external API',
+ *   schema: z.object({ query: z.string() }),
+ *   execute: async ({ query }, ctx) => {
+ *     const result = await callExternalAPI(query);
+ *     ctx.reportCost(0.001); // Report $0.001 cost
+ *     return result;
+ *   },
+ * });
+ *
+ * // Using ctx.llmist for automatic LLM cost tracking
+ * const summarizer = createGadget({
+ *   description: 'Summarizes text using LLM',
+ *   schema: z.object({ text: z.string() }),
+ *   execute: async ({ text }, ctx) => {
+ *     // LLM costs are automatically reported!
+ *     return ctx.llmist.complete('Summarize: ' + text);
+ *   },
+ * });
+ * ```
+ */
+export interface ExecutionContext {
+  /**
+   * Report a cost incurred during gadget execution.
+   *
+   * Costs are accumulated and added to the gadget's total cost.
+   * Can be called multiple times during execution.
+   * This is summed with any cost returned from the execute() method
+   * and any costs from ctx.llmist calls.
+   *
+   * @param amount - Cost in USD (e.g., 0.001 for $0.001)
+   *
+   * @example
+   * ```typescript
+   * execute: async (params, ctx) => {
+   *   await callExternalAPI(params.query);
+   *   ctx.reportCost(0.001); // $0.001 per API call
+   *
+   *   await callAnotherAPI(params.data);
+   *   ctx.reportCost(0.002); // Can be called multiple times
+   *
+   *   return 'done';
+   *   // Total cost: $0.003
+   * }
+   * ```
+   */
+  reportCost(amount: number): void;
+
+  /**
+   * Pre-configured LLMist client that automatically reports LLM costs
+   * as gadget costs via the reportCost() callback.
+   *
+   * All LLM calls made through this client will have their costs
+   * automatically tracked and included in the gadget's total cost.
+   *
+   * @example
+   * ```typescript
+   * execute: async ({ text }, ctx) => {
+   *   // LLM costs are automatically reported
+   *   const summary = await ctx.llmist.complete('Summarize: ' + text, {
+   *     model: 'haiku',
+   *   });
+   *
+   *   // Additional manual costs can still be reported
+   *   ctx.reportCost(0.0001); // Processing overhead
+   *
+   *   return summary;
+   * }
+   * ```
+   */
+  llmist: CostReportingLLMist;
+}
