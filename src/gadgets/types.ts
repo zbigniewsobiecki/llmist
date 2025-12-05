@@ -265,9 +265,21 @@ export interface ExecutionContext {
    * All LLM calls made through this client will have their costs
    * automatically tracked and included in the gadget's total cost.
    *
+   * This property is optional - it will be `undefined` if:
+   * - The gadget is executed via CLI `gadget run` command
+   * - The gadget is tested directly without agent context
+   * - No LLMist client was provided to the executor
+   *
+   * Always check for availability before use: `ctx.llmist?.complete(...)`
+   *
    * @example
    * ```typescript
    * execute: async ({ text }, ctx) => {
+   *   // Check if llmist is available
+   *   if (!ctx.llmist) {
+   *     return 'LLM not available in this context';
+   *   }
+   *
    *   // LLM costs are automatically reported
    *   const summary = await ctx.llmist.complete('Summarize: ' + text, {
    *     model: 'haiku',
@@ -280,5 +292,5 @@ export interface ExecutionContext {
    * }
    * ```
    */
-  llmist: CostReportingLLMist;
+  llmist?: CostReportingLLMist;
 }

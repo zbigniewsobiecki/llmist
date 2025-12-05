@@ -20,6 +20,8 @@ export interface TestGadgetResult {
   error?: string;
   /** Parameters after validation and default application */
   validatedParams?: Record<string, unknown>;
+  /** Cost reported by the gadget in USD (e.g., 0.001 for $0.001) */
+  cost?: number;
 }
 
 /**
@@ -99,10 +101,17 @@ export async function testGadget(
   try {
     const rawResult = await Promise.resolve(gadget.execute(validatedParams));
     // Normalize result: handle both string and { result, cost } return types
-    const result = typeof rawResult === "string" ? rawResult : rawResult.result;
+    if (typeof rawResult === "string") {
+      return {
+        result: rawResult,
+        validatedParams,
+        cost: 0,
+      };
+    }
     return {
-      result,
+      result: rawResult.result,
       validatedParams,
+      cost: rawResult.cost ?? 0,
     };
   } catch (error) {
     return {

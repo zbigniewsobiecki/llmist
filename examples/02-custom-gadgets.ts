@@ -183,6 +183,12 @@ class Summarizer extends Gadget({
   async execute(params: this["params"], ctx: ExecutionContext) {
     const { text } = params;
 
+    // ctx.llmist is only available when running within an agent context.
+    // It will be undefined when run via CLI "gadget run" or direct testing.
+    if (!ctx.llmist) {
+      return "LLM not available - this gadget requires agent context";
+    }
+
     // LLM costs are automatically reported via ctx.llmist!
     // No need to manually track tokens or calculate costs
     const summary = await ctx.llmist.complete(`Summarize briefly: ${text}`, { model: "haiku" });
@@ -209,7 +215,13 @@ class PremiumAnalyzer extends Gadget({
     await new Promise((resolve) => setTimeout(resolve, 10));
     ctx.reportCost(0.001); // External API cost
 
-    // Source 2: Automatic LLM cost via ctx.llmist
+    // Source 2: Automatic LLM cost via ctx.llmist (check availability first)
+    if (!ctx.llmist) {
+      return {
+        result: "LLM not available - this gadget requires agent context",
+        cost: 0.001, // Still report the callback cost
+      };
+    }
     const analysis = await ctx.llmist.complete(`Analyze this data: ${data}`, { model: "haiku" });
 
     // Source 3: Return-based cost (all three are summed)

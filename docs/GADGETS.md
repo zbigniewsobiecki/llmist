@@ -302,6 +302,11 @@ const summarizer = createGadget({
     text: z.string().describe('Text to summarize'),
   }),
   execute: async ({ text }, ctx) => {
+    // ctx.llmist is optional - check availability first
+    if (!ctx.llmist) {
+      return 'LLM not available in this context';
+    }
+
     // LLM costs are automatically reported!
     const summary = await ctx.llmist.complete(
       `Summarize briefly: ${text}`,
@@ -311,6 +316,13 @@ const summarizer = createGadget({
   },
 });
 ```
+
+**Note:** `ctx.llmist` is optional and may be `undefined` when:
+- The gadget is executed via CLI `gadget run` command
+- The gadget is tested directly without agent context
+- No LLMist client was provided to the executor
+
+Always check for availability before use: `if (!ctx.llmist) { ... }`
 
 The wrapped client supports:
 - `ctx.llmist.complete(prompt, options?)` - Quick completion
@@ -331,7 +343,10 @@ const complexGadget = createGadget({
     await callExternalApi(data);
     ctx.reportCost(0.001);
 
-    // Source 2: Automatic from wrapped LLMist
+    // Source 2: Automatic from wrapped LLMist (check availability)
+    if (!ctx.llmist) {
+      return { result: 'LLM not available', cost: 0.001 };
+    }
     const analysis = await ctx.llmist.complete('Analyze: ' + data);
 
     // Source 3: Return value (all three are summed)
@@ -480,7 +495,14 @@ import { testGadget } from 'llmist/testing';
 const result = await testGadget(calculator, { a: 5 });
 console.log(result.result);  // "5" (b=0 default applied)
 console.log(result.error);   // undefined for valid params
+console.log(result.cost);    // 0 (or reported cost if gadget returns { result, cost })
 ```
+
+The `TestGadgetResult` includes:
+- `result?: string` - The result string if execution succeeded
+- `error?: string` - Error message if validation or execution failed
+- `validatedParams?: Record<string, unknown>` - Parameters after validation
+- `cost?: number` - Cost reported by the gadget in USD
 
 For standalone validation without execution:
 

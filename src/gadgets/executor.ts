@@ -196,9 +196,7 @@ export class GadgetExecutor {
       // Build execution context
       const ctx: ExecutionContext = {
         reportCost,
-        llmist: this.client
-          ? new CostReportingLLMistWrapper(this.client, reportCost)
-          : (undefined as unknown as ExecutionContext["llmist"]),
+        llmist: this.client ? new CostReportingLLMistWrapper(this.client, reportCost) : undefined,
       };
 
       // Execute gadget (handle both sync and async)
