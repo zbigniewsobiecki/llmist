@@ -85,7 +85,7 @@ export interface ProgressStats {
   /** Total tokens (input + output) */
   totalTokens: number;
 
-  /** Cumulative cost in USD (requires modelRegistry) */
+  /** Cumulative cost in USD (includes LLM and gadget costs; requires modelRegistry for LLM cost estimation) */
   totalCost: number;
 
   /** Elapsed time in seconds since first call */
@@ -534,6 +534,7 @@ export class HookPresets {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCost = 0;
+    let totalGadgetCost = 0;
     const startTime = Date.now();
 
     return {
@@ -582,14 +583,14 @@ export class HookPresets {
             }
           }
 
-          // Build comprehensive progress stats
+          // Build comprehensive progress stats (LLM + gadget costs combined)
           const stats: ProgressStats = {
             currentIteration,
             totalCalls,
             totalInputTokens,
             totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens,
-            totalCost,
+            totalCost: totalCost + totalGadgetCost,
             elapsedSeconds: Number(((Date.now() - startTime) / 1000).toFixed(1)),
           };
 
@@ -611,6 +612,13 @@ export class HookPresets {
             console.log(
               `📊 Progress: Iteration #${stats.currentIteration} | ${formattedTokens} tokens | ${formattedCost} | ${stats.elapsedSeconds}s`,
             );
+          }
+        },
+
+        // Track gadget execution costs
+        onGadgetExecutionComplete: async (ctx) => {
+          if (ctx.cost && ctx.cost > 0) {
+            totalGadgetCost += ctx.cost;
           }
         },
       },

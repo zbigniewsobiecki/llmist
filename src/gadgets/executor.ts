@@ -1,12 +1,19 @@
 import type { ILogObj, Logger } from "tslog";
+import type { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX } from "../core/constants.js";
 import { createLogger } from "../logging/logger.js";
 import { parseBlockParams } from "./block-params.js";
+import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
 import { GadgetErrorFormatter, type ErrorFormatterOptions } from "./error-formatter.js";
 import { BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
 import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
-import type { GadgetExecutionResult, ParsedGadgetCall } from "./types.js";
+import type {
+  ExecutionContext,
+  GadgetExecuteResult,
+  GadgetExecutionResult,
+  ParsedGadgetCall,
+} from "./types.js";
 
 export class GadgetExecutor {
   private readonly logger: Logger<ILogObj>;
@@ -19,6 +26,7 @@ export class GadgetExecutor {
     logger?: Logger<ILogObj>,
     private readonly defaultGadgetTimeoutMs?: number,
     errorFormatterOptions?: ErrorFormatterOptions,
+    private readonly client?: LLMist,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetErrorFormatter(errorFormatterOptions);
@@ -34,6 +42,17 @@ export class GadgetExecutor {
         reject(new TimeoutException(gadgetName, timeoutMs));
       }, timeoutMs);
     });
+  }
+
+  /**
+   * Normalizes gadget execute result to consistent format.
+   * Handles both string returns (backwards compat) and object returns with cost.
+   */
+  private normalizeExecuteResult(raw: string | GadgetExecuteResult): { result: string; cost: number } {
+    if (typeof raw === "string") {
+      return { result: raw, cost: 0 };
+    }
+    return { result: raw.result, cost: raw.cost ?? 0 };
   }
 
   // Execute a gadget call asynchronously
@@ -161,28 +180,56 @@ export class GadgetExecutor {
       // Priority: gadget's own timeoutMs > defaultGadgetTimeoutMs > no timeout
       const timeoutMs = gadget.timeoutMs ?? this.defaultGadgetTimeoutMs;
 
+      // Create execution context with cost accumulator
+      let callbackCost = 0;
+      const reportCost = (amount: number) => {
+        if (amount > 0) {
+          callbackCost += amount;
+          this.logger.debug("Gadget reported cost via callback", {
+            gadgetName: call.gadgetName,
+            amount,
+            totalCallbackCost: callbackCost,
+          });
+        }
+      };
+
+      // Build execution context
+      const ctx: ExecutionContext = {
+        reportCost,
+        llmist: this.client ? new CostReportingLLMistWrapper(this.client, reportCost) : undefined,
+      };
+
       // Execute gadget (handle both sync and async)
-      let result: string;
+      let rawResult: string | GadgetExecuteResult;
       if (timeoutMs && timeoutMs > 0) {
         // Execute with timeout
         this.logger.debug("Executing gadget with timeout", {
           gadgetName: call.gadgetName,
           timeoutMs,
         });
-        result = await Promise.race([
-          Promise.resolve(gadget.execute(validatedParameters)),
+        rawResult = await Promise.race([
+          Promise.resolve(gadget.execute(validatedParameters, ctx)),
           this.createTimeoutPromise(call.gadgetName, timeoutMs),
         ]);
       } else {
         // Execute without timeout
-        result = await Promise.resolve(gadget.execute(validatedParameters));
+        rawResult = await Promise.resolve(gadget.execute(validatedParameters, ctx));
       }
+
+      // Normalize result: handle both string returns (legacy) and object returns with cost
+      const { result, cost: returnCost } = this.normalizeExecuteResult(rawResult);
+
+      // Sum callback costs + return costs
+      const totalCost = callbackCost + returnCost;
 
       const executionTimeMs = Date.now() - startTime;
       this.logger.info("Gadget executed successfully", {
         gadgetName: call.gadgetName,
         invocationId: call.invocationId,
         executionTimeMs,
+        cost: totalCost > 0 ? totalCost : undefined,
+        callbackCost: callbackCost > 0 ? callbackCost : undefined,
+        returnCost: returnCost > 0 ? returnCost : undefined,
       });
 
       this.logger.debug("Gadget result", {
@@ -190,6 +237,7 @@ export class GadgetExecutor {
         invocationId: call.invocationId,
         parameters: validatedParameters,
         result,
+        cost: totalCost,
         executionTimeMs,
       });
 
@@ -199,6 +247,7 @@ export class GadgetExecutor {
         parameters: validatedParameters,
         result,
         executionTimeMs,
+        cost: totalCost,
       };
     } catch (error) {
       // Check if this is a BreakLoopException

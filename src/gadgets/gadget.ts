@@ -3,7 +3,7 @@ import type { ZodTypeAny } from "zod";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
-import type { GadgetExample } from "./types.js";
+import type { ExecutionContext, GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
  * Format parameters object as Block format.
@@ -220,9 +220,38 @@ export abstract class BaseGadget {
    * Can be synchronous or asynchronous.
    *
    * @param params - Parameters passed from the LLM
-   * @returns Result as a string
+   * @param ctx - Optional execution context for cost reporting and LLM access
+   * @returns Result as a string, or an object with result and optional cost
+   *
+   * @example
+   * ```typescript
+   * // Simple string return (free gadget)
+   * execute(params) {
+   *   return "result";
+   * }
+   *
+   * // Object return with cost tracking
+   * execute(params) {
+   *   return { result: "data", cost: 0.001 };
+   * }
+   *
+   * // Using context for callback-based cost reporting
+   * execute(params, ctx) {
+   *   ctx.reportCost(0.001);
+   *   return "result";
+   * }
+   *
+   * // Using wrapped LLMist for automatic cost tracking
+   * async execute(params, ctx) {
+   *   const summary = await ctx.llmist.complete('Summarize: ' + params.text);
+   *   return summary;
+   * }
+   * ```
    */
-  abstract execute(params: Record<string, unknown>): string | Promise<string>;
+  abstract execute(
+    params: Record<string, unknown>,
+    ctx?: ExecutionContext,
+  ): GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
 
   /**
    * Auto-generated instruction text for the LLM.

@@ -6,6 +6,7 @@
  */
 
 import type { ILogObj, Logger } from "tslog";
+import type { LLMist } from "../core/client.js";
 import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
 import { GadgetExecutor } from "../gadgets/executor.js";
 import { StreamParser } from "../gadgets/parser.js";
@@ -72,6 +73,9 @@ export interface StreamProcessorOptions {
 
   /** Default gadget timeout */
   defaultGadgetTimeoutMs?: number;
+
+  /** LLMist client for ExecutionContext.llmist */
+  client?: LLMist;
 }
 
 /**
@@ -161,6 +165,7 @@ export class StreamProcessor {
       this.logger.getSubLogger({ name: "executor" }),
       options.defaultGadgetTimeoutMs,
       { argPrefix: options.gadgetArgPrefix },
+      options.client,
     );
   }
 
@@ -497,6 +502,7 @@ export class StreamProcessor {
           error: result.error,
           executionTimeMs: result.executionTimeMs,
           breaksLoop: result.breaksLoop,
+          cost: result.cost,
           logger: this.logger,
         };
         await this.hooks.observers!.onGadgetExecutionComplete!(context);

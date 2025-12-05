@@ -478,6 +478,146 @@ describe("HookPresets", () => {
     });
   });
 
+  describe("progressTracking preset", () => {
+    it("tracks gadget costs in totalCost", async () => {
+      let lastStats: any = null;
+      const hooks = HookPresets.progressTracking({
+        onProgress: (stats) => {
+          lastStats = stats;
+        },
+      });
+
+      // Simulate gadget execution with cost
+      const gadgetCtx: ObserveGadgetCompleteContext = {
+        iteration: 1,
+        gadgetName: "PaidAPI",
+        invocationId: "test-1",
+        parameters: { query: "test" },
+        finalResult: "result",
+        executionTimeMs: 100,
+        cost: 0.001, // $0.001
+      };
+
+      await hooks.observers?.onGadgetExecutionComplete?.(gadgetCtx);
+
+      // Simulate LLM call complete (which triggers onProgress)
+      const llmCtx: ObserveLLMCallCompleteContext = {
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        finalMessage: "Response",
+      };
+
+      await hooks.observers?.onLLMCallStart?.({ iteration: 1, messages: [], options: { model: "gpt-4o" } });
+      await hooks.observers?.onLLMCallComplete?.(llmCtx);
+
+      // Should include gadget cost in totalCost
+      expect(lastStats).not.toBeNull();
+      expect(lastStats.totalCost).toBeGreaterThanOrEqual(0.001);
+    });
+
+    it("accumulates multiple gadget costs", async () => {
+      let lastStats: any = null;
+      const hooks = HookPresets.progressTracking({
+        onProgress: (stats) => {
+          lastStats = stats;
+        },
+      });
+
+      // Simulate multiple gadget executions with costs
+      await hooks.observers?.onGadgetExecutionComplete?.({
+        iteration: 1,
+        gadgetName: "Gadget1",
+        invocationId: "test-1",
+        parameters: {},
+        finalResult: "result",
+        executionTimeMs: 50,
+        cost: 0.001, // $0.001
+      } as ObserveGadgetCompleteContext);
+
+      await hooks.observers?.onGadgetExecutionComplete?.({
+        iteration: 1,
+        gadgetName: "Gadget2",
+        invocationId: "test-2",
+        parameters: {},
+        finalResult: "result",
+        executionTimeMs: 50,
+        cost: 0.002, // $0.002
+      } as ObserveGadgetCompleteContext);
+
+      // Trigger progress callback via LLM call
+      await hooks.observers?.onLLMCallStart?.({ iteration: 1, messages: [], options: { model: "gpt-4o" } });
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      // Total gadget cost should be $0.003
+      expect(lastStats).not.toBeNull();
+      expect(lastStats.totalCost).toBeGreaterThanOrEqual(0.003);
+    });
+
+    it("handles gadgets with zero or undefined cost", async () => {
+      let lastStats: any = null;
+      const hooks = HookPresets.progressTracking({
+        onProgress: (stats) => {
+          lastStats = stats;
+        },
+      });
+
+      // Gadget with no cost (free)
+      await hooks.observers?.onGadgetExecutionComplete?.({
+        iteration: 1,
+        gadgetName: "FreeGadget",
+        invocationId: "test-1",
+        parameters: {},
+        finalResult: "result",
+        executionTimeMs: 50,
+      } as ObserveGadgetCompleteContext);
+
+      // Gadget with explicit zero cost
+      await hooks.observers?.onGadgetExecutionComplete?.({
+        iteration: 1,
+        gadgetName: "AlsoFree",
+        invocationId: "test-2",
+        parameters: {},
+        finalResult: "result",
+        executionTimeMs: 50,
+        cost: 0,
+      } as ObserveGadgetCompleteContext);
+
+      // Gadget with actual cost
+      await hooks.observers?.onGadgetExecutionComplete?.({
+        iteration: 1,
+        gadgetName: "Paid",
+        invocationId: "test-3",
+        parameters: {},
+        finalResult: "result",
+        executionTimeMs: 50,
+        cost: 0.005,
+      } as ObserveGadgetCompleteContext);
+
+      // Trigger progress callback
+      await hooks.observers?.onLLMCallStart?.({ iteration: 1, messages: [], options: { model: "gpt-4o" } });
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      // Only the paid gadget's cost should be counted
+      expect(lastStats).not.toBeNull();
+      expect(lastStats.totalCost).toBeGreaterThanOrEqual(0.005);
+    });
+  });
+
   describe("monitoring preset", () => {
     it("combines logging, timing, token tracking, and error logging", () => {
       const hooks = HookPresets.monitoring();
