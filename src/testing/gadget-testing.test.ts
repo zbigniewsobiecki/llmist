@@ -121,6 +121,62 @@ describe("testGadget", () => {
   });
 });
 
+describe("testGadget cost reporting", () => {
+  it("returns cost: 0 for gadgets returning strings", async () => {
+    const gadget = createGadget({
+      description: "Free gadget",
+      execute: () => "result",
+    });
+
+    const result = await testGadget(gadget, {});
+
+    expect(result.result).toBe("result");
+    expect(result.cost).toBe(0);
+  });
+
+  it("extracts cost from { result, cost } return values", async () => {
+    const paidGadget = createGadget({
+      description: "Paid API gadget",
+      schema: z.object({ query: z.string() }),
+      execute: ({ query }) => ({
+        result: `Response for: ${query}`,
+        cost: 0.00123,
+      }),
+    });
+
+    const result = await testGadget(paidGadget, { query: "test" });
+
+    expect(result.result).toBe("Response for: test");
+    expect(result.cost).toBe(0.00123);
+  });
+
+  it("defaults cost to 0 when result object omits cost", async () => {
+    const gadget = createGadget({
+      description: "Result object without cost",
+      execute: () => ({ result: "done" }),
+    });
+
+    const result = await testGadget(gadget, {});
+
+    expect(result.result).toBe("done");
+    expect(result.cost).toBe(0);
+  });
+
+  it("does not include cost when execution errors", async () => {
+    const errorGadget = createGadget({
+      description: "Error gadget",
+      execute: () => {
+        throw new Error("Failed");
+      },
+    });
+
+    const result = await testGadget(errorGadget, {});
+
+    expect(result.error).toBe("Failed");
+    expect(result.cost).toBeUndefined();
+  });
+});
+
 describe("testGadgetBatch", () => {
   it("tests multiple parameter sets", async () => {
     const calculator = createGadget({

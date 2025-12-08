@@ -129,7 +129,7 @@ export { createGadget } from "./gadgets/create-gadget.js";
 // Gadget output viewer (for custom output store integration)
 export { createGadgetOutputViewer } from "./gadgets/output-viewer.js";
 // Gadget infrastructure
-export { BreakLoopException, HumanInputException } from "./gadgets/exceptions.js";
+export { AbortError, BreakLoopException, HumanInputException } from "./gadgets/exceptions.js";
 export { GadgetExecutor } from "./gadgets/executor.js";
 export { BaseGadget } from "./gadgets/gadget.js";
 export { StreamParser } from "./gadgets/parser.js";
@@ -140,7 +140,11 @@ export { GadgetRegistry } from "./gadgets/registry.js";
 export type { GadgetConfig } from "./gadgets/typed-gadget.js";
 export { Gadget } from "./gadgets/typed-gadget.js";
 export type {
+  CostReportingLLMist,
+  ExecutionContext,
   GadgetExample,
+  GadgetExecuteResult,
+  GadgetExecuteReturn,
   GadgetExecutionResult,
   ParsedGadgetCall,
   StreamEvent,

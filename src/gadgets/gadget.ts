@@ -1,9 +1,10 @@
 import type { ZodTypeAny } from "zod";
 
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { AbortError } from "./exceptions.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
-import type { GadgetExample } from "./types.js";
+import type { ExecutionContext, GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
  * Format parameters object as Block format.
@@ -220,9 +221,75 @@ export abstract class BaseGadget {
    * Can be synchronous or asynchronous.
    *
    * @param params - Parameters passed from the LLM
-   * @returns Result as a string
+   * @param ctx - Optional execution context for cost reporting and LLM access
+   * @returns Result as a string, or an object with result and optional cost
+   *
+   * @example
+   * ```typescript
+   * // Simple string return (free gadget)
+   * execute(params) {
+   *   return "result";
+   * }
+   *
+   * // Object return with cost tracking
+   * execute(params) {
+   *   return { result: "data", cost: 0.001 };
+   * }
+   *
+   * // Using context for callback-based cost reporting
+   * execute(params, ctx) {
+   *   ctx.reportCost(0.001);
+   *   return "result";
+   * }
+   *
+   * // Using wrapped LLMist for automatic cost tracking
+   * async execute(params, ctx) {
+   *   const summary = await ctx.llmist.complete('Summarize: ' + params.text);
+   *   return summary;
+   * }
+   * ```
    */
-  abstract execute(params: Record<string, unknown>): string | Promise<string>;
+  abstract execute(
+    params: Record<string, unknown>,
+    ctx?: ExecutionContext,
+  ): GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
+
+  /**
+   * Throws an AbortError if the execution has been aborted.
+   *
+   * Call this at key checkpoints in long-running gadgets to allow early exit
+   * when the gadget has been cancelled (e.g., due to timeout). This enables
+   * resource cleanup and prevents unnecessary work after cancellation.
+   *
+   * @param ctx - The execution context containing the abort signal
+   * @throws AbortError if ctx.signal.aborted is true
+   *
+   * @example
+   * ```typescript
+   * class DataProcessor extends Gadget({
+   *   description: 'Processes data in multiple steps',
+   *   schema: z.object({ items: z.array(z.string()) }),
+   * }) {
+   *   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+   *     const results: string[] = [];
+   *
+   *     for (const item of params.items) {
+   *       // Check before each expensive operation
+   *       this.throwIfAborted(ctx);
+   *
+   *       results.push(await this.processItem(item));
+   *     }
+   *
+   *     return results.join(', ');
+   *   }
+   * }
+   * ```
+   */
+  throwIfAborted(ctx?: ExecutionContext): void {
+    if (ctx?.signal?.aborted) {
+      throw new AbortError();
+    }
+  }
 
   /**
    * Auto-generated instruction text for the LLM.

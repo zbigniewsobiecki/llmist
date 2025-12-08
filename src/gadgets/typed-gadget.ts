@@ -25,7 +25,7 @@
 
 import type { ZodType } from "zod";
 import { BaseGadget } from "./gadget.js";
-import type { GadgetExample } from "./types.js";
+import type { ExecutionContext, GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
  * Infer the TypeScript type from a Zod schema.
@@ -128,18 +128,32 @@ export function Gadget<TSchema extends ZodType>(config: GadgetConfig<TSchema>) {
      * Execute the gadget. Subclasses should cast params to this['params'].
      *
      * @param params - Validated parameters from the LLM
-     * @returns Result as a string (or Promise<string> for async gadgets)
+     * @param ctx - Optional execution context for cost reporting and LLM access
+     * @returns Result as a string, or an object with result and optional cost
      *
      * @example
      * ```typescript
-     * execute(params: Record<string, unknown>): string {
-     *   const typed = params as this['params'];
-     *   // Now 'typed' is fully typed!
-     *   return String(typed.a + typed.b);
+     * // Simple string return (free gadget)
+     * execute(params: this['params']) {
+     *   return String(params.a + params.b);
+     * }
+     *
+     * // Using context for callback-based cost reporting
+     * execute(params: this['params'], ctx) {
+     *   ctx.reportCost(0.001);
+     *   return "result";
+     * }
+     *
+     * // Using wrapped LLMist for automatic cost tracking
+     * async execute(params: this['params'], ctx) {
+     *   return ctx.llmist.complete('Summarize: ' + params.text);
      * }
      * ```
      */
-    abstract execute(params: Record<string, unknown>): string | Promise<string>;
+    abstract execute(
+      params: Record<string, unknown>,
+      ctx?: ExecutionContext,
+    ): GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
   }
 
   return GadgetBase as {

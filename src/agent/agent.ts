@@ -481,6 +481,7 @@ export class Agent {
           stopOnGadgetError: this.stopOnGadgetError,
           shouldContinueAfterError: this.shouldContinueAfterError,
           defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+          client: this.client,
         });
 
         const result = await processor.process(stream);

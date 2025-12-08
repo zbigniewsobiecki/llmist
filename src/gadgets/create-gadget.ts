@@ -23,7 +23,7 @@
 
 import type { ZodType } from "zod";
 import { BaseGadget } from "./gadget.js";
-import type { GadgetExample } from "./types.js";
+import type { ExecutionContext, GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
  * Infer the TypeScript type from a Zod schema.
@@ -43,8 +43,15 @@ export interface CreateGadgetConfig<TSchema extends ZodType> {
   /** Zod schema for parameter validation */
   schema: TSchema;
 
-  /** Execution function with typed parameters */
-  execute: (params: InferSchema<TSchema>) => string | Promise<string>;
+  /**
+   * Execution function with typed parameters.
+   * Can return string or { result, cost? }.
+   * Optionally receives ExecutionContext for callback-based cost reporting.
+   */
+  execute: (
+    params: InferSchema<TSchema>,
+    ctx?: ExecutionContext,
+  ) => GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
 
   /** Optional timeout in milliseconds */
   timeoutMs?: number;
@@ -123,9 +130,12 @@ export function createGadget<TSchema extends ZodType>(
     timeoutMs = config.timeoutMs;
     examples = config.examples;
 
-    execute(params: Record<string, unknown>): string | Promise<string> {
-      // Cast to inferred type and call user's function
-      return config.execute(params as InferSchema<TSchema>);
+    execute(
+      params: Record<string, unknown>,
+      ctx?: ExecutionContext,
+    ): GadgetExecuteReturn | Promise<GadgetExecuteReturn> {
+      // Cast to inferred type and call user's function with context
+      return config.execute(params as InferSchema<TSchema>, ctx);
     }
   }
 

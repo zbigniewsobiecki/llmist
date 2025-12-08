@@ -260,6 +260,243 @@ class APIGadget extends Gadget({
 }
 ```
 
+## Cost Reporting
+
+Gadgets that call paid APIs or consume resources can report their costs. These costs are tracked alongside LLM costs and included in the total cost reported by `HookPresets.progressTracking()`.
+
+### Callback-Based Cost Reporting (Recommended)
+
+Gadgets receive an optional `ExecutionContext` that provides `reportCost()` for incremental cost reporting:
+
+```typescript
+const multiStepApiGadget = createGadget({
+  name: 'MultiStepAPI',
+  description: 'Calls multiple paid APIs',
+  schema: z.object({
+    query: z.string().describe('Query to process'),
+  }),
+  execute: async ({ query }, ctx) => {
+    // First API call
+    const step1 = await callApi1(query);
+    ctx.reportCost(0.001); // $0.001
+
+    // Second API call
+    const step2 = await callApi2(step1);
+    ctx.reportCost(0.002); // $0.002
+
+    return `Processed: ${step2}`;
+    // Total: $0.003
+  },
+});
+```
+
+### Automatic LLM Cost Tracking
+
+The execution context provides a wrapped LLMist client (`ctx.llmist`) that automatically reports LLM costs:
+
+```typescript
+const summarizer = createGadget({
+  name: 'Summarizer',
+  description: 'Summarizes text using an internal LLM',
+  schema: z.object({
+    text: z.string().describe('Text to summarize'),
+  }),
+  execute: async ({ text }, ctx) => {
+    // ctx.llmist is optional - check availability first
+    if (!ctx.llmist) {
+      return 'LLM not available in this context';
+    }
+
+    // LLM costs are automatically reported!
+    const summary = await ctx.llmist.complete(
+      `Summarize briefly: ${text}`,
+      { model: 'haiku' }
+    );
+    return summary;
+  },
+});
+```
+
+**Note:** `ctx.llmist` is optional and may be `undefined` when:
+- The gadget is executed via CLI `gadget run` command
+- The gadget is tested directly without agent context
+- No LLMist client was provided to the executor
+
+Always check for availability before use: `if (!ctx.llmist) { ... }`
+
+The wrapped client supports:
+- `ctx.llmist.complete(prompt, options?)` - Quick completion
+- `ctx.llmist.streamText(prompt, options?)` - Streaming text
+- `ctx.llmist.stream(options)` - Low-level stream access
+- `ctx.llmist.modelRegistry` - Access to model registry
+
+### Combining All Cost Sources
+
+You can combine callback-based, automatic LLM, and return-based costs:
+
+```typescript
+const complexGadget = createGadget({
+  description: 'Complex processing with multiple cost sources',
+  schema: z.object({ data: z.string() }),
+  execute: async ({ data }, ctx) => {
+    // Source 1: Manual callback
+    await callExternalApi(data);
+    ctx.reportCost(0.001);
+
+    // Source 2: Automatic from wrapped LLMist (check availability)
+    if (!ctx.llmist) {
+      return { result: 'LLM not available', cost: 0.001 };
+    }
+    const analysis = await ctx.llmist.complete('Analyze: ' + data);
+
+    // Source 3: Return value (all three are summed)
+    return {
+      result: analysis,
+      cost: 0.0005, // Processing overhead
+    };
+  },
+});
+```
+
+### Return-Based Cost Reporting
+
+For simpler cases, return an object with `result` and `cost`:
+
+```typescript
+const paidApiGadget = createGadget({
+  name: 'PaidAPI',
+  description: 'Calls a paid external API',
+  schema: z.object({
+    query: z.string().describe('Query to send to the API'),
+  }),
+  execute: async ({ query }) => {
+    const response = await callExternalApi(query);
+
+    return {
+      result: JSON.stringify(response),
+      cost: 0.001, // $0.001 per API call
+    };
+  },
+});
+```
+
+### Tracking Total Costs
+
+Use `HookPresets.progressTracking()` to track combined LLM and gadget costs:
+
+```typescript
+import { LLMist, HookPresets, ModelRegistry } from 'llmist';
+
+let finalCost = 0;
+const modelRegistry = new ModelRegistry();
+
+await LLMist.createAgent()
+  .withModel('haiku')
+  .withGadgets(paidApiGadget, summarizer)
+  .withHooks(
+    HookPresets.progressTracking({
+      modelRegistry,
+      onProgress: (stats) => {
+        finalCost = stats.totalCost; // Includes LLM + gadget costs
+      },
+    }),
+  )
+  .askAndCollect('Process this data');
+
+console.log(`Total cost: $${finalCost.toFixed(6)}`);
+```
+
+### Cost Reporting Methods
+
+| Method | When to Use | Example |
+|--------|-------------|---------|
+| `ctx.reportCost(amount)` | Multiple cost events during execution | `ctx.reportCost(0.001)` |
+| `ctx.llmist.complete()` | Internal LLM calls (auto-tracked) | `await ctx.llmist.complete(prompt)` |
+| `return { result, cost }` | Single cost at end of execution | `return { result: "...", cost: 0.001 }` |
+
+**Notes:**
+- All three methods can be combined - costs are summed
+- Cost is in USD (e.g., `0.001` = $0.001)
+- The context parameter (`ctx`) is optional for backwards compatibility
+- Existing gadgets returning strings continue to work (free by default)
+
+## Cancellation Support
+
+The `ExecutionContext` provides an `AbortSignal` for handling cancellation, especially when gadgets time out.
+
+### ExecutionContext Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `reportCost(amount)` | `function` | Report costs in USD |
+| `llmist` | `CostReportingLLMist?` | Wrapped LLM client (optional) |
+| `signal` | `AbortSignal` | Abort signal for cancellation (always provided) |
+
+### Using the Abort Signal
+
+When a gadget times out, the `signal` is aborted **before** the `TimeoutException` is thrown. This allows gadgets to clean up resources:
+
+```typescript
+class BrowserGadget extends Gadget({
+  description: 'Fetches web page content',
+  schema: z.object({ url: z.string() }),
+  timeoutMs: 30000,
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const browser = await chromium.launch();
+
+    // Register cleanup handler
+    ctx.signal.addEventListener('abort', () => {
+      browser.close().catch(() => {});
+    }, { once: true });
+
+    try {
+      const page = await browser.newPage();
+      await page.goto(params.url);
+      return await page.content();
+    } finally {
+      await browser.close();
+    }
+  }
+}
+```
+
+### throwIfAborted Helper
+
+Use `throwIfAborted(ctx)` to check for cancellation at key checkpoints:
+
+```typescript
+class DataProcessor extends Gadget({
+  description: 'Processes data in batches',
+  schema: z.object({ items: z.array(z.string()) }),
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const results: string[] = [];
+
+    for (const item of params.items) {
+      // Check before each expensive operation
+      this.throwIfAborted(ctx);
+      results.push(await this.processItem(item));
+    }
+
+    return results.join(', ');
+  }
+}
+```
+
+### Pass Signal to fetch()
+
+HTTP requests can be automatically cancelled by passing the signal:
+
+```typescript
+execute: async ({ url }, ctx) => {
+  const response = await fetch(url, { signal: ctx.signal });
+  return await response.text();
+}
+```
+
+**See Also:** [Error Handling - Gadget Cancellation](./ERROR_HANDLING.md#gadget-cancellation) for more patterns.
+
 ## Special Exceptions
 
 ### Break Loop
@@ -335,7 +572,14 @@ import { testGadget } from 'llmist/testing';
 const result = await testGadget(calculator, { a: 5 });
 console.log(result.result);  // "5" (b=0 default applied)
 console.log(result.error);   // undefined for valid params
+console.log(result.cost);    // 0 (or reported cost if gadget returns { result, cost })
 ```
+
+The `TestGadgetResult` includes:
+- `result?: string` - The result string if execution succeeded
+- `error?: string` - Error message if validation or execution failed
+- `validatedParams?: Record<string, unknown>` - Parameters after validation
+- `cost?: number` - Cost reported by the gadget in USD
 
 For standalone validation without execution:
 
