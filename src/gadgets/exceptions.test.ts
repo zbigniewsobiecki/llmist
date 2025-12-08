@@ -183,11 +183,17 @@ describe("AbortError", () => {
     expect(exception.stack).toContain("AbortError");
   });
 
-  it("handles empty message", () => {
+  it("handles empty message by using default", () => {
     const exception = new AbortError("");
 
-    // Empty string should use default message
-    expect(exception.message).toBe("");
+    // Empty string should fall back to default message
+    expect(exception.message).toBe("Gadget execution was aborted");
+  });
+
+  it("handles undefined message by using default", () => {
+    const exception = new AbortError(undefined);
+
+    expect(exception.message).toBe("Gadget execution was aborted");
   });
 
   it("handles message with special characters", () => {

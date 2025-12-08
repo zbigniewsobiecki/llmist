@@ -326,7 +326,7 @@ Thrown when a gadget exceeds its timeout:
 
 ### AbortError
 
-Thrown by gadgets when they detect the abort signal (typically via `throwIfAborted()`):
+Thrown by gadgets when they detect the abort signal. Typically thrown via the `BaseGadget.throwIfAborted(ctx)` helper method:
 
 ```typescript
 import { AbortError } from 'llmist';
@@ -388,7 +388,7 @@ class BrowserGadget extends Gadget({
     const browser = await chromium.launch();
 
     // Register cleanup - fires immediately if already aborted
-    ctx?.signal.addEventListener('abort', () => {
+    ctx.signal.addEventListener('abort', () => {
       browser.close().catch(() => {});
     }, { once: true });
 
@@ -415,7 +415,7 @@ class ApiGadget extends Gadget({
   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
     // fetch() will automatically abort when signal is triggered
     const response = await fetch(params.endpoint, {
-      signal: ctx?.signal,
+      signal: ctx.signal,
     });
     return await response.text();
   }
@@ -430,7 +430,7 @@ The `ExecutionContext.signal` is always provided (never undefined):
 |----------|-------------|
 | `signal.aborted` | `true` if execution has been cancelled |
 | `signal.addEventListener('abort', fn)` | Register cleanup callback |
-| `signal.reason` | Why the abort occurred (optional) |
+| `signal.reason` | Contains the timeout message when aborted due to timeout (useful for debugging) |
 
 ## See Also
 

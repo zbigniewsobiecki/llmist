@@ -141,8 +141,8 @@ export class TimeoutException extends Error {
  * ```
  */
 export class AbortError extends Error {
-  constructor(message = "Gadget execution was aborted") {
-    super(message);
+  constructor(message?: string) {
+    super(message || "Gadget execution was aborted");
     this.name = "AbortError";
   }
 }

@@ -446,7 +446,7 @@ class BrowserGadget extends Gadget({
     const browser = await chromium.launch();
 
     // Register cleanup handler
-    ctx?.signal.addEventListener('abort', () => {
+    ctx.signal.addEventListener('abort', () => {
       browser.close().catch(() => {});
     }, { once: true });
 
@@ -490,7 +490,7 @@ HTTP requests can be automatically cancelled by passing the signal:
 
 ```typescript
 execute: async ({ url }, ctx) => {
-  const response = await fetch(url, { signal: ctx?.signal });
+  const response = await fetch(url, { signal: ctx.signal });
   return await response.text();
 }
 ```

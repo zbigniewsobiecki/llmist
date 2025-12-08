@@ -44,9 +44,11 @@ export class GadgetExecutor {
   ): Promise<never> {
     return new Promise((_, reject) => {
       setTimeout(() => {
+        const timeoutError = new TimeoutException(gadgetName, timeoutMs);
         // Signal abort FIRST so gadgets can clean up before exception is thrown
-        abortController.abort();
-        reject(new TimeoutException(gadgetName, timeoutMs));
+        // Pass the timeout message as reason for better debugging context
+        abortController.abort(timeoutError.message);
+        reject(timeoutError);
       }, timeoutMs);
     });
   }
