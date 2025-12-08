@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
+import { AbortError, BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
 
 describe("BreakLoopException", () => {
   it("creates with custom message", () => {
@@ -148,5 +148,58 @@ describe("TimeoutException", () => {
 
     expect(exception.gadgetName).toBe("My-Gadget_v2");
     expect(exception.message).toContain("'My-Gadget_v2'");
+  });
+});
+
+describe("AbortError", () => {
+  it("creates with custom message", () => {
+    const exception = new AbortError("Custom abort message");
+
+    expect(exception.message).toBe("Custom abort message");
+  });
+
+  it("creates with default message when no message provided", () => {
+    const exception = new AbortError();
+
+    expect(exception.message).toBe("Gadget execution was aborted");
+  });
+
+  it("has correct name property", () => {
+    const exception = new AbortError();
+
+    expect(exception.name).toBe("AbortError");
+  });
+
+  it("is instanceof Error", () => {
+    const exception = new AbortError();
+
+    expect(exception).toBeInstanceOf(Error);
+  });
+
+  it("has a stack trace", () => {
+    const exception = new AbortError();
+
+    expect(exception.stack).toBeDefined();
+    expect(exception.stack).toContain("AbortError");
+  });
+
+  it("handles empty message by using default", () => {
+    const exception = new AbortError("");
+
+    // Empty string should fall back to default message
+    expect(exception.message).toBe("Gadget execution was aborted");
+  });
+
+  it("handles undefined message by using default", () => {
+    const exception = new AbortError(undefined);
+
+    expect(exception.message).toBe("Gadget execution was aborted");
+  });
+
+  it("handles message with special characters", () => {
+    const message = "Aborted: timeout (30s) exceeded!";
+    const exception = new AbortError(message);
+
+    expect(exception.message).toBe(message);
   });
 });

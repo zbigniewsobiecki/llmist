@@ -324,6 +324,114 @@ Thrown when a gadget exceeds its timeout:
 })
 ```
 
+### AbortError
+
+Thrown by gadgets when they detect the abort signal. Typically thrown via the `BaseGadget.throwIfAborted(ctx)` helper method:
+
+```typescript
+import { AbortError } from 'llmist';
+
+class LongRunningGadget extends Gadget({ ... }) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    // Check at key points - throws AbortError if aborted
+    this.throwIfAborted(ctx);
+
+    await this.doPartOne(params.data);
+
+    this.throwIfAborted(ctx);
+
+    await this.doPartTwo(params.data);
+
+    return 'completed';
+  }
+}
+```
+
+## Gadget Cancellation
+
+When a gadget times out, llmist signals cancellation via `AbortSignal` before throwing `TimeoutException`. Gadgets can use this to clean up resources like open browser sessions, database connections, or HTTP requests.
+
+### Check for Abort at Checkpoints
+
+Use `throwIfAborted()` to check for cancellation at key points:
+
+```typescript
+class DataProcessor extends Gadget({
+  description: 'Processes data in multiple steps',
+  schema: z.object({ items: z.array(z.string()) }),
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const results: string[] = [];
+
+    for (const item of params.items) {
+      // Check before each expensive operation
+      this.throwIfAborted(ctx);
+
+      results.push(await this.processItem(item));
+    }
+
+    return results.join(', ');
+  }
+}
+```
+
+### Register Cleanup Handlers
+
+For gadgets that open resources (browsers, connections, etc.), register cleanup on the abort signal:
+
+```typescript
+class BrowserGadget extends Gadget({
+  description: 'Uses Playwright browser',
+  schema: z.object({ url: z.string() }),
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const browser = await chromium.launch();
+
+    // Register cleanup - fires immediately if already aborted
+    ctx.signal.addEventListener('abort', () => {
+      browser.close().catch(() => {});
+    }, { once: true });
+
+    try {
+      const page = await browser.newPage();
+      await page.goto(params.url);
+      return await page.content();
+    } finally {
+      await browser.close();
+    }
+  }
+}
+```
+
+### Pass Signal to fetch()
+
+For HTTP requests, pass the signal directly to fetch for automatic cancellation:
+
+```typescript
+class ApiGadget extends Gadget({
+  description: 'Calls external API',
+  schema: z.object({ endpoint: z.string() }),
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    // fetch() will automatically abort when signal is triggered
+    const response = await fetch(params.endpoint, {
+      signal: ctx.signal,
+    });
+    return await response.text();
+  }
+}
+```
+
+### Signal Properties
+
+The `ExecutionContext.signal` is always provided (never undefined):
+
+| Property | Description |
+|----------|-------------|
+| `signal.aborted` | `true` if execution has been cancelled |
+| `signal.addEventListener('abort', fn)` | Register cleanup callback |
+| `signal.reason` | Contains the timeout message when aborted due to timeout (useful for debugging) |
+
 ## See Also
 
 - **[Hooks Guide](./HOOKS.md)** - Lifecycle control

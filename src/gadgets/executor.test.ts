@@ -7,11 +7,11 @@ import {
   MathGadget,
   TestGadget,
 } from "../testing/helpers.js";
-import { BreakLoopException } from "./exceptions.js";
+import { AbortError, BreakLoopException } from "./exceptions.js";
 import { GadgetExecutor } from "./executor.js";
 import { GadgetRegistry } from "./registry.js";
 import { Gadget } from "./typed-gadget.js";
-import type { ParsedGadgetCall } from "./types.js";
+import type { ExecutionContext, ParsedGadgetCall } from "./types.js";
 
 describe("GadgetExecutor", () => {
   let registry: GadgetRegistry;
@@ -860,6 +860,230 @@ describe("GadgetExecutor", () => {
 
       expect(result.error).toContain("Invalid parameters");
       expect(result.error).not.toContain("timeout");
+    });
+  });
+
+  describe("abort signal support", () => {
+    // Gadget that captures the abort signal for testing
+    class SignalCapturingGadget extends Gadget({
+      name: "SignalCapturing",
+      description: "Captures the abort signal for testing",
+      schema: z.object({}),
+    }) {
+      public capturedSignal: AbortSignal | undefined;
+
+      execute(_params: this["params"], ctx?: ExecutionContext): string {
+        this.capturedSignal = ctx?.signal;
+        return "captured";
+      }
+    }
+
+    // Gadget that checks signal during execution
+    class SignalCheckingGadget extends Gadget({
+      name: "SignalChecking",
+      description: "Checks signal state during slow execution",
+      schema: z.object({
+        delay: z.number(),
+      }),
+    }) {
+      public abortedDuringExecution = false;
+
+      async execute(params: this["params"], ctx?: ExecutionContext): Promise<string> {
+        await new Promise((resolve) => setTimeout(resolve, params.delay));
+        this.abortedDuringExecution = ctx?.signal?.aborted ?? false;
+        return "done";
+      }
+    }
+
+    // Gadget that uses throwIfAborted helper
+    class AbortCheckpointGadget extends Gadget({
+      name: "AbortCheckpoint",
+      description: "Uses throwIfAborted at checkpoints",
+      schema: z.object({
+        delay: z.number(),
+      }),
+    }) {
+      public checkpointReached = false;
+
+      async execute(params: this["params"], ctx?: ExecutionContext): Promise<string> {
+        // First checkpoint - should pass
+        this.throwIfAborted(ctx);
+
+        await new Promise((resolve) => setTimeout(resolve, params.delay));
+
+        // Second checkpoint - may throw if aborted during delay
+        this.checkpointReached = true;
+        this.throwIfAborted(ctx);
+
+        return "completed";
+      }
+    }
+
+    // Gadget that registers cleanup handler on abort
+    class CleanupGadget extends Gadget({
+      name: "Cleanup",
+      description: "Registers cleanup on abort",
+      schema: z.object({
+        delay: z.number(),
+      }),
+    }) {
+      public cleanupCalled = false;
+
+      async execute(params: this["params"], ctx?: ExecutionContext): Promise<string> {
+        ctx?.signal.addEventListener(
+          "abort",
+          () => {
+            this.cleanupCalled = true;
+          },
+          { once: true },
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, params.delay));
+        return "done";
+      }
+    }
+
+    it("provides abort signal to gadgets", async () => {
+      const gadget = new SignalCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SignalCapturing",
+        invocationId: "signal-1",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      expect(gadget.capturedSignal).toBeDefined();
+      expect(gadget.capturedSignal).toBeInstanceOf(AbortSignal);
+    });
+
+    it("signal is not aborted during normal execution", async () => {
+      const gadget = new SignalCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SignalCapturing",
+        invocationId: "signal-2",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      expect(gadget.capturedSignal?.aborted).toBe(false);
+    });
+
+    it("signal is aborted when timeout fires", async () => {
+      const gadget = new SignalCheckingGadget();
+      gadget.timeoutMs = 50;
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SignalChecking",
+        invocationId: "signal-3",
+        parametersRaw: '{"delay": 200}',
+        parameters: { delay: 200 },
+      };
+
+      const result = await executor.execute(call);
+
+      expect(result.error).toContain("timeout");
+      // The gadget's check happens after the delay, which is after timeout
+      // So we can't directly verify signal.aborted in the gadget itself
+      // because Promise.race already rejected
+    });
+
+    it("abort event fires on timeout", async () => {
+      const gadget = new CleanupGadget();
+      gadget.timeoutMs = 50;
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "Cleanup",
+        invocationId: "signal-4",
+        parametersRaw: '{"delay": 200}',
+        parameters: { delay: 200 },
+      };
+
+      await executor.execute(call);
+
+      // Allow a small delay for the abort event to be processed
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(gadget.cleanupCalled).toBe(true);
+    });
+
+    it("gadgets using throwIfAborted get AbortError handled gracefully", async () => {
+      // Create a gadget that throws AbortError directly
+      class ManualAbortGadget extends Gadget({
+        name: "ManualAbort",
+        description: "Throws AbortError manually",
+        schema: z.object({}),
+      }) {
+        execute(): string {
+          throw new AbortError("Manually aborted");
+        }
+      }
+
+      registry.registerByClass(new ManualAbortGadget());
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "ManualAbort",
+        invocationId: "abort-1",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      const result = await executor.execute(call);
+
+      expect(result.error).toBe("Manually aborted");
+      expect(result.result).toBeUndefined();
+    });
+
+    it("AbortError with default message is handled", async () => {
+      class DefaultAbortGadget extends Gadget({
+        name: "DefaultAbort",
+        description: "Throws AbortError with default message",
+        schema: z.object({}),
+      }) {
+        execute(): string {
+          throw new AbortError();
+        }
+      }
+
+      registry.registerByClass(new DefaultAbortGadget());
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "DefaultAbort",
+        invocationId: "abort-2",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      const result = await executor.execute(call);
+
+      expect(result.error).toBe("Gadget execution was aborted");
+    });
+
+    it("provides signal even without timeout configured", async () => {
+      // Using executor without default timeout
+      const gadget = new SignalCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SignalCapturing",
+        invocationId: "signal-5",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      expect(gadget.capturedSignal).toBeDefined();
+      expect(gadget.capturedSignal?.aborted).toBe(false);
     });
   });
 });

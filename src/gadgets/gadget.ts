@@ -1,6 +1,7 @@
 import type { ZodTypeAny } from "zod";
 
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { AbortError } from "./exceptions.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
 import type { ExecutionContext, GadgetExample, GadgetExecuteReturn } from "./types.js";
@@ -252,6 +253,43 @@ export abstract class BaseGadget {
     params: Record<string, unknown>,
     ctx?: ExecutionContext,
   ): GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
+
+  /**
+   * Throws an AbortError if the execution has been aborted.
+   *
+   * Call this at key checkpoints in long-running gadgets to allow early exit
+   * when the gadget has been cancelled (e.g., due to timeout). This enables
+   * resource cleanup and prevents unnecessary work after cancellation.
+   *
+   * @param ctx - The execution context containing the abort signal
+   * @throws AbortError if ctx.signal.aborted is true
+   *
+   * @example
+   * ```typescript
+   * class DataProcessor extends Gadget({
+   *   description: 'Processes data in multiple steps',
+   *   schema: z.object({ items: z.array(z.string()) }),
+   * }) {
+   *   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+   *     const results: string[] = [];
+   *
+   *     for (const item of params.items) {
+   *       // Check before each expensive operation
+   *       this.throwIfAborted(ctx);
+   *
+   *       results.push(await this.processItem(item));
+   *     }
+   *
+   *     return results.join(', ');
+   *   }
+   * }
+   * ```
+   */
+  throwIfAborted(ctx?: ExecutionContext): void {
+    if (ctx?.signal?.aborted) {
+      throw new AbortError();
+    }
+  }
 
   /**
    * Auto-generated instruction text for the LLM.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
 
+import { AbortError } from "./exceptions.js";
 import { Gadget } from "./typed-gadget.js";
+import type { ExecutionContext } from "./types.js";
 
 class SchemaGadget extends Gadget({
   name: "SchemaGadget",
@@ -578,5 +580,69 @@ describe("BaseGadget parameter sections", () => {
     const endCount = (instruction.match(/!!!GADGET_END/g) || []).length;
     expect(startCount).toBe(3);
     expect(endCount).toBe(3);
+  });
+});
+
+describe("BaseGadget.throwIfAborted", () => {
+  class TestGadget extends Gadget({
+    description: "Test gadget for throwIfAborted",
+    schema: z.object({ value: z.number() }),
+  }) {
+    execute(): string {
+      return "done";
+    }
+
+    // Expose throwIfAborted for testing
+    public checkAbort(ctx?: ExecutionContext): void {
+      this.throwIfAborted(ctx);
+    }
+  }
+
+  it("does not throw when ctx is undefined", () => {
+    const gadget = new TestGadget();
+    expect(() => gadget.checkAbort(undefined)).not.toThrow();
+  });
+
+  it("does not throw when signal is not aborted", () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    expect(() => gadget.checkAbort(ctx)).not.toThrow();
+  });
+
+  it("throws AbortError when signal is aborted", () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    abortController.abort();
+
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    expect(() => gadget.checkAbort(ctx)).toThrow(AbortError);
+  });
+
+  it("throws AbortError with default message", () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    abortController.abort();
+
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    try {
+      gadget.checkAbort(ctx);
+      expect.fail("Should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AbortError);
+      expect((error as AbortError).message).toBe("Gadget execution was aborted");
+    }
   });
 });
