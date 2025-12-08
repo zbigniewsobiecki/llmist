@@ -1,3 +1,48 @@
+## 2.0.0 (2025-12-08)
+
+* Merge pull request #148 from zbigniewsobiecki/dev ([21575d9](https://github.com/zbigniewsobiecki/llmist/commit/21575d9)), closes [#148](https://github.com/zbigniewsobiecki/llmist/issues/148)
+* feat(gadgets): add AbortSignal support for gadget cancellation (#145) ([efc741f](https://github.com/zbigniewsobiecki/llmist/commit/efc741f)), closes [#145](https://github.com/zbigniewsobiecki/llmist/issues/145)
+* feat(gadgets): add callback-based cost reporting with auto LLM tracking (#144) ([05196d2](https://github.com/zbigniewsobiecki/llmist/commit/05196d2)), closes [#144](https://github.com/zbigniewsobiecki/llmist/issues/144)
+* feat(gadgets): refactor RunCommand to use argv array (#147) ([37d96ab](https://github.com/zbigniewsobiecki/llmist/commit/37d96ab)), closes [#147](https://github.com/zbigniewsobiecki/llmist/issues/147)
+
+
+### BREAKING CHANGE
+
+* RunCommand now accepts `argv` array instead of `command` string.
+
+This change eliminates shell interpretation issues by passing arguments
+directly to `Bun.spawn()` without involving `sh -c`. Special characters
+like backticks, quotes, and newlines are now preserved correctly.
+
+The block format's JSON Pointer support (`argv/0`, `argv/1`, etc.)
+naturally handles array elements, and `formatParamsAsBlock` already
+renders arrays in exploded format for LLM examples.
+
+Also eliminates code duplication by having examples/gadgets/run-command.ts
+re-export from the builtin.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* test(gadgets): add comprehensive unit tests for RunCommand
+
+Adds dedicated test file addressing code review feedback:
+- Empty argv array validation
+- Command timeout handling
+- Spawn failure / command not found
+- No output command (returns "(no output)")
+- Special character preservation (backticks, quotes)
+- Combined stdout/stderr output
+- Multiline output handling
+- cwd option
+
+Achieves 100% code coverage for run-command.ts
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 1.7.0 (2025-12-04)
 
 * Merge pull request #143 from zbigniewsobiecki/dev ([8a11d1d](https://github.com/zbigniewsobiecki/llmist/commit/8a11d1d)), closes [#143](https://github.com/zbigniewsobiecki/llmist/issues/143)
