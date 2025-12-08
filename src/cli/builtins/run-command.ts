@@ -56,6 +56,18 @@ export const runCommand = createGadget({
       output: "status=0\n\n(no output)",
       comment: "Complex arguments with special characters - no escaping needed",
     },
+    {
+      params: {
+        argv: [
+          "gh", "pr", "review", "123", "--approve",
+          "--body",
+          "## Review Summary\n\n**Looks good!**\n\n- Clean code\n- Tests pass"
+        ],
+        timeout: 30000
+      },
+      output: "status=0\n\nApproving pull request #123",
+      comment: "Multiline body: --body flag and content must be SEPARATE array elements",
+    },
   ],
   execute: async ({ argv, cwd, timeout }) => {
     const workingDir = cwd ?? process.cwd();
