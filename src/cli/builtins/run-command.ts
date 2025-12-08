@@ -51,12 +51,19 @@ export const runCommand = createGadget({
     const workingDir = cwd ?? process.cwd();
 
     try {
-      // Use Bun.spawn for better performance and streaming support
-      const proc = Bun.spawn(["sh", "-c", command], {
+      // Use stdin-based execution to handle all special characters correctly
+      // (quotes, backticks, newlines, parentheses) without shell escaping issues
+      const proc = Bun.spawn(["sh"], {
         cwd: workingDir,
+        stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
       });
+
+      // Write command to stdin (shell reads and executes it)
+      const cmdWithNewline = command.endsWith("\n") ? command : command + "\n";
+      proc.stdin.write(cmdWithNewline);
+      proc.stdin.end();
 
       // Create a timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
