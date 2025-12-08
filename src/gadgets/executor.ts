@@ -5,7 +5,7 @@ import { createLogger } from "../logging/logger.js";
 import { parseBlockParams } from "./block-params.js";
 import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
 import { GadgetErrorFormatter, type ErrorFormatterOptions } from "./error-formatter.js";
-import { BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
+import { AbortError, BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
 import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
 import type {
@@ -35,10 +35,17 @@ export class GadgetExecutor {
 
   /**
    * Creates a promise that rejects with a TimeoutException after the specified timeout.
+   * Aborts the provided AbortController before rejecting, allowing gadgets to clean up.
    */
-  private createTimeoutPromise(gadgetName: string, timeoutMs: number): Promise<never> {
+  private createTimeoutPromise(
+    gadgetName: string,
+    timeoutMs: number,
+    abortController: AbortController,
+  ): Promise<never> {
     return new Promise((_, reject) => {
       setTimeout(() => {
+        // Signal abort FIRST so gadgets can clean up before exception is thrown
+        abortController.abort();
         reject(new TimeoutException(gadgetName, timeoutMs));
       }, timeoutMs);
     });
@@ -180,7 +187,11 @@ export class GadgetExecutor {
       // Priority: gadget's own timeoutMs > defaultGadgetTimeoutMs > no timeout
       const timeoutMs = gadget.timeoutMs ?? this.defaultGadgetTimeoutMs;
 
-      // Create execution context with cost accumulator
+      // Create AbortController for cancellation support
+      // Signal is always provided to gadgets, even without timeout
+      const abortController = new AbortController();
+
+      // Create execution context with cost accumulator and abort signal
       let callbackCost = 0;
       const reportCost = (amount: number) => {
         if (amount > 0) {
@@ -193,23 +204,24 @@ export class GadgetExecutor {
         }
       };
 
-      // Build execution context
+      // Build execution context with abort signal
       const ctx: ExecutionContext = {
         reportCost,
         llmist: this.client ? new CostReportingLLMistWrapper(this.client, reportCost) : undefined,
+        signal: abortController.signal,
       };
 
       // Execute gadget (handle both sync and async)
       let rawResult: string | GadgetExecuteResult;
       if (timeoutMs && timeoutMs > 0) {
-        // Execute with timeout
+        // Execute with timeout - abort signal will be triggered before timeout rejection
         this.logger.debug("Executing gadget with timeout", {
           gadgetName: call.gadgetName,
           timeoutMs,
         });
         rawResult = await Promise.race([
           Promise.resolve(gadget.execute(validatedParameters, ctx)),
-          this.createTimeoutPromise(call.gadgetName, timeoutMs),
+          this.createTimeoutPromise(call.gadgetName, timeoutMs, abortController),
         ]);
       } else {
         // Execute without timeout
@@ -271,6 +283,21 @@ export class GadgetExecutor {
         this.logger.error("Gadget execution timed out", {
           gadgetName: call.gadgetName,
           timeoutMs: error.timeoutMs,
+          executionTimeMs: Date.now() - startTime,
+        });
+        return {
+          gadgetName: call.gadgetName,
+          invocationId: call.invocationId,
+          parameters: validatedParameters,
+          error: error.message,
+          executionTimeMs: Date.now() - startTime,
+        };
+      }
+
+      // Check if this is an AbortError (thrown by gadgets when they detect abort signal)
+      if (error instanceof AbortError) {
+        this.logger.info("Gadget execution was aborted", {
+          gadgetName: call.gadgetName,
           executionTimeMs: Date.now() - startTime,
         });
         return {

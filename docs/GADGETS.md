@@ -420,6 +420,83 @@ console.log(`Total cost: $${finalCost.toFixed(6)}`);
 - The context parameter (`ctx`) is optional for backwards compatibility
 - Existing gadgets returning strings continue to work (free by default)
 
+## Cancellation Support
+
+The `ExecutionContext` provides an `AbortSignal` for handling cancellation, especially when gadgets time out.
+
+### ExecutionContext Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `reportCost(amount)` | `function` | Report costs in USD |
+| `llmist` | `CostReportingLLMist?` | Wrapped LLM client (optional) |
+| `signal` | `AbortSignal` | Abort signal for cancellation (always provided) |
+
+### Using the Abort Signal
+
+When a gadget times out, the `signal` is aborted **before** the `TimeoutException` is thrown. This allows gadgets to clean up resources:
+
+```typescript
+class BrowserGadget extends Gadget({
+  description: 'Fetches web page content',
+  schema: z.object({ url: z.string() }),
+  timeoutMs: 30000,
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const browser = await chromium.launch();
+
+    // Register cleanup handler
+    ctx?.signal.addEventListener('abort', () => {
+      browser.close().catch(() => {});
+    }, { once: true });
+
+    try {
+      const page = await browser.newPage();
+      await page.goto(params.url);
+      return await page.content();
+    } finally {
+      await browser.close();
+    }
+  }
+}
+```
+
+### throwIfAborted Helper
+
+Use `throwIfAborted(ctx)` to check for cancellation at key checkpoints:
+
+```typescript
+class DataProcessor extends Gadget({
+  description: 'Processes data in batches',
+  schema: z.object({ items: z.array(z.string()) }),
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const results: string[] = [];
+
+    for (const item of params.items) {
+      // Check before each expensive operation
+      this.throwIfAborted(ctx);
+      results.push(await this.processItem(item));
+    }
+
+    return results.join(', ');
+  }
+}
+```
+
+### Pass Signal to fetch()
+
+HTTP requests can be automatically cancelled by passing the signal:
+
+```typescript
+execute: async ({ url }, ctx) => {
+  const response = await fetch(url, { signal: ctx?.signal });
+  return await response.text();
+}
+```
+
+**See Also:** [Error Handling - Gadget Cancellation](./ERROR_HANDLING.md#gadget-cancellation) for more patterns.
+
 ## Special Exceptions
 
 ### Break Loop

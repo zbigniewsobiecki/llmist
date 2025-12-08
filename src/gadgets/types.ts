@@ -293,4 +293,41 @@ export interface ExecutionContext {
    * ```
    */
   llmist?: CostReportingLLMist;
+
+  /**
+   * Abort signal for cancellation support.
+   *
+   * When a gadget times out, this signal is aborted before the TimeoutException
+   * is thrown. Gadgets can use this to clean up resources (close browsers,
+   * cancel HTTP requests, etc.) when execution is cancelled.
+   *
+   * The signal is always provided (never undefined) to simplify gadget code.
+   *
+   * @example
+   * ```typescript
+   * // Check for abort at key checkpoints
+   * execute: async (params, ctx) => {
+   *   if (ctx.signal.aborted) return 'Aborted';
+   *
+   *   await doExpensiveWork();
+   *
+   *   if (ctx.signal.aborted) return 'Aborted';
+   *   return result;
+   * }
+   *
+   * // Register cleanup handlers
+   * execute: async (params, ctx) => {
+   *   const browser = await chromium.launch();
+   *   ctx.signal.addEventListener('abort', () => browser.close(), { once: true });
+   *   // ... use browser
+   * }
+   *
+   * // Pass to fetch for automatic cancellation
+   * execute: async ({ url }, ctx) => {
+   *   const response = await fetch(url, { signal: ctx.signal });
+   *   return await response.text();
+   * }
+   * ```
+   */
+  signal: AbortSignal;
 }

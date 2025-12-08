@@ -110,3 +110,39 @@ export class TimeoutException extends Error {
     this.timeoutMs = timeoutMs;
   }
 }
+
+/**
+ * Exception thrown when gadget execution is aborted.
+ *
+ * Gadgets can throw this exception when they detect the abort signal has been
+ * triggered. This is typically used via the `throwIfAborted()` helper method
+ * on the Gadget base class.
+ *
+ * @example
+ * ```typescript
+ * class LongRunningGadget extends Gadget({
+ *   name: 'LongRunning',
+ *   description: 'Performs a long operation with checkpoints',
+ *   schema: z.object({ data: z.string() }),
+ * }) {
+ *   async execute(params: this['params'], ctx: ExecutionContext): Promise<string> {
+ *     // Check at key points - throws AbortError if aborted
+ *     this.throwIfAborted(ctx);
+ *
+ *     await this.doPartOne(params.data);
+ *
+ *     this.throwIfAborted(ctx);
+ *
+ *     await this.doPartTwo(params.data);
+ *
+ *     return 'completed';
+ *   }
+ * }
+ * ```
+ */
+export class AbortError extends Error {
+  constructor(message = "Gadget execution was aborted") {
+    super(message);
+    this.name = "AbortError";
+  }
+}
