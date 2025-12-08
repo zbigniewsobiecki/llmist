@@ -2,9 +2,12 @@ import { z } from "zod";
 import { createGadget } from "../../index.js";
 
 /**
- * RunCommand gadget - Executes a shell command and returns its output.
+ * RunCommand gadget - Executes a command with arguments and returns its output.
  *
- * This gadget is intentionally simple with NO built-in safety measures.
+ * Uses argv array to bypass shell interpretation entirely - arguments are
+ * passed directly to the process without any escaping or shell expansion.
+ * This allows special characters (quotes, backticks, newlines) to work correctly.
+ *
  * Safety should be added externally via the hook system (see example 10).
  *
  * Output format follows the established pattern: `status=N\n\n<output>`
@@ -12,9 +15,11 @@ import { createGadget } from "../../index.js";
 export const runCommand = createGadget({
   name: "RunCommand",
   description:
-    "Execute a shell command and return its output. Returns both stdout and stderr combined with the exit status.",
+    "Execute a command with arguments and return its output. Uses argv array to bypass shell - arguments are passed directly without interpretation. Returns stdout/stderr combined with exit status.",
   schema: z.object({
-    command: z.string().describe("The shell command to execute"),
+    argv: z
+      .array(z.string())
+      .describe("Command and arguments as array (e.g., ['git', 'commit', '-m', 'message'])"),
     cwd: z
       .string()
       .optional()
@@ -26,33 +31,42 @@ export const runCommand = createGadget({
   }),
   examples: [
     {
-      params: { command: "ls -la", timeout: 30000 },
+      params: { argv: ["ls", "-la"], timeout: 30000 },
       output:
         "status=0\n\ntotal 24\ndrwxr-xr-x  5 user  staff   160 Nov 27 10:00 .\ndrwxr-xr-x  3 user  staff    96 Nov 27 09:00 ..\n-rw-r--r--  1 user  staff  1024 Nov 27 10:00 package.json",
       comment: "List directory contents with details",
     },
     {
-      params: { command: "echo 'Hello World'", timeout: 30000 },
+      params: { argv: ["echo", "Hello World"], timeout: 30000 },
       output: "status=0\n\nHello World",
-      comment: "Simple echo command",
+      comment: "Echo without shell - argument passed directly",
     },
     {
-      params: { command: "cat nonexistent.txt", timeout: 30000 },
+      params: { argv: ["cat", "nonexistent.txt"], timeout: 30000 },
       output: "status=1\n\ncat: nonexistent.txt: No such file or directory",
       comment: "Command that fails returns non-zero status",
     },
     {
-      params: { command: "pwd", cwd: "/tmp", timeout: 30000 },
+      params: { argv: ["pwd"], cwd: "/tmp", timeout: 30000 },
       output: "status=0\n\n/tmp",
       comment: "Execute command in a specific directory",
     },
+    {
+      params: { argv: ["gh", "pr", "review", "123", "--comment", "--body", "Review with `backticks` and 'quotes'"], timeout: 30000 },
+      output: "status=0\n\n(no output)",
+      comment: "Complex arguments with special characters - no escaping needed",
+    },
   ],
-  execute: async ({ command, cwd, timeout }) => {
+  execute: async ({ argv, cwd, timeout }) => {
     const workingDir = cwd ?? process.cwd();
 
+    if (argv.length === 0) {
+      return "status=1\n\nerror: argv array cannot be empty";
+    }
+
     try {
-      // Use Bun.spawn for better performance and streaming support
-      const proc = Bun.spawn(["sh", "-c", command], {
+      // Spawn process directly without shell - arguments passed as-is
+      const proc = Bun.spawn(argv, {
         cwd: workingDir,
         stdout: "pipe",
         stderr: "pipe",
