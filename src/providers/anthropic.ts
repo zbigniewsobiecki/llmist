@@ -1,9 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+  ContentBlockParam,
+  ImageBlockParam,
   MessageCreateParamsStreaming,
   MessageStreamEvent,
+  TextBlockParam,
 } from "@anthropic-ai/sdk/resources/messages";
-import type { LLMMessage } from "../core/messages.js";
+import type {
+  ContentPart,
+  ImageContentPart,
+  ImageMimeType,
+} from "../core/input-content.js";
+import type { LLMMessage, MessageContent } from "../core/messages.js";
+import { extractText, normalizeContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { ANTHROPIC_MODELS } from "./anthropic-models.js";
@@ -60,11 +69,12 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
 
     // System message as array of text blocks with cache_control on last block
     // This enables Anthropic's prompt caching for the system prompt
+    // System messages are always text-only
     const system =
       systemMessages.length > 0
         ? systemMessages.map((m, index) => ({
             type: "text" as const,
-            text: m.content,
+            text: extractText(m.content),
             // Add cache_control to the LAST system message block
             ...(index === systemMessages.length - 1
               ? { cache_control: { type: "ephemeral" as const } }
@@ -83,20 +93,14 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
       -1,
     );
 
-    // Build conversation with cache_control on the last user message
-    // This caches the conversation history prefix for multi-turn efficiency
+    // Build conversation with multimodal content support
+    // Cache_control is added to the last part of the last user message
     const conversation = nonSystemMessages.map((message, index) => ({
       role: message.role,
-      content: [
-        {
-          type: "text" as const,
-          text: message.content,
-          // Add cache_control to the LAST user message
-          ...(message.role === "user" && index === lastUserIndex
-            ? { cache_control: { type: "ephemeral" as const } }
-            : {}),
-        },
-      ],
+      content: this.convertToAnthropicContent(
+        message.content,
+        message.role === "user" && index === lastUserIndex,
+      ),
     }));
 
     // Anthropic requires max_tokens, so use a smart default if not specified
@@ -116,6 +120,67 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     };
 
     return payload;
+  }
+
+  /**
+   * Convert llmist content to Anthropic's content block format.
+   * Handles text, images (base64 only), and applies cache_control.
+   */
+  private convertToAnthropicContent(
+    content: MessageContent,
+    addCacheControl: boolean,
+  ): ContentBlockParam[] {
+    const parts = normalizeContent(content);
+
+    return parts.map((part, index) => {
+      const isLastPart = index === parts.length - 1;
+      const cacheControl =
+        addCacheControl && isLastPart ? { cache_control: { type: "ephemeral" as const } } : {};
+
+      if (part.type === "text") {
+        return {
+          type: "text" as const,
+          text: part.text,
+          ...cacheControl,
+        } as TextBlockParam;
+      }
+
+      if (part.type === "image") {
+        return this.convertImagePart(part, cacheControl);
+      }
+
+      if (part.type === "audio") {
+        throw new Error(
+          "Anthropic does not support audio input. Use Google Gemini for audio processing.",
+        );
+      }
+
+      throw new Error(`Unsupported content type: ${(part as ContentPart).type}`);
+    });
+  }
+
+  /**
+   * Convert an image content part to Anthropic's image block format.
+   */
+  private convertImagePart(
+    part: ImageContentPart,
+    cacheControl: { cache_control?: { type: "ephemeral" } },
+  ): ImageBlockParam {
+    if (part.source.type === "url") {
+      throw new Error(
+        "Anthropic does not support image URLs. Please provide base64-encoded image data instead.",
+      );
+    }
+
+    return {
+      type: "image" as const,
+      source: {
+        type: "base64" as const,
+        media_type: part.source.mediaType as ImageMimeType,
+        data: part.source.data,
+      },
+      ...cacheControl,
+    };
   }
 
   protected async executeStreamRequest(
@@ -228,8 +293,11 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     // Extract system messages and conversation messages
     const systemMessages = messages.filter((message) => message.role === "system");
     const system =
-      systemMessages.length > 0 ? systemMessages.map((m) => m.content).join("\n\n") : undefined;
+      systemMessages.length > 0
+        ? systemMessages.map((m) => extractText(m.content)).join("\n\n")
+        : undefined;
 
+    // Convert messages to Anthropic format, handling multimodal content
     const conversation = messages
       .filter(
         (message): message is LLMMessage & { role: "user" | "assistant" } =>
@@ -237,12 +305,7 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
       )
       .map((message) => ({
         role: message.role,
-        content: [
-          {
-            type: "text" as const,
-            text: message.content,
-          },
-        ],
+        content: this.convertToAnthropicContent(message.content, false),
       }));
 
     try {
@@ -261,8 +324,20 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
         error,
       );
       // Fallback to rough estimation if API fails
-      const totalChars = messages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0);
-      return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN);
+      // For multimodal, extract text and estimate; images add ~1000 tokens
+      let totalChars = 0;
+      let imageCount = 0;
+      for (const msg of messages) {
+        const parts = normalizeContent(msg.content);
+        for (const part of parts) {
+          if (part.type === "text") {
+            totalChars += part.text.length;
+          } else if (part.type === "image") {
+            imageCount++;
+          }
+        }
+      }
+      return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN) + imageCount * 1000;
     }
   }
 }

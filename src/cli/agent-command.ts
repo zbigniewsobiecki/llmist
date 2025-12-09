@@ -3,6 +3,8 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { AgentBuilder } from "../agent/builder.js";
 import { isAbortError } from "../core/errors.js";
+import type { ContentPart } from "../core/input-content.js";
+import { text } from "../core/input-content.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
@@ -12,6 +14,7 @@ import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
+import { readAudioFile, readImageFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
 import {
   createSessionDir,
@@ -630,7 +633,22 @@ export async function executeAgent(
   );
 
   // Build and start the agent
-  const agent = builder.ask(prompt);
+  // Use multimodal content if --image or --audio flags are present
+  let agent;
+  if (options.image || options.audio) {
+    const parts: ContentPart[] = [text(prompt)];
+
+    if (options.image) {
+      parts.push(await readImageFile(options.image));
+    }
+    if (options.audio) {
+      parts.push(await readAudioFile(options.audio));
+    }
+
+    agent = builder.askWithContent(parts);
+  } else {
+    agent = builder.ask(prompt);
+  }
 
   // SHOWCASE: llmist's event-driven agent execution
   // The agent emits events as it runs, enabling reactive UIs

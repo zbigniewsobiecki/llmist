@@ -1,4 +1,14 @@
-import type { LLMMessage } from "../core/messages.js";
+import {
+  detectAudioMimeType,
+  detectImageMimeType,
+  isAudioPart,
+  isImagePart,
+  toBase64,
+  type AudioMimeType,
+  type ImageMimeType,
+} from "../core/input-content.js";
+import type { LLMMessage, MessageContent } from "../core/messages.js";
+import { extractText } from "../core/messages.js";
 import { getMockManager } from "./mock-manager.js";
 import type {
   MockMatcher,
@@ -6,6 +16,34 @@ import type {
   MockRegistration,
   MockResponse,
 } from "./mock-types.js";
+
+// ============================================================================
+// Multimodal Content Helpers
+// ============================================================================
+
+/**
+ * Check if message content contains at least one image.
+ */
+function hasImageContent(content: MessageContent): boolean {
+  if (typeof content === "string") return false;
+  return content.some((part) => isImagePart(part));
+}
+
+/**
+ * Check if message content contains audio.
+ */
+function hasAudioContent(content: MessageContent): boolean {
+  if (typeof content === "string") return false;
+  return content.some((part) => isAudioPart(part));
+}
+
+/**
+ * Count the number of images in message content.
+ */
+function countImages(content: MessageContent): number {
+  if (typeof content === "string") return 0;
+  return content.filter((part) => isImagePart(part)).length;
+}
 
 /**
  * Fluent builder for creating mock responses and registrations.
@@ -109,7 +147,7 @@ export class MockBuilder {
    */
   whenMessageContains(text: string): this {
     this.matchers.push((ctx) =>
-      ctx.messages.some((msg) => msg.content?.toLowerCase().includes(text.toLowerCase())),
+      ctx.messages.some((msg) => extractText(msg.content).toLowerCase().includes(text.toLowerCase())),
     );
     return this;
   }
@@ -123,7 +161,8 @@ export class MockBuilder {
   whenLastMessageContains(text: string): this {
     this.matchers.push((ctx) => {
       const lastMsg = ctx.messages[ctx.messages.length - 1];
-      return lastMsg?.content?.toLowerCase().includes(text.toLowerCase()) ?? false;
+      if (!lastMsg) return false;
+      return extractText(lastMsg.content).toLowerCase().includes(text.toLowerCase());
     });
     return this;
   }
@@ -135,7 +174,7 @@ export class MockBuilder {
    * mockLLM().whenMessageMatches(/calculate \d+/)
    */
   whenMessageMatches(regex: RegExp): this {
-    this.matchers.push((ctx) => ctx.messages.some((msg) => regex.test(msg.content ?? "")));
+    this.matchers.push((ctx) => ctx.messages.some((msg) => regex.test(extractText(msg.content))));
     return this;
   }
 
@@ -148,7 +187,7 @@ export class MockBuilder {
   whenRoleContains(role: LLMMessage["role"], text: string): this {
     this.matchers.push((ctx) =>
       ctx.messages.some(
-        (msg) => msg.role === role && msg.content?.toLowerCase().includes(text.toLowerCase()),
+        (msg) => msg.role === role && extractText(msg.content).toLowerCase().includes(text.toLowerCase()),
       ),
     );
     return this;
@@ -176,6 +215,47 @@ export class MockBuilder {
    */
   when(matcher: MockMatcher): this {
     this.matchers.push(matcher);
+    return this;
+  }
+
+  // ==========================================================================
+  // Multimodal Matchers
+  // ==========================================================================
+
+  /**
+   * Match when any message contains an image.
+   *
+   * @example
+   * mockLLM().whenMessageHasImage().returns("I see an image of a sunset.")
+   */
+  whenMessageHasImage(): this {
+    this.matchers.push((ctx) => ctx.messages.some((msg) => hasImageContent(msg.content)));
+    return this;
+  }
+
+  /**
+   * Match when any message contains audio.
+   *
+   * @example
+   * mockLLM().whenMessageHasAudio().returns("I hear music playing.")
+   */
+  whenMessageHasAudio(): this {
+    this.matchers.push((ctx) => ctx.messages.some((msg) => hasAudioContent(msg.content)));
+    return this;
+  }
+
+  /**
+   * Match based on the number of images in the last message.
+   *
+   * @example
+   * mockLLM().whenImageCount((n) => n >= 2).returns("Comparing multiple images...")
+   */
+  whenImageCount(predicate: (count: number) => boolean): this {
+    this.matchers.push((ctx) => {
+      const lastMsg = ctx.messages[ctx.messages.length - 1];
+      if (!lastMsg) return false;
+      return predicate(countImages(lastMsg.content));
+    });
     return this;
   }
 
@@ -243,6 +323,129 @@ export class MockBuilder {
       this.response.gadgetCalls = [];
     }
     this.response.gadgetCalls.push({ gadgetName, parameters });
+    return this;
+  }
+
+  // ==========================================================================
+  // Multimodal Response Helpers
+  // ==========================================================================
+
+  /**
+   * Return a single image in the response.
+   * Useful for mocking image generation endpoints.
+   *
+   * @param data - Image data (base64 string or Buffer)
+   * @param mimeType - MIME type (auto-detected if Buffer provided without type)
+   *
+   * @example
+   * mockLLM()
+   *   .forModel('dall-e-3')
+   *   .returnsImage(pngBuffer)
+   *   .register();
+   */
+  returnsImage(data: string | Buffer | Uint8Array, mimeType?: ImageMimeType): this {
+    if (typeof this.response === "function") {
+      throw new Error("Cannot use returnsImage() after withResponse() with a function");
+    }
+
+    let imageData: string;
+    let imageMime: ImageMimeType;
+
+    if (typeof data === "string") {
+      imageData = data;
+      if (!mimeType) {
+        throw new Error("MIME type is required when providing base64 string data");
+      }
+      imageMime = mimeType;
+    } else {
+      imageData = toBase64(data);
+      const detected = mimeType ?? detectImageMimeType(data);
+      if (!detected) {
+        throw new Error(
+          "Could not detect image MIME type. Please provide the mimeType parameter explicitly.",
+        );
+      }
+      imageMime = detected;
+    }
+
+    if (!this.response.images) {
+      this.response.images = [];
+    }
+    this.response.images.push({ data: imageData, mimeType: imageMime });
+    return this;
+  }
+
+  /**
+   * Return multiple images in the response.
+   *
+   * @example
+   * mockLLM()
+   *   .forModel('dall-e-3')
+   *   .returnsImages([
+   *     { data: pngBuffer1 },
+   *     { data: pngBuffer2 },
+   *   ])
+   *   .register();
+   */
+  returnsImages(
+    images: Array<{
+      data: string | Buffer | Uint8Array;
+      mimeType?: ImageMimeType;
+      revisedPrompt?: string;
+    }>,
+  ): this {
+    for (const img of images) {
+      this.returnsImage(img.data, img.mimeType);
+      // Set revised prompt if provided (on the last added image)
+      if (img.revisedPrompt && this.response && typeof this.response !== "function") {
+        const lastImage = this.response.images?.[this.response.images.length - 1];
+        if (lastImage) {
+          lastImage.revisedPrompt = img.revisedPrompt;
+        }
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Return audio data in the response.
+   * Useful for mocking speech synthesis endpoints.
+   *
+   * @param data - Audio data (base64 string or Buffer)
+   * @param mimeType - MIME type (auto-detected if Buffer provided without type)
+   *
+   * @example
+   * mockLLM()
+   *   .forModel('tts-1')
+   *   .returnsAudio(mp3Buffer)
+   *   .register();
+   */
+  returnsAudio(data: string | Buffer | Uint8Array, mimeType?: AudioMimeType): this {
+    if (typeof this.response === "function") {
+      throw new Error("Cannot use returnsAudio() after withResponse() with a function");
+    }
+
+    let audioData: string;
+    let audioMime: AudioMimeType;
+
+    if (typeof data === "string") {
+      audioData = data;
+      if (!mimeType) {
+        throw new Error("MIME type is required when providing base64 string data");
+      }
+      audioMime = mimeType;
+    } else {
+      audioData = toBase64(data);
+      const detected = mimeType ?? detectAudioMimeType(data);
+      if (!detected) {
+        throw new Error(
+          "Could not detect audio MIME type. Please provide the mimeType parameter explicitly.",
+        );
+      }
+      audioMime = detected;
+    }
+
+    this.response.audio = { data: audioData, mimeType: audioMime };
     return this;
   }
 

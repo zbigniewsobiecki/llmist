@@ -7,6 +7,7 @@ import { ModelRegistry } from "./model-registry.js";
 import { ImageNamespace } from "./namespaces/image.js";
 import { SpeechNamespace } from "./namespaces/speech.js";
 import { TextNamespace } from "./namespaces/text.js";
+import { VisionNamespace } from "./namespaces/vision.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "./options.js";
 import { ModelIdentifierParser } from "./options.js";
 import {
@@ -65,6 +66,7 @@ export class LLMist {
   readonly text: TextNamespace;
   readonly image: ImageNamespace;
   readonly speech: SpeechNamespace;
+  readonly vision: VisionNamespace;
 
   constructor();
   constructor(adapters: ProviderAdapter[]);
@@ -134,6 +136,7 @@ export class LLMist {
     this.text = new TextNamespace(this);
     this.image = new ImageNamespace(this.adapters, this.defaultProvider);
     this.speech = new SpeechNamespace(this.adapters, this.defaultProvider);
+    this.vision = new VisionNamespace(this);
   }
 
   stream(options: LLMGenerationOptions): LLMStream {

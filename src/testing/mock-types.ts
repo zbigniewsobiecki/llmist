@@ -1,3 +1,4 @@
+import type { AudioMimeType, ImageMimeType } from "../core/input-content.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 
@@ -41,6 +42,28 @@ export interface MockMatcherContext {
 export type MockMatcher = (context: MockMatcherContext) => boolean | Promise<boolean>;
 
 /**
+ * Image data in a mock response.
+ */
+export interface MockImageData {
+  /** Base64-encoded image data */
+  data: string;
+  /** MIME type of the image */
+  mimeType: ImageMimeType;
+  /** Revised prompt (for image generation responses) */
+  revisedPrompt?: string;
+}
+
+/**
+ * Audio data in a mock response.
+ */
+export interface MockAudioData {
+  /** Base64-encoded audio data */
+  data: string;
+  /** MIME type of the audio */
+  mimeType: AudioMimeType;
+}
+
+/**
  * A mock response that will be returned when a matcher succeeds.
  */
 export interface MockResponse {
@@ -60,6 +83,18 @@ export interface MockResponse {
     /** Optional invocationId, will be auto-generated if not provided */
     invocationId?: string;
   }>;
+
+  /**
+   * Image data to return in the response (e.g., for image generation mocks).
+   * Each image will be yielded as a separate chunk in the stream.
+   */
+  images?: MockImageData[];
+
+  /**
+   * Audio data to return in the response (e.g., for speech synthesis mocks).
+   * Will be yielded as a chunk in the stream.
+   */
+  audio?: MockAudioData;
 
   /**
    * Simulated token usage statistics

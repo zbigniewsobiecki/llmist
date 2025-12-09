@@ -1,5 +1,7 @@
 import type { Command } from "commander";
 
+import type { ContentPart } from "../core/input-content.js";
+import { text } from "../core/input-content.js";
 import { LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { TokenUsage } from "../core/options.js";
@@ -7,6 +9,7 @@ import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
+import { readAudioFile, readImageFile } from "./file-utils.js";
 import {
   createSessionDir,
   formatLlmRequest,
@@ -46,7 +49,22 @@ export async function executeComplete(
   if (options.system) {
     builder.addSystem(options.system);
   }
-  builder.addUser(prompt);
+
+  // Build multimodal message if --image or --audio flags are present
+  if (options.image || options.audio) {
+    const parts: ContentPart[] = [text(prompt)];
+
+    if (options.image) {
+      parts.push(await readImageFile(options.image));
+    }
+    if (options.audio) {
+      parts.push(await readAudioFile(options.audio));
+    }
+
+    builder.addUserMultimodal(parts);
+  } else {
+    builder.addUser(prompt);
+  }
 
   const messages = builder.build();
 

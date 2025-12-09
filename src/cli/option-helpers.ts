@@ -13,6 +13,10 @@ export interface CompleteCommandOptions {
   maxTokens?: number;
   quiet?: boolean;
   logLlmRequests?: string | boolean;
+  /** Path to image file to include with the prompt */
+  image?: string;
+  /** Path to audio file to include with the prompt */
+  audio?: string;
 }
 
 /**
@@ -32,6 +36,10 @@ export interface AgentCommandOptions {
   gadgetApproval?: GadgetApprovalConfig;
   quiet?: boolean;
   logLlmRequests?: string | boolean;
+  /** Path to image file to include with the initial prompt */
+  image?: string;
+  /** Path to audio file to include with the initial prompt */
+  audio?: string;
   /** Enable Docker sandboxing */
   docker?: boolean;
   /** Enable Docker with read-only CWD mount */
@@ -68,7 +76,9 @@ export function addCompleteOptions(cmd: Command, defaults?: CompleteConfig): Com
       defaults?.["max-tokens"],
     )
     .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet)
-    .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"]);
+    .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"])
+    .option(OPTION_FLAGS.inputImage, OPTION_DESCRIPTIONS.inputImage)
+    .option(OPTION_FLAGS.inputAudio, OPTION_DESCRIPTIONS.inputAudio);
 }
 
 /**
@@ -112,6 +122,8 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
     )
     .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet)
     .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"])
+    .option(OPTION_FLAGS.inputImage, OPTION_DESCRIPTIONS.inputImage)
+    .option(OPTION_FLAGS.inputAudio, OPTION_DESCRIPTIONS.inputAudio)
     .option(OPTION_FLAGS.docker, OPTION_DESCRIPTIONS.docker)
     .option(OPTION_FLAGS.dockerRo, OPTION_DESCRIPTIONS.dockerRo)
     .option(OPTION_FLAGS.noDocker, OPTION_DESCRIPTIONS.noDocker)

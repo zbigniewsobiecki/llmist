@@ -79,8 +79,42 @@ export {
 } from "./agent/index.js";
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
-export type { LLMMessage, LLMRole } from "./core/messages.js";
-export { LLMMessageBuilder } from "./core/messages.js";
+
+// Input content types for multimodal messages
+export type {
+  AudioContentPart,
+  AudioMimeType,
+  AudioSource,
+  ContentPart,
+  ImageBase64Source,
+  ImageContentPart,
+  ImageMimeType,
+  ImageSource,
+  ImageUrlSource,
+  TextContentPart,
+} from "./core/input-content.js";
+export {
+  audioFromBase64,
+  audioFromBuffer,
+  detectAudioMimeType,
+  detectImageMimeType,
+  imageFromBase64,
+  imageFromBuffer,
+  imageFromUrl,
+  isAudioPart,
+  isDataUrl,
+  isImagePart,
+  isTextPart,
+  parseDataUrl,
+  text,
+  toBase64,
+} from "./core/input-content.js";
+
+export type { LLMMessage, LLMRole, MessageContent } from "./core/messages.js";
+export { extractText, LLMMessageBuilder, normalizeContent } from "./core/messages.js";
+
+// Vision namespace for one-shot image analysis
+export type { VisionAnalyzeOptions, VisionAnalyzeResult } from "./core/namespaces/vision.js";
 // Model catalog
 export type {
   CostEstimate,
