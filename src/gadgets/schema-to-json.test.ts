@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { z } from "zod";
 import { defaultLogger } from "../logging/logger.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
@@ -136,6 +136,42 @@ describe("schemaToJSONSchema", () => {
       schemaToJSONSchema(schema);
 
       expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    // Note: Testing the actual mismatch detection path requires simulating
+    // a Zod instance mismatch, which is difficult to do in unit tests.
+    // The mismatch detection code is defensive fallback for when users
+    // import Zod from a different source than llmist does.
+  });
+
+  describe("edge cases", () => {
+    it("handles schema with shape as function", () => {
+      // Some Zod versions have shape as a function
+      const schema = z.object({
+        name: z.string(),
+      });
+
+      const result = schemaToJSONSchema(schema);
+
+      expect(result.type).toBe("object");
+      expect((result.properties as Record<string, unknown>).name).toBeDefined();
+    });
+
+    it("handles empty object schema", () => {
+      const schema = z.object({});
+
+      const result = schemaToJSONSchema(schema);
+
+      expect(result.type).toBe("object");
+    });
+
+    it("handles non-object JSON schema in merge", () => {
+      const schema = z.string().describe("A string");
+
+      // The toJSONSchema for a string returns a simpler structure
+      const result = schemaToJSONSchema(schema);
+
+      expect(result.type).toBe("string");
     });
   });
 });

@@ -5,23 +5,68 @@
 [![npm version](https://img.shields.io/npm/v/llmist.svg)](https://www.npmjs.com/package/llmist)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-> **Universal TypeScript LLM client with own function calling grammar, streaming-first tool execution and simple, extensible agent framework**
+> **Tools execute while the LLM streams. Any model. Clean API.**
 
 > **⚠️ EARLY WORK IN PROGRESS** - This library is under active development. APIs may change without notice. Use in production at your own risk.
 
-llmist is an asynchonous, streaming-first, provider-agnostic LLM client that makes it easy to build AI agents with **any model**—no structured outputs or native tool calling required. Switch between OpenAI, Anthropic, and Gemini without changing your code, plug into any part of the Agent workflow, have tools (Gadgets) triggered while still streaming. 
+Most LLM libraries buffer the entire response before parsing tool calls. **llmist parses incrementally.**
+
+Your gadgets (tools) fire the instant they're complete in the stream—giving your users immediate feedback. llmist implements its own function calling mechanism via a simple text-based block format. No JSON mode required. No native tool support needed. Works with OpenAI, Anthropic, and Gemini out of the box—extensible to any provider.
+
+A fluent, async-first API lets you plug into any part of the agent loop. Fully typed. Composable. Your code stays clean. 
 
 ---
 
 ## 🎯 Why llmist?
 
-- **🌍 Universal** - Works with [any LLM provider](./docs/PROVIDERS.md) (OpenAI, Anthropic, Gemini, [custom](./docs/CUSTOM_MODELS.md)) and easy to integrate more
-- **📝 No Structured Outputs** - Simple [block format](./docs/BLOCK_FORMAT.md) with streaming oriented tool calling
-- **🪝 Powerful Hooks** - Monitor, customize, and control [every step of execution](./docs/HOOKS.md)
-- **🎨 Fluent API** - [Builder pattern](./docs/CONFIGURATION.md) with model shortcuts and presets
-- **🧪 Testing-Friendly** - Built-in [mocking system](./docs/TESTING.md) for zero-cost testing
-- **⌨️ Convenient CLI** - [Capable CLI](./docs/CLI.md) showcasing how to build on top of llmist
-- **🏦 Cost-aware** - [Cost APIs per model](./docs/MODEL_CATALOG.md) + prompt-caching aware accounting
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### ⚡ Streaming Tool Execution
+Gadgets execute the moment their block is parsed—not after the response completes. Real-time UX without buffering.
+
+```typescript
+// Tool fires mid-stream
+for await (const event of agent.run()) {
+  if (event.type === 'gadget_result')
+    updateUI(event.result); // Immediate
+}
+```
+
+</td>
+<td width="33%" valign="top">
+
+### 🧩 Built-in Function Calling
+llmist implements its own tool calling via a simple block format. No `response_format: json`. No native tool support needed. Works with any model from supported providers.
+
+```
+!!!GADGET_START[Calculator]
+!!!ARG[operation] add
+!!!ARG[a] 15
+!!!ARG[b] 23
+!!!GADGET_END
+```
+
+*Markers are fully [configurable](./docs/BLOCK_FORMAT.md).*
+
+</td>
+<td width="33%" valign="top">
+
+### 🔌 Composable Agent API
+Fluent builder, async iterators, full TypeScript inference. Hook into any lifecycle point. Your code stays readable.
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(Calculator, Weather)
+  .withHooks(HookPresets.monitoring())
+  .askAndCollect('What is 15 + 23?');
+```
+
+</td>
+</tr>
+</table>
 
 ---
 
