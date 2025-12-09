@@ -269,6 +269,11 @@ function buildDockerRunArgs(
     }
   }
 
+  // Extra docker run arguments from config (e.g., port mappings, network mode)
+  if (ctx.config["docker-args"]) {
+    args.push(...ctx.config["docker-args"]);
+  }
+
   // Image name
   args.push(imageName);
 
