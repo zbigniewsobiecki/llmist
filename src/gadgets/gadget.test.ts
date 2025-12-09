@@ -583,24 +583,20 @@ describe("BaseGadget parameter sections", () => {
   });
 });
 
-describe("BaseGadget.throwIfAborted", () => {
-  class TestGadget extends Gadget({
-    description: "Test gadget for throwIfAborted",
-    schema: z.object({ value: z.number() }),
-  }) {
-    execute(): string {
-      return "done";
-    }
-
-    // Expose throwIfAborted for testing
-    public checkAbort(ctx?: ExecutionContext): void {
-      this.throwIfAborted(ctx);
-    }
+// Helper gadget for testing helper methods
+class TestGadget extends Gadget({
+  description: "Test gadget for helper method testing",
+  schema: z.object({ value: z.number() }),
+}) {
+  execute(): string {
+    return "done";
   }
+}
 
+describe("BaseGadget.throwIfAborted", () => {
   it("does not throw when ctx is undefined", () => {
     const gadget = new TestGadget();
-    expect(() => gadget.checkAbort(undefined)).not.toThrow();
+    expect(() => gadget.throwIfAborted(undefined)).not.toThrow();
   });
 
   it("does not throw when signal is not aborted", () => {
@@ -611,7 +607,7 @@ describe("BaseGadget.throwIfAborted", () => {
       signal: abortController.signal,
     };
 
-    expect(() => gadget.checkAbort(ctx)).not.toThrow();
+    expect(() => gadget.throwIfAborted(ctx)).not.toThrow();
   });
 
   it("throws AbortError when signal is aborted", () => {
@@ -624,7 +620,7 @@ describe("BaseGadget.throwIfAborted", () => {
       signal: abortController.signal,
     };
 
-    expect(() => gadget.checkAbort(ctx)).toThrow(AbortError);
+    expect(() => gadget.throwIfAborted(ctx)).toThrow(AbortError);
   });
 
   it("throws AbortError with default message", () => {
@@ -638,11 +634,190 @@ describe("BaseGadget.throwIfAborted", () => {
     };
 
     try {
-      gadget.checkAbort(ctx);
+      gadget.throwIfAborted(ctx);
       expect.fail("Should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(AbortError);
       expect((error as AbortError).message).toBe("Gadget execution was aborted");
     }
+  });
+});
+
+describe("BaseGadget.onAbort", () => {
+  it("registers cleanup that fires on abort", async () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    let cleanupCalled = false;
+    gadget.onAbort(ctx, () => {
+      cleanupCalled = true;
+    });
+
+    expect(cleanupCalled).toBe(false);
+    abortController.abort();
+
+    // Wait for async cleanup to run
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cleanupCalled).toBe(true);
+  });
+
+  it("runs cleanup immediately if already aborted", async () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    abortController.abort(); // Abort before registering
+
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    let cleanupCalled = false;
+    gadget.onAbort(ctx, () => {
+      cleanupCalled = true;
+    });
+
+    // Wait for async cleanup to run
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cleanupCalled).toBe(true);
+  });
+
+  it("handles undefined ctx gracefully", () => {
+    const gadget = new TestGadget();
+
+    // Should not throw
+    expect(() => gadget.onAbort(undefined, () => {})).not.toThrow();
+  });
+
+  it("swallows cleanup errors", async () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    gadget.onAbort(ctx, () => {
+      throw new Error("Cleanup failed!");
+    });
+
+    // Should not throw
+    abortController.abort();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it("handles async cleanup functions", async () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    let cleanupCalled = false;
+    gadget.onAbort(ctx, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      cleanupCalled = true;
+    });
+
+    abortController.abort();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(cleanupCalled).toBe(true);
+  });
+
+  it("allows multiple cleanup handlers", async () => {
+    const gadget = new TestGadget();
+    const abortController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: abortController.signal,
+    };
+
+    const cleanupOrder: number[] = [];
+    gadget.onAbort(ctx, () => cleanupOrder.push(1));
+    gadget.onAbort(ctx, () => cleanupOrder.push(2));
+    gadget.onAbort(ctx, () => cleanupOrder.push(3));
+
+    abortController.abort();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cleanupOrder).toEqual([1, 2, 3]);
+  });
+});
+
+describe("BaseGadget.createLinkedAbortController", () => {
+  it("propagates abort from parent signal", () => {
+    const gadget = new TestGadget();
+    const parentController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: parentController.signal,
+    };
+
+    const childController = gadget.createLinkedAbortController(ctx);
+
+    expect(childController.signal.aborted).toBe(false);
+    parentController.abort();
+    expect(childController.signal.aborted).toBe(true);
+  });
+
+  it("propagates abort reason from parent", () => {
+    const gadget = new TestGadget();
+    const parentController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: parentController.signal,
+    };
+
+    const childController = gadget.createLinkedAbortController(ctx);
+
+    parentController.abort("Timeout exceeded");
+    expect(childController.signal.reason).toBe("Timeout exceeded");
+  });
+
+  it("aborts immediately if parent already aborted", () => {
+    const gadget = new TestGadget();
+    const parentController = new AbortController();
+    parentController.abort("Already cancelled");
+
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: parentController.signal,
+    };
+
+    const childController = gadget.createLinkedAbortController(ctx);
+
+    expect(childController.signal.aborted).toBe(true);
+    expect(childController.signal.reason).toBe("Already cancelled");
+  });
+
+  it("returns working controller when ctx is undefined", () => {
+    const gadget = new TestGadget();
+    const childController = gadget.createLinkedAbortController(undefined);
+
+    expect(childController.signal.aborted).toBe(false);
+
+    // Should be able to abort independently
+    childController.abort("manual");
+    expect(childController.signal.aborted).toBe(true);
+  });
+
+  it("allows independent abort of child controller", () => {
+    const gadget = new TestGadget();
+    const parentController = new AbortController();
+    const ctx: ExecutionContext = {
+      reportCost: () => {},
+      signal: parentController.signal,
+    };
+
+    const childController = gadget.createLinkedAbortController(ctx);
+
+    // Abort child without aborting parent
+    childController.abort("child abort");
+    expect(childController.signal.aborted).toBe(true);
+    expect(parentController.signal.aborted).toBe(false);
   });
 });
