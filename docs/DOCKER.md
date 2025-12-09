@@ -258,6 +258,10 @@ docker-args = [
 > **Note:** Arguments are passed directly to `docker run`. Refer to
 > [Docker run reference](https://docs.docker.com/reference/cli/docker/container/run/) for all options.
 
+### Security Note
+
+The `docker-args` option is only read from your global `~/.llmist/cli.toml` config file. llmist does not support project-level configuration files, which prevents malicious repositories from injecting dangerous Docker arguments like `--privileged` or `-v /:/host`.
+
 ## Container Detection
 
 llmist automatically detects when it's already running inside a Docker container to prevent infinite nesting. Detection methods:
