@@ -24,3 +24,10 @@ comment:
   layout: "reach,diff,flags,tree,footer"
   behavior: default
   require_changes: false
+
+# Exclude test infrastructure and e2e setup files from coverage
+# These are not part of the public library API
+ignore:
+  - "src/e2e/**"
+  - "src/testing/cli-helpers.ts"
+  - "src/testing/conversation-fixtures.ts"

@@ -1,7 +1,7 @@
 {
   "name": "llmist",
   "version": "2.2.0",
-  "description": "Universal TypeScript LLM client with streaming-first agent framework. Works with any model - no structured outputs or native tool calling required. Implements its own flexible grammar for function calling.",
+  "description": "TypeScript LLM client with streaming tool execution. Tools fire mid-stream. Built-in function calling works with any model—no structured outputs or native tool support required.",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -75,9 +75,16 @@
     "universal-client",
     "multi-provider",
     "hooks",
-    "gadgets"
+    "gadgets",
+    "chatbot",
+    "chatgpt",
+    "agentic",
+    "language-model",
+    "generative-ai",
+    "bun",
+    "nodejs"
   ],
-  "author": "",
+  "author": "Zbigniew Sobiecki <zbigniew@sobiecki.name>",
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.69.0",
