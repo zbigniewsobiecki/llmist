@@ -45,7 +45,7 @@ export {
   builtinContextProviders,
   DefaultContextProvider,
   EditFileContextProvider,
-  RunCommandContextProvider,
+  formatGadgetSummary,
   WriteFileContextProvider,
 } from "./context-providers.js";
 

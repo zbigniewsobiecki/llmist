@@ -120,7 +120,7 @@ dockerfile = """
 FROM oven/bun:1-debian
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ripgrep git curl ca-certificates \
+    ed ripgrep git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install ast-grep

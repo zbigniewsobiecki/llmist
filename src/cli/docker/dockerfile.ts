@@ -7,6 +7,7 @@
  *
  * Both include:
  * - Bun runtime
+ * - ed (line editor for EditFile gadget)
  * - ripgrep (fast search tool)
  * - ast-grep (code search/refactoring)
  * - git (version control)
@@ -30,6 +31,8 @@ FROM oven/bun:1-debian
 
 # Install essential tools
 RUN apt-get update && apt-get install -y --no-install-recommends \\
+    # ed for EditFile gadget (line-oriented editor)
+    ed \\
     # ripgrep for fast file searching
     ripgrep \\
     # git for version control operations
@@ -71,6 +74,7 @@ FROM oven/bun:1-debian
 
 # Install essential tools (same as production)
 RUN apt-get update && apt-get install -y --no-install-recommends \\
+    ed \\
     ripgrep \\
     git \\
     curl \\
