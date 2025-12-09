@@ -5,6 +5,23 @@ import type { ApprovalContext, ApprovalContextProvider } from "./types.js";
 import { formatNewFileDiff } from "./diff-renderer.js";
 
 /**
+ * Formats a universal gadget summary: GadgetName(param1=value1, param2=value2)
+ * Used by all context providers for consistent approval prompts.
+ * Shows full parameter values so users know exactly what they're approving.
+ */
+export function formatGadgetSummary(gadgetName: string, params: Record<string, unknown>): string {
+  const paramEntries = Object.entries(params);
+
+  if (paramEntries.length === 0) {
+    return `${gadgetName}()`;
+  }
+
+  const paramStr = paramEntries.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ");
+
+  return `${gadgetName}(${paramStr})`;
+}
+
+/**
  * Context provider for WriteFile gadget.
  * Generates a unified diff when modifying existing files,
  * or shows "new file" content for file creation.
@@ -19,7 +36,7 @@ export class WriteFileContextProvider implements ApprovalContextProvider {
 
     if (!existsSync(resolvedPath)) {
       return {
-        summary: `Create new file: ${filePath}`,
+        summary: formatGadgetSummary(this.gadgetName, params),
         details: formatNewFileDiff(filePath, newContent),
       };
     }
@@ -28,7 +45,7 @@ export class WriteFileContextProvider implements ApprovalContextProvider {
     const diff = createPatch(filePath, oldContent, newContent, "original", "modified");
 
     return {
-      summary: `Modify: ${filePath}`,
+      summary: formatGadgetSummary(this.gadgetName, params),
       details: diff,
     };
   }
@@ -52,7 +69,7 @@ export class EditFileContextProvider implements ApprovalContextProvider {
 
       if (!existsSync(resolvedPath)) {
         return {
-          summary: `Create new file: ${filePath}`,
+          summary: formatGadgetSummary(this.gadgetName, params),
           details: formatNewFileDiff(filePath, newContent),
         };
       }
@@ -61,7 +78,7 @@ export class EditFileContextProvider implements ApprovalContextProvider {
       const diff = createPatch(filePath, oldContent, newContent, "original", "modified");
 
       return {
-        summary: `Modify: ${filePath}`,
+        summary: formatGadgetSummary(this.gadgetName, params),
         details: diff,
       };
     }
@@ -70,31 +87,14 @@ export class EditFileContextProvider implements ApprovalContextProvider {
     if ("commands" in params) {
       const commands = String(params.commands);
       return {
-        summary: `Edit: ${filePath}`,
+        summary: formatGadgetSummary(this.gadgetName, params),
         details: `Commands:\n${commands}`,
       };
     }
 
     // Fallback
     return {
-      summary: `Edit: ${filePath}`,
-    };
-  }
-}
-
-/**
- * Context provider for RunCommand gadget.
- * Shows the command that will be executed.
- */
-export class RunCommandContextProvider implements ApprovalContextProvider {
-  readonly gadgetName = "RunCommand";
-
-  async getContext(params: Record<string, unknown>): Promise<ApprovalContext> {
-    const command = String(params.command ?? "");
-    const cwd = params.cwd ? ` (in ${params.cwd})` : "";
-
-    return {
-      summary: `Execute: ${command}${cwd}`,
+      summary: formatGadgetSummary(this.gadgetName, params),
     };
   }
 }
@@ -107,34 +107,18 @@ export class DefaultContextProvider implements ApprovalContextProvider {
   constructor(public readonly gadgetName: string) {}
 
   async getContext(params: Record<string, unknown>): Promise<ApprovalContext> {
-    const paramEntries = Object.entries(params);
-
-    if (paramEntries.length === 0) {
-      return {
-        summary: `${this.gadgetName}()`,
-      };
-    }
-
-    // Truncate long parameter values
-    const formatValue = (value: unknown): string => {
-      const MAX_LEN = 50;
-      const str = JSON.stringify(value);
-      return str.length > MAX_LEN ? `${str.slice(0, MAX_LEN - 3)}...` : str;
-    };
-
-    const paramStr = paramEntries.map(([k, v]) => `${k}=${formatValue(v)}`).join(", ");
-
     return {
-      summary: `${this.gadgetName}(${paramStr})`,
+      summary: formatGadgetSummary(this.gadgetName, params),
     };
   }
 }
 
 /**
  * Built-in context providers for common gadgets.
+ * These provide custom details (diffs) while using universal summary format.
  */
 export const builtinContextProviders: ApprovalContextProvider[] = [
   new WriteFileContextProvider(),
   new EditFileContextProvider(),
-  new RunCommandContextProvider(),
+  // Note: RunCommand uses DefaultContextProvider - no custom details needed
 ];
