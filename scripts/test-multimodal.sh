@@ -90,9 +90,9 @@ run_test "image" "dall-e-3" \
 
 # DALL-E 2 - The classic (if available)
 run_test "image" "dall-e-2" \
-    "DALL-E 2: A family of rubber ducks enjoying a bubble bath" \
-    "$OUTPUT_DIR/dalle2-duck-family.png" \
-    "A cheerful family of yellow rubber ducks floating in a bubbly bathtub, pastel colors, cozy bathroom setting, cartoon illustration style"
+    "DALL-E 2: A cozy cottage in a flower garden" \
+    "$OUTPUT_DIR/dalle2-cottage.png" \
+    "A small cozy cottage with a thatched roof surrounded by colorful flowers, blue sky, green grass, peaceful countryside scene, watercolor style"
 
 # GPT Image 1 - The new hotness (if available)
 run_test "image" "gpt-image-1" \
@@ -109,25 +109,31 @@ echo -e "${PURPLE}║               🎨 GEMINI IMAGE GENERATION                
 echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Gemini Imagen 3 - Google's flagship
-run_test "image" "imagen-3.0-generate-002" \
-    "Imagen 3: A robot chef cooking a gourmet meal in a high-tech kitchen" \
-    "$OUTPUT_DIR/imagen3-robot-chef.png" \
+# Imagen 4 - Google's flagship standalone image generation
+run_test "image" "imagen-4.0-generate-001" \
+    "Imagen 4: A robot chef cooking a gourmet meal in a high-tech kitchen" \
+    "$OUTPUT_DIR/imagen4-robot-chef.png" \
     "A friendly robot chef with chrome body and LED eyes, carefully cooking a gourmet meal in a futuristic kitchen, steam rising from pots, holographic recipe display, warm lighting"
 
-# Gemini Imagen 3 - Different aspect ratio
-run_test "image" "imagen-3.0-generate-002" \
-    "Imagen 3 (16:9): Epic dragon flying over a medieval castle" \
-    "$OUTPUT_DIR/imagen3-dragon-castle.png" \
+# Imagen 4 Fast - Quicker generation, lower cost
+run_test "image" "imagen-4.0-fast-generate-001" \
+    "Imagen 4 Fast (16:9): Epic dragon flying over a medieval castle" \
+    "$OUTPUT_DIR/imagen4-fast-dragon-castle.png" \
     --size 16:9 \
     "A majestic fire-breathing dragon soaring over a medieval stone castle at sunset, mountains in the background, dramatic clouds, fantasy art style"
 
-# Gemini Imagen 3 - Portrait orientation
-run_test "image" "imagen-3.0-generate-002" \
-    "Imagen 3 (9:16): A magical forest portal" \
-    "$OUTPUT_DIR/imagen3-forest-portal.png" \
+# Imagen 4 Ultra - Highest quality
+run_test "image" "imagen-4.0-ultra-generate-001" \
+    "Imagen 4 Ultra (9:16): A magical forest portal" \
+    "$OUTPUT_DIR/imagen4-ultra-forest-portal.png" \
     --size 9:16 \
     "A mystical glowing portal hidden among ancient trees in an enchanted forest, fireflies and magical particles floating, moonlight streaming through branches"
+
+# Gemini 2.5 Flash Image - Native multimodal image generation
+run_test "image" "gemini-2.5-flash-image" \
+    "Gemini Flash Image: A steampunk library with flying books" \
+    "$OUTPUT_DIR/gemini-flash-steampunk-library.png" \
+    "A magnificent steampunk library with brass gears and copper pipes, books floating through the air, leather armchairs, warm amber lighting from gas lamps"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SPEECH GENERATION TESTS
