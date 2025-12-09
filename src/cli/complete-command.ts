@@ -7,7 +7,12 @@ import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
-import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
+import {
+  createSessionDir,
+  formatLlmRequest,
+  resolveLogDir,
+  writeLogFile,
+} from "./llm-logging.js";
 import {
   addCompleteOptions,
   type CompleteCommandOptions,
@@ -45,16 +50,18 @@ export async function executeComplete(
 
   const messages = builder.build();
 
-  // Resolve LLM debug log directories (if enabled)
-  const llmRequestsDir = resolveLogDir(options.logLlmRequests, "requests");
-  const llmResponsesDir = resolveLogDir(options.logLlmResponses, "responses");
-  const timestamp = Date.now();
+  // Resolve LLM debug log directory (if enabled)
+  const llmLogsBaseDir = resolveLogDir(options.logLlmRequests, "requests");
+  let llmSessionDir: string | undefined;
 
   // Log request before streaming
-  if (llmRequestsDir) {
-    const filename = `${timestamp}_complete.request.txt`;
-    const content = formatLlmRequest(messages);
-    await writeLogFile(llmRequestsDir, filename, content);
+  if (llmLogsBaseDir) {
+    llmSessionDir = await createSessionDir(llmLogsBaseDir);
+    if (llmSessionDir) {
+      const filename = "0001.request";
+      const content = formatLlmRequest(messages);
+      await writeLogFile(llmSessionDir, filename, content);
+    }
   }
 
   const stream = client.stream({
@@ -103,9 +110,9 @@ export async function executeComplete(
   printer.ensureNewline();
 
   // Log response after streaming
-  if (llmResponsesDir) {
-    const filename = `${timestamp}_complete.response.txt`;
-    await writeLogFile(llmResponsesDir, filename, accumulatedResponse);
+  if (llmSessionDir) {
+    const filename = "0001.response";
+    await writeLogFile(llmSessionDir, filename, accumulatedResponse);
   }
 
   // Only show summary if stderr is a TTY (not redirected) and not in quiet mode

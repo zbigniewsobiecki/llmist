@@ -94,16 +94,17 @@
  * LLM CALL LIFECYCLE:
  * 1. onLLMCallStart (observer)
  * 2. beforeLLMCall (controller) - can skip/modify
- * 3. [LLM API Call]
- * 4. For each stream chunk:
+ * 3. onLLMCallReady (observer) - final state before API call
+ * 4. [LLM API Call]
+ * 5. For each stream chunk:
  *    a. interceptRawChunk (interceptor)
  *    b. onStreamChunk (observer)
  *    c. Parse for gadgets
  *    d. If gadget found -> GADGET LIFECYCLE
  *    e. If text -> interceptTextChunk -> emit
- * 5. afterLLMCall (controller) - can append/modify
- * 6. interceptAssistantMessage (interceptor)
- * 7. onLLMCallComplete (observer)
+ * 6. afterLLMCall (controller) - can append/modify
+ * 7. interceptAssistantMessage (interceptor)
+ * 8. onLLMCallComplete (observer)
  *
  * GADGET LIFECYCLE:
  * 1. interceptGadgetParameters (interceptor)
@@ -133,6 +134,19 @@ import type { CompactionEvent, CompactionStats } from "./compaction/config.js";
  */
 export interface ObserveLLMCallContext {
   iteration: number;
+  options: Readonly<LLMGenerationOptions>;
+  logger: Logger<ILogObj>;
+}
+
+/**
+ * Context provided when an LLM call is ready to execute.
+ * Fires AFTER beforeLLMCall controller modifications, BEFORE the actual API call.
+ * Use this for logging the exact request being sent to the LLM.
+ */
+export interface ObserveLLMCallReadyContext {
+  iteration: number;
+  maxIterations: number;
+  /** Final options after any controller modifications (e.g., trailing messages) */
   options: Readonly<LLMGenerationOptions>;
   logger: Logger<ILogObj>;
 }
@@ -223,8 +237,11 @@ export interface ObserveChunkContext {
  * - Run in parallel (no ordering guarantees)
  */
 export interface Observers {
-  /** Called when an LLM call starts */
+  /** Called when an LLM call starts (before controller modifications) */
   onLLMCallStart?: (context: ObserveLLMCallContext) => void | Promise<void>;
+
+  /** Called when an LLM call is ready (after controller modifications, before API call) */
+  onLLMCallReady?: (context: ObserveLLMCallReadyContext) => void | Promise<void>;
 
   /** Called when an LLM call completes successfully */
   onLLMCallComplete?: (context: ObserveLLMCompleteContext) => void | Promise<void>;

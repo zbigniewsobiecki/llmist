@@ -297,8 +297,7 @@ max-iterations = 3
 | `temperature` | number | Sampling temperature (0-2) |
 | `max-tokens` | integer | Maximum output tokens |
 | `inherits` | string or string[] | Section(s) to inherit settings from |
-| `log-llm-requests` | string or boolean | Save raw LLM requests. `true` = default dir, string = custom path |
-| `log-llm-responses` | string or boolean | Save raw LLM responses. `true` = default dir, string = custom path |
+| `log-llm-requests` | string or boolean | Save LLM requests/responses to session directories. `true` = default dir, string = custom path |
 
 #### Options for `[agent]` section
 
@@ -316,8 +315,7 @@ max-iterations = 3
 | `gadget-end-prefix` | string | Custom prefix for gadget end marker (default: `!!!GADGET_END`) |
 | `gadget-arg-prefix` | string | Custom prefix for argument markers (default: `!!!ARG:`) |
 | `inherits` | string or string[] | Section(s) to inherit settings from |
-| `log-llm-requests` | string or boolean | Save raw LLM requests. `true` = default dir, string = custom path |
-| `log-llm-responses` | string or boolean | Save raw LLM responses. `true` = default dir, string = custom path |
+| `log-llm-requests` | string or boolean | Save LLM requests/responses to session directories. `true` = default dir, string = custom path |
 | `docker` | boolean | Enable Docker sandboxing for this command |
 | `docker-cwd-permission` | string | Override CWD mount permission: `"ro"` or `"rw"` |
 
@@ -412,8 +410,7 @@ llmist complete "Explain TypeScript generics" --model haiku
 | `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
 | `--max-tokens <n>` | | Max output tokens | Provider default |
 | `--quiet` | `-q` | Suppress all output except content | false |
-| `--log-llm-requests [dir]` | | Save raw LLM requests | disabled |
-| `--log-llm-responses [dir]` | | Save raw LLM responses | disabled |
+| `--log-llm-requests [dir]` | | Save LLM requests/responses to session directories | disabled |
 
 **Examples:**
 
@@ -456,8 +453,7 @@ llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 | `--no-builtins` | | Disable all built-in gadgets | false |
 | `--no-builtin-interaction` | | Disable interactive gadgets (AskUser) | false |
 | `--quiet` | `-q` | Suppress output except TellUser messages | false |
-| `--log-llm-requests [dir]` | | Save raw LLM requests | disabled |
-| `--log-llm-responses [dir]` | | Save raw LLM responses | disabled |
+| `--log-llm-requests [dir]` | | Save LLM requests/responses to session directories | disabled |
 | `--docker` | | Run in Docker sandbox container | config |
 | `--docker-ro` | | Run in Docker with read-only CWD | false |
 | `--docker-dev` | | Run in Docker dev mode (mount source) | false |
@@ -686,14 +682,14 @@ Note: CLI options (`--log-level`, `--log-file`) take priority over environment v
 
 ## LLM Debugging
 
-When debugging LLM prompting issues, you can save raw requests and responses as plain text files:
+When debugging LLM prompting issues, you can save raw requests and responses as plain text files. Each session creates a timestamped directory containing sequentially numbered request/response pairs:
 
 ```bash
-# Save both requests and responses to default directory (~/.llmist/logs/)
-llmist agent "Task" --log-llm-requests --log-llm-responses
+# Enable logging (saves both requests and responses)
+llmist agent "Task" --log-llm-requests
 
-# Save to custom directories
-llmist agent "Task" --log-llm-requests /tmp/req --log-llm-responses /tmp/res
+# Save to custom directory
+llmist agent "Task" --log-llm-requests /tmp/logs
 
 # Works with complete command too
 llmist complete "Hello" --log-llm-requests
@@ -704,16 +700,29 @@ Or configure in `~/.llmist/cli.toml`:
 ```toml
 [agent]
 log-llm-requests = true                    # Use default: ~/.llmist/logs/requests/
-log-llm-responses = "/custom/path"         # Use custom directory
 
 [complete]
-log-llm-requests = true
-log-llm-responses = true
+log-llm-requests = "/custom/path"          # Use custom directory
 ```
 
-**Output format:**
+**Directory structure:**
 
-Request files (`{timestamp}_call_{n}.request.txt`):
+```
+~/.llmist/logs/requests/
+├── 2025-12-09_14-30-45/           # Session directory (timestamped)
+│   ├── 0001.request               # First LLM call request
+│   ├── 0001.response              # First LLM call response
+│   ├── 0002.request               # Second LLM call request
+│   ├── 0002.response              # Second LLM call response
+│   └── ...
+└── 2025-12-09_15-12-03/           # Another session
+    ├── 0001.request
+    └── 0001.response
+```
+
+**File format:**
+
+Request files (`0001.request`):
 ```
 === SYSTEM ===
 You are a helpful assistant...
@@ -722,7 +731,7 @@ You are a helpful assistant...
 What is TypeScript?
 ```
 
-Response files (`{timestamp}_call_{n}.response.txt`):
+Response files (`0001.response`):
 ```
 TypeScript is a statically typed superset of JavaScript...
 ```

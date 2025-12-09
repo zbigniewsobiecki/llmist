@@ -35,6 +35,7 @@ export type {
   ApprovalContextProvider,
   ApprovalMode,
   ApprovalResult,
+  KeyboardCoordinator,
 } from "./types.js";
 
 // Manager
@@ -45,7 +46,7 @@ export {
   builtinContextProviders,
   DefaultContextProvider,
   EditFileContextProvider,
-  RunCommandContextProvider,
+  formatGadgetSummary,
   WriteFileContextProvider,
 } from "./context-providers.js";
 

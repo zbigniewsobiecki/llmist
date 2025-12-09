@@ -5,8 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {
   DefaultContextProvider,
   EditFileContextProvider,
-  RunCommandContextProvider,
   WriteFileContextProvider,
+  formatGadgetSummary,
 } from "./context-providers.js";
 
 // Create a temporary directory for file-based tests
@@ -40,7 +40,10 @@ describe("WriteFileContextProvider", () => {
       content,
     });
 
-    expect(context.summary).toBe(`Create new file: ${nonExistentPath}`);
+    // Universal format: GadgetName(params...)
+    expect(context.summary).toContain("WriteFile(");
+    expect(context.summary).toContain("filePath=");
+    expect(context.summary).toContain("content=");
     expect(context.details).toContain("+++ ");
     expect(context.details).toContain("(new file)");
     expect(context.details).toContain("+ Hello, World!");
@@ -55,7 +58,8 @@ describe("WriteFileContextProvider", () => {
       content: "Modified content\n",
     });
 
-    expect(context.summary).toBe(`Modify: ${existingPath}`);
+    expect(context.summary).toContain("WriteFile(");
+    expect(context.summary).toContain("filePath=");
     expect(context.details).toContain("---");
     expect(context.details).toContain("+++");
     expect(context.details).toContain("-Original content");
@@ -70,7 +74,8 @@ describe("WriteFileContextProvider", () => {
       content: "Content",
     });
 
-    expect(context.summary).toBe(`Create new file: ${nonExistentPath}`);
+    expect(context.summary).toContain("WriteFile(");
+    expect(context.summary).toContain("path=");
   });
 });
 
@@ -90,7 +95,8 @@ describe("EditFileContextProvider", () => {
       content: "Line 1\nLine 2\nLine 3\n",
     });
 
-    expect(context.summary).toBe(`Modify: ${existingPath}`);
+    expect(context.summary).toContain("EditFile(");
+    expect(context.summary).toContain("filePath=");
     expect(context.details).toContain("+Line 3");
   });
 
@@ -102,7 +108,7 @@ describe("EditFileContextProvider", () => {
       content: "New content",
     });
 
-    expect(context.summary).toBe(`Create new file: ${newPath}`);
+    expect(context.summary).toContain("EditFile(");
     expect(context.details).toContain("(new file)");
   });
 
@@ -114,7 +120,8 @@ describe("EditFileContextProvider", () => {
       commands: "1d\n2a\nNew line\n.",
     });
 
-    expect(context.summary).toBe(`Edit: ${filePath}`);
+    expect(context.summary).toContain("EditFile(");
+    expect(context.summary).toContain("commands=");
     expect(context.details).toContain("Commands:");
     expect(context.details).toContain("1d");
     expect(context.details).toContain("2a");
@@ -127,40 +134,60 @@ describe("EditFileContextProvider", () => {
       filePath,
     });
 
-    expect(context.summary).toBe(`Edit: ${filePath}`);
+    expect(context.summary).toContain("EditFile(");
     expect(context.details).toBeUndefined();
   });
 });
 
-describe("RunCommandContextProvider", () => {
-  const provider = new RunCommandContextProvider();
-
-  it('has gadgetName "RunCommand"', () => {
-    expect(provider.gadgetName).toBe("RunCommand");
+describe("formatGadgetSummary", () => {
+  it("formats gadget with no params", () => {
+    expect(formatGadgetSummary("TestGadget", {})).toBe("TestGadget()");
   });
 
-  it("returns command in summary", async () => {
+  it("formats gadget with simple params", () => {
+    expect(formatGadgetSummary("TestGadget", { foo: "bar", count: 42 })).toBe(
+      'TestGadget(foo="bar", count=42)',
+    );
+  });
+
+  it("formats gadget with array params", () => {
+    expect(formatGadgetSummary("RunCommand", { argv: ["ls", "-la"], timeout: 30000 })).toBe(
+      'RunCommand(argv=["ls","-la"], timeout=30000)',
+    );
+  });
+
+  it("shows full values without truncation", () => {
+    const longValue = "a".repeat(100);
+    const summary = formatGadgetSummary("TestGadget", { data: longValue });
+    // Full value should be shown - no truncation
+    expect(summary).toContain(`"${"a".repeat(100)}"`);
+    expect(summary).not.toContain("...");
+  });
+});
+
+describe("RunCommand via DefaultContextProvider", () => {
+  // RunCommand no longer has a custom provider - it uses DefaultContextProvider
+  const provider = new DefaultContextProvider("RunCommand");
+
+  it("formats RunCommand with argv array", async () => {
     const context = await provider.getContext({
-      command: "ls -la",
+      argv: ["npx", "create-next-app@latest", "my-app"],
+      timeout: 120000,
     });
 
-    expect(context.summary).toBe("Execute: ls -la");
+    expect(context.summary).toContain("RunCommand(");
+    expect(context.summary).toContain("argv=");
+    expect(context.summary).toContain("timeout=120000");
     expect(context.details).toBeUndefined();
   });
 
   it("includes cwd in summary when provided", async () => {
     const context = await provider.getContext({
-      command: "npm install",
+      argv: ["npm", "install"],
       cwd: "/path/to/project",
     });
 
-    expect(context.summary).toBe("Execute: npm install (in /path/to/project)");
-  });
-
-  it("handles empty command", async () => {
-    const context = await provider.getContext({});
-
-    expect(context.summary).toBe("Execute: ");
+    expect(context.summary).toContain('cwd="/path/to/project"');
   });
 });
 
@@ -170,57 +197,13 @@ describe("DefaultContextProvider", () => {
     expect(provider.gadgetName).toBe("CustomGadget");
   });
 
-  it("returns gadget name with empty parens when no params", async () => {
+  it("delegates to formatGadgetSummary and returns no details", async () => {
     const provider = new DefaultContextProvider("TestGadget");
 
-    const context = await provider.getContext({});
+    const context = await provider.getContext({ foo: "bar" });
 
-    expect(context.summary).toBe("TestGadget()");
+    // Verify it uses the shared formatter
+    expect(context.summary).toBe(formatGadgetSummary("TestGadget", { foo: "bar" }));
     expect(context.details).toBeUndefined();
-  });
-
-  it("returns formatted params in summary", async () => {
-    const provider = new DefaultContextProvider("TestGadget");
-
-    const context = await provider.getContext({
-      foo: "bar",
-      count: 42,
-    });
-
-    expect(context.summary).toBe('TestGadget(foo="bar", count=42)');
-  });
-
-  it("truncates long parameter values at 50 characters", async () => {
-    const provider = new DefaultContextProvider("TestGadget");
-    const longValue = "a".repeat(100);
-
-    const context = await provider.getContext({
-      data: longValue,
-    });
-
-    // Should be truncated to 47 chars + "..."
-    expect(context.summary).toContain("...");
-    expect(context.summary.length).toBeLessThan(100);
-  });
-
-  it("handles nested objects in params", async () => {
-    const provider = new DefaultContextProvider("TestGadget");
-
-    const context = await provider.getContext({
-      nested: { a: 1, b: 2 },
-    });
-
-    expect(context.summary).toContain("nested=");
-    expect(context.summary).toContain('"a"');
-  });
-
-  it("handles arrays in params", async () => {
-    const provider = new DefaultContextProvider("TestGadget");
-
-    const context = await provider.getContext({
-      items: [1, 2, 3],
-    });
-
-    expect(context.summary).toBe("TestGadget(items=[1,2,3])");
   });
 });

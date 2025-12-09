@@ -185,5 +185,13 @@ export function validateDockerConfig(raw: unknown, section: string): DockerConfi
     result["dev-source"] = validateString(rawObj["dev-source"], "dev-source", section);
   }
 
+  // Note: docker-args is intentionally only configurable in the global ~/.llmist/cli.toml.
+  // Since llmist only loads config from the user's home directory (not project-level configs),
+  // this is inherently safe from supply-chain attacks where a malicious project could inject
+  // dangerous Docker arguments like "--privileged" or "-v /:/host".
+  if ("docker-args" in rawObj) {
+    result["docker-args"] = validateStringArray(rawObj["docker-args"], "docker-args", section);
+  }
+
   return result;
 }

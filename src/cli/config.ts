@@ -75,7 +75,6 @@ export interface CompleteConfig extends BaseCommandConfig {
   "log-file"?: string;
   "log-reset"?: boolean;
   "log-llm-requests"?: string | boolean;
-  "log-llm-responses"?: string | boolean;
 }
 
 /**
@@ -98,7 +97,6 @@ export interface AgentConfig extends BaseCommandConfig {
   "log-file"?: string;
   "log-reset"?: boolean;
   "log-llm-requests"?: string | boolean;
-  "log-llm-responses"?: string | boolean;
 }
 
 /**
@@ -155,7 +153,6 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "log-file",
   "log-reset",
   "log-llm-requests",
-  "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
   "docker", // Enable Docker sandboxing (only effective for agent type)
   "docker-cwd-permission", // Override CWD mount permission for this profile
@@ -183,7 +180,6 @@ const AGENT_CONFIG_KEYS = new Set([
   "log-file",
   "log-reset",
   "log-llm-requests",
-  "log-llm-responses",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
   "docker", // Enable Docker sandboxing for this profile
   "docker-cwd-permission", // Override CWD mount permission for this profile
@@ -445,13 +441,6 @@ function validateCompleteConfig(raw: unknown, section: string): CompleteConfig {
       section,
     );
   }
-  if ("log-llm-responses" in rawObj) {
-    result["log-llm-responses"] = validateStringOrBoolean(
-      rawObj["log-llm-responses"],
-      "log-llm-responses",
-      section,
-    );
-  }
 
   return result;
 }
@@ -539,13 +528,6 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
     result["log-llm-requests"] = validateStringOrBoolean(
       rawObj["log-llm-requests"],
       "log-llm-requests",
-      section,
-    );
-  }
-  if ("log-llm-responses" in rawObj) {
-    result["log-llm-responses"] = validateStringOrBoolean(
-      rawObj["log-llm-responses"],
-      "log-llm-responses",
       section,
     );
   }

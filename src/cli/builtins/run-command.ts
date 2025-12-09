@@ -56,6 +56,18 @@ export const runCommand = createGadget({
       output: "status=0\n\n(no output)",
       comment: "Complex arguments with special characters - no escaping needed",
     },
+    {
+      params: {
+        argv: [
+          "gh", "pr", "review", "123", "--approve",
+          "--body",
+          "## Review Summary\n\n**Looks good!**\n\n- Clean code\n- Tests pass"
+        ],
+        timeout: 30000
+      },
+      output: "status=0\n\nApproving pull request #123",
+      comment: "Multiline body: --body flag and content must be SEPARATE array elements",
+    },
   ],
   execute: async ({ argv, cwd, timeout }) => {
     const workingDir = cwd ?? process.cwd();
@@ -63,6 +75,8 @@ export const runCommand = createGadget({
     if (argv.length === 0) {
       return "status=1\n\nerror: argv array cannot be empty";
     }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     try {
       // Spawn process directly without shell - arguments passed as-is
@@ -72,9 +86,9 @@ export const runCommand = createGadget({
         stderr: "pipe",
       });
 
-      // Create a timeout promise
+      // Create a timeout promise with cleanup
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           proc.kill();
           reject(new Error(`Command timed out after ${timeout}ms`));
         }, timeout);
@@ -82,6 +96,11 @@ export const runCommand = createGadget({
 
       // Wait for process to complete or timeout
       const exitCode = await Promise.race([proc.exited, timeoutPromise]);
+
+      // Clear timeout on normal exit to prevent dangling timer
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
 
       // Collect output
       const stdout = await new Response(proc.stdout).text();
@@ -92,6 +111,10 @@ export const runCommand = createGadget({
 
       return `status=${exitCode}\n\n${output || "(no output)"}`;
     } catch (error) {
+      // Clear timeout on error path too
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       const message = error instanceof Error ? error.message : String(error);
       return `status=1\n\nerror: ${message}`;
     }

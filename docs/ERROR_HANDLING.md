@@ -375,9 +375,9 @@ class DataProcessor extends Gadget({
 }
 ```
 
-### Register Cleanup Handlers
+### Register Cleanup Handlers with `onAbort()`
 
-For gadgets that open resources (browsers, connections, etc.), register cleanup on the abort signal:
+For gadgets that open resources (browsers, connections, etc.), use the `onAbort()` helper to register cleanup handlers:
 
 ```typescript
 class BrowserGadget extends Gadget({
@@ -386,14 +386,12 @@ class BrowserGadget extends Gadget({
 }) {
   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
     const browser = await chromium.launch();
+    this.onAbort(ctx, () => browser.close());  // One line!
 
-    // Register cleanup - fires immediately if already aborted
-    ctx.signal.addEventListener('abort', () => {
-      browser.close().catch(() => {});
-    }, { once: true });
+    const page = await browser.newPage();
+    this.onAbort(ctx, () => page.close());
 
     try {
-      const page = await browser.newPage();
       await page.goto(params.url);
       return await page.content();
     } finally {
@@ -403,9 +401,42 @@ class BrowserGadget extends Gadget({
 }
 ```
 
-### Pass Signal to fetch()
+**`onAbort()` features:**
+- Handles `undefined` context gracefully (no-op)
+- Runs cleanup immediately if already aborted
+- Swallows errors from cleanup functions
+- Supports both sync and async cleanup
 
-For HTTP requests, pass the signal directly to fetch for automatic cancellation:
+### Create Linked Abort Controllers
+
+Use `createLinkedAbortController()` to create child controllers that abort when the parent aborts:
+
+```typescript
+class MultiRequestGadget extends Gadget({
+  description: 'Makes multiple API calls',
+  schema: z.object({ urls: z.array(z.string()) }),
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const controller = this.createLinkedAbortController(ctx);
+
+    // All requests will abort if parent times out
+    const responses = await Promise.all(
+      params.urls.map(url => fetch(url, { signal: controller.signal }))
+    );
+
+    return responses.map(r => r.status).join(', ');
+  }
+}
+```
+
+**Benefits:**
+- Linked controller aborts when parent signal aborts
+- Can still abort independently if needed: `controller.abort('manual')`
+- Works safely when `ctx` is undefined
+
+### Pass Signal to fetch() (Alternative)
+
+For simple cases, pass the signal directly to fetch:
 
 ```typescript
 class ApiGadget extends Gadget({
@@ -415,7 +446,7 @@ class ApiGadget extends Gadget({
   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
     // fetch() will automatically abort when signal is triggered
     const response = await fetch(params.endpoint, {
-      signal: ctx.signal,
+      signal: ctx?.signal,
     });
     return await response.text();
   }

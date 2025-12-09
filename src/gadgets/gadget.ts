@@ -292,6 +292,108 @@ export abstract class BaseGadget {
   }
 
   /**
+   * Register a cleanup function to run when execution is aborted (timeout or cancellation).
+   * The cleanup function is called immediately if the signal is already aborted.
+   * Errors thrown by the cleanup function are silently ignored.
+   *
+   * Use this to clean up resources like browser instances, database connections,
+   * or child processes when the gadget is cancelled due to timeout.
+   *
+   * @param ctx - The execution context containing the abort signal
+   * @param cleanup - Function to run on abort (can be sync or async)
+   *
+   * @example
+   * ```typescript
+   * class BrowserGadget extends Gadget({
+   *   description: 'Fetches web page content',
+   *   schema: z.object({ url: z.string() }),
+   * }) {
+   *   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+   *     const browser = await chromium.launch();
+   *     this.onAbort(ctx, () => browser.close());
+   *
+   *     const page = await browser.newPage();
+   *     this.onAbort(ctx, () => page.close());
+   *
+   *     await page.goto(params.url);
+   *     const content = await page.content();
+   *
+   *     await browser.close();
+   *     return content;
+   *   }
+   * }
+   * ```
+   */
+  onAbort(ctx: ExecutionContext | undefined, cleanup: () => void | Promise<void>): void {
+    if (!ctx?.signal) return;
+
+    const safeCleanup = () => {
+      try {
+        const result = cleanup();
+        if (result && typeof result === "object" && "catch" in result) {
+          (result as Promise<void>).catch(() => {});
+        }
+      } catch {
+        // Swallow synchronous errors
+      }
+    };
+
+    if (ctx.signal.aborted) {
+      // Already aborted, run cleanup immediately
+      safeCleanup();
+      return;
+    }
+
+    ctx.signal.addEventListener("abort", safeCleanup, { once: true });
+  }
+
+  /**
+   * Create an AbortController linked to the execution context's signal.
+   * When the parent signal aborts, the returned controller also aborts with the same reason.
+   *
+   * Useful for passing abort signals to child operations like fetch() while still
+   * being able to abort them independently if needed.
+   *
+   * @param ctx - The execution context containing the parent abort signal
+   * @returns A new AbortController linked to the parent signal
+   *
+   * @example
+   * ```typescript
+   * class FetchGadget extends Gadget({
+   *   description: 'Fetches data from URL',
+   *   schema: z.object({ url: z.string() }),
+   * }) {
+   *   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+   *     const controller = this.createLinkedAbortController(ctx);
+   *
+   *     // fetch() will automatically abort when parent times out
+   *     const response = await fetch(params.url, { signal: controller.signal });
+   *     return response.text();
+   *   }
+   * }
+   * ```
+   */
+  createLinkedAbortController(ctx?: ExecutionContext): AbortController {
+    const controller = new AbortController();
+
+    if (ctx?.signal) {
+      if (ctx.signal.aborted) {
+        controller.abort(ctx.signal.reason);
+      } else {
+        ctx.signal.addEventListener(
+          "abort",
+          () => {
+            controller.abort(ctx.signal.reason);
+          },
+          { once: true },
+        );
+      }
+    }
+
+    return controller;
+  }
+
+  /**
    * Auto-generated instruction text for the LLM.
    * Combines name, description, and parameter schema into a formatted instruction.
    * @deprecated Use getInstruction() instead

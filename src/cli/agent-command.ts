@@ -13,7 +13,13 @@ import type { AgentConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { loadGadgets } from "./gadgets.js";
-import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
+import {
+  createSessionDir,
+  formatCallNumber,
+  formatLlmRequest,
+  resolveLogDir,
+  writeLogFile,
+} from "./llm-logging.js";
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
   createEscKeyListener,
@@ -234,6 +240,10 @@ export async function executeAgent(
       abortController.abort();
       progress.pause();
       env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
+    } else {
+      // Already cancelled - treat as quit request (like double Ctrl+C)
+      // This ensures the user can always exit even if the abort didn't fully propagate
+      handleQuit();
     }
   };
 
@@ -246,7 +256,7 @@ export async function executeAgent(
       // the executeAgent function is terminating and we don't need the listener.
       // This is called after readline closes to re-enable ESC key detection.
       if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
-        keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
+        keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel, handleCancel);
       }
     },
   };
@@ -277,9 +287,10 @@ export async function executeAgent(
     process.exit(130); // SIGINT convention: 128 + signal number (2)
   };
 
-  // Set up ESC key listener if in interactive TTY mode
+  // Set up ESC key and Ctrl+C listener if in interactive TTY mode
+  // Both ESC and Ctrl+C trigger handleCancel during streaming
   if (stdinIsInteractive && stdinStream.isTTY) {
-    keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
+    keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel, handleCancel);
   }
 
   // Set up SIGINT (Ctrl+C) listener - always active for graceful cancellation
@@ -313,14 +324,14 @@ export async function executeAgent(
     gadgetApprovals,
     defaultMode: "allowed",
   };
-  const approvalManager = new ApprovalManager(approvalConfig, env, progress);
+  const approvalManager = new ApprovalManager(approvalConfig, env, progress, keyboard);
 
   let usage: TokenUsage | undefined;
   let iterations = 0;
 
-  // Resolve LLM debug log directories (if enabled)
-  const llmRequestsDir = resolveLogDir(options.logLlmRequests, "requests");
-  const llmResponsesDir = resolveLogDir(options.logLlmResponses, "responses");
+  // Resolve LLM debug log directory (if enabled)
+  const llmLogsBaseDir = resolveLogDir(options.logLlmRequests, "requests");
+  let llmSessionDir: string | undefined;
   let llmCallCounter = 0;
 
   // Count tokens accurately using provider-specific methods
@@ -378,12 +389,20 @@ export async function executeAgent(
           progress.startCall(context.options.model, inputTokens);
           // Mark input tokens as accurate (not estimated)
           progress.setInputTokens(inputTokens, false);
+        },
 
-          // Write LLM request to debug log if enabled
-          if (llmRequestsDir) {
-            const filename = `${Date.now()}_call_${llmCallCounter}.request.txt`;
-            const content = formatLlmRequest(context.options.messages);
-            await writeLogFile(llmRequestsDir, filename, content);
+        // onLLMCallReady: Log the exact request being sent to the LLM
+        // This fires AFTER controller modifications (e.g., trailing messages)
+        onLLMCallReady: async (context) => {
+          if (llmLogsBaseDir) {
+            if (!llmSessionDir) {
+              llmSessionDir = await createSessionDir(llmLogsBaseDir);
+            }
+            if (llmSessionDir) {
+              const filename = `${formatCallNumber(llmCallCounter)}.request`;
+              const content = formatLlmRequest(context.options.messages);
+              await writeLogFile(llmSessionDir, filename, content);
+            }
           }
         },
         // onStreamChunk: Real-time updates as LLM generates tokens
@@ -475,9 +494,9 @@ export async function executeAgent(
           }
 
           // Write LLM response to debug log if enabled
-          if (llmResponsesDir) {
-            const filename = `${Date.now()}_call_${llmCallCounter}.response.txt`;
-            await writeLogFile(llmResponsesDir, filename, context.rawResponse);
+          if (llmSessionDir) {
+            const filename = `${formatCallNumber(llmCallCounter)}.response`;
+            await writeLogFile(llmSessionDir, filename, context.rawResponse);
           }
         },
       },
@@ -600,6 +619,16 @@ export async function executeAgent(
     resultMapping: (text) => `ℹ️  ${text}`,
   });
 
+  // Inject ephemeral trailing message to encourage parallel gadget invocations
+  // This message is appended to each LLM request but NOT persisted in history
+  builder.withTrailingMessage((ctx) =>
+    [
+      `[Iteration ${ctx.iteration + 1}/${ctx.maxIterations}]`,
+      "Think carefully: what gadget invocations can you make in parallel right now?",
+      "Maximize efficiency by batching independent operations in a single response.",
+    ].join(" "),
+  );
+
   // Build and start the agent
   const agent = builder.ask(prompt);
 
@@ -664,7 +693,13 @@ export async function executeAgent(
     // Always cleanup keyboard and signal listeners
     isStreaming = false;
     keyboard.cleanupEsc?.();
-    keyboard.cleanupSigint?.();
+
+    // Replace the complex SIGINT handler with a simple exit handler
+    // This ensures Ctrl+C always works even if something keeps the event loop alive
+    if (keyboard.cleanupSigint) {
+      keyboard.cleanupSigint();
+      process.once("SIGINT", () => process.exit(130)); // 130 = 128 + SIGINT (2)
+    }
   }
 
   // Flush any remaining buffered text with markdown rendering (includes partial on cancel)

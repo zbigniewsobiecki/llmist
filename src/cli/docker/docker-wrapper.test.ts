@@ -263,5 +263,29 @@ describe("docker-wrapper", () => {
       const ctx = createDockerContext({}, defaultOptions, [], "/work");
       expect(ctx.profileCwdPermission).toBeUndefined();
     });
+
+    it("should preserve docker-args in config", () => {
+      const config: DockerConfig = {
+        enabled: true,
+        "docker-args": ["-p", "3000:3000", "--network", "host"],
+      };
+      const ctx = createDockerContext(config, defaultOptions, ["agent"], "/work");
+      expect(ctx.config["docker-args"]).toEqual(["-p", "3000:3000", "--network", "host"]);
+    });
+
+    it("should handle empty docker-args array", () => {
+      const config: DockerConfig = {
+        enabled: true,
+        "docker-args": [],
+      };
+      const ctx = createDockerContext(config, defaultOptions, ["agent"], "/work");
+      expect(ctx.config["docker-args"]).toEqual([]);
+    });
+
+    it("should handle undefined docker-args", () => {
+      const config: DockerConfig = { enabled: true };
+      const ctx = createDockerContext(config, defaultOptions, ["agent"], "/work");
+      expect(ctx.config["docker-args"]).toBeUndefined();
+    });
   });
 });

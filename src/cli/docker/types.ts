@@ -73,6 +73,9 @@ export interface DockerConfig {
 
   /** Path to llmist source for dev mode (supports ~ for home directory) */
   "dev-source"?: string;
+
+  /** Extra arguments to pass to docker run (e.g., ["-p", "3000:3000"]) */
+  "docker-args"?: string[];
 }
 
 /**
@@ -88,6 +91,7 @@ export const DOCKER_CONFIG_KEYS = new Set([
   "image-name",
   "dev-mode",
   "dev-source",
+  "docker-args",
 ]);
 
 /**
