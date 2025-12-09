@@ -101,6 +101,35 @@ run_test "image" "gpt-image-1" \
     "A penguin in ancient Greek philosopher robes, sitting on a marble pillar under a starry sky, contemplating a floating fish with deep philosophical intensity, dramatic chiaroscuro lighting"
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# GEMINI IMAGE GENERATION TESTS (requires GEMINI_API_KEY)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${PURPLE}║               🎨 GEMINI IMAGE GENERATION                      ║${NC}"
+echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Gemini Imagen 3 - Google's flagship
+run_test "image" "imagen-3.0-generate-002" \
+    "Imagen 3: A robot chef cooking a gourmet meal in a high-tech kitchen" \
+    "$OUTPUT_DIR/imagen3-robot-chef.png" \
+    "A friendly robot chef with chrome body and LED eyes, carefully cooking a gourmet meal in a futuristic kitchen, steam rising from pots, holographic recipe display, warm lighting"
+
+# Gemini Imagen 3 - Different aspect ratio
+run_test "image" "imagen-3.0-generate-002" \
+    "Imagen 3 (16:9): Epic dragon flying over a medieval castle" \
+    "$OUTPUT_DIR/imagen3-dragon-castle.png" \
+    --size 16:9 \
+    "A majestic fire-breathing dragon soaring over a medieval stone castle at sunset, mountains in the background, dramatic clouds, fantasy art style"
+
+# Gemini Imagen 3 - Portrait orientation
+run_test "image" "imagen-3.0-generate-002" \
+    "Imagen 3 (9:16): A magical forest portal" \
+    "$OUTPUT_DIR/imagen3-forest-portal.png" \
+    --size 9:16 \
+    "A mystical glowing portal hidden among ancient trees in an enchanted forest, fireflies and magical particles floating, moonlight streaming through branches"
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # SPEECH GENERATION TESTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -171,6 +200,53 @@ run_test "speech" "tts-1" \
     "$OUTPUT_DIR/tts1-fast-excited.mp3" \
     --voice echo --speed 1.5 \
     "Oh my gosh the tests are passing! All green! Ship it ship it ship it! Deploy deploy deploy! Wait what's that red thing NO NO NO ROLLBACK ROLLBACK!"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GEMINI SPEECH GENERATION TESTS (requires GEMINI_API_KEY)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${PURPLE}║               🎤 GEMINI SPEECH GENERATION                     ║${NC}"
+echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Gemini 2.5 Flash TTS - Different voices
+run_test "speech" "gemini-2.5-flash-preview-tts" \
+    "Gemini Flash TTS (Zephyr): Bright storyteller" \
+    "$OUTPUT_DIR/gemini-flash-zephyr.wav" \
+    --voice Zephyr \
+    "Welcome to the future of text to speech! I am Zephyr, your bright and cheerful guide through the wonderful world of AI-generated audio."
+
+run_test "speech" "gemini-2.5-flash-preview-tts" \
+    "Gemini Flash TTS (Charon): Informative narrator" \
+    "$OUTPUT_DIR/gemini-flash-charon.wav" \
+    --voice Charon \
+    "In the annals of software development, few moments rival the satisfaction of seeing all tests pass. Today, we celebrate that milestone."
+
+run_test "speech" "gemini-2.5-flash-preview-tts" \
+    "Gemini Flash TTS (Fenrir): Excitable announcer" \
+    "$OUTPUT_DIR/gemini-flash-fenrir.wav" \
+    --voice Fenrir \
+    "BREAKING NEWS! Scientists have discovered that rubber ducks debug code fifty percent faster than traditional methods! More at eleven!"
+
+run_test "speech" "gemini-2.5-flash-preview-tts" \
+    "Gemini Flash TTS (Aoede): Breezy meditation" \
+    "$OUTPUT_DIR/gemini-flash-aoede.wav" \
+    --voice Aoede \
+    "Close your eyes. Breathe deeply. Let go of all merge conflicts. Your branches are now perfectly synchronized. Inner peace achieved."
+
+# Gemini 2.5 Pro TTS - Higher quality voice
+run_test "speech" "gemini-2.5-pro-preview-tts" \
+    "Gemini Pro TTS (Sulafat): Warm bedtime story" \
+    "$OUTPUT_DIR/gemini-pro-sulafat.wav" \
+    --voice Sulafat \
+    "Once upon a time, in a data center far, far away, there lived a brave little microservice named Redis. Redis could remember everything, and helped all the other services find their way home."
+
+run_test "speech" "gemini-2.5-pro-preview-tts" \
+    "Gemini Pro TTS (Gacrux): Mature documentary voice" \
+    "$OUTPUT_DIR/gemini-pro-gacrux.wav" \
+    --voice Gacrux \
+    "The migration patterns of legacy code remain one of nature's greatest mysteries. Here we observe a rare jQuery plugin, still alive in the wild, decades after its prime."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SUMMARY
