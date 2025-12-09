@@ -39,7 +39,10 @@ console.log('Cost:', speechResult.cost);
 | `dall-e-2` | OpenAI | - | 256x256, 512x512, 1024x1024 | Legacy, faster |
 | `gpt-image-1` | OpenAI | low, medium, high | 1024x1024, 1024x1536, 1536x1024 | Text rendering, transparency |
 | `gpt-image-1-mini` | OpenAI | low, medium, high | 1024x1024, 1024x1536, 1536x1024 | Cost-effective |
-| `imagen-3.0-generate-002` | Google | - | 1:1, 3:4, 4:3, 9:16, 16:9 | Imagen 3 |
+| `imagen-4.0-generate-001` | Google | - | 1:1, 3:4, 4:3, 9:16, 16:9 | Imagen 4 |
+| `imagen-4.0-fast-generate-001` | Google | - | 1:1, 3:4, 4:3, 9:16, 16:9 | Imagen 4 Fast |
+| `imagen-4.0-ultra-generate-001` | Google | - | 1:1, 3:4, 4:3, 9:16, 16:9 | Imagen 4 Ultra |
+| `gemini-2.5-flash-image` | Google | - | 1:1, 3:4, 4:3, 9:16, 16:9 | Native multimodal |
 
 ### API Reference
 
@@ -103,6 +106,8 @@ for (const model of models) {
 |-------|----------|--------|---------|-------------|
 | `tts-1` | OpenAI | alloy, echo, fable, onyx, nova, shimmer | mp3, opus, aac, flac, wav, pcm | 0.25-4.0 |
 | `tts-1-hd` | OpenAI | alloy, echo, fable, onyx, nova, shimmer | mp3, opus, aac, flac, wav, pcm | 0.25-4.0 |
+| `gemini-2.5-flash-preview-tts` | Google | 30 voices (Zephyr, Puck, Charon, etc.) | wav | - |
+| `gemini-2.5-pro-preview-tts` | Google | 30 voices (Zephyr, Puck, Charon, etc.) | wav | - |
 
 ### API Reference
 
