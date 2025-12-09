@@ -90,6 +90,12 @@ export type StreamEvent =
 
 // Imports for text-only handlers
 import type { ILogObj, Logger } from "tslog";
+import type {
+  ImageGenerationOptions,
+  ImageGenerationResult,
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+} from "../core/media-types.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { LLMGenerationOptions, LLMStream } from "../core/options.js";
@@ -175,6 +181,28 @@ export type TextOnlyAction =
  * }
  * ```
  */
+/**
+ * Image generation namespace with automatic cost reporting.
+ */
+export interface CostReportingImageNamespace {
+  /**
+   * Generate images from a text prompt.
+   * Costs are automatically reported to the execution context.
+   */
+  generate(options: ImageGenerationOptions): Promise<ImageGenerationResult>;
+}
+
+/**
+ * Speech generation namespace with automatic cost reporting.
+ */
+export interface CostReportingSpeechNamespace {
+  /**
+   * Generate speech audio from text.
+   * Costs are automatically reported to the execution context.
+   */
+  generate(options: SpeechGenerationOptions): Promise<SpeechGenerationResult>;
+}
+
 export interface CostReportingLLMist {
   /**
    * Quick completion - returns final text response.
@@ -198,6 +226,18 @@ export interface CostReportingLLMist {
    * Access to model registry for cost estimation.
    */
   readonly modelRegistry: ModelRegistry;
+
+  /**
+   * Image generation with automatic cost reporting.
+   * Costs are reported based on model and generation parameters.
+   */
+  readonly image: CostReportingImageNamespace;
+
+  /**
+   * Speech generation with automatic cost reporting.
+   * Costs are reported based on input length and model pricing.
+   */
+  readonly speech: CostReportingSpeechNamespace;
 }
 
 /**

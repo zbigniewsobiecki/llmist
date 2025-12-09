@@ -78,6 +78,30 @@ export interface CompleteConfig extends BaseCommandConfig {
 }
 
 /**
+ * Configuration for the image command.
+ */
+export interface ImageConfig {
+  model?: string;
+  size?: string;
+  quality?: string;
+  count?: number;
+  output?: string;
+  quiet?: boolean;
+}
+
+/**
+ * Configuration for the speech command.
+ */
+export interface SpeechConfig {
+  model?: string;
+  voice?: string;
+  format?: string;
+  speed?: number;
+  output?: string;
+  quiet?: boolean;
+}
+
+/**
  * Configuration for the agent command.
  */
 export interface AgentConfig extends BaseCommandConfig {
@@ -120,12 +144,16 @@ export interface CLIConfig {
   global?: GlobalConfig;
   complete?: CompleteConfig;
   agent?: AgentConfig;
+  image?: ImageConfig;
+  speech?: SpeechConfig;
   prompts?: PromptsConfig;
   docker?: DockerConfig;
   [customCommand: string]:
     | CustomCommandConfig
     | CompleteConfig
     | AgentConfig
+    | ImageConfig
+    | SpeechConfig
     | GlobalConfig
     | PromptsConfig
     | DockerConfig
@@ -183,6 +211,26 @@ const AGENT_CONFIG_KEYS = new Set([
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
   "docker", // Enable Docker sandboxing for this profile
   "docker-cwd-permission", // Override CWD mount permission for this profile
+]);
+
+/** Valid keys for image command config */
+const IMAGE_CONFIG_KEYS = new Set([
+  "model",
+  "size",
+  "quality",
+  "count",
+  "output",
+  "quiet",
+]);
+
+/** Valid keys for speech command config */
+const SPEECH_CONFIG_KEYS = new Set([
+  "model",
+  "voice",
+  "format",
+  "speed",
+  "output",
+  "quiet",
 ]);
 
 /** Valid keys for custom command config (union of complete + agent + type + description) */
@@ -536,6 +584,95 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
 }
 
 /**
+ * Validates an image command config section.
+ */
+function validateImageConfig(raw: unknown, section: string): ImageConfig {
+  if (typeof raw !== "object" || raw === null) {
+    throw new ConfigError(`[${section}] must be a table`);
+  }
+
+  const rawObj = raw as Record<string, unknown>;
+
+  // Check for unknown keys
+  for (const key of Object.keys(rawObj)) {
+    if (!IMAGE_CONFIG_KEYS.has(key)) {
+      throw new ConfigError(`[${section}].${key} is not a valid option`);
+    }
+  }
+
+  const result: ImageConfig = {};
+
+  if ("model" in rawObj) {
+    result.model = validateString(rawObj.model, "model", section);
+  }
+  if ("size" in rawObj) {
+    result.size = validateString(rawObj.size, "size", section);
+  }
+  if ("quality" in rawObj) {
+    result.quality = validateString(rawObj.quality, "quality", section);
+  }
+  if ("count" in rawObj) {
+    result.count = validateNumber(rawObj.count, "count", section, {
+      integer: true,
+      min: 1,
+      max: 10,
+    });
+  }
+  if ("output" in rawObj) {
+    result.output = validateString(rawObj.output, "output", section);
+  }
+  if ("quiet" in rawObj) {
+    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
+  }
+
+  return result;
+}
+
+/**
+ * Validates a speech command config section.
+ */
+function validateSpeechConfig(raw: unknown, section: string): SpeechConfig {
+  if (typeof raw !== "object" || raw === null) {
+    throw new ConfigError(`[${section}] must be a table`);
+  }
+
+  const rawObj = raw as Record<string, unknown>;
+
+  // Check for unknown keys
+  for (const key of Object.keys(rawObj)) {
+    if (!SPEECH_CONFIG_KEYS.has(key)) {
+      throw new ConfigError(`[${section}].${key} is not a valid option`);
+    }
+  }
+
+  const result: SpeechConfig = {};
+
+  if ("model" in rawObj) {
+    result.model = validateString(rawObj.model, "model", section);
+  }
+  if ("voice" in rawObj) {
+    result.voice = validateString(rawObj.voice, "voice", section);
+  }
+  if ("format" in rawObj) {
+    result.format = validateString(rawObj.format, "format", section);
+  }
+  if ("speed" in rawObj) {
+    result.speed = validateNumber(rawObj.speed, "speed", section, {
+      min: 0.25,
+      max: 4.0,
+    });
+  }
+  if ("output" in rawObj) {
+    result.output = validateString(rawObj.output, "output", section);
+  }
+  if ("quiet" in rawObj) {
+    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
+  }
+
+  return result;
+}
+
+/**
  * Validates a value is either a string or boolean.
  */
 function validateStringOrBoolean(value: unknown, field: string, section: string): string | boolean {
@@ -697,6 +834,10 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.complete = validateCompleteConfig(value, key);
       } else if (key === "agent") {
         result.agent = validateAgentConfig(value, key);
+      } else if (key === "image") {
+        result.image = validateImageConfig(value, key);
+      } else if (key === "speech") {
+        result.speech = validateSpeechConfig(value, key);
       } else if (key === "prompts") {
         result.prompts = validatePromptsConfig(value, key);
       } else if (key === "docker") {
@@ -758,7 +899,7 @@ export function loadConfig(): CLIConfig {
  * Gets list of custom command names from config (excludes built-in sections).
  */
 export function getCustomCommandNames(config: CLIConfig): string[] {
-  const reserved = new Set(["global", "complete", "agent", "prompts", "docker"]);
+  const reserved = new Set(["global", "complete", "agent", "image", "speech", "prompts", "docker"]);
   return Object.keys(config).filter((key) => !reserved.has(key));
 }
 

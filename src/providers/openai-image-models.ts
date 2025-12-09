@@ -1,0 +1,184 @@
+/**
+ * OpenAI Image Generation Model Catalog
+ *
+ * Pricing as of December 2025:
+ *
+ * GPT Image 1 (flagship):
+ * - Low quality: ~$0.011 per image
+ * - Medium quality: ~$0.04 per image
+ * - High quality: ~$0.17 per image
+ *
+ * GPT Image 1 Mini (cost-effective):
+ * - Low quality: ~$0.005 per image
+ * - Medium quality: ~$0.02 per image
+ * - High quality: ~$0.052 per image
+ *
+ * DALL-E 3:
+ * - 1024x1024: $0.040 (standard), $0.080 (hd)
+ * - 1024x1792: $0.080 (standard), $0.120 (hd)
+ * - 1792x1024: $0.080 (standard), $0.120 (hd)
+ *
+ * DALL-E 2 (legacy):
+ * - 256x256: $0.016
+ * - 512x512: $0.018
+ * - 1024x1024: $0.020
+ *
+ * @see https://platform.openai.com/docs/guides/images
+ */
+
+import type { ImageModelSpec } from "../core/media-types.js";
+
+/** GPT Image 1 supported sizes */
+export const GPT_IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024"] as const;
+export type GptImageSize = (typeof GPT_IMAGE_SIZES)[number];
+
+/** GPT Image quality levels */
+export const GPT_IMAGE_QUALITIES = ["low", "medium", "high"] as const;
+export type GptImageQuality = (typeof GPT_IMAGE_QUALITIES)[number];
+
+/** DALL-E 3 supported sizes */
+export const DALLE3_SIZES = ["1024x1024", "1024x1792", "1792x1024"] as const;
+export type DallE3Size = (typeof DALLE3_SIZES)[number];
+
+/** DALL-E 3 quality levels */
+export const DALLE3_QUALITIES = ["standard", "hd"] as const;
+export type DallE3Quality = (typeof DALLE3_QUALITIES)[number];
+
+/** DALL-E 2 supported sizes */
+export const DALLE2_SIZES = ["256x256", "512x512", "1024x1024"] as const;
+export type DallE2Size = (typeof DALLE2_SIZES)[number];
+
+/**
+ * OpenAI Image Model Specifications
+ */
+export const openaiImageModels: ImageModelSpec[] = [
+  // GPT Image 1 Family (flagship)
+  {
+    provider: "openai",
+    modelId: "gpt-image-1",
+    displayName: "GPT Image 1",
+    pricing: {
+      bySize: {
+        "1024x1024": { low: 0.011, medium: 0.04, high: 0.17 },
+        "1024x1536": { low: 0.016, medium: 0.06, high: 0.25 },
+        "1536x1024": { low: 0.016, medium: 0.06, high: 0.25 },
+      },
+    },
+    supportedSizes: [...GPT_IMAGE_SIZES],
+    supportedQualities: [...GPT_IMAGE_QUALITIES],
+    maxImages: 1,
+    defaultSize: "1024x1024",
+    defaultQuality: "medium",
+    features: {
+      textRendering: true,
+      transparency: true,
+    },
+  },
+  {
+    provider: "openai",
+    modelId: "gpt-image-1-mini",
+    displayName: "GPT Image 1 Mini",
+    pricing: {
+      bySize: {
+        "1024x1024": { low: 0.005, medium: 0.02, high: 0.052 },
+        "1024x1536": { low: 0.0075, medium: 0.03, high: 0.078 },
+        "1536x1024": { low: 0.0075, medium: 0.03, high: 0.078 },
+      },
+    },
+    supportedSizes: [...GPT_IMAGE_SIZES],
+    supportedQualities: [...GPT_IMAGE_QUALITIES],
+    maxImages: 1,
+    defaultSize: "1024x1024",
+    defaultQuality: "medium",
+    features: {
+      textRendering: true,
+      transparency: true,
+    },
+  },
+  // DALL-E Family
+  {
+    provider: "openai",
+    modelId: "dall-e-3",
+    displayName: "DALL-E 3",
+    pricing: {
+      bySize: {
+        "1024x1024": { standard: 0.04, hd: 0.08 },
+        "1024x1792": { standard: 0.08, hd: 0.12 },
+        "1792x1024": { standard: 0.08, hd: 0.12 },
+      },
+    },
+    supportedSizes: [...DALLE3_SIZES],
+    supportedQualities: [...DALLE3_QUALITIES],
+    maxImages: 1, // DALL-E 3 only supports n=1
+    defaultSize: "1024x1024",
+    defaultQuality: "standard",
+    features: {
+      textRendering: true,
+    },
+  },
+  {
+    provider: "openai",
+    modelId: "dall-e-2",
+    displayName: "DALL-E 2 (Legacy)",
+    pricing: {
+      bySize: {
+        "256x256": 0.016,
+        "512x512": 0.018,
+        "1024x1024": 0.02,
+      },
+    },
+    supportedSizes: [...DALLE2_SIZES],
+    maxImages: 10,
+    defaultSize: "1024x1024",
+  },
+];
+
+/**
+ * Get image model spec by model ID.
+ */
+export function getOpenAIImageModelSpec(modelId: string): ImageModelSpec | undefined {
+  return openaiImageModels.find((m) => m.modelId === modelId);
+}
+
+/**
+ * Check if a model ID is an OpenAI image model.
+ */
+export function isOpenAIImageModel(modelId: string): boolean {
+  return openaiImageModels.some((m) => m.modelId === modelId);
+}
+
+/**
+ * Calculate cost for image generation.
+ *
+ * @param modelId - The model ID (dall-e-3 or dall-e-2)
+ * @param size - Image size
+ * @param quality - Quality level (for DALL-E 3)
+ * @param n - Number of images
+ * @returns Cost in USD, or undefined if model not found
+ */
+export function calculateOpenAIImageCost(
+  modelId: string,
+  size: string,
+  quality = "standard",
+  n = 1,
+): number | undefined {
+  const spec = getOpenAIImageModelSpec(modelId);
+  if (!spec) return undefined;
+
+  // Get price for this size
+  const sizePrice = spec.pricing.bySize?.[size];
+  if (sizePrice === undefined) return undefined;
+
+  let pricePerImage: number;
+
+  if (typeof sizePrice === "number") {
+    // Flat pricing (DALL-E 2)
+    pricePerImage = sizePrice;
+  } else {
+    // Quality-based pricing (DALL-E 3)
+    pricePerImage = sizePrice[quality];
+    if (pricePerImage === undefined) return undefined;
+  }
+
+  return pricePerImage * n;
+}

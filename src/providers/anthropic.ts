@@ -22,6 +22,34 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     return ANTHROPIC_MODELS;
   }
 
+  // =========================================================================
+  // Image Generation (Not Supported)
+  // =========================================================================
+
+  supportsImageGeneration(_modelId: string): boolean {
+    return false;
+  }
+
+  async generateImage(): Promise<never> {
+    throw new Error(
+      "Anthropic does not support image generation. Use OpenAI (DALL-E, GPT Image) or Google Gemini (Imagen) instead.",
+    );
+  }
+
+  // =========================================================================
+  // Speech Generation (Not Supported)
+  // =========================================================================
+
+  supportsSpeechGeneration(_modelId: string): boolean {
+    return false;
+  }
+
+  async generateSpeech(): Promise<never> {
+    throw new Error(
+      "Anthropic does not support speech generation. Use OpenAI (TTS) or Google Gemini (TTS) instead.",
+    );
+  }
+
   protected buildRequestPayload(
     options: LLMGenerationOptions,
     descriptor: ModelDescriptor,

@@ -4,6 +4,7 @@ import { runCLI } from "./program.js";
 import type { CLIEnvironment } from "./environment.js";
 import type { LLMist } from "../core/client.js";
 import type { ModelSpec } from "../core/model-catalog.js";
+import type { ImageModelSpec, SpeechModelSpec } from "../core/media-types.js";
 import { ModelRegistry } from "../core/model-registry.js";
 import { createLogger } from "../logging/logger.js";
 
@@ -102,6 +103,13 @@ function createTestClient(models: ModelSpec[]): LLMist {
 
   return {
     modelRegistry: registry,
+    // Mock image and speech namespaces for multimodal support
+    image: {
+      listModels: () => [],
+    },
+    speech: {
+      listModels: () => [],
+    },
   } as unknown as LLMist;
 }
 
@@ -237,13 +245,13 @@ describe("models command", () => {
       const output = stdout.read();
 
       // Should show OpenAI models section
-      expect(output).toContain("Openai Models");
+      expect(output).toContain("Openai");
       expect(output).toContain("gpt-4o");
       expect(output).toContain("gpt-5-nano");
 
       // Should NOT show other providers' model sections
-      expect(output).not.toContain("Anthropic Models");
-      expect(output).not.toContain("Gemini Models");
+      expect(output).not.toContain("Anthropic\n");
+      expect(output).not.toContain("Gemini\n");
 
       // Note: model IDs from other providers will appear in shortcuts section,
       // which is expected behavior
@@ -266,13 +274,13 @@ describe("models command", () => {
       const output = stdout.read();
 
       // Should show Anthropic models section
-      expect(output).toContain("Anthropic Models");
+      expect(output).toContain("Anthropic");
       expect(output).toContain("claude-sonnet-4-5");
       expect(output).toContain("claude-haiku-4-5");
 
       // Should NOT show other providers' model sections
-      expect(output).not.toContain("Openai Models");
-      expect(output).not.toContain("Gemini Models");
+      expect(output).not.toContain("Openai\n");
+      expect(output).not.toContain("Gemini\n");
 
       // Note: model IDs from other providers will appear in shortcuts section,
       // which is expected behavior
@@ -301,9 +309,9 @@ describe("models command", () => {
 
       const json = JSON.parse(output);
 
-      // Should have models array
-      expect(json.models).toBeInstanceOf(Array);
-      expect(json.models.length).toBe(5);
+      // Should have textModels array (renamed from models for multimodal support)
+      expect(json.textModels).toBeInstanceOf(Array);
+      expect(json.textModels.length).toBe(5);
 
       // Should have shortcuts object
       expect(json.shortcuts).toBeDefined();
@@ -325,7 +333,7 @@ describe("models command", () => {
       await runCLI(env);
 
       const json = JSON.parse(stdout.read());
-      const firstModel = json.models[0];
+      const firstModel = json.textModels[0];
 
       // Should have all expected fields
       expect(firstModel).toHaveProperty("provider");
@@ -360,8 +368,8 @@ describe("models command", () => {
       const json = JSON.parse(stdout.read());
 
       // All models should be from OpenAI
-      expect(json.models.every((m: ModelSpec) => m.provider === "openai")).toBe(true);
-      expect(json.models.length).toBe(2);
+      expect(json.textModels.every((m: ModelSpec) => m.provider === "openai")).toBe(true);
+      expect(json.textModels.length).toBe(2);
     });
   });
 
@@ -431,11 +439,8 @@ describe("models command", () => {
 
       const output = stdout.read();
 
-      // Should still show header
-      expect(output).toContain("Available Models");
-
-      // Should show shortcuts even with no models
-      expect(output).toContain("Model Shortcuts");
+      // Should show "no models found" message
+      expect(output).toContain("No models found");
     });
 
     it("should handle non-existent provider filter", async () => {
@@ -454,18 +459,216 @@ describe("models command", () => {
 
       const output = stdout.read();
 
-      // Should show header
-      expect(output).toContain("Available Models");
+      // Should show "no models found" message when filtering yields no results
+      expect(output).toContain("No models found");
+    });
+  });
 
-      // Should not show any provider model sections
-      expect(output).not.toContain("Openai Models");
-      expect(output).not.toContain("Anthropic Models");
-      expect(output).not.toContain("Gemini Models");
+  describe("multimodal filtering", () => {
+    // Create test image and speech models
+    const testImageModels: ImageModelSpec[] = [
+      {
+        provider: "openai",
+        modelId: "dall-e-3",
+        displayName: "DALL-E 3",
+        supportedSizes: ["1024x1024", "1792x1024"],
+        maxImages: 1,
+        pricing: { perImage: 0.04 },
+      },
+      {
+        provider: "gemini",
+        modelId: "imagen-4.0-generate-001",
+        displayName: "Imagen 4",
+        supportedSizes: ["1:1", "16:9"],
+        maxImages: 4,
+        pricing: { perImage: 0.04 },
+      },
+    ];
 
-      // Should still show shortcuts (global shortcuts are always shown)
-      expect(output).toContain("Model Shortcuts");
+    const testSpeechModels: SpeechModelSpec[] = [
+      {
+        provider: "openai",
+        modelId: "tts-1",
+        displayName: "TTS-1",
+        voices: ["alloy", "echo", "fable", "nova", "onyx", "shimmer"],
+        formats: ["mp3", "opus", "wav"],
+        maxInputLength: 4096,
+        pricing: { perCharacter: 0.000015 },
+      },
+      {
+        provider: "gemini",
+        modelId: "gemini-2.5-flash-tts",
+        displayName: "Gemini Flash TTS",
+        voices: ["Zephyr", "Puck", "Charon"],
+        formats: ["wav"],
+        maxInputLength: 8000,
+        pricing: { perMinute: 0.01 },
+      },
+    ];
 
-      // Note: model IDs will appear in shortcuts section, which is expected
+    function createMultimodalClient(): LLMist {
+      const registry = new ModelRegistry();
+      registry.registerModels(testModels);
+
+      return {
+        modelRegistry: registry,
+        image: {
+          listModels: () => testImageModels,
+        },
+        speech: {
+          listModels: () => testSpeechModels,
+        },
+      } as unknown as LLMist;
+    }
+
+    it("should show only image models with --image flag", async () => {
+      const stdout = createWritable();
+      const stderr = createWritable();
+      const client = createMultimodalClient();
+
+      const env = createEnv({
+        argv: ["node", "llmist", "models", "--image"],
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        createClient: () => client,
+      });
+
+      await runCLI(env);
+
+      const output = stdout.read();
+
+      // Should show image models section
+      expect(output).toContain("Image Generation Models");
+      expect(output).toContain("dall-e-3");
+      expect(output).toContain("imagen-4.0-generate-001");
+
+      // Should NOT show text or speech sections
+      expect(output).not.toContain("Text/LLM Models");
+      expect(output).not.toContain("Speech (TTS) Models");
+    });
+
+    it("should show only speech models with --speech flag", async () => {
+      const stdout = createWritable();
+      const stderr = createWritable();
+      const client = createMultimodalClient();
+
+      const env = createEnv({
+        argv: ["node", "llmist", "models", "--speech"],
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        createClient: () => client,
+      });
+
+      await runCLI(env);
+
+      const output = stdout.read();
+
+      // Should show speech models section
+      expect(output).toContain("Speech (TTS) Models");
+      expect(output).toContain("tts-1");
+      expect(output).toContain("gemini-2.5-flash-tts");
+
+      // Should NOT show text or image sections
+      expect(output).not.toContain("Text/LLM Models");
+      expect(output).not.toContain("Image Generation Models");
+    });
+
+    it("should show all model types with --all flag", async () => {
+      const stdout = createWritable();
+      const stderr = createWritable();
+      const client = createMultimodalClient();
+
+      const env = createEnv({
+        argv: ["node", "llmist", "models", "--all"],
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        createClient: () => client,
+      });
+
+      await runCLI(env);
+
+      const output = stdout.read();
+
+      // Should show all three sections
+      expect(output).toContain("Text/LLM Models");
+      expect(output).toContain("Image Generation Models");
+      expect(output).toContain("Speech (TTS) Models");
+
+      // Should include models from all types
+      expect(output).toContain("gpt-4o");
+      expect(output).toContain("dall-e-3");
+      expect(output).toContain("tts-1");
+    });
+
+    it("should default to text models when no type flag is specified", async () => {
+      const stdout = createWritable();
+      const stderr = createWritable();
+      const client = createMultimodalClient();
+
+      const env = createEnv({
+        argv: ["node", "llmist", "models"],
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        createClient: () => client,
+      });
+
+      await runCLI(env);
+
+      const output = stdout.read();
+
+      // Should show text models by default
+      expect(output).toContain("Text/LLM Models");
+      expect(output).toContain("gpt-4o");
+
+      // Should NOT show image or speech sections
+      expect(output).not.toContain("Image Generation Models");
+      expect(output).not.toContain("Speech (TTS) Models");
+    });
+
+    it("should include imageModels and speechModels in JSON with --all", async () => {
+      const stdout = createWritable();
+      const stderr = createWritable();
+      const client = createMultimodalClient();
+
+      const env = createEnv({
+        argv: ["node", "llmist", "models", "--all", "--format", "json"],
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        createClient: () => client,
+      });
+
+      await runCLI(env);
+
+      const json = JSON.parse(stdout.read());
+
+      expect(json.textModels).toBeInstanceOf(Array);
+      expect(json.imageModels).toBeInstanceOf(Array);
+      expect(json.speechModels).toBeInstanceOf(Array);
+
+      expect(json.textModels.length).toBe(5);
+      expect(json.imageModels.length).toBe(2);
+      expect(json.speechModels.length).toBe(2);
+    });
+
+    it("should filter multimodal models by provider", async () => {
+      const stdout = createWritable();
+      const stderr = createWritable();
+      const client = createMultimodalClient();
+
+      const env = createEnv({
+        argv: ["node", "llmist", "models", "--image", "--provider", "openai"],
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        createClient: () => client,
+      });
+
+      await runCLI(env);
+
+      const output = stdout.read();
+
+      // Should show OpenAI image models only
+      expect(output).toContain("dall-e-3");
+      expect(output).not.toContain("imagen-4.0-generate-001");
     });
   });
 });
