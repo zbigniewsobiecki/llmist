@@ -4,6 +4,9 @@ import type { ProviderAdapter } from "../providers/provider.js";
 import type { LLMMessage } from "./messages.js";
 import type { ModelSpec } from "./model-catalog.js";
 import { ModelRegistry } from "./model-registry.js";
+import { ImageNamespace } from "./namespaces/image.js";
+import { SpeechNamespace } from "./namespaces/speech.js";
+import { TextNamespace } from "./namespaces/text.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "./options.js";
 import { ModelIdentifierParser } from "./options.js";
 import {
@@ -54,8 +57,14 @@ export interface LLMistOptions {
 
 export class LLMist {
   private readonly parser: ModelIdentifierParser;
+  private readonly defaultProvider: string;
   readonly modelRegistry: ModelRegistry;
   private readonly adapters: ProviderAdapter[];
+
+  // Namespaces for different generation types
+  readonly text: TextNamespace;
+  readonly image: ImageNamespace;
+  readonly speech: SpeechNamespace;
 
   constructor();
   constructor(adapters: ProviderAdapter[]);
@@ -107,6 +116,7 @@ export class LLMist {
       const priorityB = b.priority ?? 0;
       return priorityB - priorityA;
     });
+    this.defaultProvider = resolvedDefaultProvider;
     this.parser = new ModelIdentifierParser(resolvedDefaultProvider);
     this.modelRegistry = new ModelRegistry();
 
@@ -119,6 +129,11 @@ export class LLMist {
     if (customModels.length > 0) {
       this.modelRegistry.registerModels(customModels);
     }
+
+    // Initialize generation namespaces
+    this.text = new TextNamespace(this);
+    this.image = new ImageNamespace(this.adapters, this.defaultProvider);
+    this.speech = new SpeechNamespace(this.adapters, this.defaultProvider);
   }
 
   stream(options: LLMGenerationOptions): LLMStream {

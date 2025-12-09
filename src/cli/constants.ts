@@ -10,6 +10,8 @@ export const COMMANDS = {
   agent: "agent",
   models: "models",
   gadget: "gadget",
+  image: "image",
+  speech: "speech",
 } as const;
 
 /** Valid log level names */
@@ -38,6 +40,16 @@ export const OPTION_FLAGS = {
   dockerRo: "--docker-ro",
   noDocker: "--no-docker",
   dockerDev: "--docker-dev",
+  // Image generation options
+  imageSize: "--size <size>",
+  imageQuality: "--quality <quality>",
+  imageCount: "-n, --count <number>",
+  imageOutput: "-o, --output <path>",
+  // Speech generation options
+  voice: "--voice <name>",
+  speechFormat: "--format <format>",
+  speechSpeed: "--speed <value>",
+  speechOutput: "-o, --output <path>",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -60,6 +72,16 @@ export const OPTION_DESCRIPTIONS = {
   dockerRo: "Run in Docker with current directory mounted read-only.",
   noDocker: "Disable Docker sandboxing (override config).",
   dockerDev: "Run in Docker dev mode (mount local source instead of npm install).",
+  // Image generation descriptions
+  imageSize: "Image size/aspect ratio, e.g. '1024x1024', '1:1', '16:9'.",
+  imageQuality: "Image quality: 'standard', 'hd', 'low', 'medium', 'high'.",
+  imageCount: "Number of images to generate (model dependent, usually 1-4).",
+  imageOutput: "Output path for the generated image. Defaults to stdout if not specified.",
+  // Speech generation descriptions
+  voice: "Voice name for speech generation, e.g. 'nova', 'alloy', 'Zephyr'.",
+  speechFormat: "Audio format: 'mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'.",
+  speechSpeed: "Speech speed multiplier (0.25 to 4.0, default 1.0).",
+  speechOutput: "Output path for audio file. Defaults to stdout if not specified.",
 } as const;
 
 /** Prefix for summary output written to stderr */

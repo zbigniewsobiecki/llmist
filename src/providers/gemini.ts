@@ -1,10 +1,30 @@
-import { FunctionCallingConfigMode, GoogleGenAI } from "@google/genai";
+import { FunctionCallingConfigMode, GoogleGenAI, Modality } from "@google/genai";
+import type {
+  ImageGenerationOptions,
+  ImageGenerationResult,
+  ImageModelSpec,
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+  SpeechModelSpec,
+} from "../core/media-types.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
+import {
+  calculateGeminiImageCost,
+  geminiImageModels,
+  getGeminiImageModelSpec,
+  isGeminiImageModel,
+} from "./gemini-image-models.js";
 import { GEMINI_MODELS } from "./gemini-models.js";
+import {
+  calculateGeminiSpeechCost,
+  geminiSpeechModels,
+  getGeminiSpeechModelSpec,
+  isGeminiSpeechModel,
+} from "./gemini-speech-models.js";
 import { createProviderFromEnv } from "./utils.js";
 
 type GeminiContent = {
@@ -34,6 +54,61 @@ const GEMINI_ROLE_MAP: Record<LLMMessage["role"], "user" | "model"> = {
   assistant: "model",
 };
 
+/**
+ * Wraps raw PCM audio data in a WAV file container.
+ *
+ * WAV format structure:
+ * - RIFF header (12 bytes)
+ * - fmt chunk (24 bytes) - describes audio format
+ * - data chunk (8 bytes + audio data)
+ *
+ * @param pcmData - Raw PCM audio samples
+ * @param sampleRate - Sample rate in Hz (e.g., 24000)
+ * @param bitsPerSample - Bits per sample (e.g., 16)
+ * @param numChannels - Number of audio channels (1 = mono, 2 = stereo)
+ * @returns ArrayBuffer containing valid WAV file
+ */
+function wrapPcmInWav(
+  pcmData: Uint8Array,
+  sampleRate: number,
+  bitsPerSample: number,
+  numChannels: number,
+): ArrayBuffer {
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const dataSize = pcmData.length;
+  const headerSize = 44;
+  const fileSize = headerSize + dataSize - 8; // File size minus RIFF header
+
+  const buffer = new ArrayBuffer(headerSize + dataSize);
+  const view = new DataView(buffer);
+  const uint8 = new Uint8Array(buffer);
+
+  // RIFF header
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, fileSize, true); // File size - 8
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+
+  // fmt chunk
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true); // fmt chunk size (16 for PCM)
+  view.setUint16(20, 1, true); // Audio format (1 = PCM)
+  view.setUint16(22, numChannels, true); // Number of channels
+  view.setUint32(24, sampleRate, true); // Sample rate
+  view.setUint32(28, byteRate, true); // Byte rate
+  view.setUint16(32, blockAlign, true); // Block align
+  view.setUint16(34, bitsPerSample, true); // Bits per sample
+
+  // data chunk
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, dataSize, true); // Data size
+
+  // Copy PCM data
+  uint8.set(pcmData, headerSize);
+
+  return buffer;
+}
+
 export class GeminiGenerativeProvider extends BaseProviderAdapter {
   readonly providerId = "gemini" as const;
 
@@ -43,6 +118,171 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
 
   getModelSpecs() {
     return GEMINI_MODELS;
+  }
+
+  // =========================================================================
+  // Image Generation
+  // =========================================================================
+
+  getImageModelSpecs(): ImageModelSpec[] {
+    return geminiImageModels;
+  }
+
+  supportsImageGeneration(modelId: string): boolean {
+    return isGeminiImageModel(modelId);
+  }
+
+  async generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult> {
+    const client = this.client as GoogleGenAI;
+    const spec = getGeminiImageModelSpec(options.model);
+    const isImagenModel = options.model.startsWith("imagen");
+
+    const aspectRatio = options.size ?? spec?.defaultSize ?? "1:1";
+    const n = options.n ?? 1;
+
+    if (isImagenModel) {
+      // Use Imagen API for imagen models
+      // Note: safetyFilterLevel and personGeneration can be configured for less restrictive filtering
+      // Valid safetyFilterLevel values: "BLOCK_NONE" | "BLOCK_ONLY_HIGH" | "BLOCK_MEDIUM_AND_ABOVE" | "BLOCK_LOW_AND_ABOVE"
+      // Valid personGeneration values: "ALLOW_ALL" | "ALLOW_ADULT" | "DONT_ALLOW"
+      const response = await client.models.generateImages({
+        model: options.model,
+        prompt: options.prompt,
+        config: {
+          numberOfImages: n,
+          aspectRatio: aspectRatio,
+          outputMimeType: options.responseFormat === "b64_json" ? "image/png" : "image/jpeg",
+        },
+      });
+
+      const images = response.generatedImages ?? [];
+      const cost = calculateGeminiImageCost(options.model, aspectRatio, images.length);
+
+      return {
+        // Gemini's imageBytes is already base64 encoded, so use it directly
+        images: images.map((img) => ({
+          b64Json: img.image?.imageBytes ?? undefined,
+        })),
+        model: options.model,
+        usage: {
+          imagesGenerated: images.length,
+          size: aspectRatio,
+          quality: "standard",
+        },
+        cost,
+      };
+    }
+    // Use native Gemini image generation for gemini-* models
+    const response = await client.models.generateContent({
+      model: options.model,
+      contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+      config: {
+        responseModalities: [Modality.IMAGE, Modality.TEXT],
+      },
+    });
+
+    // Extract images from response
+    const images: Array<{ b64Json?: string; url?: string }> = [];
+    const candidate = response.candidates?.[0];
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if ("inlineData" in part && part.inlineData) {
+          images.push({
+            b64Json: part.inlineData.data,
+          });
+        }
+      }
+    }
+
+    const cost = calculateGeminiImageCost(options.model, aspectRatio, images.length);
+
+    return {
+      images,
+      model: options.model,
+      usage: {
+        imagesGenerated: images.length,
+        size: aspectRatio,
+        quality: "standard",
+      },
+      cost,
+    };
+  }
+
+  // =========================================================================
+  // Speech Generation
+  // =========================================================================
+
+  getSpeechModelSpecs(): SpeechModelSpec[] {
+    return geminiSpeechModels;
+  }
+
+  supportsSpeechGeneration(modelId: string): boolean {
+    return isGeminiSpeechModel(modelId);
+  }
+
+  async generateSpeech(options: SpeechGenerationOptions): Promise<SpeechGenerationResult> {
+    const client = this.client as GoogleGenAI;
+    const spec = getGeminiSpeechModelSpec(options.model);
+
+    const voice = options.voice ?? spec?.defaultVoice ?? "Zephyr";
+
+    // Gemini TTS uses speech configuration
+    const response = await client.models.generateContent({
+      model: options.model,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: options.input }],
+        },
+      ],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: voice,
+            },
+          },
+        },
+      },
+    });
+
+    // Extract audio from response
+    let pcmData: Uint8Array | undefined;
+    const candidate = response.candidates?.[0];
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if ("inlineData" in part && part.inlineData?.data) {
+          // Convert base64 to Uint8Array
+          const base64 = part.inlineData.data;
+          const binary = atob(base64);
+          pcmData = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            pcmData[i] = binary.charCodeAt(i);
+          }
+          break;
+        }
+      }
+    }
+
+    if (!pcmData) {
+      throw new Error("No audio data in Gemini TTS response");
+    }
+
+    // Wrap raw PCM data in WAV headers (Gemini returns 24kHz, 16-bit, mono PCM)
+    const audioData = wrapPcmInWav(pcmData, 24000, 16, 1);
+
+    const cost = calculateGeminiSpeechCost(options.model, options.input.length);
+
+    return {
+      audio: audioData,
+      model: options.model,
+      usage: {
+        characterCount: options.input.length,
+      },
+      cost,
+      format: spec?.defaultFormat ?? "wav",
+    };
   }
 
   protected buildRequestPayload(

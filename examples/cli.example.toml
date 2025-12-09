@@ -39,6 +39,30 @@ model = "anthropic:claude-sonnet-4-5"   # Model identifier (provider:model or al
 # quiet = false                          # Suppress all output except content
 
 #──────────────────────────────────────────────────────────────────────────────
+# IMAGE COMMAND DEFAULTS
+# These settings apply when running: llmist image "prompt"
+#──────────────────────────────────────────────────────────────────────────────
+[image]
+model = "dall-e-3"                          # Image generation model
+# size = "1024x1024"                        # Image size (model dependent)
+# quality = "standard"                      # Image quality: standard, hd
+# count = 1                                 # Number of images to generate
+# output = "output.png"                     # Output file path (default: stdout URL)
+# quiet = false                             # Suppress progress messages
+
+#──────────────────────────────────────────────────────────────────────────────
+# SPEECH COMMAND DEFAULTS
+# These settings apply when running: llmist speech "text"
+#──────────────────────────────────────────────────────────────────────────────
+[speech]
+model = "tts-1"                             # Speech generation model
+voice = "nova"                              # Voice name
+# format = "mp3"                            # Audio format: mp3, opus, aac, flac, wav, pcm
+# speed = 1.0                               # Speed multiplier (0.25 to 4.0)
+# output = "speech.mp3"                     # Output file path (default: stdout)
+# quiet = false                             # Suppress progress messages
+
+#──────────────────────────────────────────────────────────────────────────────
 # AGENT COMMAND DEFAULTS
 # These settings apply when running: llmist agent "prompt"
 #──────────────────────────────────────────────────────────────────────────────

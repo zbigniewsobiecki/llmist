@@ -370,4 +370,216 @@ describe("CostReportingLLMistWrapper", () => {
       expect(reportedCosts.length).toBe(0);
     });
   });
+
+  describe("image.generate()", () => {
+    it("reports cost from image generation", async () => {
+      const mockClient = {
+        modelRegistry: createMockClient([]).modelRegistry,
+        stream: createMockClient([]).stream,
+        image: {
+          generate: mock(async () => ({
+            images: [{ url: "https://example.com/image.png" }],
+            model: "dall-e-3",
+            usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
+            cost: 0.04,
+          })),
+        },
+        speech: {
+          generate: mock(async () => ({
+            audio: new ArrayBuffer(1000),
+            model: "tts-1",
+            usage: { characterCount: 100 },
+            cost: 0.0015,
+            format: "mp3",
+          })),
+        },
+      } as unknown as LLMist;
+      const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
+
+      await wrapper.image.generate({
+        model: "dall-e-3",
+        prompt: "A cat in space",
+      });
+
+      expect(reportedCosts.length).toBe(1);
+      expect(reportedCosts[0]).toBe(0.04);
+    });
+
+    it("does not report cost when cost is zero", async () => {
+      const mockClient = {
+        modelRegistry: createMockClient([]).modelRegistry,
+        stream: createMockClient([]).stream,
+        image: {
+          generate: mock(async () => ({
+            images: [{ url: "https://example.com/image.png" }],
+            model: "test-model",
+            usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
+            cost: 0,
+          })),
+        },
+        speech: {
+          generate: mock(async () => ({ audio: new ArrayBuffer(0), model: "test", usage: { characterCount: 0 }, cost: 0, format: "mp3" })),
+        },
+      } as unknown as LLMist;
+      const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
+
+      await wrapper.image.generate({
+        model: "test-model",
+        prompt: "Test",
+      });
+
+      expect(reportedCosts.length).toBe(0);
+    });
+
+    it("does not report cost when cost is undefined", async () => {
+      const mockClient = {
+        modelRegistry: createMockClient([]).modelRegistry,
+        stream: createMockClient([]).stream,
+        image: {
+          generate: mock(async () => ({
+            images: [{ url: "https://example.com/image.png" }],
+            model: "test-model",
+            usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
+            // cost is undefined
+          })),
+        },
+        speech: {
+          generate: mock(async () => ({ audio: new ArrayBuffer(0), model: "test", usage: { characterCount: 0 }, format: "mp3" })),
+        },
+      } as unknown as LLMist;
+      const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
+
+      await wrapper.image.generate({
+        model: "test-model",
+        prompt: "Test",
+      });
+
+      expect(reportedCosts.length).toBe(0);
+    });
+  });
+
+  describe("speech.generate()", () => {
+    it("reports cost from speech generation", async () => {
+      const mockClient = {
+        modelRegistry: createMockClient([]).modelRegistry,
+        stream: createMockClient([]).stream,
+        image: {
+          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" }, cost: 0 })),
+        },
+        speech: {
+          generate: mock(async () => ({
+            audio: new ArrayBuffer(5000),
+            model: "tts-1-hd",
+            usage: { characterCount: 200 },
+            cost: 0.006,
+            format: "mp3",
+          })),
+        },
+      } as unknown as LLMist;
+      const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
+
+      await wrapper.speech.generate({
+        model: "tts-1-hd",
+        input: "A".repeat(200),
+        voice: "nova",
+      });
+
+      expect(reportedCosts.length).toBe(1);
+      expect(reportedCosts[0]).toBe(0.006);
+    });
+
+    it("does not report cost when cost is zero", async () => {
+      const mockClient = {
+        modelRegistry: createMockClient([]).modelRegistry,
+        stream: createMockClient([]).stream,
+        image: {
+          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" }, cost: 0 })),
+        },
+        speech: {
+          generate: mock(async () => ({
+            audio: new ArrayBuffer(100),
+            model: "test-tts",
+            usage: { characterCount: 10 },
+            cost: 0,
+            format: "mp3",
+          })),
+        },
+      } as unknown as LLMist;
+      const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
+
+      await wrapper.speech.generate({
+        model: "test-tts",
+        input: "Test",
+        voice: "voice1",
+      });
+
+      expect(reportedCosts.length).toBe(0);
+    });
+
+    it("does not report cost when cost is undefined", async () => {
+      const mockClient = {
+        modelRegistry: createMockClient([]).modelRegistry,
+        stream: createMockClient([]).stream,
+        image: {
+          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" } })),
+        },
+        speech: {
+          generate: mock(async () => ({
+            audio: new ArrayBuffer(100),
+            model: "test-tts",
+            usage: { characterCount: 10 },
+            format: "mp3",
+            // cost is undefined
+          })),
+        },
+      } as unknown as LLMist;
+      const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
+
+      await wrapper.speech.generate({
+        model: "test-tts",
+        input: "Test",
+        voice: "voice1",
+      });
+
+      expect(reportedCosts.length).toBe(0);
+    });
+
+    it("passes all options to underlying client", async () => {
+      const generateSpeechMock = mock(async () => ({
+        audio: new ArrayBuffer(1000),
+        model: "tts-1",
+        usage: { characterCount: 50 },
+        cost: 0.00075,
+        format: "opus",
+      }));
+
+      const mockClient = {
+        modelRegistry: createMockClient([]).modelRegistry,
+        stream: createMockClient([]).stream,
+        image: {
+          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" }, cost: 0 })),
+        },
+        speech: {
+          generate: generateSpeechMock,
+        },
+      } as unknown as LLMist;
+      const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
+
+      await wrapper.speech.generate({
+        model: "tts-1",
+        input: "Hello world!",
+        voice: "alloy",
+        responseFormat: "opus",
+        speed: 1.2,
+      });
+
+      expect(generateSpeechMock).toHaveBeenCalledWith({
+        model: "tts-1",
+        input: "Hello world!",
+        voice: "alloy",
+        responseFormat: "opus",
+        speed: 1.2,
+      });
+    });
+  });
 });
