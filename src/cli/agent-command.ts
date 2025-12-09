@@ -389,8 +389,11 @@ export async function executeAgent(
           progress.startCall(context.options.model, inputTokens);
           // Mark input tokens as accurate (not estimated)
           progress.setInputTokens(inputTokens, false);
+        },
 
-          // Write LLM request to debug log if enabled
+        // onLLMCallReady: Log the exact request being sent to the LLM
+        // This fires AFTER controller modifications (e.g., trailing messages)
+        onLLMCallReady: async (context) => {
           if (llmLogsBaseDir) {
             if (!llmSessionDir) {
               llmSessionDir = await createSessionDir(llmLogsBaseDir);
@@ -615,6 +618,16 @@ export async function executeAgent(
     parameterMapping: (text) => ({ message: text, done: false, type: "info" }),
     resultMapping: (text) => `ℹ️  ${text}`,
   });
+
+  // Inject ephemeral trailing message to encourage parallel gadget invocations
+  // This message is appended to each LLM request but NOT persisted in history
+  builder.withTrailingMessage((ctx) =>
+    [
+      `[Iteration ${ctx.iteration + 1}/${ctx.maxIterations}]`,
+      "Think carefully: what gadget invocations can you make in parallel right now?",
+      "Maximize efficiency by batching independent operations in a single response.",
+    ].join(" "),
+  );
 
   // Build and start the agent
   const agent = builder.ask(prompt);

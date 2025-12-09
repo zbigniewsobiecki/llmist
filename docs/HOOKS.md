@@ -962,6 +962,7 @@ Async control with short-circuit capability:
 | Hook | Context Properties |
 |------|-------------------|
 | `onLLMCallStart` | `iteration`, `options`, `logger` |
+| `onLLMCallReady` | `iteration`, `maxIterations`, `options`, `logger` |
 | `onLLMCallComplete` | `iteration`, `options`, `finishReason`, `usage`, `rawResponse`, `finalMessage`, `logger` |
 | `onLLMCallError` | `iteration`, `options`, `error`, `recovered`, `logger` |
 | `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger` |
