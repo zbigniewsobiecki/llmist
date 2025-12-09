@@ -54,6 +54,61 @@ const GEMINI_ROLE_MAP: Record<LLMMessage["role"], "user" | "model"> = {
   assistant: "model",
 };
 
+/**
+ * Wraps raw PCM audio data in a WAV file container.
+ *
+ * WAV format structure:
+ * - RIFF header (12 bytes)
+ * - fmt chunk (24 bytes) - describes audio format
+ * - data chunk (8 bytes + audio data)
+ *
+ * @param pcmData - Raw PCM audio samples
+ * @param sampleRate - Sample rate in Hz (e.g., 24000)
+ * @param bitsPerSample - Bits per sample (e.g., 16)
+ * @param numChannels - Number of audio channels (1 = mono, 2 = stereo)
+ * @returns ArrayBuffer containing valid WAV file
+ */
+function wrapPcmInWav(
+  pcmData: Uint8Array,
+  sampleRate: number,
+  bitsPerSample: number,
+  numChannels: number,
+): ArrayBuffer {
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const dataSize = pcmData.length;
+  const headerSize = 44;
+  const fileSize = headerSize + dataSize - 8; // File size minus RIFF header
+
+  const buffer = new ArrayBuffer(headerSize + dataSize);
+  const view = new DataView(buffer);
+  const uint8 = new Uint8Array(buffer);
+
+  // RIFF header
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, fileSize, true); // File size - 8
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+
+  // fmt chunk
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true); // fmt chunk size (16 for PCM)
+  view.setUint16(20, 1, true); // Audio format (1 = PCM)
+  view.setUint16(22, numChannels, true); // Number of channels
+  view.setUint32(24, sampleRate, true); // Sample rate
+  view.setUint32(28, byteRate, true); // Byte rate
+  view.setUint16(32, blockAlign, true); // Block align
+  view.setUint16(34, bitsPerSample, true); // Bits per sample
+
+  // data chunk
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, dataSize, true); // Data size
+
+  // Copy PCM data
+  uint8.set(pcmData, headerSize);
+
+  return buffer;
+}
+
 export class GeminiGenerativeProvider extends BaseProviderAdapter {
   readonly providerId = "gemini" as const;
 
@@ -104,10 +159,9 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
       const cost = calculateGeminiImageCost(options.model, aspectRatio, images.length);
 
       return {
+        // Gemini's imageBytes is already base64 encoded, so use it directly
         images: images.map((img) => ({
-          b64Json: img.image?.imageBytes
-            ? Buffer.from(img.image.imageBytes).toString("base64")
-            : undefined,
+          b64Json: img.image?.imageBytes ?? undefined,
         })),
         model: options.model,
         usage: {
@@ -194,27 +248,29 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     });
 
     // Extract audio from response
-    let audioData: ArrayBuffer | undefined;
+    let pcmData: Uint8Array | undefined;
     const candidate = response.candidates?.[0];
     if (candidate?.content?.parts) {
       for (const part of candidate.content.parts) {
         if ("inlineData" in part && part.inlineData?.data) {
-          // Convert base64 to ArrayBuffer
+          // Convert base64 to Uint8Array
           const base64 = part.inlineData.data;
           const binary = atob(base64);
-          const bytes = new Uint8Array(binary.length);
+          pcmData = new Uint8Array(binary.length);
           for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
+            pcmData[i] = binary.charCodeAt(i);
           }
-          audioData = bytes.buffer;
           break;
         }
       }
     }
 
-    if (!audioData) {
+    if (!pcmData) {
       throw new Error("No audio data in Gemini TTS response");
     }
+
+    // Wrap raw PCM data in WAV headers (Gemini returns 24kHz, 16-bit, mono PCM)
+    const audioData = wrapPcmInWav(pcmData, 24000, 16, 1);
 
     const cost = calculateGeminiSpeechCost(options.model, options.input.length);
 
