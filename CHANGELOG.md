@@ -1,3 +1,8 @@
+## 2.3.0 (2025-12-09)
+
+* Merge pull request #159 from zbigniewsobiecki/dev ([643d52d](https://github.com/zbigniewsobiecki/llmist/commit/643d52d)), closes [#159](https://github.com/zbigniewsobiecki/llmist/issues/159)
+* feat(testing): add test coverage and improve discoverability (#158) ([7f10c98](https://github.com/zbigniewsobiecki/llmist/commit/7f10c98)), closes [#158](https://github.com/zbigniewsobiecki/llmist/issues/158)
+
 ## 2.2.0 (2025-12-09)
 
 * feat(agent): add native abort signal handling in agent loop (#157) ([2b7fa46](https://github.com/zbigniewsobiecki/llmist/commit/2b7fa46)), closes [#157](https://github.com/zbigniewsobiecki/llmist/issues/157)
