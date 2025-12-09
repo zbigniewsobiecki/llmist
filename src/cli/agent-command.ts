@@ -240,6 +240,10 @@ export async function executeAgent(
       abortController.abort();
       progress.pause();
       env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
+    } else {
+      // Already cancelled - treat as quit request (like double Ctrl+C)
+      // This ensures the user can always exit even if the abort didn't fully propagate
+      handleQuit();
     }
   };
 
@@ -252,7 +256,7 @@ export async function executeAgent(
       // the executeAgent function is terminating and we don't need the listener.
       // This is called after readline closes to re-enable ESC key detection.
       if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
-        keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
+        keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel, handleCancel);
       }
     },
   };
@@ -283,9 +287,10 @@ export async function executeAgent(
     process.exit(130); // SIGINT convention: 128 + signal number (2)
   };
 
-  // Set up ESC key listener if in interactive TTY mode
+  // Set up ESC key and Ctrl+C listener if in interactive TTY mode
+  // Both ESC and Ctrl+C trigger handleCancel during streaming
   if (stdinIsInteractive && stdinStream.isTTY) {
-    keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel);
+    keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel, handleCancel);
   }
 
   // Set up SIGINT (Ctrl+C) listener - always active for graceful cancellation
@@ -319,7 +324,7 @@ export async function executeAgent(
     gadgetApprovals,
     defaultMode: "allowed",
   };
-  const approvalManager = new ApprovalManager(approvalConfig, env, progress);
+  const approvalManager = new ApprovalManager(approvalConfig, env, progress, keyboard);
 
   let usage: TokenUsage | undefined;
   let iterations = 0;
@@ -675,7 +680,13 @@ export async function executeAgent(
     // Always cleanup keyboard and signal listeners
     isStreaming = false;
     keyboard.cleanupEsc?.();
-    keyboard.cleanupSigint?.();
+
+    // Replace the complex SIGINT handler with a simple exit handler
+    // This ensures Ctrl+C always works even if something keeps the event loop alive
+    if (keyboard.cleanupSigint) {
+      keyboard.cleanupSigint();
+      process.once("SIGINT", () => process.exit(130)); // 130 = 128 + SIGINT (2)
+    }
   }
 
   // Flush any remaining buffered text with markdown rendering (includes partial on cancel)

@@ -9,6 +9,7 @@ import type {
   ApprovalContextProvider,
   ApprovalMode,
   ApprovalResult,
+  KeyboardCoordinator,
 } from "./types.js";
 
 /**
@@ -31,11 +32,13 @@ export class ApprovalManager {
    * @param config - Approval configuration with per-gadget modes
    * @param env - CLI environment for I/O operations
    * @param progress - Optional progress indicator to pause during prompts
+   * @param keyboard - Optional keyboard coordinator to disable ESC listener during prompts
    */
   constructor(
     private readonly config: ApprovalConfig,
     private readonly env: CLIEnvironment,
     private readonly progress?: StreamProgress,
+    private readonly keyboard?: KeyboardCoordinator,
   ) {
     // Register built-in context providers
     for (const provider of builtinContextProviders) {
@@ -132,26 +135,38 @@ export class ApprovalManager {
     // Pause progress indicator if available
     this.progress?.pause();
 
-    // Render approval UI
-    this.env.stderr.write(`\n${chalk.yellow("🔒 Approval required:")} ${context.summary}\n`);
-
-    if (context.details) {
-      this.env.stderr.write(`\n${renderColoredDiff(context.details)}\n`);
+    // Temporarily disable ESC listener for readline (raw mode conflict)
+    // This prevents interference between ESC key detection and readline input
+    if (this.keyboard?.cleanupEsc) {
+      this.keyboard.cleanupEsc();
+      this.keyboard.cleanupEsc = null;
     }
 
-    // Prompt user
-    const response = await this.prompt("   ⏎ approve, or type to reject: ");
+    try {
+      // Render approval UI
+      this.env.stderr.write(`\n${chalk.yellow("🔒 Approval required:")} ${context.summary}\n`);
 
-    // Empty input or "y"/"Y" = approved
-    const isApproved = response === "" || response.toLowerCase() === "y";
+      if (context.details) {
+        this.env.stderr.write(`\n${renderColoredDiff(context.details)}\n`);
+      }
 
-    if (isApproved) {
-      this.env.stderr.write(`   ${chalk.green("✓ Approved")}\n\n`);
-      return { approved: true };
+      // Prompt user
+      const response = await this.prompt("   ⏎ approve, or type to reject: ");
+
+      // Empty input or "y"/"Y" = approved
+      const isApproved = response === "" || response.toLowerCase() === "y";
+
+      if (isApproved) {
+        this.env.stderr.write(`   ${chalk.green("✓ Approved")}\n\n`);
+        return { approved: true };
+      }
+
+      this.env.stderr.write(`   ${chalk.red("✗ Denied")}\n\n`);
+      return { approved: false, reason: response || "Rejected by user" };
+    } finally {
+      // Restore ESC listener after readline closes
+      this.keyboard?.restore();
     }
-
-    this.env.stderr.write(`   ${chalk.red("✗ Denied")}\n\n`);
-    return { approved: false, reason: response || "Rejected by user" };
   }
 
   /**

@@ -6,6 +6,23 @@ import type { GadgetApprovalMode } from "../config.js";
 export type ApprovalMode = GadgetApprovalMode;
 
 /**
+ * Interface for managing keyboard listeners during approval prompts.
+ * Used to coordinate ESC key handling with readline input.
+ */
+export interface KeyboardCoordinator {
+  /**
+   * Cleanup function for the ESC key listener.
+   * Set to null after cleanup to prevent double-cleanup.
+   */
+  cleanupEsc: (() => void) | null;
+
+  /**
+   * Restores the ESC key listener after readline closes.
+   */
+  restore: () => void;
+}
+
+/**
  * Configuration for the approval system.
  */
 export interface ApprovalConfig {
