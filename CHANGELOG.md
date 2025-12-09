@@ -1,3 +1,7 @@
+## 2.2.0 (2025-12-09)
+
+* feat(agent): add native abort signal handling in agent loop (#157) ([2b7fa46](https://github.com/zbigniewsobiecki/llmist/commit/2b7fa46)), closes [#157](https://github.com/zbigniewsobiecki/llmist/issues/157)
+
 ## 2.1.0 (2025-12-09)
 
 * Merge pull request #156 from zbigniewsobiecki/dev ([eb86a60](https://github.com/zbigniewsobiecki/llmist/commit/eb86a60)), closes [#156](https://github.com/zbigniewsobiecki/llmist/issues/156)
