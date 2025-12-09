@@ -45,3 +45,37 @@ export async function writeLogFile(dir: string, filename: string, content: strin
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, filename), content, "utf-8");
 }
+
+/**
+ * Formats a timestamp for session directory naming.
+ * Returns format: "YYYY-MM-DD_HH-MM-SS" (e.g., "2025-12-09_14-30-45")
+ */
+export function formatSessionTimestamp(date: Date = new Date()): string {
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+}
+
+/**
+ * Creates a session directory with a timestamped name.
+ * Returns the full path to the created directory.
+ */
+export async function createSessionDir(baseDir: string): Promise<string> {
+  const timestamp = formatSessionTimestamp();
+  const sessionDir = join(baseDir, timestamp);
+  await mkdir(sessionDir, { recursive: true });
+  return sessionDir;
+}
+
+/**
+ * Formats a call number as a zero-padded 4-digit string.
+ * E.g., 1 → "0001", 42 → "0042"
+ */
+export function formatCallNumber(n: number): string {
+  return n.toString().padStart(4, "0");
+}
