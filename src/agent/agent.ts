@@ -42,6 +42,7 @@ import type {
   LLMCallControllerContext,
   LLMErrorControllerContext,
   ObserveLLMCallContext,
+  ObserveLLMCallReadyContext,
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
 } from "./hooks.js";
@@ -456,6 +457,20 @@ export class Agent {
             llmOptions = { ...llmOptions, ...action.modifiedOptions };
           }
         }
+
+        // Observer: LLM call ready (after controller modifications)
+        // This is the ideal point for logging the exact request being sent to the LLM
+        await this.safeObserve(async () => {
+          if (this.hooks.observers?.onLLMCallReady) {
+            const context: ObserveLLMCallReadyContext = {
+              iteration: currentIteration,
+              maxIterations: this.maxIterations,
+              options: llmOptions,
+              logger: this.logger,
+            };
+            await this.hooks.observers.onLLMCallReady(context);
+          }
+        });
 
         // Call LLM
         this.logger.info("Calling LLM", { model: this.model });
