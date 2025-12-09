@@ -1,6 +1,14 @@
 import OpenAI from "openai";
 import type { ChatCompletionChunk } from "openai/resources/chat/completions";
 import { encoding_for_model, type TiktokenModel } from "tiktoken";
+import type {
+  ImageGenerationOptions,
+  ImageGenerationResult,
+  ImageModelSpec,
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+  SpeechModelSpec,
+} from "../core/media-types.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
@@ -11,7 +19,19 @@ import {
   OPENAI_NAME_FIELD_OVERHEAD_TOKENS,
   OPENAI_REPLY_PRIMING_TOKENS,
 } from "./constants.js";
+import {
+  calculateOpenAIImageCost,
+  getOpenAIImageModelSpec,
+  isOpenAIImageModel,
+  openaiImageModels,
+} from "./openai-image-models.js";
 import { OPENAI_MODELS } from "./openai-models.js";
+import {
+  calculateOpenAISpeechCost,
+  getOpenAISpeechModelSpec,
+  isOpenAISpeechModel,
+  openaiSpeechModels,
+} from "./openai-speech-models.js";
 import { createProviderFromEnv } from "./utils.js";
 
 const ROLE_MAP: Record<LLMMessage["role"], "system" | "user" | "assistant"> = {
@@ -47,6 +67,120 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
 
   getModelSpecs() {
     return OPENAI_MODELS;
+  }
+
+  // =========================================================================
+  // Image Generation
+  // =========================================================================
+
+  getImageModelSpecs(): ImageModelSpec[] {
+    return openaiImageModels;
+  }
+
+  supportsImageGeneration(modelId: string): boolean {
+    return isOpenAIImageModel(modelId);
+  }
+
+  async generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult> {
+    const client = this.client as OpenAI;
+    const spec = getOpenAIImageModelSpec(options.model);
+
+    const size = options.size ?? spec?.defaultSize ?? "1024x1024";
+    const quality = options.quality ?? spec?.defaultQuality ?? "standard";
+    const n = options.n ?? 1;
+
+    // Determine which parameters to include based on model capabilities
+    const isDallE2 = options.model === "dall-e-2";
+    const isGptImage = options.model.startsWith("gpt-image");
+
+    // Build request payload conditionally
+    // - DALL-E 2: no quality parameter, no response_format
+    // - GPT Image: quality uses low/medium/high, no response_format (uses output_format)
+    // - DALL-E 3: supports quality (standard/hd) and response_format
+    const requestParams: Parameters<typeof client.images.generate>[0] = {
+      model: options.model,
+      prompt: options.prompt,
+      size: size as "1024x1024" | "1024x1792" | "1792x1024" | "256x256" | "512x512",
+      n,
+    };
+
+    // Only DALL-E 3 supports the quality parameter with standard/hd values
+    if (!isDallE2 && !isGptImage) {
+      requestParams.quality = quality as "standard" | "hd";
+    }
+
+    // GPT Image models use output_format instead of response_format
+    if (isGptImage) {
+      // GPT Image supports: png, webp, jpeg
+      // Map b64_json to the default format (png) since GPT Image API is different
+      // For now, we'll always return URLs for GPT Image models
+      // Note: GPT Image API uses different response structure
+    } else if (!isDallE2) {
+      // DALL-E 3 supports response_format
+      requestParams.response_format = options.responseFormat ?? "url";
+    }
+
+    const response = await client.images.generate(requestParams);
+
+    const cost = calculateOpenAIImageCost(options.model, size, quality, n);
+    // Type assertion: we're not using streaming, so response is ImagesResponse
+    const images = (response as OpenAI.Images.ImagesResponse).data ?? [];
+
+    return {
+      images: images.map((img) => ({
+        url: img.url,
+        b64Json: img.b64_json,
+        revisedPrompt: img.revised_prompt,
+      })),
+      model: options.model,
+      usage: {
+        imagesGenerated: images.length,
+        size,
+        quality,
+      },
+      cost,
+    };
+  }
+
+  // =========================================================================
+  // Speech Generation
+  // =========================================================================
+
+  getSpeechModelSpecs(): SpeechModelSpec[] {
+    return openaiSpeechModels;
+  }
+
+  supportsSpeechGeneration(modelId: string): boolean {
+    return isOpenAISpeechModel(modelId);
+  }
+
+  async generateSpeech(options: SpeechGenerationOptions): Promise<SpeechGenerationResult> {
+    const client = this.client as OpenAI;
+    const spec = getOpenAISpeechModelSpec(options.model);
+
+    const format = options.responseFormat ?? spec?.defaultFormat ?? "mp3";
+    const voice = options.voice ?? spec?.defaultVoice ?? "alloy";
+
+    const response = await client.audio.speech.create({
+      model: options.model,
+      input: options.input,
+      voice: voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer",
+      response_format: format,
+      speed: options.speed ?? 1.0,
+    });
+
+    const audioBuffer = await response.arrayBuffer();
+    const cost = calculateOpenAISpeechCost(options.model, options.input.length);
+
+    return {
+      audio: audioBuffer,
+      model: options.model,
+      usage: {
+        characterCount: options.input.length,
+      },
+      cost,
+      format,
+    };
   }
 
   protected buildRequestPayload(

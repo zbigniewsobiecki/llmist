@@ -1,10 +1,30 @@
-import { FunctionCallingConfigMode, GoogleGenAI } from "@google/genai";
+import { FunctionCallingConfigMode, GoogleGenAI, Modality } from "@google/genai";
+import type {
+  ImageGenerationOptions,
+  ImageGenerationResult,
+  ImageModelSpec,
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+  SpeechModelSpec,
+} from "../core/media-types.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
+import {
+  calculateGeminiImageCost,
+  geminiImageModels,
+  getGeminiImageModelSpec,
+  isGeminiImageModel,
+} from "./gemini-image-models.js";
 import { GEMINI_MODELS } from "./gemini-models.js";
+import {
+  calculateGeminiSpeechCost,
+  geminiSpeechModels,
+  getGeminiSpeechModelSpec,
+  isGeminiSpeechModel,
+} from "./gemini-speech-models.js";
 import { createProviderFromEnv } from "./utils.js";
 
 type GeminiContent = {
@@ -43,6 +63,170 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
 
   getModelSpecs() {
     return GEMINI_MODELS;
+  }
+
+  // =========================================================================
+  // Image Generation
+  // =========================================================================
+
+  getImageModelSpecs(): ImageModelSpec[] {
+    return geminiImageModels;
+  }
+
+  supportsImageGeneration(modelId: string): boolean {
+    return isGeminiImageModel(modelId);
+  }
+
+  async generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult> {
+    const client = this.client as GoogleGenAI;
+    const spec = getGeminiImageModelSpec(options.model);
+    const isImagenModel = options.model.startsWith("imagen");
+
+    const aspectRatio = options.size ?? spec?.defaultSize ?? "1:1";
+    const n = options.n ?? 1;
+
+    if (isImagenModel) {
+      // Use Imagen API for imagen models
+      // Note: safetyFilterLevel and personGeneration can be configured for less restrictive filtering
+      // Valid safetyFilterLevel values: "BLOCK_NONE" | "BLOCK_ONLY_HIGH" | "BLOCK_MEDIUM_AND_ABOVE" | "BLOCK_LOW_AND_ABOVE"
+      // Valid personGeneration values: "ALLOW_ALL" | "ALLOW_ADULT" | "DONT_ALLOW"
+      const response = await client.models.generateImages({
+        model: options.model,
+        prompt: options.prompt,
+        config: {
+          numberOfImages: n,
+          aspectRatio: aspectRatio,
+          outputMimeType: options.responseFormat === "b64_json" ? "image/png" : "image/jpeg",
+        },
+      });
+
+      const images = response.generatedImages ?? [];
+      const cost = calculateGeminiImageCost(options.model, aspectRatio, images.length);
+
+      return {
+        images: images.map((img) => ({
+          b64Json: img.image?.imageBytes
+            ? Buffer.from(img.image.imageBytes).toString("base64")
+            : undefined,
+        })),
+        model: options.model,
+        usage: {
+          imagesGenerated: images.length,
+          size: aspectRatio,
+          quality: "standard",
+        },
+        cost,
+      };
+    }
+    // Use native Gemini image generation for gemini-* models
+    const response = await client.models.generateContent({
+      model: options.model,
+      contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+      config: {
+        responseModalities: [Modality.IMAGE, Modality.TEXT],
+      },
+    });
+
+    // Extract images from response
+    const images: Array<{ b64Json?: string; url?: string }> = [];
+    const candidate = response.candidates?.[0];
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if ("inlineData" in part && part.inlineData) {
+          images.push({
+            b64Json: part.inlineData.data,
+          });
+        }
+      }
+    }
+
+    const cost = calculateGeminiImageCost(options.model, aspectRatio, images.length);
+
+    return {
+      images,
+      model: options.model,
+      usage: {
+        imagesGenerated: images.length,
+        size: aspectRatio,
+        quality: "standard",
+      },
+      cost,
+    };
+  }
+
+  // =========================================================================
+  // Speech Generation
+  // =========================================================================
+
+  getSpeechModelSpecs(): SpeechModelSpec[] {
+    return geminiSpeechModels;
+  }
+
+  supportsSpeechGeneration(modelId: string): boolean {
+    return isGeminiSpeechModel(modelId);
+  }
+
+  async generateSpeech(options: SpeechGenerationOptions): Promise<SpeechGenerationResult> {
+    const client = this.client as GoogleGenAI;
+    const spec = getGeminiSpeechModelSpec(options.model);
+
+    const voice = options.voice ?? spec?.defaultVoice ?? "Zephyr";
+
+    // Gemini TTS uses speech configuration
+    const response = await client.models.generateContent({
+      model: options.model,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: options.input }],
+        },
+      ],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: voice,
+            },
+          },
+        },
+      },
+    });
+
+    // Extract audio from response
+    let audioData: ArrayBuffer | undefined;
+    const candidate = response.candidates?.[0];
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if ("inlineData" in part && part.inlineData?.data) {
+          // Convert base64 to ArrayBuffer
+          const base64 = part.inlineData.data;
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          audioData = bytes.buffer;
+          break;
+        }
+      }
+    }
+
+    if (!audioData) {
+      throw new Error("No audio data in Gemini TTS response");
+    }
+
+    const cost = calculateGeminiSpeechCost(options.model, options.input.length);
+
+    return {
+      audio: audioData,
+      model: options.model,
+      usage: {
+        characterCount: options.input.length,
+      },
+      cost,
+      format: spec?.defaultFormat ?? "wav",
+    };
   }
 
   protected buildRequestPayload(

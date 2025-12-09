@@ -9,11 +9,21 @@
  */
 
 import type { LLMist } from "../core/client.js";
+import type {
+  ImageGenerationOptions,
+  ImageGenerationResult,
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+} from "../core/media-types.js";
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { LLMGenerationOptions, LLMStream, LLMStreamChunk } from "../core/options.js";
 import type { QuickOptions } from "../core/quick-methods.js";
 import { resolveModel } from "../core/model-shortcuts.js";
-import type { CostReportingLLMist } from "./types.js";
+import type {
+  CostReportingImageNamespace,
+  CostReportingLLMist,
+  CostReportingSpeechNamespace,
+} from "./types.js";
 
 /**
  * Callback type for reporting costs.
@@ -39,10 +49,37 @@ export type CostReporter = (amount: number) => void;
  * ```
  */
 export class CostReportingLLMistWrapper implements CostReportingLLMist {
+  readonly image: CostReportingImageNamespace;
+  readonly speech: CostReportingSpeechNamespace;
+
   constructor(
     private readonly client: LLMist,
     private readonly reportCost: CostReporter,
-  ) {}
+  ) {
+    // Initialize image namespace with cost reporting
+    this.image = {
+      generate: async (options: ImageGenerationOptions): Promise<ImageGenerationResult> => {
+        const result = await this.client.image.generate(options);
+        // Report cost if available in the result
+        if (result.cost !== undefined && result.cost > 0) {
+          this.reportCost(result.cost);
+        }
+        return result;
+      },
+    };
+
+    // Initialize speech namespace with cost reporting
+    this.speech = {
+      generate: async (options: SpeechGenerationOptions): Promise<SpeechGenerationResult> => {
+        const result = await this.client.speech.generate(options);
+        // Report cost if available in the result
+        if (result.cost !== undefined && result.cost > 0) {
+          this.reportCost(result.cost);
+        }
+        return result;
+      },
+    };
+  }
 
   /**
    * Access to model registry for cost estimation.
