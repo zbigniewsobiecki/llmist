@@ -35,6 +35,7 @@ export type {
   ApprovalContextProvider,
   ApprovalMode,
   ApprovalResult,
+  KeyboardCoordinator,
 } from "./types.js";
 
 // Manager

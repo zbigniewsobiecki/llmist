@@ -76,6 +76,8 @@ export const runCommand = createGadget({
       return "status=1\n\nerror: argv array cannot be empty";
     }
 
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     try {
       // Spawn process directly without shell - arguments passed as-is
       const proc = Bun.spawn(argv, {
@@ -84,9 +86,9 @@ export const runCommand = createGadget({
         stderr: "pipe",
       });
 
-      // Create a timeout promise
+      // Create a timeout promise with cleanup
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           proc.kill();
           reject(new Error(`Command timed out after ${timeout}ms`));
         }, timeout);
@@ -94,6 +96,11 @@ export const runCommand = createGadget({
 
       // Wait for process to complete or timeout
       const exitCode = await Promise.race([proc.exited, timeoutPromise]);
+
+      // Clear timeout on normal exit to prevent dangling timer
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
 
       // Collect output
       const stdout = await new Response(proc.stdout).text();
@@ -104,6 +111,10 @@ export const runCommand = createGadget({
 
       return `status=${exitCode}\n\n${output || "(no output)"}`;
     } catch (error) {
+      // Clear timeout on error path too
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       const message = error instanceof Error ? error.message : String(error);
       return `status=1\n\nerror: ${message}`;
     }
