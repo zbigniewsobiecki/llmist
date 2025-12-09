@@ -63,13 +63,18 @@ export function formatSessionTimestamp(date: Date = new Date()): string {
 
 /**
  * Creates a session directory with a timestamped name.
- * Returns the full path to the created directory.
+ * Returns the full path to the created directory, or undefined if creation fails.
  */
-export async function createSessionDir(baseDir: string): Promise<string> {
+export async function createSessionDir(baseDir: string): Promise<string | undefined> {
   const timestamp = formatSessionTimestamp();
   const sessionDir = join(baseDir, timestamp);
-  await mkdir(sessionDir, { recursive: true });
-  return sessionDir;
+  try {
+    await mkdir(sessionDir, { recursive: true });
+    return sessionDir;
+  } catch (error) {
+    console.warn(`[llmist] Failed to create log session directory: ${sessionDir}`, error);
+    return undefined;
+  }
 }
 
 /**

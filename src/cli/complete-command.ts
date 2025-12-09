@@ -57,9 +57,11 @@ export async function executeComplete(
   // Log request before streaming
   if (llmLogsBaseDir) {
     llmSessionDir = await createSessionDir(llmLogsBaseDir);
-    const filename = "0001.request";
-    const content = formatLlmRequest(messages);
-    await writeLogFile(llmSessionDir, filename, content);
+    if (llmSessionDir) {
+      const filename = "0001.request";
+      const content = formatLlmRequest(messages);
+      await writeLogFile(llmSessionDir, filename, content);
+    }
   }
 
   const stream = client.stream({

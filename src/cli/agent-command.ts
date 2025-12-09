@@ -390,9 +390,11 @@ export async function executeAgent(
             if (!llmSessionDir) {
               llmSessionDir = await createSessionDir(llmLogsBaseDir);
             }
-            const filename = `${formatCallNumber(llmCallCounter)}.request`;
-            const content = formatLlmRequest(context.options.messages);
-            await writeLogFile(llmSessionDir, filename, content);
+            if (llmSessionDir) {
+              const filename = `${formatCallNumber(llmCallCounter)}.request`;
+              const content = formatLlmRequest(context.options.messages);
+              await writeLogFile(llmSessionDir, filename, content);
+            }
           }
         },
         // onStreamChunk: Real-time updates as LLM generates tokens
