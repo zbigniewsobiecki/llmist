@@ -13,7 +13,13 @@ import type { AgentConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { loadGadgets } from "./gadgets.js";
-import { formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
+import {
+  createSessionDir,
+  formatCallNumber,
+  formatLlmRequest,
+  resolveLogDir,
+  writeLogFile,
+} from "./llm-logging.js";
 import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
 import {
   createEscKeyListener,
@@ -318,9 +324,9 @@ export async function executeAgent(
   let usage: TokenUsage | undefined;
   let iterations = 0;
 
-  // Resolve LLM debug log directories (if enabled)
-  const llmRequestsDir = resolveLogDir(options.logLlmRequests, "requests");
-  const llmResponsesDir = resolveLogDir(options.logLlmResponses, "responses");
+  // Resolve LLM debug log directory (if enabled)
+  const llmLogsBaseDir = resolveLogDir(options.logLlmRequests, "requests");
+  let llmSessionDir: string | undefined;
   let llmCallCounter = 0;
 
   // Count tokens accurately using provider-specific methods
@@ -380,10 +386,15 @@ export async function executeAgent(
           progress.setInputTokens(inputTokens, false);
 
           // Write LLM request to debug log if enabled
-          if (llmRequestsDir) {
-            const filename = `${Date.now()}_call_${llmCallCounter}.request.txt`;
-            const content = formatLlmRequest(context.options.messages);
-            await writeLogFile(llmRequestsDir, filename, content);
+          if (llmLogsBaseDir) {
+            if (!llmSessionDir) {
+              llmSessionDir = await createSessionDir(llmLogsBaseDir);
+            }
+            if (llmSessionDir) {
+              const filename = `${formatCallNumber(llmCallCounter)}.request`;
+              const content = formatLlmRequest(context.options.messages);
+              await writeLogFile(llmSessionDir, filename, content);
+            }
           }
         },
         // onStreamChunk: Real-time updates as LLM generates tokens
@@ -475,9 +486,9 @@ export async function executeAgent(
           }
 
           // Write LLM response to debug log if enabled
-          if (llmResponsesDir) {
-            const filename = `${Date.now()}_call_${llmCallCounter}.response.txt`;
-            await writeLogFile(llmResponsesDir, filename, context.rawResponse);
+          if (llmSessionDir) {
+            const filename = `${formatCallNumber(llmCallCounter)}.response`;
+            await writeLogFile(llmSessionDir, filename, context.rawResponse);
           }
         },
       },
