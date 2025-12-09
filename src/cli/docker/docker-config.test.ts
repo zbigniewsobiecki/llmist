@@ -19,6 +19,7 @@ describe("docker-config", () => {
         "env-vars": ["GH_TOKEN", "CUSTOM_VAR"],
         "dev-mode": true,
         "dev-source": "~/Code/llmist",
+        "docker-args": ["-p", "3000:3000", "--memory", "4g"],
         mounts: [
           { source: "~/data", target: "/data", permission: "ro" },
         ],
@@ -34,6 +35,7 @@ describe("docker-config", () => {
       expect(result["env-vars"]).toEqual(["GH_TOKEN", "CUSTOM_VAR"]);
       expect(result["dev-mode"]).toBe(true);
       expect(result["dev-source"]).toBe("~/Code/llmist");
+      expect(result["docker-args"]).toEqual(["-p", "3000:3000", "--memory", "4g"]);
       expect(result.mounts).toHaveLength(1);
       expect(result.mounts![0]).toEqual({
         source: "~/data",
@@ -168,6 +170,44 @@ describe("docker-config", () => {
       it("should reject non-string", () => {
         expect(() => validateDockerConfig({ "dev-source": null }, "docker")).toThrow(
           "[docker].dev-source must be a string",
+        );
+      });
+    });
+
+    describe("docker-args field", () => {
+      it("should accept array of strings", () => {
+        const result = validateDockerConfig(
+          { "docker-args": ["-p", "3000:3000", "--network", "host"] },
+          "docker",
+        );
+        expect(result["docker-args"]).toEqual(["-p", "3000:3000", "--network", "host"]);
+      });
+
+      it("should accept empty array", () => {
+        const result = validateDockerConfig({ "docker-args": [] }, "docker");
+        expect(result["docker-args"]).toEqual([]);
+      });
+
+      it("should accept single argument", () => {
+        const result = validateDockerConfig({ "docker-args": ["--privileged"] }, "docker");
+        expect(result["docker-args"]).toEqual(["--privileged"]);
+      });
+
+      it("should reject non-array", () => {
+        expect(() => validateDockerConfig({ "docker-args": "-p 3000:3000" }, "docker")).toThrow(
+          "[docker].docker-args must be an array",
+        );
+      });
+
+      it("should reject array with non-strings", () => {
+        expect(() => validateDockerConfig({ "docker-args": ["-p", 3000] }, "docker")).toThrow(
+          "[docker].docker-args[1] must be a string",
+        );
+      });
+
+      it("should reject array with null values", () => {
+        expect(() => validateDockerConfig({ "docker-args": ["-p", null] }, "docker")).toThrow(
+          "[docker].docker-args[1] must be a string",
         );
       });
     });

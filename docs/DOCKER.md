@@ -82,6 +82,9 @@ env-vars = ["GH_TOKEN", "MY_API_KEY"]
 # Custom Docker image name (default: "llmist-sandbox")
 # image-name = "my-custom-llmist"
 
+# Extra arguments to docker run (ports, network, memory, etc.)
+# docker-args = ["-p", "3000:3000"]
+
 # Custom Dockerfile (see "Custom Dockerfile" section below)
 # dockerfile = """..."""
 ```
@@ -209,6 +212,55 @@ By default, these API keys are always forwarded:
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
+
+## Extra Docker Arguments
+
+Pass additional arguments directly to `docker run` using `docker-args`. This is useful for:
+- Port mapping (`-p`)
+- Network modes (`--network`)
+- Resource limits (`--memory`, `--cpus`)
+- GPU access (`--gpus`)
+- Any other Docker option
+
+```toml
+[docker]
+enabled = true
+
+# Expose ports for dev servers
+docker-args = ["-p", "3000:3000", "-p", "8080:8080"]
+```
+
+### Common Examples
+
+```toml
+# Single port
+docker-args = ["-p", "31337:31337"]
+
+# Multiple ports
+docker-args = ["-p", "3000:3000", "-p", "5173:5173", "-p", "8080:8080"]
+
+# Host networking (access all host ports)
+docker-args = ["--network", "host"]
+
+# GPU access (requires nvidia-docker)
+docker-args = ["--gpus", "all"]
+
+# Resource limits
+docker-args = ["--memory", "4g", "--cpus", "2"]
+
+# Combined
+docker-args = [
+  "-p", "3000:3000",
+  "--memory", "4g",
+]
+```
+
+> **Note:** Arguments are passed directly to `docker run`. Refer to
+> [Docker run reference](https://docs.docker.com/reference/cli/docker/container/run/) for all options.
+
+### Security Note
+
+The `docker-args` option is only read from your global `~/.llmist/cli.toml` config file. llmist does not support project-level configuration files, which prevents malicious repositories from injecting dangerous Docker arguments like `--privileged` or `-v /:/host`.
 
 ## Container Detection
 
