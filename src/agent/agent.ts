@@ -41,6 +41,7 @@ import type {
   BeforeLLMCallAction,
   LLMCallControllerContext,
   LLMErrorControllerContext,
+  ObserveAbortContext,
   ObserveLLMCallContext,
   ObserveLLMCallReadyContext,
   ObserveLLMCompleteContext,
@@ -381,6 +382,28 @@ export class Agent {
     });
 
     while (currentIteration < this.maxIterations) {
+      // Check abort signal at start of each iteration for immediate termination
+      if (this.signal?.aborted) {
+        this.logger.info("Agent loop terminated by abort signal", {
+          iteration: currentIteration,
+          reason: this.signal.reason,
+        });
+
+        // Observer: Notify abort
+        await this.safeObserve(async () => {
+          if (this.hooks.observers?.onAbort) {
+            const context: ObserveAbortContext = {
+              iteration: currentIteration,
+              reason: this.signal?.reason,
+              logger: this.logger,
+            };
+            await this.hooks.observers.onAbort(context);
+          }
+        });
+
+        return; // Clean exit from generator
+      }
+
       this.logger.debug("Starting iteration", { iteration: currentIteration });
 
       try {

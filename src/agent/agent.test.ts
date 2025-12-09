@@ -218,4 +218,178 @@ describe("Agent Architecture", () => {
       expect(agent).toBeDefined();
     });
   });
+
+  describe("Agent abort handling", () => {
+    it("should terminate loop immediately when abort signal is already aborted", async () => {
+      const abortController = new AbortController();
+      abortController.abort("pre-aborted");
+
+      const mockClientAbort = {
+        stream: vi.fn().mockImplementation(async function* () {
+          yield { text: "Test response" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientAbort)
+        .withModel("test:model")
+        .withGadgets()
+        .withSignal(abortController.signal)
+        .withMaxIterations(10)
+        .ask("Test prompt");
+
+      const events: unknown[] = [];
+      for await (const event of agent.run()) {
+        events.push(event);
+      }
+
+      // Should have no events because loop terminated before first iteration
+      expect(events).toHaveLength(0);
+      // Stream should never have been called
+      expect(mockClientAbort.stream).not.toHaveBeenCalled();
+    });
+
+    it("should terminate loop when abort signal is triggered mid-loop", async () => {
+      const abortController = new AbortController();
+      let streamCallCount = 0;
+
+      const mockClientAbort = {
+        stream: vi.fn().mockImplementation(async function* () {
+          streamCallCount++;
+          // Abort after first stream call completes
+          if (streamCallCount === 1) {
+            abortController.abort("user cancelled");
+          }
+          yield { text: "Test response" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientAbort)
+        .withModel("test:model")
+        .withGadgets()
+        .withSignal(abortController.signal)
+        .withMaxIterations(10)
+        .withTextOnlyHandler("acknowledge") // Keep loop going after text-only response
+        .ask("Test prompt");
+
+      for await (const _event of agent.run()) {
+        // consume events
+      }
+
+      // Should have called stream only once before abort was detected
+      expect(streamCallCount).toBe(1);
+    });
+
+    it("should call onAbort observer when aborted", async () => {
+      const abortController = new AbortController();
+      const onAbortMock = vi.fn();
+
+      const mockClientAbort = {
+        stream: vi.fn().mockImplementation(async function* () {
+          abortController.abort("user cancelled");
+          yield { text: "Test response" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientAbort)
+        .withModel("test:model")
+        .withGadgets()
+        .withSignal(abortController.signal)
+        .withMaxIterations(10)
+        .withTextOnlyHandler("acknowledge") // Keep loop going after text-only response
+        .withHooks({
+          observers: {
+            onAbort: onAbortMock,
+          },
+        })
+        .ask("Test prompt");
+
+      for await (const _event of agent.run()) {
+        // consume events
+      }
+
+      expect(onAbortMock).toHaveBeenCalledTimes(1);
+      expect(onAbortMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          iteration: 1,
+          reason: "user cancelled",
+        }),
+      );
+    });
+
+    it("should not call onAbort observer when completing normally", async () => {
+      const onAbortMock = vi.fn();
+
+      const mockClientAbort = {
+        stream: vi.fn().mockImplementation(async function* () {
+          yield { text: "Test response" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientAbort)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(1)
+        .withHooks({
+          observers: {
+            onAbort: onAbortMock,
+          },
+        })
+        .ask("Test prompt");
+
+      for await (const _event of agent.run()) {
+        // consume events
+      }
+
+      expect(onAbortMock).not.toHaveBeenCalled();
+    });
+
+    it("should include abort reason in onAbort context", async () => {
+      const abortController = new AbortController();
+      const customReason = { code: "TIMEOUT", message: "Operation timed out" };
+      let receivedContext: { iteration: number; reason?: unknown } | null = null;
+
+      const mockClientAbort = {
+        stream: vi.fn().mockImplementation(async function* () {
+          abortController.abort(customReason);
+          yield { text: "Test" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientAbort)
+        .withModel("test:model")
+        .withGadgets()
+        .withSignal(abortController.signal)
+        .withTextOnlyHandler("acknowledge") // Keep loop going after text-only response
+        .withHooks({
+          observers: {
+            onAbort: (ctx) => {
+              receivedContext = { iteration: ctx.iteration, reason: ctx.reason };
+            },
+          },
+        })
+        .ask("Test");
+
+      for await (const _event of agent.run()) {
+        // consume
+      }
+
+      expect(receivedContext).not.toBeNull();
+      expect(receivedContext?.reason).toEqual(customReason);
+    });
+  });
 });

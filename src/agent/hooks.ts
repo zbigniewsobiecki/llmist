@@ -260,6 +260,9 @@ export interface Observers {
 
   /** Called when context compaction occurs */
   onCompaction?: (context: ObserveCompactionContext) => void | Promise<void>;
+
+  /** Called when the agent loop is terminated by an abort signal */
+  onAbort?: (context: ObserveAbortContext) => void | Promise<void>;
 }
 
 /**
@@ -273,6 +276,19 @@ export interface ObserveCompactionContext {
   event: CompactionEvent;
   /** Cumulative compaction statistics */
   stats: CompactionStats;
+  /** Logger instance */
+  logger: Logger<ILogObj>;
+}
+
+/**
+ * Context provided when the agent is aborted via AbortSignal.
+ * Read-only observation point.
+ */
+export interface ObserveAbortContext {
+  /** Current iteration when abort was detected */
+  iteration: number;
+  /** Abort reason if provided via AbortController.abort(reason) */
+  reason?: unknown;
   /** Logger instance */
   logger: Logger<ILogObj>;
 }
