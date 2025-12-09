@@ -1,3 +1,14 @@
+## 2.1.0 (2025-12-09)
+
+* Merge pull request #156 from zbigniewsobiecki/dev ([eb86a60](https://github.com/zbigniewsobiecki/llmist/commit/eb86a60)), closes [#156](https://github.com/zbigniewsobiecki/llmist/issues/156)
+* feat(agent): add onLLMCallReady hook for post-controller logging (#154) ([2c40cbd](https://github.com/zbigniewsobiecki/llmist/commit/2c40cbd)), closes [#154](https://github.com/zbigniewsobiecki/llmist/issues/154)
+* feat(cli): session-based LLM request/response logging (#150) ([3a5fb5d](https://github.com/zbigniewsobiecki/llmist/commit/3a5fb5d)), closes [#150](https://github.com/zbigniewsobiecki/llmist/issues/150)
+* feat(cli): universal approval prompt format and add ed to Docker (#151) ([0686701](https://github.com/zbigniewsobiecki/llmist/commit/0686701)), closes [#151](https://github.com/zbigniewsobiecki/llmist/issues/151)
+* feat(docker): add docker-args for extra container options (#152) ([d2a7360](https://github.com/zbigniewsobiecki/llmist/commit/d2a7360)), closes [#152](https://github.com/zbigniewsobiecki/llmist/issues/152)
+* feat(gadgets): add onAbort and createLinkedAbortController helpers (#155) ([91c60eb](https://github.com/zbigniewsobiecki/llmist/commit/91c60eb)), closes [#155](https://github.com/zbigniewsobiecki/llmist/issues/155)
+* fix(cli): improve Ctrl+C and ESC signal handling reliability (#153) ([d0ace4e](https://github.com/zbigniewsobiecki/llmist/commit/d0ace4e)), closes [#153](https://github.com/zbigniewsobiecki/llmist/issues/153)
+* docs(gadgets): add multiline body example to RunCommand (#149) ([3a99272](https://github.com/zbigniewsobiecki/llmist/commit/3a99272)), closes [#149](https://github.com/zbigniewsobiecki/llmist/issues/149)
+
 ## 2.0.0 (2025-12-08)
 
 * Merge pull request #148 from zbigniewsobiecki/dev ([21575d9](https://github.com/zbigniewsobiecki/llmist/commit/21575d9)), closes [#148](https://github.com/zbigniewsobiecki/llmist/issues/148)
