@@ -98,7 +98,7 @@ export class StreamParser {
       // Name + ID: GadgetName:calc_1
       return {
         actualName: parts[0],
-        invocationId: parts[1],
+        invocationId: parts[1].trim(),
         dependencies: [],
       };
     } else {
@@ -109,7 +109,7 @@ export class StreamParser {
         .filter((d) => d.length > 0);
       return {
         actualName: parts[0],
-        invocationId: parts[1],
+        invocationId: parts[1].trim(),
         dependencies: deps,
       };
     }

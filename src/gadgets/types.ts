@@ -39,8 +39,6 @@ export interface GadgetExecutionResult {
   breaksLoop?: boolean;
   /** Cost of gadget execution in USD. Defaults to 0 if not provided by gadget. */
   cost?: number;
-  /** If this gadget was skipped due to a failed dependency, the invocation ID of that dependency. */
-  skippedDueToFailedDependency?: string;
 }
 
 /**

@@ -387,6 +387,25 @@ export class StreamProcessor {
 
     // Check for dependencies
     if (call.dependencies.length > 0) {
+      // Check for self-referential dependency (circular to self)
+      if (call.dependencies.includes(call.invocationId)) {
+        this.logger.warn("Gadget has self-referential dependency (depends on itself)", {
+          gadgetName: call.gadgetName,
+          invocationId: call.invocationId,
+        });
+        this.failedInvocations.add(call.invocationId);
+        const skipEvent: GadgetSkippedEvent = {
+          type: "gadget_skipped",
+          gadgetName: call.gadgetName,
+          invocationId: call.invocationId,
+          parameters: call.parameters ?? {},
+          failedDependency: call.invocationId,
+          failedDependencyError: `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`,
+        };
+        events.push(skipEvent);
+        return events;
+      }
+
       // Check if any dependency has failed
       const failedDep = call.dependencies.find((dep) => this.failedInvocations.has(dep));
       if (failedDep) {
@@ -772,12 +791,33 @@ export class StreamProcessor {
 
     // Warn about any remaining unresolved gadgets (circular or missing dependencies)
     if (this.pendingGadgets.size > 0) {
+      // Collect all pending invocation IDs to detect circular dependencies
+      const pendingIds = new Set(this.pendingGadgets.keys());
+
       for (const [invocationId, call] of this.pendingGadgets) {
         const missingDeps = call.dependencies.filter((dep) => !this.completedResults.has(dep));
-        this.logger.warn("Gadget has unresolvable dependencies (possibly circular or missing)", {
+
+        // Categorize the dependency issue
+        const circularDeps = missingDeps.filter((dep) => pendingIds.has(dep));
+        const trulyMissingDeps = missingDeps.filter((dep) => !pendingIds.has(dep));
+
+        let errorMessage: string;
+        let logLevel: "warn" | "error" = "warn";
+
+        if (circularDeps.length > 0 && trulyMissingDeps.length > 0) {
+          errorMessage = `Dependencies unresolvable: circular=[${circularDeps.join(", ")}], missing=[${trulyMissingDeps.join(", ")}]`;
+          logLevel = "error";
+        } else if (circularDeps.length > 0) {
+          errorMessage = `Circular dependency detected: "${invocationId}" depends on "${circularDeps[0]}" which also depends on "${invocationId}" (directly or indirectly)`;
+        } else {
+          errorMessage = `Dependency "${missingDeps[0]}" was never executed - check that the invocation ID exists and is spelled correctly`;
+        }
+
+        this.logger[logLevel]("Gadget has unresolvable dependencies", {
           gadgetName: call.gadgetName,
           invocationId,
-          missingDependencies: missingDeps,
+          circularDependencies: circularDeps,
+          missingDependencies: trulyMissingDeps,
         });
 
         // Mark as failed and emit skip event
@@ -788,7 +828,7 @@ export class StreamProcessor {
           invocationId,
           parameters: call.parameters ?? {},
           failedDependency: missingDeps[0],
-          failedDependencyError: `Dependency "${missingDeps[0]}" was never executed (circular or missing)`,
+          failedDependencyError: errorMessage,
         };
         events.push(skipEvent);
       }

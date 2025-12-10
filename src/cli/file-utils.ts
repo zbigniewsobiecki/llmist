@@ -5,7 +5,7 @@
  * for use with multimodal LLM requests.
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
@@ -20,11 +20,58 @@ import {
 } from "../core/input-content.js";
 
 /**
+ * Default maximum file size: 50MB
+ * This prevents accidentally loading very large files into memory.
+ */
+export const DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+/**
+ * Options for file reading operations.
+ */
+export interface FileReadOptions {
+  /**
+   * Maximum allowed file size in bytes.
+   * Files larger than this will throw an error.
+   * Default: 50MB (DEFAULT_MAX_FILE_SIZE)
+   */
+  maxFileSize?: number;
+}
+
+/**
+ * Format file size as human-readable string.
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+/**
+ * Check file size before reading to prevent memory issues.
+ */
+async function checkFileSize(
+  absolutePath: string,
+  filePath: string,
+  maxSize: number,
+): Promise<void> {
+  const stats = await stat(absolutePath);
+  if (stats.size > maxSize) {
+    throw new Error(
+      `File "${filePath}" is too large (${formatFileSize(stats.size)}). ` +
+        `Maximum allowed size is ${formatFileSize(maxSize)}. ` +
+        `Consider compressing the file or using a smaller version.`,
+    );
+  }
+}
+
+/**
  * Read and validate an image file.
  *
  * @param filePath - Path to image file (absolute or relative to cwd)
+ * @param options - Optional configuration for file reading
  * @returns Image content part ready for LLM message
- * @throws Error if file doesn't exist or isn't a valid image format
+ * @throws Error if file doesn't exist, is too large, or isn't a valid image format
  *
  * @example
  * ```typescript
@@ -32,11 +79,16 @@ import {
  * const messages = [{ role: "user", content: [text("Describe this:"), imagePart] }];
  * ```
  */
-export async function readImageFile(filePath: string): Promise<ImageContentPart> {
+export async function readImageFile(
+  filePath: string,
+  options: FileReadOptions = {},
+): Promise<ImageContentPart> {
   const absolutePath = resolve(filePath);
+  const maxFileSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
 
   let buffer: Buffer;
   try {
+    await checkFileSize(absolutePath, filePath, maxFileSize);
     buffer = await readFile(absolutePath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -59,8 +111,9 @@ export async function readImageFile(filePath: string): Promise<ImageContentPart>
  * Read and validate an audio file.
  *
  * @param filePath - Path to audio file (absolute or relative to cwd)
+ * @param options - Optional configuration for file reading
  * @returns Audio content part ready for LLM message
- * @throws Error if file doesn't exist or isn't a valid audio format
+ * @throws Error if file doesn't exist, is too large, or isn't a valid audio format
  *
  * @example
  * ```typescript
@@ -68,11 +121,16 @@ export async function readImageFile(filePath: string): Promise<ImageContentPart>
  * const messages = [{ role: "user", content: [text("Transcribe:"), audioPart] }];
  * ```
  */
-export async function readAudioFile(filePath: string): Promise<AudioContentPart> {
+export async function readAudioFile(
+  filePath: string,
+  options: FileReadOptions = {},
+): Promise<AudioContentPart> {
   const absolutePath = resolve(filePath);
+  const maxFileSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
 
   let buffer: Buffer;
   try {
+    await checkFileSize(absolutePath, filePath, maxFileSize);
     buffer = await readFile(absolutePath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -96,13 +154,19 @@ export async function readAudioFile(filePath: string): Promise<AudioContentPart>
  * Use this when you need the raw data without converting to content parts.
  *
  * @param filePath - Path to file (absolute or relative to cwd)
+ * @param options - Optional configuration for file reading
  * @returns File contents as Buffer
- * @throws Error if file doesn't exist or can't be read
+ * @throws Error if file doesn't exist, is too large, or can't be read
  */
-export async function readFileBuffer(filePath: string): Promise<Buffer> {
+export async function readFileBuffer(
+  filePath: string,
+  options: FileReadOptions = {},
+): Promise<Buffer> {
   const absolutePath = resolve(filePath);
+  const maxFileSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
 
   try {
+    await checkFileSize(absolutePath, filePath, maxFileSize);
     return await readFile(absolutePath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
