@@ -25,13 +25,16 @@ export interface EventHandlers {
   /** Called when a gadget is about to be executed */
   onGadgetCall?: (call: {
     gadgetName: string;
+    invocationId: string;
     parameters?: Record<string, unknown>;
     parametersRaw: string;
+    dependencies: string[];
   }) => void | Promise<void>;
 
   /** Called when a gadget execution completes */
   onGadgetResult?: (result: {
     gadgetName: string;
+    invocationId: string;
     result?: string;
     error?: string;
     parameters: Record<string, unknown>;
@@ -74,8 +77,10 @@ export async function runWithHandlers(
         if (handlers.onGadgetCall) {
           await handlers.onGadgetCall({
             gadgetName: event.call.gadgetName,
+            invocationId: event.call.invocationId,
             parameters: event.call.parameters,
             parametersRaw: event.call.parametersRaw,
+            dependencies: event.call.dependencies,
           });
         }
         break;

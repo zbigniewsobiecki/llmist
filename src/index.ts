@@ -180,6 +180,7 @@ export type {
   GadgetExecuteResult,
   GadgetExecuteReturn,
   GadgetExecutionResult,
+  GadgetSkippedEvent,
   ParsedGadgetCall,
   StreamEvent,
   TextOnlyAction,

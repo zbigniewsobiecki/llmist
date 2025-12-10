@@ -11,8 +11,23 @@ import { StreamProcessor } from "./stream-processor.js";
 import type { AgentHooks } from "./hooks.js";
 
 // Helper to create a gadget call string
-function createGadgetCallString(gadgetName: string, params: Record<string, string> = {}): string {
-  let result = `${GADGET_START_PREFIX}${gadgetName}\n`;
+// Supports optional invocation ID and dependencies via the new syntax:
+// - gadgetName → auto ID, no deps
+// - gadgetName:id → explicit ID, no deps
+// - gadgetName:id:dep1,dep2 → explicit ID with deps
+function createGadgetCallString(
+  gadgetName: string,
+  params: Record<string, string> = {},
+  options?: { invocationId?: string; dependencies?: string[] },
+): string {
+  let header = gadgetName;
+  if (options?.invocationId) {
+    header += `:${options.invocationId}`;
+    if (options.dependencies && options.dependencies.length > 0) {
+      header += `:${options.dependencies.join(",")}`;
+    }
+  }
+  let result = `${GADGET_START_PREFIX}${header}\n`;
   for (const [key, value] of Object.entries(params)) {
     result += `${GADGET_ARG_PREFIX}${key}\n${value}\n`;
   }
@@ -1013,6 +1028,410 @@ test value
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
       expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("custom prefix result");
+    });
+  });
+
+  describe("Gadget Dependencies", () => {
+    it("executes gadget without dependencies immediately", async () => {
+      const testGadget = createMockGadget({ name: "TestGadget", result: "immediate" });
+      registry.registerByClass(testGadget);
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+      const gadgetCall = createGadgetCallString("TestGadget", { name: "test" }, { invocationId: "g1" });
+      const stream = createTextStream(gadgetCall);
+
+      const result = await processor.process(stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(1);
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.invocationId).toBe("g1");
+    });
+
+    it("executes dependent gadget after dependency completes", async () => {
+      const executionOrder: string[] = [];
+      const gadgetA = createMockGadget({
+        name: "GadgetA",
+        resultFn: async () => {
+          executionOrder.push("A");
+          return "result_a";
+        },
+      });
+      const gadgetB = createMockGadget({
+        name: "GadgetB",
+        resultFn: async () => {
+          executionOrder.push("B");
+          return "result_b";
+        },
+      });
+      registry.registerByClass(gadgetA);
+      registry.registerByClass(gadgetB);
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      // B depends on A, but A comes first in stream
+      const gadgetCalls =
+        createGadgetCallString("GadgetA", {}, { invocationId: "a1" }) +
+        "\n" +
+        createGadgetCallString("GadgetB", {}, { invocationId: "b1", dependencies: ["a1"] });
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await processor.process(stream);
+
+      // Both should execute
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(2);
+
+      // A should execute before B
+      expect(executionOrder).toEqual(["A", "B"]);
+    });
+
+    it("defers execution when dependency not yet complete", async () => {
+      const executionOrder: string[] = [];
+      const gadgetA = createMockGadget({
+        name: "GadgetA",
+        resultFn: async () => {
+          executionOrder.push("A");
+          return "result_a";
+        },
+      });
+      const gadgetB = createMockGadget({
+        name: "GadgetB",
+        resultFn: async () => {
+          executionOrder.push("B");
+          return "result_b";
+        },
+      });
+      registry.registerByClass(gadgetA);
+      registry.registerByClass(gadgetB);
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      // B is declared first but depends on A which comes second
+      const gadgetCalls =
+        createGadgetCallString("GadgetB", {}, { invocationId: "b1", dependencies: ["a1"] }) +
+        "\n" +
+        createGadgetCallString("GadgetA", {}, { invocationId: "a1" });
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await processor.process(stream);
+
+      // Both should execute, but A runs first (dependency)
+      expect(executionOrder).toEqual(["A", "B"]);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(2);
+    });
+
+    it("skips gadget when dependency fails", async () => {
+      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Dependency failed" });
+      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      registry.registerByClass(errorGadget);
+      registry.registerByClass(dependentGadget);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        stopOnGadgetError: false, // Don't stop so we can test skip behavior
+      });
+
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
+        "\n" +
+        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await processor.process(stream);
+
+      // Should have one gadget_result (error) and one gadget_skipped
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+
+      expect(gadgetResults).toHaveLength(1);
+      expect(skippedEvents).toHaveLength(1);
+
+      if (skippedEvents[0].type === "gadget_skipped") {
+        expect(skippedEvents[0].gadgetName).toBe("DependentGadget");
+        expect(skippedEvents[0].failedDependency).toBe("err1");
+      }
+    });
+
+    it("propagates failure to transitive dependents", async () => {
+      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Root failure" });
+      const gadgetB = createMockGadget({ name: "GadgetB", result: "b" });
+      const gadgetC = createMockGadget({ name: "GadgetC", result: "c" });
+      registry.registerByClass(errorGadget);
+      registry.registerByClass(gadgetB);
+      registry.registerByClass(gadgetC);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        stopOnGadgetError: false,
+      });
+
+      // Chain: A (error) -> B -> C
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget", {}, { invocationId: "a1" }) +
+        "\n" +
+        createGadgetCallString("GadgetB", {}, { invocationId: "b1", dependencies: ["a1"] }) +
+        "\n" +
+        createGadgetCallString("GadgetC", {}, { invocationId: "c1", dependencies: ["b1"] });
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await processor.process(stream);
+
+      // A executes with error, B and C are skipped
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+
+      expect(gadgetResults).toHaveLength(1); // Just A
+      expect(skippedEvents).toHaveLength(2); // B and C skipped
+    });
+
+    it("executes pending gadgets in parallel when their dependencies complete", async () => {
+      const startTimes: Record<string, number> = {};
+      const endTimes: Record<string, number> = {};
+
+      const createDelayedGadget = (name: string, delayMs: number) =>
+        createMockGadget({
+          name,
+          resultFn: async () => {
+            startTimes[name] = Date.now();
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            endTimes[name] = Date.now();
+            return `${name}_result`;
+          },
+        });
+
+      // Root gadget is fast
+      const root = createMockGadget({ name: "Root", result: "root_result" });
+      // B and C are slow and both depend on Root
+      const gadgetB = createDelayedGadget("GadgetB", 50);
+      const gadgetC = createDelayedGadget("GadgetC", 50);
+      registry.registerByClass(root);
+      registry.registerByClass(gadgetB);
+      registry.registerByClass(gadgetC);
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      // B and C both depend on Root - they should execute in parallel after Root completes
+      const gadgetCalls = [
+        createGadgetCallString("GadgetB", {}, { invocationId: "b1", dependencies: ["root1"] }),
+        createGadgetCallString("GadgetC", {}, { invocationId: "c1", dependencies: ["root1"] }),
+        createGadgetCallString("Root", {}, { invocationId: "root1" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+
+      const startTime = Date.now();
+      await processor.process(stream);
+      const totalTime = Date.now() - startTime;
+
+      // B and C should run in parallel after Root (~50ms each but parallel, not ~100ms sequential)
+      // Allow tolerance for test execution overhead
+      expect(totalTime).toBeLessThan(90);
+    });
+
+    it("handles diamond dependency pattern correctly", async () => {
+      const executionOrder: string[] = [];
+      const createTrackingGadget = (name: string) =>
+        createMockGadget({
+          name,
+          resultFn: async () => {
+            executionOrder.push(name);
+            return `${name}_result`;
+          },
+        });
+
+      registry.registerByClass(createTrackingGadget("A"));
+      registry.registerByClass(createTrackingGadget("B"));
+      registry.registerByClass(createTrackingGadget("C"));
+      registry.registerByClass(createTrackingGadget("D"));
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      // Diamond: A -> B, A -> C, B -> D, C -> D
+      const gadgetCalls = [
+        createGadgetCallString("A", {}, { invocationId: "a1" }),
+        createGadgetCallString("B", {}, { invocationId: "b1", dependencies: ["a1"] }),
+        createGadgetCallString("C", {}, { invocationId: "c1", dependencies: ["a1"] }),
+        createGadgetCallString("D", {}, { invocationId: "d1", dependencies: ["b1", "c1"] }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await processor.process(stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(4);
+
+      // A must execute first
+      expect(executionOrder[0]).toBe("A");
+      // D must execute last
+      expect(executionOrder[3]).toBe("D");
+      // B and C can be in either order (parallel)
+      expect(executionOrder.slice(1, 3).sort()).toEqual(["B", "C"]);
+    });
+
+    it("handles missing dependency reference gracefully", async () => {
+      const testGadget = createMockGadget({ name: "TestGadget", result: "test" });
+      registry.registerByClass(testGadget);
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      // Reference a non-existent dependency
+      const gadgetCall = createGadgetCallString("TestGadget", {}, {
+        invocationId: "t1",
+        dependencies: ["nonexistent"],
+      });
+
+      const stream = createTextStream(gadgetCall);
+      const result = await processor.process(stream);
+
+      // Should be skipped due to unresolvable dependency
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+      expect(skippedEvents).toHaveLength(1);
+      if (skippedEvents[0].type === "gadget_skipped") {
+        expect(skippedEvents[0].failedDependencyError).toContain("never executed");
+      }
+    });
+
+    it("calls onDependencySkipped controller", async () => {
+      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
+      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      registry.registerByClass(errorGadget);
+      registry.registerByClass(dependentGadget);
+
+      const onDependencySkipped = mock(async () => ({ action: "skip" as const }));
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        stopOnGadgetError: false,
+        hooks: {
+          controllers: { onDependencySkipped },
+        },
+      });
+
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
+        "\n" +
+        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+
+      const stream = createTextStream(gadgetCalls);
+      await processor.process(stream);
+
+      expect(onDependencySkipped).toHaveBeenCalledTimes(1);
+      expect(onDependencySkipped.mock.calls[0][0]).toMatchObject({
+        gadgetName: "DependentGadget",
+        invocationId: "dep1",
+        failedDependency: "err1",
+      });
+    });
+
+    it("controller can override skip with execute_anyway", async () => {
+      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
+      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "executed_anyway" });
+      registry.registerByClass(errorGadget);
+      registry.registerByClass(dependentGadget);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        stopOnGadgetError: false,
+        hooks: {
+          controllers: {
+            onDependencySkipped: async () => ({ action: "execute_anyway" }),
+          },
+        },
+      });
+
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
+        "\n" +
+        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await processor.process(stream);
+
+      // Both should have results (no skip)
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(2);
+
+      const dependentResult = gadgetResults.find(
+        (e) => e.type === "gadget_result" && e.result.invocationId === "dep1",
+      );
+      expect(dependentResult?.type === "gadget_result" && dependentResult.result.result).toBe("executed_anyway");
+    });
+
+    it("controller can provide fallback result", async () => {
+      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
+      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      registry.registerByClass(errorGadget);
+      registry.registerByClass(dependentGadget);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        stopOnGadgetError: false,
+        hooks: {
+          controllers: {
+            onDependencySkipped: async () => ({
+              action: "use_fallback",
+              fallbackResult: "fallback_value",
+            }),
+          },
+        },
+      });
+
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
+        "\n" +
+        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await processor.process(stream);
+
+      // Both should have results
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(2);
+
+      const dependentResult = gadgetResults.find(
+        (e) => e.type === "gadget_result" && e.result.invocationId === "dep1",
+      );
+      expect(dependentResult?.type === "gadget_result" && dependentResult.result.result).toBe("fallback_value");
+    });
+
+    it("calls onGadgetSkipped observer", async () => {
+      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
+      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      registry.registerByClass(errorGadget);
+      registry.registerByClass(dependentGadget);
+
+      const onGadgetSkipped = mock(() => {});
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        stopOnGadgetError: false,
+        hooks: {
+          observers: { onGadgetSkipped },
+        },
+      });
+
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
+        "\n" +
+        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+
+      const stream = createTextStream(gadgetCalls);
+      await processor.process(stream);
+
+      expect(onGadgetSkipped).toHaveBeenCalledTimes(1);
+      expect(onGadgetSkipped.mock.calls[0][0]).toMatchObject({
+        gadgetName: "DependentGadget",
+        invocationId: "dep1",
+        failedDependency: "err1",
+      });
     });
   });
 });

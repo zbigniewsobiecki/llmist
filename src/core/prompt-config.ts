@@ -147,7 +147,9 @@ export const DEFAULT_PROMPTS: Required<
   rules: () => [
     "Output ONLY plain text with the exact markers - never use function/tool calling",
     "You can invoke multiple gadgets in a single response",
-    "For dependent gadgets, invoke the first one and wait for the result",
+    "Gadgets without dependencies execute immediately (in parallel if multiple)",
+    "Use :invocation_id:dep1,dep2 syntax when a gadget needs results from prior gadgets",
+    "If any dependency fails, dependent gadgets are automatically skipped",
   ],
 
   customExamples: null,

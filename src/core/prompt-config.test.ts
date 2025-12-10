@@ -144,7 +144,7 @@ describe("prompt-config", () => {
       expect(typeof DEFAULT_PROMPTS.rules).toBe("function");
       const rules = DEFAULT_PROMPTS.rules(mockContext);
       expect(rules).toBeArray();
-      expect(rules.length).toBe(3);
+      expect(rules.length).toBe(5);
       expect(rules[0]).toContain("plain text with the exact markers");
     });
 
@@ -168,7 +168,7 @@ describe("prompt-config", () => {
 
       // Other fields should use defaults
       const rulesResult = resolveRulesTemplate(config.rules, mockContext);
-      expect(rulesResult.length).toBe(3); // Default rules count
+      expect(rulesResult.length).toBe(5); // Default rules count
     });
 
     it("should support full custom configuration", () => {

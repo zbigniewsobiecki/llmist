@@ -173,7 +173,7 @@ describe("Observers (Read-Only Hooks)", () => {
       const mockAdapter = new MockAdapter([
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -417,7 +417,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:123\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}TestGadget:123`,
+          text: `${GADGET_START_PREFIX}TestGadget:123\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}23`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -451,10 +451,10 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}`,
         },
         {
-          text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}TestGadget:2`,
+          text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -489,7 +489,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:456\n${GADGET_ARG_PREFIX}message\nsuccess\n${GADGET_END_PREFIX}TestGadget:456`,
+          text: `${GADGET_START_PREFIX}TestGadget:456\n${GADGET_ARG_PREFIX}message\nsuccess\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -527,7 +527,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}ErrorGadget:789\n{}\n${GADGET_END_PREFIX}ErrorGadget:789`,
+          text: `${GADGET_START_PREFIX}ErrorGadget:789\n{}\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -559,7 +559,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -958,7 +958,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -992,7 +992,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\noriginal\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\noriginal\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1034,7 +1034,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:42\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:42`,
+          text: `${GADGET_START_PREFIX}TestGadget:42\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1062,7 +1062,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1103,7 +1103,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:99\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:99`,
+          text: `${GADGET_START_PREFIX}TestGadget:99\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1127,7 +1127,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1322,7 +1322,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         // First iteration with gadget call
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1398,7 +1398,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         // First iteration with gadget
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1556,7 +1556,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1590,7 +1590,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1631,7 +1631,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:42\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:42`,
+          text: `${GADGET_START_PREFIX}TestGadget:42\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1662,7 +1662,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}ErrorGadget:1\n{}\n${GADGET_END_PREFIX}ErrorGadget:1`,
+          text: `${GADGET_START_PREFIX}ErrorGadget:1\n{}\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1697,7 +1697,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1741,7 +1741,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:99\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:99`,
+          text: `${GADGET_START_PREFIX}TestGadget:99\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -1830,7 +1830,7 @@ describe("Hook System Integration", () => {
       const mockAdapter = new MockAdapter([
         [
           {
-            text: `Text ${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `Text ${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1907,14 +1907,14 @@ describe("Hook System Integration", () => {
         // Iteration 0: gadget call
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}`,
           },
           { text: "", finishReason: "stop" },
         ],
         // Iteration 1: another gadget call
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}TestGadget:2`,
+            text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -1960,7 +1960,7 @@ describe("Hook System Integration", () => {
       const mockAdapter = new MockAdapter([
         [
           {
-            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
           },
           { text: "", finishReason: "stop" },
         ],
@@ -2004,7 +2004,7 @@ describe("Hook System Integration", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}ErrorGadget:1\n{}\n${GADGET_END_PREFIX}ErrorGadget:1`,
+          text: `${GADGET_START_PREFIX}ErrorGadget:1\n{}\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -2072,7 +2072,7 @@ describe("Hook System Integration", () => {
       const stream = createMockStream([
         { text: "hello " },
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nworld\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nworld\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);
@@ -2124,7 +2124,7 @@ describe("Hook System Integration", () => {
 
       const stream = createMockStream([
         {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}TestGadget:1`,
+          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
         },
         { text: "", finishReason: "stop" },
       ]);

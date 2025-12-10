@@ -39,6 +39,8 @@ export interface GadgetExecutionResult {
   breaksLoop?: boolean;
   /** Cost of gadget execution in USD. Defaults to 0 if not provided by gadget. */
   cost?: number;
+  /** If this gadget was skipped due to a failed dependency, the invocation ID of that dependency. */
+  skippedDueToFailedDependency?: string;
 }
 
 /**
@@ -75,16 +77,31 @@ export interface ParsedGadgetCall {
   parametersRaw: string;
   parameters?: Record<string, unknown>;
   parseError?: string;
+  /** List of invocation IDs this gadget depends on. Empty array if no dependencies. */
+  dependencies: string[];
 }
 
 // Import compaction types
 import type { CompactionEvent } from "../agent/compaction/config.js";
+
+/** Event emitted when a gadget is skipped due to a failed dependency */
+export interface GadgetSkippedEvent {
+  type: "gadget_skipped";
+  gadgetName: string;
+  invocationId: string;
+  parameters: Record<string, unknown>;
+  /** The invocation ID of the dependency that failed */
+  failedDependency: string;
+  /** The error message from the failed dependency */
+  failedDependencyError: string;
+}
 
 // Stream chunk with text or gadget metadata
 export type StreamEvent =
   | { type: "text"; content: string }
   | { type: "gadget_call"; call: ParsedGadgetCall }
   | { type: "gadget_result"; result: GadgetExecutionResult }
+  | GadgetSkippedEvent
   | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string }
   | { type: "compaction"; event: CompactionEvent };
 

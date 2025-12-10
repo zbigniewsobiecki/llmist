@@ -71,17 +71,48 @@ export class StreamParser {
   }
 
   /**
-   * Parse gadget name, handling both old format (name:invocationId) and new format (just name).
-   * For new format, generates a unique invocation ID.
+   * Parse gadget name with optional invocation ID and dependencies.
+   *
+   * Supported formats:
+   * - `GadgetName` - Auto-generate ID, no dependencies
+   * - `GadgetName:my_id` - Explicit ID, no dependencies
+   * - `GadgetName:my_id:dep1,dep2` - Explicit ID with dependencies
+   *
+   * Dependencies must be comma-separated invocation IDs.
    */
-  private parseGadgetName(gadgetName: string): { actualName: string; invocationId: string } {
-    if (gadgetName.includes(":")) {
-      // Old format: gadgetName:invocationId - support for backward compatibility
-      const parts = gadgetName.split(":");
-      return { actualName: parts[0], invocationId: parts[1] };
+  private parseGadgetName(gadgetName: string): {
+    actualName: string;
+    invocationId: string;
+    dependencies: string[];
+  } {
+    const parts = gadgetName.split(":");
+
+    if (parts.length === 1) {
+      // Just name: GadgetName
+      return {
+        actualName: parts[0],
+        invocationId: `gadget_${++globalInvocationCounter}`,
+        dependencies: [],
+      };
+    } else if (parts.length === 2) {
+      // Name + ID: GadgetName:calc_1
+      return {
+        actualName: parts[0],
+        invocationId: parts[1],
+        dependencies: [],
+      };
+    } else {
+      // Name + ID + deps: GadgetName:calc_1:dep1,dep2
+      const deps = parts[2]
+        .split(",")
+        .map((d) => d.trim())
+        .filter((d) => d.length > 0);
+      return {
+        actualName: parts[0],
+        invocationId: parts[1],
+        dependencies: deps,
+      };
     }
-    // New format: just gadget name, generate unique ID
-    return { actualName: gadgetName, invocationId: `gadget_${++globalInvocationCounter}` };
   }
 
   /**
@@ -132,66 +163,37 @@ export class StreamParser {
       if (metadataEndIndex === -1) break; // Wait for more data
 
       const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
-      const { actualName: actualGadgetName, invocationId } = this.parseGadgetName(gadgetName);
+      const { actualName: actualGadgetName, invocationId, dependencies } =
+        this.parseGadgetName(gadgetName);
 
       const contentStartIndex = metadataEndIndex + 1;
 
       let partEndIndex: number;
       let endMarkerLength = 0;
 
-      if (gadgetName.includes(":")) {
-        // Old format - look for old format end marker
-        const oldEndMarker = `${this.endPrefix + actualGadgetName}:${invocationId}`;
-        partEndIndex = this.buffer.indexOf(oldEndMarker, contentStartIndex);
-        if (partEndIndex === -1) break; // Wait for more data
-        endMarkerLength = oldEndMarker.length;
+      // Look for end marker OR next start marker (implicit end)
+      // If a next gadget starts BEFORE an end marker, use that as implicit terminator
+
+      // Look for next gadget start (potential implicit end)
+      const nextStartPos = this.buffer.indexOf(this.startPrefix, contentStartIndex);
+
+      // Look for end marker
+      const endPos = this.buffer.indexOf(this.endPrefix, contentStartIndex);
+
+      // Decide which terminator to use:
+      // - If next start comes before end marker, use next start (implicit end)
+      // - Otherwise use the end marker if found
+      if (nextStartPos !== -1 && (endPos === -1 || nextStartPos < endPos)) {
+        // Found next gadget start before any end marker - implicit end
+        partEndIndex = nextStartPos;
+        endMarkerLength = 0; // Don't consume the next start marker
+      } else if (endPos !== -1) {
+        // Found proper end marker
+        partEndIndex = endPos;
+        endMarkerLength = this.endPrefix.length;
       } else {
-        // New format - look for end marker OR next start marker (implicit end)
-        // If a next gadget starts BEFORE an end marker, use that as implicit terminator
-
-        // Look for next gadget start (potential implicit end)
-        const nextStartPos = this.buffer.indexOf(this.startPrefix, contentStartIndex);
-
-        // Look for proper end marker
-        let validEndPos = -1;
-        let searchPos = contentStartIndex;
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const endPos = this.buffer.indexOf(this.endPrefix, searchPos);
-          if (endPos === -1) break;
-
-          // Check if this is a standalone end marker or part of old format
-          const afterEnd = this.buffer.substring(endPos + this.endPrefix.length);
-          if (
-            afterEnd.startsWith("\n") ||
-            afterEnd.startsWith("\r") ||
-            afterEnd.startsWith(this.startPrefix) ||
-            afterEnd.length === 0
-          ) {
-            // It's a standalone end marker
-            validEndPos = endPos;
-            break;
-          } else {
-            // It might be old format, skip this one
-            searchPos = endPos + this.endPrefix.length;
-          }
-        }
-
-        // Decide which terminator to use:
-        // - If next start comes before end marker, use next start (implicit end)
-        // - Otherwise use the end marker if found
-        if (nextStartPos !== -1 && (validEndPos === -1 || nextStartPos < validEndPos)) {
-          // Found next gadget start before any end marker - implicit end
-          partEndIndex = nextStartPos;
-          endMarkerLength = 0; // Don't consume the next start marker
-        } else if (validEndPos !== -1) {
-          // Found proper end marker
-          partEndIndex = validEndPos;
-          endMarkerLength = this.endPrefix.length;
-        } else {
-          // Neither end marker nor next start found - wait for more data
-          break;
-        }
+        // Neither end marker nor next start found - wait for more data
+        break;
       }
 
       // Extract parameters
@@ -208,6 +210,7 @@ export class StreamParser {
           parametersRaw,
           parameters,
           parseError,
+          dependencies,
         },
       };
 
@@ -242,7 +245,8 @@ export class StreamParser {
 
       if (metadataEndIndex !== -1) {
         const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
-        const { actualName: actualGadgetName, invocationId } = this.parseGadgetName(gadgetName);
+        const { actualName: actualGadgetName, invocationId, dependencies } =
+          this.parseGadgetName(gadgetName);
         const contentStartIndex = metadataEndIndex + 1;
 
         // Extract parameters (everything after the newline to end of buffer)
@@ -258,6 +262,7 @@ export class StreamParser {
             parametersRaw: parametersRaw,
             parameters,
             parseError,
+            dependencies,
           },
         };
 
