@@ -953,3 +953,190 @@ ${GADGET_END_PREFIX}`;
     });
   });
 });
+
+describe("dependency parsing", () => {
+  let parser: StreamParser;
+
+  beforeEach(() => {
+    resetGlobalInvocationCounter();
+    parser = new StreamParser();
+  });
+
+  it("parses gadget with no ID and no dependencies", () => {
+    const input = `${GADGET_START_PREFIX}Calculator
+${GADGET_ARG_PREFIX}a
+5
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "gadget_call",
+      call: {
+        gadgetName: "Calculator",
+        invocationId: "gadget_1",
+        dependencies: [],
+      },
+    });
+  });
+
+  it("parses gadget with explicit ID and no dependencies", () => {
+    const input = `${GADGET_START_PREFIX}Calculator:calc_1
+${GADGET_ARG_PREFIX}a
+5
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "gadget_call",
+      call: {
+        gadgetName: "Calculator",
+        invocationId: "calc_1",
+        dependencies: [],
+      },
+    });
+  });
+
+  it("parses gadget with explicit ID and single dependency", () => {
+    const input = `${GADGET_START_PREFIX}Summarize:sum_1:fetch_1
+${GADGET_ARG_PREFIX}format
+json
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "gadget_call",
+      call: {
+        gadgetName: "Summarize",
+        invocationId: "sum_1",
+        dependencies: ["fetch_1"],
+      },
+    });
+  });
+
+  it("parses gadget with explicit ID and multiple dependencies", () => {
+    const input = `${GADGET_START_PREFIX}MergeData:merge_1:fetch_1,fetch_2,fetch_3
+${GADGET_ARG_PREFIX}format
+json
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "gadget_call",
+      call: {
+        gadgetName: "MergeData",
+        invocationId: "merge_1",
+        dependencies: ["fetch_1", "fetch_2", "fetch_3"],
+      },
+    });
+  });
+
+  it("trims whitespace around dependency IDs", () => {
+    const input = `${GADGET_START_PREFIX}Process:proc_1:dep_1, dep_2 , dep_3
+${GADGET_ARG_PREFIX}data
+test
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    if (events[0]?.type === "gadget_call") {
+      expect(events[0].call.dependencies).toEqual(["dep_1", "dep_2", "dep_3"]);
+    }
+  });
+
+  it("handles empty dependency list (trailing colon)", () => {
+    const input = `${GADGET_START_PREFIX}Process:proc_1:
+${GADGET_ARG_PREFIX}data
+test
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    if (events[0]?.type === "gadget_call") {
+      expect(events[0].call.invocationId).toBe("proc_1");
+      expect(events[0].call.dependencies).toEqual([]);
+    }
+  });
+
+  it("handles trailing comma in dependencies", () => {
+    const input = `${GADGET_START_PREFIX}Process:proc_1:dep_1,dep_2,
+${GADGET_ARG_PREFIX}data
+test
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+
+    expect(events).toHaveLength(1);
+    if (events[0]?.type === "gadget_call") {
+      expect(events[0].call.dependencies).toEqual(["dep_1", "dep_2"]);
+    }
+  });
+
+  it("parses multiple gadgets with dependencies in one response", () => {
+    const input = `${GADGET_START_PREFIX}FetchData:fetch_1
+${GADGET_ARG_PREFIX}url
+https://api.example.com/users
+${GADGET_END_PREFIX}
+
+${GADGET_START_PREFIX}FetchData:fetch_2
+${GADGET_ARG_PREFIX}url
+https://api.example.com/orders
+${GADGET_END_PREFIX}
+
+${GADGET_START_PREFIX}MergeData:merge_1:fetch_1,fetch_2
+${GADGET_ARG_PREFIX}format
+json
+${GADGET_END_PREFIX}`;
+
+    const events = collectSyncEvents(parser.feed(input));
+    const gadgetCalls = events.filter((e) => e.type === "gadget_call");
+
+    expect(gadgetCalls).toHaveLength(3);
+
+    if (gadgetCalls[0]?.type === "gadget_call") {
+      expect(gadgetCalls[0].call.invocationId).toBe("fetch_1");
+      expect(gadgetCalls[0].call.dependencies).toEqual([]);
+    }
+
+    if (gadgetCalls[1]?.type === "gadget_call") {
+      expect(gadgetCalls[1].call.invocationId).toBe("fetch_2");
+      expect(gadgetCalls[1].call.dependencies).toEqual([]);
+    }
+
+    if (gadgetCalls[2]?.type === "gadget_call") {
+      expect(gadgetCalls[2].call.invocationId).toBe("merge_1");
+      expect(gadgetCalls[2].call.dependencies).toEqual(["fetch_1", "fetch_2"]);
+    }
+  });
+
+  it("handles incomplete gadget with dependencies in finalize", () => {
+    // Feed incomplete gadget
+    const events = collectSyncEvents(
+      parser.feed(`${GADGET_START_PREFIX}Process:proc_1:dep_1,dep_2
+${GADGET_ARG_PREFIX}data
+test`),
+    );
+
+    // No events yet (gadget incomplete)
+    expect(events).toHaveLength(0);
+
+    // Finalize should complete the gadget
+    const finalEvents = collectSyncEvents(parser.finalize());
+
+    expect(finalEvents).toHaveLength(1);
+    if (finalEvents[0]?.type === "gadget_call") {
+      expect(finalEvents[0].call.invocationId).toBe("proc_1");
+      expect(finalEvents[0].call.dependencies).toEqual(["dep_1", "dep_2"]);
+    }
+  });
+
+});

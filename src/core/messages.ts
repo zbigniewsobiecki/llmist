@@ -192,6 +192,8 @@ export class LLMMessageBuilder {
     // Format section
     parts.push("\nFORMAT:");
     parts.push(`\n  1. Start marker: ${this.startPrefix}gadget_name`);
+    parts.push(`\n     With ID: ${this.startPrefix}gadget_name:my_id`);
+    parts.push(`\n     With dependencies: ${this.startPrefix}gadget_name:my_id:dep1,dep2`);
     parts.push(`\n  2. ${formatDescription}`);
     parts.push(`\n  3. End marker: ${this.endPrefix}`);
 
@@ -250,6 +252,26 @@ Analyze the following:
 ${this.endPrefix}`;
 
     parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExample}`);
+
+    // Dependency example
+    const dependencyExample = `${this.startPrefix}fetch_data:fetch_1
+${this.argPrefix}url
+https://api.example.com/users
+${this.endPrefix}
+${this.startPrefix}fetch_data:fetch_2
+${this.argPrefix}url
+https://api.example.com/orders
+${this.endPrefix}
+${this.startPrefix}merge_data:merge_1:fetch_1,fetch_2
+${this.argPrefix}format
+json
+${this.endPrefix}`;
+
+    parts.push(`\n\nEXAMPLE (With Dependencies):
+merge_1 waits for fetch_1 AND fetch_2 to complete.
+If either fails, merge_1 is automatically skipped.
+
+${dependencyExample}`);
 
     // Block format syntax guide
     parts.push(`

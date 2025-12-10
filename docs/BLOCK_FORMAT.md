@@ -246,6 +246,100 @@ Markers are case-sensitive and must be exact:
 - `!!!GADGET_START:`, `!!!ARG:`, `!!!GADGET_END`
 - `!!!gadget_start:`, `!!!Arg:`, `!!!GADGET_end`
 
+## Dependencies
+
+Gadgets can specify dependencies on other gadgets using invocation IDs. This enables DAG (Directed Acyclic Graph) execution: independent gadgets run in parallel, dependent gadgets wait.
+
+### Syntax
+
+```
+!!!GADGET_START:GadgetName:invocation_id:dep1,dep2
+```
+
+| Component | Required | Description |
+|-----------|----------|-------------|
+| `GadgetName` | Yes | Name of the gadget to call |
+| `invocation_id` | Optional | Unique ID for this call (auto-generated if omitted) |
+| `dep1,dep2` | Optional | Comma-separated IDs this gadget depends on |
+
+### Examples
+
+**No dependencies (immediate execution):**
+```
+!!!GADGET_START:FetchData
+!!!ARG:url
+/api/users
+!!!GADGET_END
+```
+
+**With invocation ID (no dependencies):**
+```
+!!!GADGET_START:FetchData:fetch_users
+!!!ARG:url
+/api/users
+!!!GADGET_END
+```
+
+**With dependencies:**
+```
+!!!GADGET_START:FetchData:fetch_users
+!!!ARG:url
+/api/users
+!!!GADGET_END
+
+!!!GADGET_START:FetchData:fetch_orders
+!!!ARG:url
+/api/orders
+!!!GADGET_END
+
+!!!GADGET_START:MergeData:merge_all:fetch_users,fetch_orders
+!!!ARG:format
+json
+!!!GADGET_END
+```
+
+In this example:
+1. `fetch_users` and `fetch_orders` execute **in parallel** (no dependencies)
+2. `merge_all` **waits** for both to complete before executing
+3. If `fetch_users` fails, `merge_all` is automatically **skipped**
+
+### Handling Dependency Events
+
+```typescript
+await LLMist.createAgent()
+  .withGadgets(FetchData, MergeData)
+  .askWith('Merge user and order data', {
+    onGadgetCall: (call) => {
+      console.log(`${call.gadgetName}:${call.invocationId}`);
+      if (call.dependencies.length > 0) {
+        console.log(`  Depends on: ${call.dependencies.join(', ')}`);
+      }
+    },
+  });
+```
+
+### Failure Propagation
+
+When a dependency fails:
+- The dependent gadget is skipped by default
+- A `gadget_skipped` event is emitted
+- Downstream dependents are also skipped
+
+Customize with the `onDependencySkipped` controller:
+
+```typescript
+.withHooks({
+  controllers: {
+    onDependencySkipped: async (ctx) => {
+      // Options:
+      return { action: 'skip' };              // Default: skip execution
+      return { action: 'execute_anyway' };    // Ignore failed dependency
+      return { action: 'use_fallback', fallbackResult: '[]' };  // Use synthetic result
+    },
+  },
+})
+```
+
 ## Customizing Markers
 
 You can customize the marker prefixes if needed:

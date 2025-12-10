@@ -33,6 +33,7 @@ bunx tsx examples/01-basic-usage.ts
 | [08-hook-presets-advanced.ts](./08-hook-presets-advanced.ts) | Advanced preset patterns, cost tracking, analytics |
 | [09-filesystem-gadgets.ts](./09-filesystem-gadgets.ts) | Secure file system operations with path sandboxing |
 | [10-text-handling.ts](./10-text-handling.ts) | Text response handling: textOnlyHandler, textWithGadgetsHandler |
+| [11-gadget-dependencies.ts](./11-gadget-dependencies.ts) | Gadget dependencies (DAG execution) |
 | [13-syntactic-sugar.ts](./13-syntactic-sugar.ts) | Fluent API showcase |
 | [cli.example.toml](./cli.example.toml) | CLI configuration file example |
 

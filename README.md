@@ -322,6 +322,12 @@ for await (const event of agent.run()) {
 
 📖 **[Streaming Guide](./docs/STREAMING.md)** | **[Examples](./examples/05-streaming.ts)**
 
+### 🔗 Gadget Dependencies (DAG Execution)
+
+LLMs can specify execution order between gadgets. Independent gadgets run in parallel; dependent gadgets wait for their dependencies. Failed dependencies automatically skip downstream gadgets.
+
+📖 **[Block Format](./docs/BLOCK_FORMAT.md#dependencies)** | **[Example](./examples/11-gadget-dependencies.ts)**
+
 ### 🧪 Mock Testing
 
 ```typescript
@@ -422,6 +428,7 @@ Comprehensive examples are available in the **[examples/](./examples/)** directo
 | **[06-model-catalog.ts](./examples/06-model-catalog.ts)** | Model queries and cost estimation |
 | **[07-logging.ts](./examples/07-logging.ts)** | Logging and debugging |
 | **[13-syntactic-sugar.ts](./examples/13-syntactic-sugar.ts)** | Fluent API showcase |
+| **[11-gadget-dependencies.ts](./examples/11-gadget-dependencies.ts)** | Gadget dependencies (DAG execution) |
 
 **Run any example:**
 ```bash

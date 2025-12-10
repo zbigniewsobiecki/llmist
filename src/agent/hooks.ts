@@ -216,6 +216,22 @@ export interface ObserveGadgetCompleteContext {
 }
 
 /**
+ * Context provided when a gadget is skipped due to a failed dependency.
+ * Read-only observation point.
+ */
+export interface ObserveGadgetSkippedContext {
+  iteration: number;
+  gadgetName: string;
+  invocationId: string;
+  parameters: Readonly<Record<string, unknown>>;
+  /** The invocation ID of the dependency that failed */
+  failedDependency: string;
+  /** The error message from the failed dependency */
+  failedDependencyError: string;
+  logger: Logger<ILogObj>;
+}
+
+/**
  * Context provided for each stream chunk.
  * Read-only observation point.
  */
@@ -254,6 +270,9 @@ export interface Observers {
 
   /** Called when a gadget execution completes (success or error) */
   onGadgetExecutionComplete?: (context: ObserveGadgetCompleteContext) => void | Promise<void>;
+
+  /** Called when a gadget is skipped due to a failed dependency */
+  onGadgetSkipped?: (context: ObserveGadgetSkippedContext) => void | Promise<void>;
 
   /** Called for each stream chunk */
   onStreamChunk?: (context: ObserveChunkContext) => void | Promise<void>;
@@ -509,6 +528,34 @@ export type AfterGadgetExecutionAction =
   | { action: "recover"; fallbackResult: string };
 
 /**
+ * Context for dependency skip controller.
+ * Called when a gadget would be skipped due to a failed dependency.
+ */
+export interface DependencySkipControllerContext {
+  iteration: number;
+  gadgetName: string;
+  invocationId: string;
+  /** Parameters of the gadget that would be skipped */
+  parameters: Record<string, unknown>;
+  /** The invocation ID of the dependency that failed */
+  failedDependency: string;
+  /** The error message from the failed dependency */
+  failedDependencyError: string;
+  logger: Logger<ILogObj>;
+}
+
+/**
+ * Action returned by onDependencySkipped controller.
+ */
+export type DependencySkipAction =
+  /** Skip execution and propagate failure to downstream dependents */
+  | { action: "skip" }
+  /** Execute the gadget anyway despite the failed dependency */
+  | { action: "execute_anyway" }
+  /** Skip execution but provide a fallback result (doesn't propagate failure) */
+  | { action: "use_fallback"; fallbackResult: string };
+
+/**
  * Controllers: Async lifecycle hooks that control execution flow.
  * - Can short-circuit execution
  * - Can modify options and provide fallbacks
@@ -548,6 +595,14 @@ export interface Controllers {
   afterGadgetExecution?: (
     context: AfterGadgetExecutionControllerContext,
   ) => Promise<AfterGadgetExecutionAction>;
+
+  /**
+   * Called before skipping a gadget due to a failed dependency.
+   * Can override the default skip behavior to execute anyway or provide a fallback.
+   */
+  onDependencySkipped?: (
+    context: DependencySkipControllerContext,
+  ) => Promise<DependencySkipAction>;
 }
 
 // ============================================================================
