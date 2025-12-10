@@ -3,7 +3,8 @@ import { z } from "zod";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import { MathGadget, TestGadget } from "../testing/helpers.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
-import { isLLMMessage, LLMMessageBuilder } from "./messages.js";
+import { text, imageFromBase64, imageFromUrl, audioFromBase64 } from "./input-content.js";
+import { isLLMMessage, LLMMessageBuilder, extractText, normalizeContent } from "./messages.js";
 import type { PromptConfig } from "./prompt-config.js";
 
 /** Test gadget with examples for testing argPrefix propagation */
@@ -445,5 +446,234 @@ describe("custom argPrefix propagation", () => {
     // All ARG markers should use custom prefix
     expect(customMatches.length).toBeGreaterThan(0);
     expect(defaultMatches.length).toBe(0);
+  });
+});
+
+describe("Multimodal Content Support", () => {
+  describe("addUser with multimodal content", () => {
+    it("accepts ContentPart array", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addUser([
+        text("What's in this image?"),
+        imageFromBase64("SGVsbG8=", "image/jpeg"),
+      ]);
+
+      const messages = builder.build();
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0]?.role).toBe("user");
+      expect(Array.isArray(messages[0]?.content)).toBe(true);
+
+      const content = messages[0]?.content as unknown[];
+      expect(content).toHaveLength(2);
+      expect(content[0]).toEqual({ type: "text", text: "What's in this image?" });
+      expect(content[1]).toMatchObject({
+        type: "image",
+        source: { type: "base64", mediaType: "image/jpeg" },
+      });
+    });
+  });
+
+  describe("addUserWithImage", () => {
+    it("creates a message with text and base64 image from Buffer", () => {
+      const builder = new LLMMessageBuilder();
+      // JPEG magic bytes
+      const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+      builder.addUserWithImage("Describe this", jpegBuffer);
+
+      const messages = builder.build();
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0]?.role).toBe("user");
+      expect(Array.isArray(messages[0]?.content)).toBe(true);
+
+      const content = messages[0]?.content as unknown[];
+      expect(content).toHaveLength(2);
+      expect(content[0]).toEqual({ type: "text", text: "Describe this" });
+      expect(content[1]).toMatchObject({
+        type: "image",
+        source: { type: "base64", mediaType: "image/jpeg" },
+      });
+    });
+
+    it("uses explicit mediaType when provided", () => {
+      const builder = new LLMMessageBuilder();
+      const buffer = Buffer.from([0x00, 0x00, 0x00]);
+      builder.addUserWithImage("Test", buffer, "image/png");
+
+      const messages = builder.build();
+      const content = messages[0]?.content as unknown[];
+      expect(content[1]).toMatchObject({
+        type: "image",
+        source: { type: "base64", mediaType: "image/png" },
+      });
+    });
+  });
+
+  describe("addUserWithImageUrl", () => {
+    it("creates a message with text and image URL", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addUserWithImageUrl("What's in this?", "https://example.com/image.jpg");
+
+      const messages = builder.build();
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0]?.role).toBe("user");
+      expect(Array.isArray(messages[0]?.content)).toBe(true);
+
+      const content = messages[0]?.content as unknown[];
+      expect(content).toHaveLength(2);
+      expect(content[0]).toEqual({ type: "text", text: "What's in this?" });
+      expect(content[1]).toEqual({
+        type: "image",
+        source: { type: "url", url: "https://example.com/image.jpg" },
+      });
+    });
+  });
+
+  describe("addUserWithAudio", () => {
+    it("creates a message with text and base64 audio from Buffer", () => {
+      const builder = new LLMMessageBuilder();
+      // MP3 magic bytes (ID3 tag)
+      const mp3Buffer = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00]);
+      builder.addUserWithAudio("Transcribe this", mp3Buffer);
+
+      const messages = builder.build();
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0]?.role).toBe("user");
+      expect(Array.isArray(messages[0]?.content)).toBe(true);
+
+      const content = messages[0]?.content as unknown[];
+      expect(content).toHaveLength(2);
+      expect(content[0]).toEqual({ type: "text", text: "Transcribe this" });
+      expect(content[1]).toMatchObject({
+        type: "audio",
+        source: { type: "base64", mediaType: "audio/mp3" },
+      });
+    });
+
+    it("uses explicit mediaType when provided", () => {
+      const builder = new LLMMessageBuilder();
+      const buffer = Buffer.from([0x00, 0x00, 0x00]);
+      builder.addUserWithAudio("Test", buffer, "audio/wav");
+
+      const messages = builder.build();
+      const content = messages[0]?.content as unknown[];
+      expect(content[1]).toMatchObject({
+        type: "audio",
+        source: { type: "base64", mediaType: "audio/wav" },
+      });
+    });
+  });
+
+  describe("addUserMultimodal", () => {
+    it("creates a message with multiple content parts", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addUserMultimodal([
+        text("Part 1"),
+        text("Part 2"),
+        imageFromUrl("https://example.com/img.png"),
+      ]);
+
+      const messages = builder.build();
+
+      expect(messages).toHaveLength(1);
+      const content = messages[0]?.content as unknown[];
+      expect(content).toHaveLength(3);
+    });
+
+    it("handles single content part", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addUserMultimodal([text("Just text")]);
+
+      const messages = builder.build();
+      const content = messages[0]?.content as unknown[];
+      expect(content).toHaveLength(1);
+      expect(content[0]).toEqual({ type: "text", text: "Just text" });
+    });
+  });
+});
+
+describe("extractText", () => {
+  it("returns string content as-is", () => {
+    expect(extractText("Hello, world!")).toBe("Hello, world!");
+  });
+
+  it("extracts text from ContentPart array", () => {
+    const content = [
+      text("First "),
+      imageFromBase64("abc", "image/png"),
+      text("Second"),
+    ];
+    expect(extractText(content)).toBe("First Second");
+  });
+
+  it("handles array with no text parts", () => {
+    const content = [
+      imageFromBase64("abc", "image/png"),
+      audioFromBase64("xyz", "audio/mp3"),
+    ];
+    expect(extractText(content)).toBe("");
+  });
+
+  it("handles empty array", () => {
+    expect(extractText([])).toBe("");
+  });
+
+  it("handles empty string", () => {
+    expect(extractText("")).toBe("");
+  });
+});
+
+describe("normalizeContent", () => {
+  it("wraps string in text part array", () => {
+    const result = normalizeContent("Hello");
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ type: "text", text: "Hello" });
+  });
+
+  it("passes through ContentPart array unchanged", () => {
+    const parts = [text("Hello"), imageFromUrl("https://example.com/img.jpg")];
+    const result = normalizeContent(parts);
+    expect(result).toBe(parts);
+  });
+
+  it("handles empty string", () => {
+    const result = normalizeContent("");
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ type: "text", text: "" });
+  });
+
+  it("handles empty array", () => {
+    const result = normalizeContent([]);
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe("isLLMMessage with multimodal content", () => {
+  it("returns true for messages with array content", () => {
+    expect(isLLMMessage({
+      role: "user",
+      content: [{ type: "text", text: "Hello" }],
+    })).toBe(true);
+  });
+
+  it("returns true for messages with string content", () => {
+    expect(isLLMMessage({
+      role: "user",
+      content: "Hello",
+    })).toBe(true);
+  });
+
+  it("returns false for invalid content types", () => {
+    expect(isLLMMessage({
+      role: "user",
+      content: 123,
+    })).toBe(false);
+    expect(isLLMMessage({
+      role: "user",
+      content: { invalid: true },
+    })).toBe(false);
   });
 });

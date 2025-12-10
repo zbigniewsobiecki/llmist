@@ -3,7 +3,7 @@
  * These interfaces define the contracts for the composable services that make up the agent system.
  */
 
-import type { LLMMessage } from "../core/messages.js";
+import type { LLMMessage, MessageContent } from "../core/messages.js";
 
 /**
  * Manages the conversation history and message building.
@@ -12,8 +12,9 @@ import type { LLMMessage } from "../core/messages.js";
 export interface IConversationManager {
   /**
    * Adds a user message to the conversation.
+   * Supports multimodal content (text + images/audio).
    */
-  addUserMessage(content: string): void;
+  addUserMessage(content: MessageContent): void;
 
   /**
    * Adds an assistant message to the conversation.

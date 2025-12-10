@@ -14,6 +14,7 @@ import { registerGadgetCommand } from "./gadget-command.js";
 import { registerImageCommand } from "./image-command.js";
 import { registerModelsCommand } from "./models-command.js";
 import { registerSpeechCommand } from "./speech-command.js";
+import { registerVisionCommand } from "./vision-command.js";
 import { registerCustomCommand } from "./custom-command.js";
 import {
   CLI_DESCRIPTION,
@@ -73,6 +74,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
   registerAgentCommand(program, env, config?.agent);
   registerImageCommand(program, env, config?.image);
   registerSpeechCommand(program, env, config?.speech);
+  registerVisionCommand(program, env);
   registerModelsCommand(program, env);
   registerGadgetCommand(program, env);
 

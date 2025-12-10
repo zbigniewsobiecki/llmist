@@ -54,6 +54,8 @@ export { getMockManager, MockManager } from "./mock-manager.js";
 export { createMockStream, createTextMockStream } from "./mock-stream.js";
 // Types
 export type {
+  MockAudioData,
+  MockImageData,
   MockMatcher,
   MockMatcherContext,
   MockOptions,

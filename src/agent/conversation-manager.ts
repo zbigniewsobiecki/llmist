@@ -3,7 +3,8 @@
  * Extracted from AgentLoop to follow Single Responsibility Principle.
  */
 
-import { type LLMMessage, LLMMessageBuilder } from "../core/messages.js";
+import type { MessageContent } from "../core/messages.js";
+import { extractText, type LLMMessage, LLMMessageBuilder } from "../core/messages.js";
 import type { IConversationManager } from "./interfaces.js";
 
 /**
@@ -50,7 +51,7 @@ export class ConversationManager implements IConversationManager {
     }
   }
 
-  addUserMessage(content: string): void {
+  addUserMessage(content: MessageContent): void {
     this.historyBuilder.addUser(content);
   }
 
@@ -86,7 +87,8 @@ export class ConversationManager implements IConversationManager {
       if (msg.role === "user") {
         this.historyBuilder.addUser(msg.content);
       } else if (msg.role === "assistant") {
-        this.historyBuilder.addAssistant(msg.content);
+        // Assistant messages are always text, extract if multimodal
+        this.historyBuilder.addAssistant(extractText(msg.content));
       }
       // System messages are not added to history (they're in baseMessages)
     }

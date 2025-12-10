@@ -1,4 +1,5 @@
 import { FunctionCallingConfigMode, GoogleGenAI, Modality } from "@google/genai";
+import type { ContentPart } from "../core/input-content.js";
 import type {
   ImageGenerationOptions,
   ImageGenerationResult,
@@ -7,7 +8,8 @@ import type {
   SpeechGenerationResult,
   SpeechModelSpec,
 } from "../core/media-types.js";
-import type { LLMMessage } from "../core/messages.js";
+import type { LLMMessage, MessageContent } from "../core/messages.js";
+import { extractText, normalizeContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
@@ -27,9 +29,19 @@ import {
 } from "./gemini-speech-models.js";
 import { createProviderFromEnv } from "./utils.js";
 
+/**
+ * Gemini content part - can be text or inline data (images/audio).
+ */
+type GeminiPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } };
+
+/**
+ * Gemini content with role and multimodal parts.
+ */
 type GeminiContent = {
   role: string;
-  parts: Array<{ text: string }>;
+  parts: GeminiPart[];
 };
 
 type GeminiChunk = {
@@ -292,7 +304,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     messages: LLMMessage[],
   ): {
     model: string;
-    contents: Array<{ role: string; parts: Array<{ text: string }> }>;
+    contents: GeminiContent[];
     config: Record<string, unknown>;
   } {
     // Convert messages to Gemini format (system messages become user+model exchanges)
@@ -315,7 +327,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
 
     return {
       model: descriptor.name,
-      contents: this.convertContentsForNewSDK(contents),
+      contents,
       config,
     };
   }
@@ -323,7 +335,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
   protected async executeStreamRequest(
     payload: {
       model: string;
-      contents: Array<{ role: string; parts: Array<{ text: string }> }>;
+      contents: GeminiContent[];
       config: Record<string, unknown>;
     },
     signal?: AbortSignal,
@@ -355,28 +367,38 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
    * - Model: "Understood."
    */
   private convertMessagesToContents(messages: LLMMessage[]): GeminiContent[] {
-    const expandedMessages: LLMMessage[] = [];
+    const expandedMessages: Array<{ role: LLMMessage["role"]; content: MessageContent }> = [];
 
     for (const message of messages) {
       if (message.role === "system") {
         // Convert system message to user+model exchange
+        // System messages are always text-only
         expandedMessages.push({
           role: "user",
-          content: message.content,
+          content: extractText(message.content),
         });
         expandedMessages.push({
           role: "assistant",
           content: "Understood.",
         });
       } else {
-        expandedMessages.push(message);
+        expandedMessages.push({
+          role: message.role,
+          content: message.content,
+        });
       }
     }
 
     return this.mergeConsecutiveMessages(expandedMessages);
   }
 
-  private mergeConsecutiveMessages(messages: LLMMessage[]): GeminiContent[] {
+  /**
+   * Merge consecutive messages with the same role (required by Gemini).
+   * Handles multimodal content by converting to Gemini's part format.
+   */
+  private mergeConsecutiveMessages(
+    messages: Array<{ role: LLMMessage["role"]; content: MessageContent }>,
+  ): GeminiContent[] {
     if (messages.length === 0) {
       return [];
     }
@@ -386,10 +408,11 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
 
     for (const message of messages) {
       const geminiRole = GEMINI_ROLE_MAP[message.role];
+      const geminiParts = this.convertToGeminiParts(message.content);
 
       if (currentGroup && currentGroup.role === geminiRole) {
         // Merge into current group
-        currentGroup.parts.push({ text: message.content });
+        currentGroup.parts.push(...geminiParts);
       } else {
         // Start new group
         if (currentGroup) {
@@ -397,7 +420,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
         }
         currentGroup = {
           role: geminiRole,
-          parts: [{ text: message.content }],
+          parts: geminiParts,
         };
       }
     }
@@ -410,14 +433,43 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     return result;
   }
 
-  private convertContentsForNewSDK(
-    contents: GeminiContent[],
-  ): Array<{ role: string; parts: Array<{ text: string }> }> {
-    // The new SDK expects a simpler format for contents
-    return contents.map((content) => ({
-      role: content.role,
-      parts: content.parts.map((part) => ({ text: part.text })),
-    }));
+  /**
+   * Convert llmist content to Gemini's part format.
+   * Handles text, images, and audio (Gemini supports all three).
+   */
+  private convertToGeminiParts(content: MessageContent): GeminiPart[] {
+    const parts = normalizeContent(content);
+
+    return parts.map((part) => {
+      if (part.type === "text") {
+        return { text: part.text };
+      }
+
+      if (part.type === "image") {
+        if (part.source.type === "url") {
+          throw new Error(
+            "Gemini does not support image URLs directly. Please provide base64-encoded image data.",
+          );
+        }
+        return {
+          inlineData: {
+            mimeType: part.source.mediaType,
+            data: part.source.data,
+          },
+        };
+      }
+
+      if (part.type === "audio") {
+        return {
+          inlineData: {
+            mimeType: part.source.mediaType,
+            data: part.source.data,
+          },
+        };
+      }
+
+      throw new Error(`Unsupported content type: ${(part as ContentPart).type}`);
+    });
   }
 
   private buildGenerationConfig(options: LLMGenerationOptions) {
@@ -525,13 +577,14 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     const client = this.client as GoogleGenAI;
 
     // Convert messages to Gemini format (same as buildRequestPayload)
+    // This now handles multimodal content
     const contents = this.convertMessagesToContents(messages);
 
     try {
       // Use Gemini's count_tokens method
       const response = await client.models.countTokens({
         model: descriptor.name,
-        contents: this.convertContentsForNewSDK(contents),
+        contents,
         // Note: systemInstruction not used - it's not supported by countTokens()
         // and would cause a 2100% token counting error
       });
@@ -543,8 +596,23 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
         error,
       );
       // Fallback to rough estimation if API fails
-      const totalChars = messages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0);
-      return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN);
+      // For multimodal, extract text and estimate; images/audio add tokens
+      let totalChars = 0;
+      let mediaCount = 0;
+      for (const msg of messages) {
+        const parts = normalizeContent(msg.content);
+        for (const part of parts) {
+          if (part.type === "text") {
+            totalChars += part.text.length;
+          } else if (part.type === "image" || part.type === "audio") {
+            mediaCount++;
+          }
+        }
+      }
+      // Gemini charges ~258 tokens per image/audio (for standard size).
+      // Source: https://ai.google.dev/gemini-api/docs/tokens
+      // Actual cost varies by media type and dimensions.
+      return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN) + mediaCount * 258;
     }
   }
 }

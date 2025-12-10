@@ -675,6 +675,27 @@ For Claude Sonnet (200K context) with default 15%:
 - Token limit: 30,000 tokens
 - Character limit: ~120,000 characters
 
+## Dependencies
+
+Gadgets can specify dependencies on other gadgets, enabling **DAG (Directed Acyclic Graph) execution**: independent gadgets run in parallel, dependent gadgets wait for their dependencies.
+
+See **[Block Format - Dependencies](./BLOCK_FORMAT.md#dependencies)** for syntax details and examples.
+
+### Controlling Skip Behavior
+
+When a dependency fails, dependent gadgets are skipped by default. Customize with the `onDependencySkipped` controller:
+
+```typescript
+.withHooks({
+  controllers: {
+    onDependencySkipped: async (ctx) => {
+      // Options: 'skip' (default), 'execute_anyway', or 'use_fallback'
+      return { action: 'use_fallback', fallbackResult: '[]' };
+    },
+  },
+})
+```
+
 ## See Also
 
 - **[Testing Guide](./TESTING.md)** - Test gadgets and mock utilities

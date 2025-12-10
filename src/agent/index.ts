@@ -18,6 +18,9 @@ export type {
   // Interceptor contexts
   ChunkInterceptorContext,
   Controllers,
+  // Dependency skip controller
+  DependencySkipAction,
+  DependencySkipControllerContext,
   GadgetExecutionControllerContext,
   GadgetParameterInterceptorContext,
   GadgetResultInterceptorContext,
@@ -28,6 +31,8 @@ export type {
   MessageInterceptorContext,
   ObserveChunkContext,
   ObserveGadgetCompleteContext,
+  // Gadget skip observer
+  ObserveGadgetSkippedContext,
   ObserveGadgetStartContext,
   // Observer contexts
   ObserveLLMCallContext,

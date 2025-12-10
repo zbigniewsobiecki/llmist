@@ -1,15 +1,66 @@
 import type { BaseGadget } from "../gadgets/gadget.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
+import type {
+  AudioMimeType,
+  ContentPart,
+  ImageMimeType,
+  TextContentPart,
+} from "./input-content.js";
+import {
+  audioFromBuffer,
+  detectImageMimeType,
+  imageFromBuffer,
+  imageFromUrl,
+  text,
+  toBase64,
+} from "./input-content.js";
 import type { PromptConfig } from "./prompt-config.js";
 import { DEFAULT_PROMPTS, resolvePromptTemplate, resolveRulesTemplate } from "./prompt-config.js";
 
 export type LLMRole = "system" | "user" | "assistant";
 
+/**
+ * Message content can be a simple string (text only) or an array of content parts (multimodal).
+ * Using a string is simpler for text-only messages, while arrays support images and audio.
+ */
+export type MessageContent = string | ContentPart[];
+
 export interface LLMMessage {
   role: LLMRole;
-  content: string;
+  content: MessageContent;
   name?: string;
   metadata?: Record<string, unknown>;
+}
+
+/**
+ * Normalize message content to an array of content parts.
+ * Converts string content to a single text part.
+ *
+ * @param content - Message content (string or ContentPart[])
+ * @returns Array of content parts
+ */
+export function normalizeContent(content: MessageContent): ContentPart[] {
+  if (typeof content === "string") {
+    return [{ type: "text", text: content }];
+  }
+  return content;
+}
+
+/**
+ * Extract text from message content.
+ * Concatenates all text parts in the content.
+ *
+ * @param content - Message content (string or ContentPart[])
+ * @returns Combined text from all text parts
+ */
+export function extractText(content: MessageContent): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  return content
+    .filter((part): part is TextContentPart => part.type === "text")
+    .map((part) => part.text)
+    .join("");
 }
 
 export class LLMMessageBuilder {
@@ -141,6 +192,8 @@ export class LLMMessageBuilder {
     // Format section
     parts.push("\nFORMAT:");
     parts.push(`\n  1. Start marker: ${this.startPrefix}gadget_name`);
+    parts.push(`\n     With ID: ${this.startPrefix}gadget_name:my_id`);
+    parts.push(`\n     With dependencies: ${this.startPrefix}gadget_name:my_id:dep1,dep2`);
     parts.push(`\n  2. ${formatDescription}`);
     parts.push(`\n  3. End marker: ${this.endPrefix}`);
 
@@ -199,6 +252,26 @@ Analyze the following:
 ${this.endPrefix}`;
 
     parts.push(`\n\nEXAMPLE (Multiple Gadgets):\n\n${multipleExample}`);
+
+    // Dependency example
+    const dependencyExample = `${this.startPrefix}fetch_data:fetch_1
+${this.argPrefix}url
+https://api.example.com/users
+${this.endPrefix}
+${this.startPrefix}fetch_data:fetch_2
+${this.argPrefix}url
+https://api.example.com/orders
+${this.endPrefix}
+${this.startPrefix}merge_data:merge_1:fetch_1,fetch_2
+${this.argPrefix}format
+json
+${this.endPrefix}`;
+
+    parts.push(`\n\nEXAMPLE (With Dependencies):
+merge_1 waits for fetch_1 AND fetch_2 to complete.
+If either fails, merge_1 is automatically skipped.
+
+${dependencyExample}`);
 
     // Block format syntax guide
     parts.push(`
@@ -263,13 +336,148 @@ Produces: { "items": ["first", "second"] }`);
     return parts.join("");
   }
 
-  addUser(content: string, metadata?: Record<string, unknown>): this {
+  /**
+   * Add a user message.
+   * Content can be a string (text only) or an array of content parts (multimodal).
+   *
+   * @param content - Message content
+   * @param metadata - Optional metadata
+   *
+   * @example
+   * ```typescript
+   * // Text only
+   * builder.addUser("Hello!");
+   *
+   * // Multimodal
+   * builder.addUser([
+   *   text("What's in this image?"),
+   *   imageFromBuffer(imageData),
+   * ]);
+   * ```
+   */
+  addUser(content: MessageContent, metadata?: Record<string, unknown>): this {
     this.messages.push({ role: "user", content, metadata });
     return this;
   }
 
   addAssistant(content: string, metadata?: Record<string, unknown>): this {
     this.messages.push({ role: "assistant", content, metadata });
+    return this;
+  }
+
+  /**
+   * Add a user message with an image attachment.
+   *
+   * @param textContent - Text prompt
+   * @param imageData - Image data (Buffer, Uint8Array, or base64 string)
+   * @param mimeType - Optional MIME type (auto-detected if not provided)
+   *
+   * @example
+   * ```typescript
+   * builder.addUserWithImage(
+   *   "What's in this image?",
+   *   await fs.readFile("photo.jpg"),
+   *   "image/jpeg"  // Optional - auto-detected
+   * );
+   * ```
+   */
+  addUserWithImage(
+    textContent: string,
+    imageData: Buffer | Uint8Array | string,
+    mimeType?: ImageMimeType,
+  ): this {
+    const imageBuffer =
+      typeof imageData === "string" ? Buffer.from(imageData, "base64") : imageData;
+    const detectedMime = mimeType ?? detectImageMimeType(imageBuffer);
+
+    if (!detectedMime) {
+      throw new Error(
+        "Could not detect image MIME type. Please provide the mimeType parameter explicitly.",
+      );
+    }
+
+    const content: ContentPart[] = [
+      text(textContent),
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          mediaType: detectedMime,
+          data: toBase64(imageBuffer),
+        },
+      },
+    ];
+
+    this.messages.push({ role: "user", content });
+    return this;
+  }
+
+  /**
+   * Add a user message with an image URL (OpenAI only).
+   *
+   * @param textContent - Text prompt
+   * @param imageUrl - URL to the image
+   *
+   * @example
+   * ```typescript
+   * builder.addUserWithImageUrl(
+   *   "What's in this image?",
+   *   "https://example.com/image.jpg"
+   * );
+   * ```
+   */
+  addUserWithImageUrl(textContent: string, imageUrl: string): this {
+    const content: ContentPart[] = [text(textContent), imageFromUrl(imageUrl)];
+    this.messages.push({ role: "user", content });
+    return this;
+  }
+
+  /**
+   * Add a user message with an audio attachment (Gemini only).
+   *
+   * @param textContent - Text prompt
+   * @param audioData - Audio data (Buffer, Uint8Array, or base64 string)
+   * @param mimeType - Optional MIME type (auto-detected if not provided)
+   *
+   * @example
+   * ```typescript
+   * builder.addUserWithAudio(
+   *   "Transcribe this audio",
+   *   await fs.readFile("recording.mp3"),
+   *   "audio/mp3"  // Optional - auto-detected
+   * );
+   * ```
+   */
+  addUserWithAudio(
+    textContent: string,
+    audioData: Buffer | Uint8Array | string,
+    mimeType?: AudioMimeType,
+  ): this {
+    const audioBuffer =
+      typeof audioData === "string" ? Buffer.from(audioData, "base64") : audioData;
+
+    const content: ContentPart[] = [text(textContent), audioFromBuffer(audioBuffer, mimeType)];
+    this.messages.push({ role: "user", content });
+    return this;
+  }
+
+  /**
+   * Add a user message with multiple content parts.
+   * Provides full flexibility for complex multimodal messages.
+   *
+   * @param parts - Array of content parts
+   *
+   * @example
+   * ```typescript
+   * builder.addUserMultimodal([
+   *   text("Compare these images:"),
+   *   imageFromBuffer(image1),
+   *   imageFromBuffer(image2),
+   * ]);
+   * ```
+   */
+  addUserMultimodal(parts: ContentPart[]): this {
+    this.messages.push({ role: "user", content: parts });
     return this;
   }
 
@@ -336,8 +544,9 @@ export const isLLMMessage = (value: unknown): value is LLMMessage => {
   }
 
   const message = value as Partial<LLMMessage>;
-  return (
-    (message.role === "system" || message.role === "user" || message.role === "assistant") &&
-    typeof message.content === "string"
-  );
+  const validRole =
+    message.role === "system" || message.role === "user" || message.role === "assistant";
+  const validContent = typeof message.content === "string" || Array.isArray(message.content);
+
+  return validRole && validContent;
 };
