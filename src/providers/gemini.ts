@@ -609,7 +609,9 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
           }
         }
       }
-      // Gemini charges ~258 tokens per image (for standard size)
+      // Gemini charges ~258 tokens per image/audio (for standard size).
+      // Source: https://ai.google.dev/gemini-api/docs/tokens
+      // Actual cost varies by media type and dimensions.
       return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN) + mediaCount * 258;
     }
   }

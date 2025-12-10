@@ -337,6 +337,9 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
           }
         }
       }
+      // Anthropic charges ~1000 tokens per image (rough estimate).
+      // Source: https://docs.anthropic.com/en/docs/build-with-claude/vision
+      // Actual cost depends on image size, but this provides a reasonable fallback.
       return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN) + imageCount * 1000;
     }
   }

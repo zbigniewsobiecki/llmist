@@ -794,16 +794,21 @@ export class AgentBuilder {
    * }
    * ```
    */
-  ask(userPrompt: string): Agent {
+  /**
+   * Build AgentOptions with the given user prompt.
+   * Centralizes options construction for ask(), askWithImage(), and askWithContent().
+   */
+  private buildAgentOptions(userPrompt: string | ContentPart[]): AgentOptions {
     // Lazy import to avoid circular dependency
     if (!this.client) {
       const { LLMist: LLMistClass } =
         require("../core/client.js") as typeof import("../core/client.js");
       this.client = new LLMistClass();
     }
+
     const registry = GadgetRegistry.from(this.gadgets);
 
-    const options: AgentOptions = {
+    return {
       client: this.client,
       model: this.model ?? "openai:gpt-5-nano",
       systemPrompt: this.systemPrompt,
@@ -829,7 +834,10 @@ export class AgentBuilder {
       compactionConfig: this.compactionConfig,
       signal: this.signal,
     };
+  }
 
+  ask(userPrompt: string): Agent {
+    const options = this.buildAgentOptions(userPrompt);
     return new Agent(AGENT_INTERNAL_KEY, options);
   }
 
@@ -862,13 +870,6 @@ export class AgentBuilder {
     imageData: Buffer | Uint8Array | string,
     mimeType?: ImageMimeType,
   ): Agent {
-    // Lazy import to avoid circular dependency
-    if (!this.client) {
-      const { LLMist: LLMistClass } =
-        require("../core/client.js") as typeof import("../core/client.js");
-      this.client = new LLMistClass();
-    }
-
     const imageBuffer =
       typeof imageData === "string" ? Buffer.from(imageData, "base64") : imageData;
     const detectedMime = mimeType ?? detectImageMimeType(imageBuffer);
@@ -892,35 +893,7 @@ export class AgentBuilder {
       },
     ];
 
-    const registry = GadgetRegistry.from(this.gadgets);
-
-    const options: AgentOptions = {
-      client: this.client,
-      model: this.model ?? "openai:gpt-5-nano",
-      systemPrompt: this.systemPrompt,
-      userPrompt: userContent, // Multimodal content
-      registry,
-      maxIterations: this.maxIterations,
-      temperature: this.temperature,
-      logger: this.logger,
-      hooks: this.composeHooks(),
-      promptConfig: this.promptConfig,
-      initialMessages: this.initialMessages,
-      onHumanInputRequired: this.onHumanInputRequired,
-      gadgetStartPrefix: this.gadgetStartPrefix,
-      gadgetEndPrefix: this.gadgetEndPrefix,
-      gadgetArgPrefix: this.gadgetArgPrefix,
-      textOnlyHandler: this.textOnlyHandler,
-      textWithGadgetsHandler: this.textWithGadgetsHandler,
-      stopOnGadgetError: this.stopOnGadgetError,
-      shouldContinueAfterError: this.shouldContinueAfterError,
-      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-      gadgetOutputLimit: this.gadgetOutputLimit,
-      gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
-      compactionConfig: this.compactionConfig,
-      signal: this.signal,
-    };
-
+    const options = this.buildAgentOptions(userContent);
     return new Agent(AGENT_INTERNAL_KEY, options);
   }
 
@@ -949,42 +922,7 @@ export class AgentBuilder {
    * ```
    */
   askWithContent(content: ContentPart[]): Agent {
-    // Lazy import to avoid circular dependency
-    if (!this.client) {
-      const { LLMist: LLMistClass } =
-        require("../core/client.js") as typeof import("../core/client.js");
-      this.client = new LLMistClass();
-    }
-
-    const registry = GadgetRegistry.from(this.gadgets);
-
-    const options: AgentOptions = {
-      client: this.client,
-      model: this.model ?? "openai:gpt-5-nano",
-      systemPrompt: this.systemPrompt,
-      userPrompt: content, // Multimodal content
-      registry,
-      maxIterations: this.maxIterations,
-      temperature: this.temperature,
-      logger: this.logger,
-      hooks: this.composeHooks(),
-      promptConfig: this.promptConfig,
-      initialMessages: this.initialMessages,
-      onHumanInputRequired: this.onHumanInputRequired,
-      gadgetStartPrefix: this.gadgetStartPrefix,
-      gadgetEndPrefix: this.gadgetEndPrefix,
-      gadgetArgPrefix: this.gadgetArgPrefix,
-      textOnlyHandler: this.textOnlyHandler,
-      textWithGadgetsHandler: this.textWithGadgetsHandler,
-      stopOnGadgetError: this.stopOnGadgetError,
-      shouldContinueAfterError: this.shouldContinueAfterError,
-      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-      gadgetOutputLimit: this.gadgetOutputLimit,
-      gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
-      compactionConfig: this.compactionConfig,
-      signal: this.signal,
-    };
-
+    const options = this.buildAgentOptions(content);
     return new Agent(AGENT_INTERNAL_KEY, options);
   }
 

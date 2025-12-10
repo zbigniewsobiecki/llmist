@@ -78,31 +78,10 @@ export class VisionNamespace {
   constructor(private readonly client: LLMist) {}
 
   /**
-   * Analyze an image with a vision-capable model.
-   * Returns the analysis as a string.
-   *
-   * @param options - Vision analysis options
-   * @returns Promise resolving to the analysis text
-   * @throws Error if the image format is unsupported or model doesn't support vision
-   *
-   * @example
-   * ```typescript
-   * // From file
-   * const result = await llmist.vision.analyze({
-   *   model: "gpt-4o",
-   *   image: await fs.readFile("photo.jpg"),
-   *   prompt: "What's in this image?",
-   * });
-   *
-   * // From URL (OpenAI only)
-   * const result = await llmist.vision.analyze({
-   *   model: "gpt-4o",
-   *   image: "https://example.com/image.jpg",
-   *   prompt: "Describe this image",
-   * });
-   * ```
+   * Build a message builder with the image content attached.
+   * Handles URLs, data URLs, base64 strings, and binary buffers.
    */
-  async analyze(options: VisionAnalyzeOptions): Promise<string> {
+  private buildImageMessage(options: VisionAnalyzeOptions): LLMMessageBuilder {
     const builder = new LLMMessageBuilder();
 
     if (options.systemPrompt) {
@@ -135,7 +114,16 @@ export class VisionNamespace {
       builder.addUserWithImage(options.prompt, options.image, options.mimeType);
     }
 
-    // Stream and collect the response
+    return builder;
+  }
+
+  /**
+   * Stream the response and collect text and usage information.
+   */
+  private async streamAndCollect(
+    options: VisionAnalyzeOptions,
+    builder: LLMMessageBuilder,
+  ): Promise<{ text: string; usage?: VisionAnalyzeResult["usage"] }> {
     let response = "";
     let finalUsage: VisionAnalyzeResult["usage"] | undefined;
 
@@ -155,7 +143,38 @@ export class VisionNamespace {
       }
     }
 
-    return response.trim();
+    return { text: response.trim(), usage: finalUsage };
+  }
+
+  /**
+   * Analyze an image with a vision-capable model.
+   * Returns the analysis as a string.
+   *
+   * @param options - Vision analysis options
+   * @returns Promise resolving to the analysis text
+   * @throws Error if the image format is unsupported or model doesn't support vision
+   *
+   * @example
+   * ```typescript
+   * // From file
+   * const result = await llmist.vision.analyze({
+   *   model: "gpt-4o",
+   *   image: await fs.readFile("photo.jpg"),
+   *   prompt: "What's in this image?",
+   * });
+   *
+   * // From URL (OpenAI only)
+   * const result = await llmist.vision.analyze({
+   *   model: "gpt-4o",
+   *   image: "https://example.com/image.jpg",
+   *   prompt: "Describe this image",
+   * });
+   * ```
+   */
+  async analyze(options: VisionAnalyzeOptions): Promise<string> {
+    const builder = this.buildImageMessage(options);
+    const { text } = await this.streamAndCollect(options, builder);
+    return text;
   }
 
   /**
@@ -165,57 +184,13 @@ export class VisionNamespace {
    * @returns Promise resolving to the analysis result with usage info
    */
   async analyzeWithUsage(options: VisionAnalyzeOptions): Promise<VisionAnalyzeResult> {
-    const builder = new LLMMessageBuilder();
-
-    if (options.systemPrompt) {
-      builder.addSystem(options.systemPrompt);
-    }
-
-    // Handle different image source types (same as analyze)
-    if (typeof options.image === "string") {
-      if (options.image.startsWith("http://") || options.image.startsWith("https://")) {
-        builder.addUserWithImageUrl(options.prompt, options.image);
-      } else if (isDataUrl(options.image)) {
-        const parsed = parseDataUrl(options.image);
-        if (!parsed) {
-          throw new Error("Invalid data URL format");
-        }
-        builder.addUserWithImage(
-          options.prompt,
-          parsed.data,
-          parsed.mimeType as ImageMimeType,
-        );
-      } else {
-        const buffer = Buffer.from(options.image, "base64");
-        builder.addUserWithImage(options.prompt, buffer, options.mimeType);
-      }
-    } else {
-      builder.addUserWithImage(options.prompt, options.image, options.mimeType);
-    }
-
-    let response = "";
-    let finalUsage: VisionAnalyzeResult["usage"] | undefined;
-
-    for await (const chunk of this.client.stream({
-      model: options.model,
-      messages: builder.build(),
-      maxTokens: options.maxTokens,
-      temperature: options.temperature,
-    })) {
-      response += chunk.text;
-      if (chunk.usage) {
-        finalUsage = {
-          inputTokens: chunk.usage.inputTokens,
-          outputTokens: chunk.usage.outputTokens,
-          totalTokens: chunk.usage.totalTokens,
-        };
-      }
-    }
+    const builder = this.buildImageMessage(options);
+    const { text, usage } = await this.streamAndCollect(options, builder);
 
     return {
-      text: response.trim(),
+      text,
       model: options.model,
-      usage: finalUsage,
+      usage,
     };
   }
 

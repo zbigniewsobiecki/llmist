@@ -422,7 +422,9 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
         }
 
         tokenCount += OPENAI_REPLY_PRIMING_TOKENS;
-        // Add ~765 tokens per image (low detail) or more for high detail
+        // Add ~765 tokens per image (low detail mode).
+        // Source: https://platform.openai.com/docs/guides/vision
+        // High detail mode varies by image size (510-1105 tokens per 512px tile + 85 base).
         tokenCount += imageCount * 765;
 
         return tokenCount;
@@ -449,6 +451,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
           }
         }
       }
+      // Use same image token estimate as tiktoken path (765 tokens per image).
       return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN) + imageCount * 765;
     }
   }
