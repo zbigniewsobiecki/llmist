@@ -12,6 +12,7 @@ export const COMMANDS = {
   gadget: "gadget",
   image: "image",
   speech: "speech",
+  vision: "vision",
 } as const;
 
 /** Valid log level names */
@@ -40,6 +41,9 @@ export const OPTION_FLAGS = {
   dockerRo: "--docker-ro",
   noDocker: "--no-docker",
   dockerDev: "--docker-dev",
+  // Multimodal input options
+  inputImage: "--image <path>",
+  inputAudio: "--audio <path>",
   // Image generation options
   imageSize: "--size <size>",
   imageQuality: "--quality <quality>",
@@ -68,6 +72,9 @@ export const OPTION_DESCRIPTIONS = {
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
   noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
   quiet: "Suppress all output except content (text and TellUser messages).",
+  // Multimodal input descriptions
+  inputImage: "Image file to include with the prompt (vision models).",
+  inputAudio: "Audio file to include with the prompt (Gemini only).",
   docker: "Run agent in a Docker sandbox container for security isolation.",
   dockerRo: "Run in Docker with current directory mounted read-only.",
   noDocker: "Disable Docker sandboxing (override config).",

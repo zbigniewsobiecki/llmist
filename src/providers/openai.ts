@@ -1,6 +1,11 @@
 import OpenAI from "openai";
-import type { ChatCompletionChunk } from "openai/resources/chat/completions";
+import type {
+  ChatCompletionChunk,
+  ChatCompletionContentPart,
+  ChatCompletionMessageParam,
+} from "openai/resources/chat/completions";
 import { encoding_for_model, type TiktokenModel } from "tiktoken";
+import type { ContentPart, ImageContentPart } from "../core/input-content.js";
 import type {
   ImageGenerationOptions,
   ImageGenerationResult,
@@ -9,7 +14,8 @@ import type {
   SpeechGenerationResult,
   SpeechModelSpec,
 } from "../core/media-types.js";
-import type { LLMMessage } from "../core/messages.js";
+import type { LLMMessage, MessageContent } from "../core/messages.js";
+import { extractText, normalizeContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
@@ -198,11 +204,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
 
     return {
       model: descriptor.name,
-      messages: messages.map((message) => ({
-        role: ROLE_MAP[message.role],
-        content: message.content,
-        name: message.name,
-      })),
+      messages: messages.map((message) => this.convertToOpenAIMessage(message)),
       // Only set max_completion_tokens if explicitly provided
       // Otherwise let the API use "as much as fits" in the context window
       ...(maxTokens !== undefined ? { max_completion_tokens: maxTokens } : {}),
@@ -212,6 +214,97 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
       stream_options: { include_usage: true },
       ...(sanitizedExtra ?? {}),
       ...(shouldIncludeTemperature ? { temperature } : {}),
+    };
+  }
+
+  /**
+   * Convert an LLMMessage to OpenAI's ChatCompletionMessageParam.
+   * Handles role-specific content type requirements:
+   * - system/assistant: string content only
+   * - user: string or multimodal array content
+   */
+  private convertToOpenAIMessage(message: LLMMessage): ChatCompletionMessageParam {
+    const role = ROLE_MAP[message.role];
+
+    // User messages support multimodal content
+    if (role === "user") {
+      const content = this.convertToOpenAIContent(message.content);
+      return {
+        role: "user",
+        content,
+        ...(message.name ? { name: message.name } : {}),
+      };
+    }
+
+    // System and assistant messages only support string content
+    const textContent = typeof message.content === "string" ? message.content : extractText(message.content);
+
+    if (role === "system") {
+      return {
+        role: "system",
+        content: textContent,
+        ...(message.name ? { name: message.name } : {}),
+      };
+    }
+
+    // Assistant role
+    return {
+      role: "assistant",
+      content: textContent,
+      ...(message.name ? { name: message.name } : {}),
+    };
+  }
+
+  /**
+   * Convert llmist content to OpenAI's content format.
+   * Optimizes by returning string for text-only content, array for multimodal.
+   */
+  private convertToOpenAIContent(
+    content: MessageContent,
+  ): string | ChatCompletionContentPart[] {
+    // Optimization: keep simple string content as-is
+    if (typeof content === "string") {
+      return content;
+    }
+
+    // Convert array content to OpenAI format
+    return content.map((part) => {
+      if (part.type === "text") {
+        return { type: "text" as const, text: part.text };
+      }
+
+      if (part.type === "image") {
+        return this.convertImagePart(part);
+      }
+
+      if (part.type === "audio") {
+        throw new Error(
+          "OpenAI chat completions do not support audio input. Use Whisper for transcription or Gemini for audio understanding.",
+        );
+      }
+
+      throw new Error(`Unsupported content type: ${(part as ContentPart).type}`);
+    });
+  }
+
+  /**
+   * Convert an image content part to OpenAI's image_url format.
+   * Supports both URLs and base64 data URLs.
+   */
+  private convertImagePart(part: ImageContentPart): ChatCompletionContentPart {
+    if (part.source.type === "url") {
+      return {
+        type: "image_url" as const,
+        image_url: { url: part.source.url },
+      };
+    }
+
+    // Convert base64 to data URL format
+    return {
+      type: "image_url" as const,
+      image_url: {
+        url: `data:${part.source.mediaType};base64,${part.source.data}`,
+      },
     };
   }
 
@@ -297,6 +390,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
 
       try {
         let tokenCount = 0;
+        let imageCount = 0;
 
         // Count tokens per message with proper formatting
         // OpenAI's format adds tokens for message boundaries and roles
@@ -308,7 +402,18 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
 
           const roleText = ROLE_MAP[message.role];
           tokenCount += encoding.encode(roleText).length;
-          tokenCount += encoding.encode(message.content ?? "").length;
+
+          // Handle multimodal content
+          const textContent = extractText(message.content);
+          tokenCount += encoding.encode(textContent).length;
+
+          // Count images for estimation (each image ~85 tokens base + variable)
+          const parts = normalizeContent(message.content);
+          for (const part of parts) {
+            if (part.type === "image") {
+              imageCount++;
+            }
+          }
 
           if (message.name) {
             tokenCount += encoding.encode(message.name).length;
@@ -317,6 +422,10 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
         }
 
         tokenCount += OPENAI_REPLY_PRIMING_TOKENS;
+        // Add ~765 tokens per image (low detail mode).
+        // Source: https://platform.openai.com/docs/guides/vision
+        // High detail mode varies by image size (510-1105 tokens per 512px tile + 85 base).
+        tokenCount += imageCount * 765;
 
         return tokenCount;
       } finally {
@@ -330,8 +439,20 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
         error,
       );
       // If tiktoken fails, provide a rough estimate
-      const totalChars = messages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0);
-      return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN);
+      let totalChars = 0;
+      let imageCount = 0;
+      for (const msg of messages) {
+        const parts = normalizeContent(msg.content);
+        for (const part of parts) {
+          if (part.type === "text") {
+            totalChars += part.text.length;
+          } else if (part.type === "image") {
+            imageCount++;
+          }
+        }
+      }
+      // Use same image token estimate as tiktoken path (765 tokens per image).
+      return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN) + imageCount * 765;
     }
   }
 }

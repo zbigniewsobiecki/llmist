@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { LLMMessage } from "../core/messages.js";
+import { extractText, type LLMMessage } from "../core/messages.js";
 
 /**
  * Default directory for LLM debug logs.
@@ -32,7 +32,8 @@ export function formatLlmRequest(messages: LLMMessage[]): string {
   const lines: string[] = [];
   for (const msg of messages) {
     lines.push(`=== ${msg.role.toUpperCase()} ===`);
-    lines.push(msg.content ?? "");
+    // Handle undefined content (for incomplete/malformed messages)
+    lines.push(msg.content ? extractText(msg.content) : "");
     lines.push("");
   }
   return lines.join("\n");

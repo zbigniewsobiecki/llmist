@@ -13,7 +13,9 @@ import {
   DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT,
   FALLBACK_CONTEXT_WINDOW,
 } from "../core/constants.js";
-import { LLMMessageBuilder } from "../core/messages.js";
+import type { ContentPart } from "../core/input-content.js";
+import type { MessageContent } from "../core/messages.js";
+import { extractText, LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 import type { PromptConfig } from "../core/prompt-config.js";
@@ -62,8 +64,8 @@ export interface AgentOptions {
   /** System prompt */
   systemPrompt?: string;
 
-  /** Initial user prompt (optional if using build()) */
-  userPrompt?: string;
+  /** Initial user prompt (optional if using build()). Can be text or multimodal content. */
+  userPrompt?: string | ContentPart[];
 
   /** Maximum iterations */
   maxIterations?: number;
@@ -92,8 +94,8 @@ export interface AgentOptions {
   /** Custom gadget argument prefix for block format parameters */
   gadgetArgPrefix?: string;
 
-  /** Initial messages */
-  initialMessages?: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  /** Initial messages. User messages support multimodal content. */
+  initialMessages?: Array<{ role: "system" | "user" | "assistant"; content: MessageContent }>;
 
   /** Text-only handler */
   textOnlyHandler?: TextOnlyHandler;
@@ -586,10 +588,11 @@ export class Agent {
               if (msg.role === "user") {
                 this.conversation.addUserMessage(msg.content);
               } else if (msg.role === "assistant") {
-                this.conversation.addAssistantMessage(msg.content);
+                // Assistant messages are always text, extract if multimodal
+                this.conversation.addAssistantMessage(extractText(msg.content));
               } else if (msg.role === "system") {
                 // System messages can't be added mid-conversation, treat as user
-                this.conversation.addUserMessage(`[System] ${msg.content}`);
+                this.conversation.addUserMessage(`[System] ${extractText(msg.content)}`);
               }
             }
           }

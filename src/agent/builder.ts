@@ -19,6 +19,13 @@
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import type { ContentPart, ImageMimeType } from "../core/input-content.js";
+import {
+  detectImageMimeType,
+  text,
+  toBase64,
+} from "../core/input-content.js";
+import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
@@ -36,8 +43,12 @@ import type {
 
 /**
  * Message for conversation history.
+ * User messages can be text (string) or multimodal (ContentPart[]).
  */
-export type HistoryMessage = { user: string } | { assistant: string } | { system: string };
+export type HistoryMessage =
+  | { user: string | ContentPart[] }
+  | { assistant: string }
+  | { system: string };
 
 /**
  * Context available to trailing message functions.
@@ -69,7 +80,7 @@ export class AgentBuilder {
   private gadgets: GadgetOrClass[] = [];
   private initialMessages: Array<{
     role: "system" | "user" | "assistant";
-    content: string;
+    content: MessageContent;
   }> = [];
   private onHumanInputRequired?: (question: string) => Promise<string>;
   private gadgetStartPrefix?: string;
@@ -783,16 +794,21 @@ export class AgentBuilder {
    * }
    * ```
    */
-  ask(userPrompt: string): Agent {
+  /**
+   * Build AgentOptions with the given user prompt.
+   * Centralizes options construction for ask(), askWithImage(), and askWithContent().
+   */
+  private buildAgentOptions(userPrompt: string | ContentPart[]): AgentOptions {
     // Lazy import to avoid circular dependency
     if (!this.client) {
       const { LLMist: LLMistClass } =
         require("../core/client.js") as typeof import("../core/client.js");
       this.client = new LLMistClass();
     }
+
     const registry = GadgetRegistry.from(this.gadgets);
 
-    const options: AgentOptions = {
+    return {
       client: this.client,
       model: this.model ?? "openai:gpt-5-nano",
       systemPrompt: this.systemPrompt,
@@ -818,7 +834,95 @@ export class AgentBuilder {
       compactionConfig: this.compactionConfig,
       signal: this.signal,
     };
+  }
 
+  ask(userPrompt: string): Agent {
+    const options = this.buildAgentOptions(userPrompt);
+    return new Agent(AGENT_INTERNAL_KEY, options);
+  }
+
+  /**
+   * Build and create the agent with a multimodal user prompt (text + image).
+   * Returns the Agent instance ready to run.
+   *
+   * @param textPrompt - Text prompt describing what to do with the image
+   * @param imageData - Image data (Buffer, Uint8Array, or base64 string)
+   * @param mimeType - Optional MIME type (auto-detected if not provided)
+   * @returns Configured Agent instance
+   *
+   * @example
+   * ```typescript
+   * const agent = LLMist.createAgent()
+   *   .withModel("gpt-4o")
+   *   .withSystem("You analyze images")
+   *   .askWithImage(
+   *     "What's in this image?",
+   *     await fs.readFile("photo.jpg")
+   *   );
+   *
+   * for await (const event of agent.run()) {
+   *   // handle events
+   * }
+   * ```
+   */
+  askWithImage(
+    textPrompt: string,
+    imageData: Buffer | Uint8Array | string,
+    mimeType?: ImageMimeType,
+  ): Agent {
+    const imageBuffer =
+      typeof imageData === "string" ? Buffer.from(imageData, "base64") : imageData;
+    const detectedMime = mimeType ?? detectImageMimeType(imageBuffer);
+
+    if (!detectedMime) {
+      throw new Error(
+        "Could not detect image MIME type. Please provide the mimeType parameter explicitly.",
+      );
+    }
+
+    // Build multimodal content
+    const userContent: ContentPart[] = [
+      text(textPrompt),
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          mediaType: detectedMime,
+          data: toBase64(imageBuffer),
+        },
+      },
+    ];
+
+    const options = this.buildAgentOptions(userContent);
+    return new Agent(AGENT_INTERNAL_KEY, options);
+  }
+
+  /**
+   * Build and return an Agent configured with multimodal content.
+   * More flexible than askWithImage - accepts any combination of content parts.
+   *
+   * @param content - Array of content parts (text, images, audio)
+   * @returns A configured Agent ready for execution
+   *
+   * @example
+   * ```typescript
+   * import { text, imageFromBuffer, audioFromBuffer } from "llmist";
+   *
+   * const agent = LLMist.createAgent()
+   *   .withModel("gemini:gemini-2.5-flash")
+   *   .askWithContent([
+   *     text("Describe this image and transcribe the audio:"),
+   *     imageFromBuffer(imageData),
+   *     audioFromBuffer(audioData),
+   *   ]);
+   *
+   * for await (const event of agent.run()) {
+   *   // handle events
+   * }
+   * ```
+   */
+  askWithContent(content: ContentPart[]): Agent {
+    const options = this.buildAgentOptions(content);
     return new Agent(AGENT_INTERNAL_KEY, options);
   }
 
