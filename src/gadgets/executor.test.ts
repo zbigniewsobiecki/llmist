@@ -700,8 +700,8 @@ describe("GadgetExecutor", () => {
         result: "Completed after 100ms",
       });
       expect(result.error).toBeUndefined();
-      expect(result.executionTimeMs).toBeGreaterThanOrEqual(90);  // 10% margin for overhead
-      expect(result.executionTimeMs).toBeLessThan(200);  // Ensure it didn't hang/timeout
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(90); // 10% margin for overhead
+      expect(result.executionTimeMs).toBeLessThan(200); // Ensure it didn't hang/timeout
     });
 
     it("times out when gadget exceeds its own timeoutMs", async () => {

@@ -124,11 +124,7 @@ export function validatePrompts(prompts: PromptsConfig, configPath?: string): vo
  * @param configPath - Path to config file for error messages
  * @throws TemplateError if an undefined env var is referenced
  */
-export function validateEnvVars(
-  template: string,
-  promptName?: string,
-  configPath?: string,
-): void {
+export function validateEnvVars(template: string, promptName?: string, configPath?: string): void {
   // Match <%= it.env.VAR_NAME %> patterns
   const envVarPattern = /<%=\s*it\.env\.(\w+)\s*%>/g;
   const matches = template.matchAll(envVarPattern);

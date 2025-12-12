@@ -39,9 +39,9 @@
 
 import {
   DEFAULT_HINTS,
-  resolveHintTemplate,
   type HintContext,
   type HintTemplate,
+  resolveHintTemplate,
 } from "../core/prompt-config.js";
 import { HookPresets } from "./hook-presets.js";
 import type { AgentHooks } from "./hooks.js";
@@ -178,11 +178,7 @@ export function iterationProgressHint(options?: IterationHintOptions): AgentHook
         };
 
         // Resolve template
-        let hint = resolveHintTemplate(
-          template,
-          DEFAULT_HINTS.iterationProgressHint,
-          hintContext,
-        );
+        let hint = resolveHintTemplate(template, DEFAULT_HINTS.iterationProgressHint, hintContext);
 
         // Add urgency indicator if late in iterations
         if (showUrgency && progress >= 0.8) {
@@ -308,15 +304,13 @@ export function createHints(config: HintsConfig): AgentHooks {
 
   // Iteration progress hint
   if (config.iterationProgress) {
-    const options =
-      typeof config.iterationProgress === "boolean" ? {} : config.iterationProgress;
+    const options = typeof config.iterationProgress === "boolean" ? {} : config.iterationProgress;
     hooksToMerge.push(iterationProgressHint(options));
   }
 
   // Parallel gadgets hint
   if (config.parallelGadgets) {
-    const options =
-      typeof config.parallelGadgets === "boolean" ? {} : config.parallelGadgets;
+    const options = typeof config.parallelGadgets === "boolean" ? {} : config.parallelGadgets;
     hooksToMerge.push(parallelGadgetHint(options));
   }
 

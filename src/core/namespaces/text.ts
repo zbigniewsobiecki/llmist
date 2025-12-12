@@ -19,7 +19,7 @@
  */
 
 import type { LLMist } from "../client.js";
-import { complete, stream, type QuickOptions } from "../quick-methods.js";
+import { complete, type QuickOptions, stream } from "../quick-methods.js";
 
 export class TextNamespace {
   constructor(private readonly client: LLMist) {}

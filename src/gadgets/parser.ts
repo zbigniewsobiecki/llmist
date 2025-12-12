@@ -1,9 +1,8 @@
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
-import type { StreamEvent } from "./types.js";
 import { parseBlockParams } from "./block-params.js";
+import type { StreamEvent } from "./types.js";
 
 export type ParameterFormat = "block";
-
 
 /**
  * Strip markdown code fences from parameter content.
@@ -163,8 +162,11 @@ export class StreamParser {
       if (metadataEndIndex === -1) break; // Wait for more data
 
       const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
-      const { actualName: actualGadgetName, invocationId, dependencies } =
-        this.parseGadgetName(gadgetName);
+      const {
+        actualName: actualGadgetName,
+        invocationId,
+        dependencies,
+      } = this.parseGadgetName(gadgetName);
 
       const contentStartIndex = metadataEndIndex + 1;
 
@@ -245,8 +247,11 @@ export class StreamParser {
 
       if (metadataEndIndex !== -1) {
         const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
-        const { actualName: actualGadgetName, invocationId, dependencies } =
-          this.parseGadgetName(gadgetName);
+        const {
+          actualName: actualGadgetName,
+          invocationId,
+          dependencies,
+        } = this.parseGadgetName(gadgetName);
         const contentStartIndex = metadataEndIndex + 1;
 
         // Extract parameters (everything after the newline to end of buffer)

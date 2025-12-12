@@ -19,17 +19,17 @@ import { extractText, LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 import type { PromptConfig } from "../core/prompt-config.js";
+import { MediaStore } from "../gadgets/media-store.js";
+import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type { StreamEvent, TextOnlyHandler } from "../gadgets/types.js";
-import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import { createLogger } from "../logging/logger.js";
+import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.js";
 import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
 import { CompactionManager } from "./compaction/manager.js";
-import { GadgetOutputStore } from "./gadget-output-store.js";
-import type { GadgetResultInterceptorContext } from "./hooks.js";
-import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.js";
 import { ConversationManager } from "./conversation-manager.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
+import { GadgetOutputStore } from "./gadget-output-store.js";
 import {
   validateAfterLLMCallAction,
   validateAfterLLMErrorAction,
@@ -41,6 +41,7 @@ import type {
   AfterLLMErrorAction,
   AgentHooks,
   BeforeLLMCallAction,
+  GadgetResultInterceptorContext,
   LLMCallControllerContext,
   LLMErrorControllerContext,
   ObserveAbortContext,
@@ -196,6 +197,9 @@ export class Agent {
   // Context compaction
   private readonly compactionManager?: CompactionManager;
 
+  // Media storage (for gadgets returning images, audio, etc.)
+  private readonly mediaStore: MediaStore;
+
   // Cancellation
   private readonly signal?: AbortSignal;
 
@@ -230,6 +234,9 @@ export class Agent {
     // Initialize gadget output limiting
     this.outputLimitEnabled = options.gadgetOutputLimit ?? DEFAULT_GADGET_OUTPUT_LIMIT;
     this.outputStore = new GadgetOutputStore();
+
+    // Initialize media storage for gadgets returning images, audio, etc.
+    this.mediaStore = new MediaStore();
 
     // Calculate character limit from model context window
     const limitPercent = options.gadgetOutputLimitPercent ?? DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT;
@@ -311,6 +318,37 @@ export class Agent {
    */
   getRegistry(): GadgetRegistry {
     return this.registry;
+  }
+
+  /**
+   * Get the media store for this agent session.
+   *
+   * The media store holds all media outputs (images, audio, etc.) produced by gadgets
+   * during this agent's execution. Use this to:
+   * - Access stored media files by ID
+   * - List all stored media
+   * - Clean up temporary files after execution
+   *
+   * @returns The MediaStore instance for this agent
+   *
+   * @example
+   * ```typescript
+   * const agent = new AgentBuilder()
+   *   .withModel("sonnet")
+   *   .build();
+   *
+   * // After execution, access stored media
+   * const store = agent.getMediaStore();
+   * for (const media of store.list()) {
+   *   console.log(`${media.id}: ${media.path}`);
+   * }
+   *
+   * // Clean up when done
+   * await store.cleanup();
+   * ```
+   */
+  getMediaStore(): MediaStore {
+    return this.mediaStore;
   }
 
   /**
@@ -522,6 +560,7 @@ export class Agent {
           shouldContinueAfterError: this.shouldContinueAfterError,
           defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
           client: this.client,
+          mediaStore: this.mediaStore,
         });
 
         const result = await processor.process(stream);
@@ -603,7 +642,9 @@ export class Agent {
           // If configured, wrap accompanying text as a synthetic gadget call (before actual gadgets)
           if (this.textWithGadgetsHandler) {
             const textContent = result.outputs
-              .filter((output): output is { type: "text"; content: string } => output.type === "text")
+              .filter(
+                (output): output is { type: "text"; content: string } => output.type === "text",
+              )
               .map((output) => output.content)
               .join("");
 
@@ -625,6 +666,8 @@ export class Agent {
                 gadgetResult.gadgetName,
                 gadgetResult.parameters,
                 gadgetResult.error ?? gadgetResult.result ?? "",
+                gadgetResult.media,
+                gadgetResult.mediaIds,
               );
             }
           }
@@ -795,10 +838,7 @@ export class Agent {
       return userHooks ?? {};
     }
 
-    const limiterInterceptor = (
-      result: string,
-      ctx: GadgetResultInterceptorContext,
-    ): string => {
+    const limiterInterceptor = (result: string, ctx: GadgetResultInterceptorContext): string => {
       // Skip limiting for GadgetOutputViewer itself to avoid recursion
       if (ctx.gadgetName === "GadgetOutputViewer") {
         return result;

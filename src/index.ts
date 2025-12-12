@@ -23,6 +23,13 @@ export type {
   BeforeLLMCallAction,
   // Interceptor contexts
   ChunkInterceptorContext,
+  // Context compaction
+  CompactionConfig,
+  CompactionContext,
+  CompactionEvent,
+  CompactionResult,
+  CompactionStats,
+  CompactionStrategy,
   Controllers,
   GadgetExecutionControllerContext,
   GadgetParameterInterceptorContext,
@@ -36,7 +43,9 @@ export type {
   LLMCallControllerContext,
   LLMErrorControllerContext,
   MessageInterceptorContext,
+  MessageTurn,
   ObserveChunkContext,
+  ObserveCompactionContext,
   ObserveGadgetCompleteContext,
   ObserveGadgetStartContext,
   // Observer contexts
@@ -45,37 +54,28 @@ export type {
   ObserveLLMErrorContext,
   Observers,
   ParallelGadgetHintOptions,
-  StreamProcessingResult,
-  StreamProcessorOptions,
+  ResolvedCompactionConfig,
   // Gadget output limiting
   StoredOutput,
-  // Context compaction
-  CompactionConfig,
-  CompactionContext,
-  CompactionEvent,
-  CompactionResult,
-  CompactionStats,
-  CompactionStrategy,
-  MessageTurn,
-  ObserveCompactionContext,
-  ResolvedCompactionConfig,
+  StreamProcessingResult,
+  StreamProcessorOptions,
 } from "./agent/index.js";
 export {
-  // Existing exports
-  ConversationManager,
-  GadgetOutputStore,
-  StreamProcessor,
   // Compaction exports
   CompactionManager,
-  DEFAULT_COMPACTION_CONFIG,
-  DEFAULT_SUMMARIZATION_PROMPT,
-  HybridStrategy,
-  SlidingWindowStrategy,
-  SummarizationStrategy,
+  // Existing exports
+  ConversationManager,
   // LLM Assistance Hints
   createHints,
+  DEFAULT_COMPACTION_CONFIG,
+  DEFAULT_SUMMARIZATION_PROMPT,
+  GadgetOutputStore,
+  HybridStrategy,
   iterationProgressHint,
   parallelGadgetHint,
+  SlidingWindowStrategy,
+  StreamProcessor,
+  SummarizationStrategy,
 } from "./agent/index.js";
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
@@ -112,9 +112,6 @@ export {
 
 export type { LLMMessage, LLMRole, MessageContent } from "./core/messages.js";
 export { extractText, LLMMessageBuilder, normalizeContent } from "./core/messages.js";
-
-// Vision namespace for one-shot image analysis
-export type { VisionAnalyzeOptions, VisionAnalyzeResult } from "./core/namespaces/vision.js";
 // Model catalog
 export type {
   CostEstimate,
@@ -124,7 +121,6 @@ export type {
   ModelSpec,
 } from "./core/model-catalog.js";
 export { ModelRegistry } from "./core/model-registry.js";
-
 // Syntactic sugar: Model shortcuts and quick methods
 export {
   getModelId,
@@ -133,6 +129,8 @@ export {
   MODEL_ALIASES,
   resolveModel,
 } from "./core/model-shortcuts.js";
+// Vision namespace for one-shot image analysis
+export type { VisionAnalyzeOptions, VisionAnalyzeResult } from "./core/namespaces/vision.js";
 export type {
   LLMGenerationOptions,
   LLMStream,
@@ -160,12 +158,12 @@ export type { QuickOptions } from "./core/quick-methods.js";
 export { complete, stream } from "./core/quick-methods.js";
 export type { CreateGadgetConfig } from "./gadgets/create-gadget.js";
 export { createGadget } from "./gadgets/create-gadget.js";
-// Gadget output viewer (for custom output store integration)
-export { createGadgetOutputViewer } from "./gadgets/output-viewer.js";
 // Gadget infrastructure
 export { AbortError, BreakLoopException, HumanInputException } from "./gadgets/exceptions.js";
 export { GadgetExecutor } from "./gadgets/executor.js";
 export { BaseGadget } from "./gadgets/gadget.js";
+// Gadget output viewer (for custom output store integration)
+export { createGadgetOutputViewer } from "./gadgets/output-viewer.js";
 export { StreamParser } from "./gadgets/parser.js";
 export type { GadgetClass, GadgetOrClass } from "./gadgets/registry.js";
 export { GadgetRegistry } from "./gadgets/registry.js";
@@ -178,10 +176,15 @@ export type {
   ExecutionContext,
   GadgetExample,
   GadgetExecuteResult,
+  GadgetExecuteResultWithMedia,
   GadgetExecuteReturn,
   GadgetExecutionResult,
+  GadgetMediaOutput,
   GadgetSkippedEvent,
+  MediaKind,
+  MediaMetadata,
   ParsedGadgetCall,
+  StoredMedia,
   StreamEvent,
   TextOnlyAction,
   TextOnlyContext,
@@ -190,6 +193,17 @@ export type {
   TextOnlyHandler,
   TextOnlyStrategy,
 } from "./gadgets/types.js";
+// Media output helpers for gadgets
+export {
+  createMedia,
+  resultWithAudio,
+  resultWithFile,
+  resultWithImage,
+  resultWithImages,
+  resultWithMedia,
+} from "./gadgets/helpers.js";
+// Media storage for gadget outputs
+export { MediaStore } from "./gadgets/media-store.js";
 export type { ValidationIssue, ValidationResult } from "./gadgets/validation.js";
 export { validateAndApplyDefaults, validateGadgetParams } from "./gadgets/validation.js";
 export type { LoggerOptions } from "./logging/logger.js";

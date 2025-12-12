@@ -9,6 +9,7 @@ import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
 import { GadgetExecutor } from "../gadgets/executor.js";
+import type { MediaStore } from "../gadgets/media-store.js";
 import { StreamParser } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
@@ -84,6 +85,9 @@ export interface StreamProcessorOptions {
 
   /** LLMist client for ExecutionContext.llmist */
   client?: LLMist;
+
+  /** MediaStore for storing gadget media outputs */
+  mediaStore?: MediaStore;
 }
 
 /**
@@ -182,6 +186,7 @@ export class StreamProcessor {
       options.defaultGadgetTimeoutMs,
       { argPrefix: options.gadgetArgPrefix },
       options.client,
+      options.mediaStore,
     );
   }
 

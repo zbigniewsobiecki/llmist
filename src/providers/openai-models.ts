@@ -62,7 +62,8 @@ export const OPENAI_MODELS: ModelSpec[] = [
     metadata: {
       family: "GPT-5",
       releaseDate: "2025-08-07",
-      notes: "Best model for coding and agentic tasks. Adaptive reasoning with 90% caching discount.",
+      notes:
+        "Best model for coding and agentic tasks. Adaptive reasoning with 90% caching discount.",
       supportsTemperature: false,
     },
   },

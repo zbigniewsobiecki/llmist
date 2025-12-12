@@ -124,9 +124,7 @@ describe("AnthropicMessagesProvider", () => {
             { role: "assistant", content: [{ type: "text", text: "Assistant 1" }] },
             {
               role: "user",
-              content: [
-                { type: "text", text: "User 2", cache_control: { type: "ephemeral" } },
-              ],
+              content: [{ type: "text", text: "User 2", cache_control: { type: "ephemeral" } }],
             },
           ],
         }),

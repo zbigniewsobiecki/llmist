@@ -6,6 +6,7 @@
  */
 
 import type { LLMist } from "../../core/client.js";
+import type { LLMMessage } from "../../core/messages.js";
 import type { ModelLimits } from "../../core/model-catalog.js";
 import type { IConversationManager } from "../interfaces.js";
 import {
@@ -15,9 +16,12 @@ import {
   type ResolvedCompactionConfig,
   resolveCompactionConfig,
 } from "./config.js";
+import {
+  HybridStrategy,
+  SlidingWindowStrategy,
+  SummarizationStrategy,
+} from "./strategies/index.js";
 import type { CompactionStrategy } from "./strategy.js";
-import type { LLMMessage } from "../../core/messages.js";
-import { HybridStrategy, SlidingWindowStrategy, SummarizationStrategy } from "./strategies/index.js";
 
 /**
  * Pre-computed token counts to avoid redundant counting.

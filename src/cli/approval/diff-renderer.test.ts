@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import { describe, expect, it } from "bun:test";
+import chalk from "chalk";
 import { formatNewFileDiff, renderColoredDiff } from "./diff-renderer.js";
 
 describe("renderColoredDiff", () => {

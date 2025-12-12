@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { Readable, Writable } from "node:stream";
-import { runCLI } from "./program.js";
-import type { CLIEnvironment } from "./environment.js";
 import type { LLMist } from "../core/client.js";
-import type { ModelSpec } from "../core/model-catalog.js";
 import type { ImageModelSpec, SpeechModelSpec } from "../core/media-types.js";
+import type { ModelSpec } from "../core/model-catalog.js";
 import { ModelRegistry } from "../core/model-registry.js";
 import { createLogger } from "../logging/logger.js";
+import type { CLIEnvironment } from "./environment.js";
+import { runCLI } from "./program.js";
 
 /**
  * Helper to create a readable stream.

@@ -104,7 +104,9 @@ async function main() {
       observers: {
         // Track what goes into conversation history
         onGadgetExecutionComplete: async (ctx) => {
-          conversationHistory.push(`${ctx.gadgetName}: ${JSON.stringify(ctx.parameters).slice(0, 50)}`);
+          conversationHistory.push(
+            `${ctx.gadgetName}: ${JSON.stringify(ctx.parameters).slice(0, 50)}`,
+          );
         },
       },
     })

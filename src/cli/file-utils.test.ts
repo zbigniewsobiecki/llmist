@@ -1,14 +1,14 @@
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { mkdir, writeFile, rm, chmod } from "node:fs/promises";
-import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
-  readImageFile,
+  DEFAULT_MAX_FILE_SIZE,
   readAudioFile,
   readFileBuffer,
-  validateImageFile,
+  readImageFile,
   validateAudioFile,
-  DEFAULT_MAX_FILE_SIZE,
+  validateImageFile,
 } from "./file-utils.js";
 
 /**
@@ -26,16 +26,34 @@ const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const GIF_MAGIC = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
 const WEBP_MAGIC = Buffer.from([
-  0x52, 0x49, 0x46, 0x46, // RIFF
-  0x00, 0x00, 0x00, 0x00, // file size (doesn't matter for detection)
-  0x57, 0x45, 0x42, 0x50, // WEBP
+  0x52,
+  0x49,
+  0x46,
+  0x46, // RIFF
+  0x00,
+  0x00,
+  0x00,
+  0x00, // file size (doesn't matter for detection)
+  0x57,
+  0x45,
+  0x42,
+  0x50, // WEBP
 ]);
 
 const MP3_MAGIC = Buffer.from([0x49, 0x44, 0x33]); // ID3 tag
 const WAV_MAGIC = Buffer.from([
-  0x52, 0x49, 0x46, 0x46, // RIFF
-  0x00, 0x00, 0x00, 0x00, // file size
-  0x57, 0x41, 0x56, 0x45, // WAVE
+  0x52,
+  0x49,
+  0x46,
+  0x46, // RIFF
+  0x00,
+  0x00,
+  0x00,
+  0x00, // file size
+  0x57,
+  0x41,
+  0x56,
+  0x45, // WAVE
 ]);
 const OGG_MAGIC = Buffer.from([0x4f, 0x67, 0x67, 0x53]); // OggS
 
@@ -319,32 +337,32 @@ describe("file size limits", () => {
 
   test("readImageFile rejects files exceeding custom limit", async () => {
     // Set limit smaller than the test file
-    await expect(
-      readImageFile(join(TEST_DIR, "test.jpg"), { maxFileSize: 5 }),
-    ).rejects.toThrow(/too large/);
+    await expect(readImageFile(join(TEST_DIR, "test.jpg"), { maxFileSize: 5 })).rejects.toThrow(
+      /too large/,
+    );
   });
 
   test("readAudioFile rejects files exceeding custom limit", async () => {
-    await expect(
-      readAudioFile(join(TEST_DIR, "test.mp3"), { maxFileSize: 1 }),
-    ).rejects.toThrow(/too large/);
+    await expect(readAudioFile(join(TEST_DIR, "test.mp3"), { maxFileSize: 1 })).rejects.toThrow(
+      /too large/,
+    );
   });
 
   test("readFileBuffer rejects files exceeding custom limit", async () => {
-    await expect(
-      readFileBuffer(join(TEST_DIR, "test.jpg"), { maxFileSize: 1 }),
-    ).rejects.toThrow(/too large/);
+    await expect(readFileBuffer(join(TEST_DIR, "test.jpg"), { maxFileSize: 1 })).rejects.toThrow(
+      /too large/,
+    );
   });
 
   test("error message includes file size and limit info", async () => {
-    await expect(
-      readImageFile(join(TEST_DIR, "test.jpg"), { maxFileSize: 5 }),
-    ).rejects.toThrow(/Maximum allowed size is 5 bytes/);
+    await expect(readImageFile(join(TEST_DIR, "test.jpg"), { maxFileSize: 5 })).rejects.toThrow(
+      /Maximum allowed size is 5 bytes/,
+    );
   });
 
   test("error message suggests compression for large files", async () => {
-    await expect(
-      readImageFile(join(TEST_DIR, "test.jpg"), { maxFileSize: 5 }),
-    ).rejects.toThrow(/Consider compressing/);
+    await expect(readImageFile(join(TEST_DIR, "test.jpg"), { maxFileSize: 5 })).rejects.toThrow(
+      /Consider compressing/,
+    );
   });
 });

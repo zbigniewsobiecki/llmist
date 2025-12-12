@@ -15,7 +15,10 @@ export const DEFAULT_LLM_LOG_DIR = join(homedir(), ".llmist", "logs");
  * - string: use the provided path
  * - undefined/false: disabled
  */
-export function resolveLogDir(option: string | boolean | undefined, subdir: string): string | undefined {
+export function resolveLogDir(
+  option: string | boolean | undefined,
+  subdir: string,
+): string | undefined {
   if (option === true) {
     return join(DEFAULT_LLM_LOG_DIR, subdir);
   }

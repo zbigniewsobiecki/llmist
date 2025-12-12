@@ -3,8 +3,8 @@
  * Implements IConversationManager interface with test-friendly features.
  */
 
-import type { LLMMessage } from "../core/messages.js";
 import type { IConversationManager } from "../agent/interfaces.js";
+import type { LLMMessage } from "../core/messages.js";
 
 /**
  * A mock implementation of IConversationManager for testing.
@@ -32,10 +32,7 @@ export class MockConversationManager implements IConversationManager {
   private replaceHistoryCallCount = 0;
   private addedMessages: LLMMessage[] = [];
 
-  constructor(
-    history: LLMMessage[] = [],
-    baseMessages: LLMMessage[] = [],
-  ) {
+  constructor(history: LLMMessage[] = [], baseMessages: LLMMessage[] = []) {
     this.history = [...history];
     this.baseMessages = [...baseMessages];
   }

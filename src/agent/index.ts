@@ -4,7 +4,36 @@
  */
 
 export type { AgentOptions } from "./agent.js";
+// Context compaction
+export {
+  type CompactionConfig,
+  type CompactionContext,
+  type CompactionEvent,
+  CompactionManager,
+  type CompactionResult,
+  type CompactionStats,
+  type CompactionStrategy,
+  DEFAULT_COMPACTION_CONFIG,
+  DEFAULT_SUMMARIZATION_PROMPT,
+  HybridStrategy,
+  type MessageTurn,
+  type ResolvedCompactionConfig,
+  SlidingWindowStrategy,
+  SummarizationStrategy,
+} from "./compaction/index.js";
 export { ConversationManager } from "./conversation-manager.js";
+// Gadget output limiting
+export type { StoredOutput } from "./gadget-output-store.js";
+export { GadgetOutputStore } from "./gadget-output-store.js";
+// LLM Assistance Hints
+export {
+  createHints,
+  type HintsConfig,
+  type IterationHintOptions,
+  iterationProgressHint,
+  type ParallelGadgetHintOptions,
+  parallelGadgetHint,
+} from "./hints.js";
 // New clean hooks system
 export type {
   AfterGadgetExecutionAction,
@@ -30,6 +59,7 @@ export type {
   LLMErrorControllerContext,
   MessageInterceptorContext,
   ObserveChunkContext,
+  ObserveCompactionContext,
   ObserveGadgetCompleteContext,
   // Gadget skip observer
   ObserveGadgetSkippedContext,
@@ -41,47 +71,9 @@ export type {
   Observers,
 } from "./hooks.js";
 export type { IConversationManager } from "./interfaces.js";
-
 // StreamProcessor for advanced use cases
 export {
   type StreamProcessingResult,
   StreamProcessor,
   type StreamProcessorOptions,
 } from "./stream-processor.js";
-
-// Gadget output limiting
-export type { StoredOutput } from "./gadget-output-store.js";
-export { GadgetOutputStore } from "./gadget-output-store.js";
-
-// Context compaction
-export {
-  type CompactionConfig,
-  type CompactionEvent,
-  type CompactionStats,
-  type ResolvedCompactionConfig,
-  DEFAULT_COMPACTION_CONFIG,
-  DEFAULT_SUMMARIZATION_PROMPT,
-} from "./compaction/index.js";
-
-export {
-  type CompactionContext,
-  type CompactionResult,
-  type CompactionStrategy,
-  type MessageTurn,
-  CompactionManager,
-  HybridStrategy,
-  SlidingWindowStrategy,
-  SummarizationStrategy,
-} from "./compaction/index.js";
-
-export type { ObserveCompactionContext } from "./hooks.js";
-
-// LLM Assistance Hints
-export {
-  createHints,
-  iterationProgressHint,
-  parallelGadgetHint,
-  type HintsConfig,
-  type IterationHintOptions,
-  type ParallelGadgetHintOptions,
-} from "./hints.js";

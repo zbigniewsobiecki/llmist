@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { AbortError, BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
+import {
+  AbortError,
+  BreakLoopException,
+  HumanInputException,
+  TimeoutException,
+} from "./exceptions.js";
 
 describe("BreakLoopException", () => {
   it("creates with custom message", () => {

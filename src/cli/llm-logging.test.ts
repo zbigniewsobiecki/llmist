@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, afterEach, describe, expect, it } from "bun:test";
 
 import {
   createSessionDir,
@@ -52,7 +52,7 @@ describe("llm-logging", () => {
       ];
       const result = formatLlmRequest(messages);
       expect(result).toBe(
-        "=== SYSTEM ===\nYou are helpful\n\n=== USER ===\nHi\n\n=== ASSISTANT ===\nHello!\n"
+        "=== SYSTEM ===\nYou are helpful\n\n=== USER ===\nHi\n\n=== ASSISTANT ===\nHello!\n",
       );
     });
 
@@ -152,7 +152,10 @@ describe("llm-logging", () => {
     let testBaseDir: string;
 
     beforeEach(async () => {
-      testBaseDir = join(tmpdir(), `llmist-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      testBaseDir = join(
+        tmpdir(),
+        `llmist-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
       await mkdir(testBaseDir, { recursive: true });
     });
 
@@ -220,7 +223,9 @@ describe("llm-logging", () => {
       // Capture console.warn
       const originalWarn = console.warn;
       let warnCalled = false;
-      console.warn = () => { warnCalled = true; };
+      console.warn = () => {
+        warnCalled = true;
+      };
 
       try {
         const result = await createSessionDir(invalidPath);

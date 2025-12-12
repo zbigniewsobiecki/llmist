@@ -8,7 +8,9 @@ import { HybridStrategy } from "./hybrid.js";
 describe("HybridStrategy", () => {
   const strategy = new HybridStrategy();
 
-  const createConfig = (overrides?: Partial<ResolvedCompactionConfig>): ResolvedCompactionConfig => ({
+  const createConfig = (
+    overrides?: Partial<ResolvedCompactionConfig>,
+  ): ResolvedCompactionConfig => ({
     enabled: true,
     strategy: "hybrid",
     triggerThresholdPercent: 80,

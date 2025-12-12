@@ -10,16 +10,8 @@ import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
-import {
-  createSessionDir,
-  formatLlmRequest,
-  resolveLogDir,
-  writeLogFile,
-} from "./llm-logging.js";
-import {
-  addCompleteOptions,
-  type CompleteCommandOptions,
-} from "./option-helpers.js";
+import { createSessionDir, formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
+import { addCompleteOptions, type CompleteCommandOptions } from "./option-helpers.js";
 import {
   executeAction,
   renderSummary,

@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { MockConversationManager, createMockConversationManager } from "./mock-conversation.js";
 import type { LLMMessage } from "../core/messages.js";
+import { createMockConversationManager, MockConversationManager } from "./mock-conversation.js";
 
 describe("MockConversationManager", () => {
   describe("constructor", () => {
@@ -43,12 +43,8 @@ describe("MockConversationManager", () => {
     });
 
     it("combines base messages and history in getMessages()", () => {
-      const baseMessages: LLMMessage[] = [
-        { role: "system", content: "System prompt" },
-      ];
-      const history: LLMMessage[] = [
-        { role: "user", content: "Hello" },
-      ];
+      const baseMessages: LLMMessage[] = [{ role: "system", content: "System prompt" }];
+      const history: LLMMessage[] = [{ role: "user", content: "Hello" }];
 
       const manager = new MockConversationManager(history, baseMessages);
 
@@ -75,9 +71,7 @@ describe("MockConversationManager", () => {
 
       manager.addUserMessage("Hello");
 
-      expect(manager.getHistoryMessages()).toEqual([
-        { role: "user", content: "Hello" },
-      ]);
+      expect(manager.getHistoryMessages()).toEqual([{ role: "user", content: "Hello" }]);
     });
 
     it("tracks added message", () => {
@@ -85,9 +79,7 @@ describe("MockConversationManager", () => {
 
       manager.addUserMessage("Hello");
 
-      expect(manager.getAddedMessages()).toEqual([
-        { role: "user", content: "Hello" },
-      ]);
+      expect(manager.getAddedMessages()).toEqual([{ role: "user", content: "Hello" }]);
     });
   });
 
@@ -97,9 +89,7 @@ describe("MockConversationManager", () => {
 
       manager.addAssistantMessage("Hi there!");
 
-      expect(manager.getHistoryMessages()).toEqual([
-        { role: "assistant", content: "Hi there!" },
-      ]);
+      expect(manager.getHistoryMessages()).toEqual([{ role: "assistant", content: "Hi there!" }]);
     });
 
     it("tracks added message", () => {
@@ -107,9 +97,7 @@ describe("MockConversationManager", () => {
 
       manager.addAssistantMessage("Response");
 
-      expect(manager.getAddedMessages()).toEqual([
-        { role: "assistant", content: "Response" },
-      ]);
+      expect(manager.getAddedMessages()).toEqual([{ role: "assistant", content: "Response" }]);
     });
   });
 
@@ -138,9 +126,7 @@ describe("MockConversationManager", () => {
 
   describe("replaceHistory()", () => {
     it("replaces entire history", () => {
-      const manager = new MockConversationManager([
-        { role: "user", content: "Old message" },
-      ]);
+      const manager = new MockConversationManager([{ role: "user", content: "Old message" }]);
 
       const newHistory: LLMMessage[] = [
         { role: "user", content: "New message" },
@@ -165,9 +151,7 @@ describe("MockConversationManager", () => {
 
     it("stores replacement history for inspection", () => {
       const manager = new MockConversationManager();
-      const newHistory: LLMMessage[] = [
-        { role: "user", content: "Compacted" },
-      ];
+      const newHistory: LLMMessage[] = [{ role: "user", content: "Compacted" }];
 
       manager.replaceHistory(newHistory);
 
@@ -214,38 +198,28 @@ describe("MockConversationManager", () => {
     });
 
     it("preserves the current history", () => {
-      const manager = new MockConversationManager([
-        { role: "user", content: "Keep me" },
-      ]);
+      const manager = new MockConversationManager([{ role: "user", content: "Keep me" }]);
       manager.replaceHistory([{ role: "user", content: "New history" }]);
 
       manager.resetTracking();
 
       // History should still be the replaced one
-      expect(manager.getHistoryMessages()).toEqual([
-        { role: "user", content: "New history" },
-      ]);
+      expect(manager.getHistoryMessages()).toEqual([{ role: "user", content: "New history" }]);
     });
   });
 
   describe("reset()", () => {
     it("resets to provided history", () => {
-      const manager = new MockConversationManager([
-        { role: "user", content: "Old" },
-      ]);
+      const manager = new MockConversationManager([{ role: "user", content: "Old" }]);
       manager.addUserMessage("Added");
 
       manager.reset([{ role: "user", content: "Fresh start" }]);
 
-      expect(manager.getHistoryMessages()).toEqual([
-        { role: "user", content: "Fresh start" },
-      ]);
+      expect(manager.getHistoryMessages()).toEqual([{ role: "user", content: "Fresh start" }]);
     });
 
     it("resets to empty history by default", () => {
-      const manager = new MockConversationManager([
-        { role: "user", content: "Old" },
-      ]);
+      const manager = new MockConversationManager([{ role: "user", content: "Old" }]);
 
       manager.reset();
 
@@ -268,13 +242,9 @@ describe("MockConversationManager", () => {
     it("directly sets history", () => {
       const manager = new MockConversationManager();
 
-      manager.setHistory([
-        { role: "user", content: "Set directly" },
-      ]);
+      manager.setHistory([{ role: "user", content: "Set directly" }]);
 
-      expect(manager.getHistoryMessages()).toEqual([
-        { role: "user", content: "Set directly" },
-      ]);
+      expect(manager.getHistoryMessages()).toEqual([{ role: "user", content: "Set directly" }]);
     });
   });
 
@@ -309,9 +279,7 @@ describe("MockConversationManager", () => {
           { role: "user", content: "1" },
           { role: "assistant", content: "2" },
         ],
-        [
-          { role: "system", content: "System" },
-        ]
+        [{ role: "system", content: "System" }],
       );
 
       expect(manager.getTotalMessageCount()).toBe(3);
@@ -346,9 +314,7 @@ describe("createMockConversationManager()", () => {
   });
 
   it("includes base messages", () => {
-    const baseMessages: LLMMessage[] = [
-      { role: "system", content: "System prompt" },
-    ];
+    const baseMessages: LLMMessage[] = [{ role: "system", content: "System prompt" }];
 
     const manager = createMockConversationManager(1, baseMessages);
 

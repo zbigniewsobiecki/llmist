@@ -65,10 +65,7 @@ describe("E2E: Multimodal Input Support", () => {
     });
 
     it("sends image URL to OpenAI", async () => {
-      mockLLM()
-        .forProvider("openai")
-        .returns("This is a cat playing with yarn.")
-        .register();
+      mockLLM().forProvider("openai").returns("This is a cat playing with yarn.").register();
 
       const client = createMockClient();
 
@@ -77,10 +74,7 @@ describe("E2E: Multimodal Input Support", () => {
         messages: [
           {
             role: "user",
-            content: [
-              text("What's in this image?"),
-              imageFromUrl("https://example.com/cat.jpg"),
-            ],
+            content: [text("What's in this image?"), imageFromUrl("https://example.com/cat.jpg")],
           },
         ],
       });

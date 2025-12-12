@@ -121,13 +121,10 @@ async function buildImage(imageName: string, dockerfile: string): Promise<void> 
   writeFileSync(dockerfilePath, dockerfile);
 
   // Build the image
-  const proc = Bun.spawn(
-    ["docker", "build", "-t", imageName, "-f", dockerfilePath, CACHE_DIR],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
+  const proc = Bun.spawn(["docker", "build", "-t", imageName, "-f", dockerfilePath, CACHE_DIR], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
 
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();
@@ -135,10 +132,7 @@ async function buildImage(imageName: string, dockerfile: string): Promise<void> 
 
   if (exitCode !== 0) {
     const output = [stdout, stderr].filter(Boolean).join("\n");
-    throw new DockerBuildError(
-      `Docker build failed with exit code ${exitCode}`,
-      output,
-    );
+    throw new DockerBuildError(`Docker build failed with exit code ${exitCode}`, output);
   }
 }
 

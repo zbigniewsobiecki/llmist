@@ -68,7 +68,8 @@ export const OPTION_DESCRIPTIONS = {
   logLevel: "Log level: silly, trace, debug, info, warn, error, fatal.",
   logFile: "Path to log file. When set, logs are written to file instead of stderr.",
   logReset: "Reset (truncate) the log file at session start instead of appending.",
-  logLlmRequests: "Save LLM requests/responses to session directories. Optional dir, defaults to ~/.llmist/logs/requests/",
+  logLlmRequests:
+    "Save LLM requests/responses to session directories. Optional dir, defaults to ~/.llmist/logs/requests/",
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
   noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
   quiet: "Suppress all output except content (text and TellUser messages).",

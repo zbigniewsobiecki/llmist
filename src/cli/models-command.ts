@@ -1,11 +1,11 @@
-import { type Command } from "commander";
 import chalk from "chalk";
+import type { Command } from "commander";
+import type { ImageModelSpec, SpeechModelSpec } from "../core/media-types.js";
+import type { ModelSpec } from "../core/model-catalog.js";
+import { MODEL_ALIASES } from "../core/model-shortcuts.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { executeAction } from "./utils.js";
-import type { ModelSpec } from "../core/model-catalog.js";
-import type { ImageModelSpec, SpeechModelSpec } from "../core/media-types.js";
-import { MODEL_ALIASES } from "../core/model-shortcuts.js";
 
 interface ModelsCommandOptions {
   provider?: string;
@@ -87,7 +87,9 @@ function renderAllTables(
 
     const shortcuts = Object.entries(MODEL_ALIASES).sort((a, b) => a[0].localeCompare(b[0]));
     for (const [shortcut, fullName] of shortcuts) {
-      stream.write(chalk.cyan(`  ${shortcut.padEnd(15)}`) + chalk.dim(" → ") + chalk.white(fullName) + "\n");
+      stream.write(
+        chalk.cyan(`  ${shortcut.padEnd(15)}`) + chalk.dim(" → ") + chalk.white(fullName) + "\n",
+      );
     }
     stream.write("\n");
   }
@@ -96,7 +98,11 @@ function renderAllTables(
 /**
  * Render text/LLM models grouped by provider.
  */
-function renderTextTable(models: ModelSpec[], verbose: boolean, stream: NodeJS.WritableStream): void {
+function renderTextTable(
+  models: ModelSpec[],
+  verbose: boolean,
+  stream: NodeJS.WritableStream,
+): void {
   // Group models by provider
   const grouped = new Map<string, ModelSpec[]>();
   for (const model of models) {
@@ -137,17 +143,25 @@ function renderCompactTable(models: ModelSpec[], stream: NodeJS.WritableStream):
   const outputWidth = 10;
 
   // Header
-  stream.write(chalk.dim("─".repeat(idWidth + nameWidth + contextWidth + inputWidth + outputWidth + 8)) + "\n");
+  stream.write(
+    chalk.dim("─".repeat(idWidth + nameWidth + contextWidth + inputWidth + outputWidth + 8)) + "\n",
+  );
   stream.write(
     chalk.bold(
       "Model ID".padEnd(idWidth) +
-      "  " + "Display Name".padEnd(nameWidth) +
-      "  " + "Context".padEnd(contextWidth) +
-      "  " + "Input".padEnd(inputWidth) +
-      "  " + "Output".padEnd(outputWidth)
-    ) + "\n"
+        "  " +
+        "Display Name".padEnd(nameWidth) +
+        "  " +
+        "Context".padEnd(contextWidth) +
+        "  " +
+        "Input".padEnd(inputWidth) +
+        "  " +
+        "Output".padEnd(outputWidth),
+    ) + "\n",
   );
-  stream.write(chalk.dim("─".repeat(idWidth + nameWidth + contextWidth + inputWidth + outputWidth + 8)) + "\n");
+  stream.write(
+    chalk.dim("─".repeat(idWidth + nameWidth + contextWidth + inputWidth + outputWidth + 8)) + "\n",
+  );
 
   // Rows
   for (const model of models) {
@@ -157,15 +171,21 @@ function renderCompactTable(models: ModelSpec[], stream: NodeJS.WritableStream):
 
     stream.write(
       chalk.green(model.modelId.padEnd(idWidth)) +
-      "  " + chalk.white(model.displayName.padEnd(nameWidth)) +
-      "  " + chalk.yellow(contextFormatted.padEnd(contextWidth)) +
-      "  " + chalk.cyan(inputPrice.padEnd(inputWidth)) +
-      "  " + chalk.cyan(outputPrice.padEnd(outputWidth)) +
-      "\n"
+        "  " +
+        chalk.white(model.displayName.padEnd(nameWidth)) +
+        "  " +
+        chalk.yellow(contextFormatted.padEnd(contextWidth)) +
+        "  " +
+        chalk.cyan(inputPrice.padEnd(inputWidth)) +
+        "  " +
+        chalk.cyan(outputPrice.padEnd(outputWidth)) +
+        "\n",
     );
   }
 
-  stream.write(chalk.dim("─".repeat(idWidth + nameWidth + contextWidth + inputWidth + outputWidth + 8)) + "\n");
+  stream.write(
+    chalk.dim("─".repeat(idWidth + nameWidth + contextWidth + inputWidth + outputWidth + 8)) + "\n",
+  );
   stream.write(chalk.dim(`  * Prices are per 1M tokens\n`));
 }
 
@@ -174,12 +194,20 @@ function renderVerboseTable(models: ModelSpec[], stream: NodeJS.WritableStream):
     stream.write(chalk.bold.green(`\n  ${model.modelId}\n`));
     stream.write(chalk.dim("  " + "─".repeat(60)) + "\n");
     stream.write(`  ${chalk.dim("Name:")}         ${chalk.white(model.displayName)}\n`);
-    stream.write(`  ${chalk.dim("Context:")}      ${chalk.yellow(formatTokens(model.contextWindow))}\n`);
-    stream.write(`  ${chalk.dim("Max Output:")}   ${chalk.yellow(formatTokens(model.maxOutputTokens))}\n`);
-    stream.write(`  ${chalk.dim("Pricing:")}      ${chalk.cyan(`$${model.pricing.input.toFixed(2)} input`)} ${chalk.dim("/")} ${chalk.cyan(`$${model.pricing.output.toFixed(2)} output`)} ${chalk.dim("(per 1M tokens)")}\n`);
+    stream.write(
+      `  ${chalk.dim("Context:")}      ${chalk.yellow(formatTokens(model.contextWindow))}\n`,
+    );
+    stream.write(
+      `  ${chalk.dim("Max Output:")}   ${chalk.yellow(formatTokens(model.maxOutputTokens))}\n`,
+    );
+    stream.write(
+      `  ${chalk.dim("Pricing:")}      ${chalk.cyan(`$${model.pricing.input.toFixed(2)} input`)} ${chalk.dim("/")} ${chalk.cyan(`$${model.pricing.output.toFixed(2)} output`)} ${chalk.dim("(per 1M tokens)")}\n`,
+    );
 
     if (model.pricing.cachedInput !== undefined) {
-      stream.write(`  ${chalk.dim("Cached Input:")} ${chalk.cyan(`$${model.pricing.cachedInput.toFixed(2)} per 1M tokens`)}\n`);
+      stream.write(
+        `  ${chalk.dim("Cached Input:")} ${chalk.cyan(`$${model.pricing.cachedInput.toFixed(2)} per 1M tokens`)}\n`,
+      );
     }
 
     if (model.knowledgeCutoff) {
@@ -218,7 +246,11 @@ function renderVerboseTable(models: ModelSpec[], stream: NodeJS.WritableStream):
 /**
  * Render image generation models table.
  */
-function renderImageTable(models: ImageModelSpec[], verbose: boolean, stream: NodeJS.WritableStream): void {
+function renderImageTable(
+  models: ImageModelSpec[],
+  verbose: boolean,
+  stream: NodeJS.WritableStream,
+): void {
   stream.write(chalk.bold.green("🎨 Image Generation Models\n"));
   stream.write(chalk.dim("─".repeat(80)) + "\n\n");
 
@@ -240,9 +272,13 @@ function renderImageTable(models: ImageModelSpec[], verbose: boolean, stream: No
         stream.write(chalk.bold.green(`\n  ${model.modelId}\n`));
         stream.write(chalk.dim("  " + "─".repeat(60)) + "\n");
         stream.write(`  ${chalk.dim("Name:")}      ${chalk.white(model.displayName)}\n`);
-        stream.write(`  ${chalk.dim("Sizes:")}     ${chalk.yellow(model.supportedSizes.join(", "))}\n`);
+        stream.write(
+          `  ${chalk.dim("Sizes:")}     ${chalk.yellow(model.supportedSizes.join(", "))}\n`,
+        );
         if (model.supportedQualities) {
-          stream.write(`  ${chalk.dim("Qualities:")} ${chalk.yellow(model.supportedQualities.join(", "))}\n`);
+          stream.write(
+            `  ${chalk.dim("Qualities:")} ${chalk.yellow(model.supportedQualities.join(", "))}\n`,
+          );
         }
         stream.write(`  ${chalk.dim("Max Images:")} ${chalk.yellow(model.maxImages.toString())}\n`);
         stream.write(`  ${chalk.dim("Pricing:")}   ${chalk.cyan(formatImagePrice(model))}\n`);
@@ -266,24 +302,31 @@ function renderImageTable(models: ImageModelSpec[], verbose: boolean, stream: No
       stream.write(
         chalk.bold(
           "Model ID".padEnd(idWidth) +
-          "  " + "Display Name".padEnd(nameWidth) +
-          "  " + "Sizes".padEnd(sizesWidth) +
-          "  " + "Price".padEnd(priceWidth)
-        ) + "\n"
+            "  " +
+            "Display Name".padEnd(nameWidth) +
+            "  " +
+            "Sizes".padEnd(sizesWidth) +
+            "  " +
+            "Price".padEnd(priceWidth),
+        ) + "\n",
       );
       stream.write(chalk.dim("─".repeat(idWidth + nameWidth + sizesWidth + priceWidth + 6)) + "\n");
 
       for (const model of providerModels) {
-        const sizes = model.supportedSizes.length > 2
-          ? model.supportedSizes.slice(0, 2).join(", ") + "..."
-          : model.supportedSizes.join(", ");
+        const sizes =
+          model.supportedSizes.length > 2
+            ? model.supportedSizes.slice(0, 2).join(", ") + "..."
+            : model.supportedSizes.join(", ");
 
         stream.write(
           chalk.green(model.modelId.padEnd(idWidth)) +
-          "  " + chalk.white(model.displayName.substring(0, nameWidth - 1).padEnd(nameWidth)) +
-          "  " + chalk.yellow(sizes.padEnd(sizesWidth)) +
-          "  " + chalk.cyan(formatImagePrice(model).padEnd(priceWidth)) +
-          "\n"
+            "  " +
+            chalk.white(model.displayName.substring(0, nameWidth - 1).padEnd(nameWidth)) +
+            "  " +
+            chalk.yellow(sizes.padEnd(sizesWidth)) +
+            "  " +
+            chalk.cyan(formatImagePrice(model).padEnd(priceWidth)) +
+            "\n",
         );
       }
       stream.write(chalk.dim("─".repeat(idWidth + nameWidth + sizesWidth + priceWidth + 6)) + "\n");
@@ -296,7 +339,11 @@ function renderImageTable(models: ImageModelSpec[], verbose: boolean, stream: No
 /**
  * Render speech/TTS models table.
  */
-function renderSpeechTable(models: SpeechModelSpec[], verbose: boolean, stream: NodeJS.WritableStream): void {
+function renderSpeechTable(
+  models: SpeechModelSpec[],
+  verbose: boolean,
+  stream: NodeJS.WritableStream,
+): void {
   stream.write(chalk.bold.magenta("🎤 Speech (TTS) Models\n"));
   stream.write(chalk.dim("─".repeat(80)) + "\n\n");
 
@@ -318,14 +365,18 @@ function renderSpeechTable(models: SpeechModelSpec[], verbose: boolean, stream: 
         stream.write(chalk.bold.green(`\n  ${model.modelId}\n`));
         stream.write(chalk.dim("  " + "─".repeat(60)) + "\n");
         stream.write(`  ${chalk.dim("Name:")}    ${chalk.white(model.displayName)}\n`);
-        stream.write(`  ${chalk.dim("Voices:")}  ${chalk.yellow(model.voices.length.toString())} voices\n`);
+        stream.write(
+          `  ${chalk.dim("Voices:")}  ${chalk.yellow(model.voices.length.toString())} voices\n`,
+        );
         if (model.voices.length <= 6) {
           stream.write(`            ${chalk.dim(model.voices.join(", "))}\n`);
         } else {
           stream.write(`            ${chalk.dim(model.voices.slice(0, 6).join(", ") + "...")}\n`);
         }
         stream.write(`  ${chalk.dim("Formats:")} ${chalk.yellow(model.formats.join(", "))}\n`);
-        stream.write(`  ${chalk.dim("Max Input:")} ${chalk.yellow(model.maxInputLength.toString())} chars\n`);
+        stream.write(
+          `  ${chalk.dim("Max Input:")} ${chalk.yellow(model.maxInputLength.toString())} chars\n`,
+        );
         stream.write(`  ${chalk.dim("Pricing:")} ${chalk.cyan(formatSpeechPrice(model))}\n`);
         if (model.features) {
           const features: string[] = [];
@@ -343,27 +394,39 @@ function renderSpeechTable(models: SpeechModelSpec[], verbose: boolean, stream: 
       const voicesWidth = 12;
       const priceWidth = 18;
 
-      stream.write(chalk.dim("─".repeat(idWidth + nameWidth + voicesWidth + priceWidth + 6)) + "\n");
+      stream.write(
+        chalk.dim("─".repeat(idWidth + nameWidth + voicesWidth + priceWidth + 6)) + "\n",
+      );
       stream.write(
         chalk.bold(
           "Model ID".padEnd(idWidth) +
-          "  " + "Display Name".padEnd(nameWidth) +
-          "  " + "Voices".padEnd(voicesWidth) +
-          "  " + "Price".padEnd(priceWidth)
-        ) + "\n"
+            "  " +
+            "Display Name".padEnd(nameWidth) +
+            "  " +
+            "Voices".padEnd(voicesWidth) +
+            "  " +
+            "Price".padEnd(priceWidth),
+        ) + "\n",
       );
-      stream.write(chalk.dim("─".repeat(idWidth + nameWidth + voicesWidth + priceWidth + 6)) + "\n");
+      stream.write(
+        chalk.dim("─".repeat(idWidth + nameWidth + voicesWidth + priceWidth + 6)) + "\n",
+      );
 
       for (const model of providerModels) {
         stream.write(
           chalk.green(model.modelId.padEnd(idWidth)) +
-          "  " + chalk.white(model.displayName.substring(0, nameWidth - 1).padEnd(nameWidth)) +
-          "  " + chalk.yellow(`${model.voices.length} voices`.padEnd(voicesWidth)) +
-          "  " + chalk.cyan(formatSpeechPrice(model).padEnd(priceWidth)) +
-          "\n"
+            "  " +
+            chalk.white(model.displayName.substring(0, nameWidth - 1).padEnd(nameWidth)) +
+            "  " +
+            chalk.yellow(`${model.voices.length} voices`.padEnd(voicesWidth)) +
+            "  " +
+            chalk.cyan(formatSpeechPrice(model).padEnd(priceWidth)) +
+            "\n",
         );
       }
-      stream.write(chalk.dim("─".repeat(idWidth + nameWidth + voicesWidth + priceWidth + 6)) + "\n");
+      stream.write(
+        chalk.dim("─".repeat(idWidth + nameWidth + voicesWidth + priceWidth + 6)) + "\n",
+      );
     }
 
     stream.write("\n");
@@ -379,8 +442,12 @@ function formatImagePrice(model: ImageModelSpec): string {
   }
   if (model.pricing.bySize) {
     const prices = Object.values(model.pricing.bySize);
-    const minPrice = Math.min(...prices.flatMap(p => typeof p === "number" ? [p] : Object.values(p)));
-    const maxPrice = Math.max(...prices.flatMap(p => typeof p === "number" ? [p] : Object.values(p)));
+    const minPrice = Math.min(
+      ...prices.flatMap((p) => (typeof p === "number" ? [p] : Object.values(p))),
+    );
+    const maxPrice = Math.max(
+      ...prices.flatMap((p) => (typeof p === "number" ? [p] : Object.values(p))),
+    );
     if (minPrice === maxPrice) {
       return `$${minPrice.toFixed(2)}/img`;
     }
@@ -412,7 +479,7 @@ function renderJSON(
   const output: Record<string, unknown> = {};
 
   if (textModels.length > 0) {
-    output.textModels = textModels.map(model => ({
+    output.textModels = textModels.map((model) => ({
       provider: model.provider,
       modelId: model.modelId,
       displayName: model.displayName,
@@ -433,7 +500,7 @@ function renderJSON(
   }
 
   if (imageModels.length > 0) {
-    output.imageModels = imageModels.map(model => ({
+    output.imageModels = imageModels.map((model) => ({
       provider: model.provider,
       modelId: model.modelId,
       displayName: model.displayName,
@@ -446,7 +513,7 @@ function renderJSON(
   }
 
   if (speechModels.length > 0) {
-    output.speechModels = speechModels.map(model => ({
+    output.speechModels = speechModels.map((model) => ({
       provider: model.provider,
       modelId: model.modelId,
       displayName: model.displayName,
@@ -483,9 +550,6 @@ export function registerModelsCommand(program: Command, env: CLIEnvironment): vo
     .option("--speech", "Show speech/TTS models")
     .option("--all", "Show all model types (text, image, speech)")
     .action((options) =>
-      executeAction(
-        () => handleModelsCommand(options as ModelsCommandOptions, env),
-        env,
-      ),
+      executeAction(() => handleModelsCommand(options as ModelsCommandOptions, env), env),
     );
 }

@@ -5,10 +5,10 @@
  */
 
 import type { BaseGadget } from "../../gadgets/gadget.js";
+import { editFile } from "./filesystem/edit-file.js";
 import { listDirectory } from "./filesystem/list-directory.js";
 import { readFile } from "./filesystem/read-file.js";
 import { writeFile } from "./filesystem/write-file.js";
-import { editFile } from "./filesystem/edit-file.js";
 import { runCommand } from "./run-command.js";
 
 /**

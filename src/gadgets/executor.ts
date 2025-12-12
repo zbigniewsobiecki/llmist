@@ -4,14 +4,22 @@ import { GADGET_ARG_PREFIX } from "../core/constants.js";
 import { createLogger } from "../logging/logger.js";
 import { parseBlockParams } from "./block-params.js";
 import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
-import { GadgetErrorFormatter, type ErrorFormatterOptions } from "./error-formatter.js";
-import { AbortError, BreakLoopException, HumanInputException, TimeoutException } from "./exceptions.js";
+import { type ErrorFormatterOptions, GadgetErrorFormatter } from "./error-formatter.js";
+import {
+  AbortError,
+  BreakLoopException,
+  HumanInputException,
+  TimeoutException,
+} from "./exceptions.js";
+import type { MediaStore } from "./media-store.js";
 import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
 import type {
   ExecutionContext,
   GadgetExecuteResult,
+  GadgetExecuteResultWithMedia,
   GadgetExecutionResult,
+  GadgetMediaOutput,
   ParsedGadgetCall,
 } from "./types.js";
 
@@ -27,6 +35,7 @@ export class GadgetExecutor {
     private readonly defaultGadgetTimeoutMs?: number,
     errorFormatterOptions?: ErrorFormatterOptions,
     private readonly client?: LLMist,
+    private readonly mediaStore?: MediaStore,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetErrorFormatter(errorFormatterOptions);
@@ -55,11 +64,18 @@ export class GadgetExecutor {
 
   /**
    * Normalizes gadget execute result to consistent format.
-   * Handles both string returns (backwards compat) and object returns with cost.
+   * Handles string returns (backwards compat), object returns with cost,
+   * and object returns with media.
    */
-  private normalizeExecuteResult(raw: string | GadgetExecuteResult): { result: string; cost: number } {
+  private normalizeExecuteResult(
+    raw: string | GadgetExecuteResult | GadgetExecuteResultWithMedia,
+  ): { result: string; media?: GadgetMediaOutput[]; cost: number } {
     if (typeof raw === "string") {
       return { result: raw, cost: 0 };
+    }
+    // Check if it has media property (GadgetExecuteResultWithMedia)
+    if ("media" in raw && raw.media) {
+      return { result: raw.result, media: raw.media, cost: raw.cost ?? 0 };
     }
     return { result: raw.result, cost: raw.cost ?? 0 };
   }
@@ -230,11 +246,26 @@ export class GadgetExecutor {
         rawResult = await Promise.resolve(gadget.execute(validatedParameters, ctx));
       }
 
-      // Normalize result: handle both string returns (legacy) and object returns with cost
-      const { result, cost: returnCost } = this.normalizeExecuteResult(rawResult);
+      // Normalize result: handle string returns (legacy), object returns with cost, and media
+      const { result, media, cost: returnCost } = this.normalizeExecuteResult(rawResult);
 
       // Sum callback costs + return costs
       const totalCost = callbackCost + returnCost;
+
+      // Store media in MediaStore if present
+      let mediaIds: string[] | undefined;
+      let storedMedia: import("./types.js").StoredMedia[] | undefined;
+      if (media && media.length > 0 && this.mediaStore) {
+        storedMedia = await Promise.all(
+          media.map((item) => this.mediaStore!.store(item, call.gadgetName)),
+        );
+        mediaIds = storedMedia.map((m) => m.id);
+        this.logger.debug("Stored media outputs", {
+          gadgetName: call.gadgetName,
+          mediaIds,
+          count: media.length,
+        });
+      }
 
       const executionTimeMs = Date.now() - startTime;
       this.logger.info("Gadget executed successfully", {
@@ -244,6 +275,7 @@ export class GadgetExecutor {
         cost: totalCost > 0 ? totalCost : undefined,
         callbackCost: callbackCost > 0 ? callbackCost : undefined,
         returnCost: returnCost > 0 ? returnCost : undefined,
+        mediaCount: media?.length,
       });
 
       this.logger.debug("Gadget result", {
@@ -253,6 +285,7 @@ export class GadgetExecutor {
         result,
         cost: totalCost,
         executionTimeMs,
+        mediaIds,
       });
 
       return {
@@ -262,6 +295,9 @@ export class GadgetExecutor {
         result,
         executionTimeMs,
         cost: totalCost,
+        media,
+        mediaIds,
+        storedMedia,
       };
     } catch (error) {
       // Check if this is a BreakLoopException

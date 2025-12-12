@@ -2,17 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { load as parseToml } from "js-toml";
+import { validateDockerConfig } from "./docker/docker-config.js";
+import type { DockerConfig } from "./docker/types.js";
 import {
-  type PromptsConfig,
-  TemplateError,
   createTemplateEngine,
   hasTemplateSyntax,
+  type PromptsConfig,
   resolveTemplate,
+  TemplateError,
   validateEnvVars,
   validatePrompts,
 } from "./templates.js";
-import type { DockerConfig } from "./docker/types.js";
-import { validateDockerConfig } from "./docker/docker-config.js";
 
 // Re-export PromptsConfig for consumers
 export type { PromptsConfig } from "./templates.js";
@@ -214,24 +214,10 @@ const AGENT_CONFIG_KEYS = new Set([
 ]);
 
 /** Valid keys for image command config */
-const IMAGE_CONFIG_KEYS = new Set([
-  "model",
-  "size",
-  "quality",
-  "count",
-  "output",
-  "quiet",
-]);
+const IMAGE_CONFIG_KEYS = new Set(["model", "size", "quality", "count", "output", "quiet"]);
 
 /** Valid keys for speech command config */
-const SPEECH_CONFIG_KEYS = new Set([
-  "model",
-  "voice",
-  "format",
-  "speed",
-  "output",
-  "quiet",
-]);
+const SPEECH_CONFIG_KEYS = new Set(["model", "voice", "format", "speed", "output", "quiet"]);
 
 /** Valid keys for custom command config (union of complete + agent + type + description) */
 const CUSTOM_CONFIG_KEYS = new Set([
@@ -351,9 +337,7 @@ function validateGadgetApproval(value: unknown, section: string): GadgetApproval
   const result: GadgetApprovalConfig = {};
   for (const [gadgetName, mode] of Object.entries(value as Record<string, unknown>)) {
     if (typeof mode !== "string") {
-      throw new ConfigError(
-        `[${section}].gadget-approval.${gadgetName} must be a string`,
-      );
+      throw new ConfigError(`[${section}].gadget-approval.${gadgetName} must be a string`);
     }
     if (!VALID_APPROVAL_MODES.includes(mode as GadgetApprovalMode)) {
       throw new ConfigError(
@@ -529,7 +513,11 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
     result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
   }
   if ("gadget-remove" in rawObj) {
-    result["gadget-remove"] = validateStringArray(rawObj["gadget-remove"], "gadget-remove", section);
+    result["gadget-remove"] = validateStringArray(
+      rawObj["gadget-remove"],
+      "gadget-remove",
+      section,
+    );
   }
   // Legacy singular form (deprecated)
   if ("gadget" in rawObj) {
@@ -734,7 +722,11 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
     result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
   }
   if ("gadget-remove" in rawObj) {
-    result["gadget-remove"] = validateStringArray(rawObj["gadget-remove"], "gadget-remove", section);
+    result["gadget-remove"] = validateStringArray(
+      rawObj["gadget-remove"],
+      "gadget-remove",
+      section,
+    );
   }
   // Legacy singular form (deprecated)
   if ("gadget" in rawObj) {

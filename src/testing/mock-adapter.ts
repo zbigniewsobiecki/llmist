@@ -57,11 +57,7 @@ export class MockProviderAdapter implements ProviderAdapter {
     return true;
   }
 
-  stream(
-    options: LLMGenerationOptions,
-    descriptor: ModelDescriptor,
-    _spec?: unknown,
-  ): LLMStream {
+  stream(options: LLMGenerationOptions, descriptor: ModelDescriptor, _spec?: unknown): LLMStream {
     // Create matcher context
     const context: MockMatcherContext = {
       model: options.model,
