@@ -16,11 +16,23 @@ import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
  */
 function createMockClient(chunks: LLMStreamChunk[]): LLMist {
   const mockRegistry = {
-    estimateCost: mock((_modelId: string, input: number, output: number, _cached: number, _cacheCreation: number) => {
-      // Simple cost calculation: $0.001 per 1000 tokens total
-      const total = input + output;
-      return { totalCost: total / 1000 * 0.001, inputCost: input / 1000 * 0.0005, outputCost: output / 1000 * 0.0005 };
-    }),
+    estimateCost: mock(
+      (
+        _modelId: string,
+        input: number,
+        output: number,
+        _cached: number,
+        _cacheCreation: number,
+      ) => {
+        // Simple cost calculation: $0.001 per 1000 tokens total
+        const total = input + output;
+        return {
+          totalCost: (total / 1000) * 0.001,
+          inputCost: (input / 1000) * 0.0005,
+          outputCost: (output / 1000) * 0.0005,
+        };
+      },
+    ),
   } as unknown as ModelRegistry;
 
   return {
@@ -87,7 +99,10 @@ describe("CostReportingLLMistWrapper", () => {
     it("handles cached input tokens", async () => {
       const chunks: LLMStreamChunk[] = [
         { text: "Response" },
-        { text: "", usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 30 } },
+        {
+          text: "",
+          usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 30 },
+        },
       ];
       const mockClient = createMockClient(chunks);
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
@@ -103,7 +118,15 @@ describe("CostReportingLLMistWrapper", () => {
     it("handles cache creation input tokens", async () => {
       const chunks: LLMStreamChunk[] = [
         { text: "Response" },
-        { text: "", usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, cacheCreationInputTokens: 20 } },
+        {
+          text: "",
+          usage: {
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+            cacheCreationInputTokens: 20,
+          },
+        },
       ];
       const mockClient = createMockClient(chunks);
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
@@ -260,12 +283,15 @@ describe("CostReportingLLMistWrapper", () => {
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
 
       const collected: LLMStreamChunk[] = [];
-      for await (const chunk of wrapper.stream({ model: "haiku", messages: [{ role: "user", content: "Test" }] })) {
+      for await (const chunk of wrapper.stream({
+        model: "haiku",
+        messages: [{ role: "user", content: "Test" }],
+      })) {
         collected.push(chunk);
       }
 
       expect(collected).toHaveLength(3);
-      expect(collected.map(c => c.text).join("")).toBe("Hello world!");
+      expect(collected.map((c) => c.text).join("")).toBe("Hello world!");
     });
 
     it("reports cost after stream completes", async () => {
@@ -276,7 +302,10 @@ describe("CostReportingLLMistWrapper", () => {
       const mockClient = createMockClient(chunks);
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
 
-      for await (const _chunk of wrapper.stream({ model: "anthropic:claude-haiku-4-5-20250929", messages: [] })) {
+      for await (const _chunk of wrapper.stream({
+        model: "anthropic:claude-haiku-4-5-20250929",
+        messages: [],
+      })) {
         // Consume
       }
 
@@ -284,9 +313,7 @@ describe("CostReportingLLMistWrapper", () => {
     });
 
     it("does not report cost when stream has no usage data", async () => {
-      const chunks: LLMStreamChunk[] = [
-        { text: "Response without usage" },
-      ];
+      const chunks: LLMStreamChunk[] = [{ text: "Response without usage" }];
       const mockClient = createMockClient(chunks);
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
 
@@ -340,7 +367,10 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: {
           estimateCost: () => ({ totalCost: 0, inputCost: 0, outputCost: 0 }),
         },
-        stream: () => (async function* () { for (const c of chunks) yield c; })(),
+        stream: () =>
+          (async function* () {
+            for (const c of chunks) yield c;
+          })(),
       } as unknown as LLMist;
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
 
@@ -359,7 +389,10 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: {
           estimateCost: () => undefined,
         },
-        stream: () => (async function* () { for (const c of chunks) yield c; })(),
+        stream: () =>
+          (async function* () {
+            for (const c of chunks) yield c;
+          })(),
       } as unknown as LLMist;
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
 
@@ -418,7 +451,13 @@ describe("CostReportingLLMistWrapper", () => {
           })),
         },
         speech: {
-          generate: mock(async () => ({ audio: new ArrayBuffer(0), model: "test", usage: { characterCount: 0 }, cost: 0, format: "mp3" })),
+          generate: mock(async () => ({
+            audio: new ArrayBuffer(0),
+            model: "test",
+            usage: { characterCount: 0 },
+            cost: 0,
+            format: "mp3",
+          })),
         },
       } as unknown as LLMist;
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
@@ -444,7 +483,12 @@ describe("CostReportingLLMistWrapper", () => {
           })),
         },
         speech: {
-          generate: mock(async () => ({ audio: new ArrayBuffer(0), model: "test", usage: { characterCount: 0 }, format: "mp3" })),
+          generate: mock(async () => ({
+            audio: new ArrayBuffer(0),
+            model: "test",
+            usage: { characterCount: 0 },
+            format: "mp3",
+          })),
         },
       } as unknown as LLMist;
       const wrapper = new CostReportingLLMistWrapper(mockClient, reportCost);
@@ -464,7 +508,12 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" }, cost: 0 })),
+          generate: mock(async () => ({
+            images: [],
+            model: "test",
+            usage: { imagesGenerated: 0, size: "", quality: "" },
+            cost: 0,
+          })),
         },
         speech: {
           generate: mock(async () => ({
@@ -493,7 +542,12 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" }, cost: 0 })),
+          generate: mock(async () => ({
+            images: [],
+            model: "test",
+            usage: { imagesGenerated: 0, size: "", quality: "" },
+            cost: 0,
+          })),
         },
         speech: {
           generate: mock(async () => ({
@@ -521,7 +575,11 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" } })),
+          generate: mock(async () => ({
+            images: [],
+            model: "test",
+            usage: { imagesGenerated: 0, size: "", quality: "" },
+          })),
         },
         speech: {
           generate: mock(async () => ({
@@ -557,7 +615,12 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({ images: [], model: "test", usage: { imagesGenerated: 0, size: "", quality: "" }, cost: 0 })),
+          generate: mock(async () => ({
+            images: [],
+            model: "test",
+            usage: { imagesGenerated: 0, size: "", quality: "" },
+            cost: 0,
+          })),
         },
         speech: {
           generate: generateSpeechMock,

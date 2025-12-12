@@ -206,9 +206,7 @@ export function getBufferedOutput(stream: PassThrough): string {
  * expect(await prompt("Question 2?")).toBe("no");
  * ```
  */
-export function createMockPrompt(
-  responses: string[],
-): (question: string) => Promise<string> {
+export function createMockPrompt(responses: string[]): (question: string) => Promise<string> {
   let index = 0;
 
   return async (_question: string): Promise<string> => {

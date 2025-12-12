@@ -396,7 +396,9 @@ describe("AgentBuilder", () => {
       builder.withSyntheticGadgetCall("TestGadget", { message: "hello" }, "Success");
 
       // Access private initialMessages via type assertion
-      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+      const messages = (
+        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
+      ).initialMessages;
 
       expect(messages).toHaveLength(2);
 
@@ -420,7 +422,9 @@ describe("AgentBuilder", () => {
         .withGadgetArgPrefix("<<<ARG>>>")
         .withSyntheticGadgetCall("Calculator", { a: 1, b: 2 }, "3");
 
-      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+      const messages = (
+        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
+      ).initialMessages;
 
       expect(messages).toHaveLength(2);
 
@@ -443,12 +447,14 @@ describe("AgentBuilder", () => {
         "CreateTask",
         {
           title: "My Task",
-          metadata: { priority: "high", tags: ["urgent", "bug"] }
+          metadata: { priority: "high", tags: ["urgent", "bug"] },
         },
-        "Task created"
+        "Task created",
       );
 
-      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+      const messages = (
+        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
+      ).initialMessages;
       const content = messages[0].content;
 
       // Verify nested paths use JSON Pointer format
@@ -464,7 +470,9 @@ describe("AgentBuilder", () => {
         .withSyntheticGadgetCall("First", { x: 1 }, "one")
         .withSyntheticGadgetCall("Second", { y: 2 }, "two");
 
-      const messages = (builder as unknown as { initialMessages: Array<{ role: string; content: string }> }).initialMessages;
+      const messages = (
+        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
+      ).initialMessages;
 
       // Each call adds 2 messages (assistant + user)
       expect(messages).toHaveLength(4);
@@ -806,7 +814,9 @@ describe("AgentBuilder", () => {
       builder.withTrailingMessage("Test message");
 
       // Access private composeHooks via type assertion
-      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: unknown } } }).composeHooks();
+      const composedHooks = (
+        builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: unknown } } }
+      ).composeHooks();
 
       expect(composedHooks).toBeDefined();
       expect(composedHooks?.controllers?.beforeLLMCall).toBeDefined();
@@ -816,7 +826,9 @@ describe("AgentBuilder", () => {
     it("returns undefined hooks when no trailing message is set", () => {
       const builder = new AgentBuilder();
 
-      const composedHooks = (builder as unknown as { composeHooks: () => undefined | object }).composeHooks();
+      const composedHooks = (
+        builder as unknown as { composeHooks: () => undefined | object }
+      ).composeHooks();
 
       expect(composedHooks).toBeUndefined();
     });
@@ -829,7 +841,14 @@ describe("AgentBuilder", () => {
       });
       builder.withTrailingMessage("Test message");
 
-      const composedHooks = (builder as unknown as { composeHooks: () => { observers?: { onLLMCallStart?: unknown }; controllers?: { beforeLLMCall?: unknown } } }).composeHooks();
+      const composedHooks = (
+        builder as unknown as {
+          composeHooks: () => {
+            observers?: { onLLMCallStart?: unknown };
+            controllers?: { beforeLLMCall?: unknown };
+          };
+        }
+      ).composeHooks();
 
       // Should have both the observer and the controller
       expect(composedHooks?.observers?.onLLMCallStart).toBe(onLLMCallStart);
@@ -848,7 +867,13 @@ describe("AgentBuilder", () => {
       });
       builder.withTrailingMessage("Test message");
 
-      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> } } }).composeHooks();
+      const composedHooks = (
+        builder as unknown as {
+          composeHooks: () => {
+            controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> };
+          };
+        }
+      ).composeHooks();
       const controller = composedHooks?.controllers?.beforeLLMCall;
 
       // Call the composed controller
@@ -859,7 +884,10 @@ describe("AgentBuilder", () => {
         logger: {} as never,
       };
 
-      const result = await controller?.(mockContext) as { action: string; modifiedOptions?: { messages?: unknown[]; temperature?: number } };
+      const result = (await controller?.(mockContext)) as {
+        action: string;
+        modifiedOptions?: { messages?: unknown[]; temperature?: number };
+      };
 
       // Existing controller should have been called
       expect(existingController).toHaveBeenCalledWith(mockContext);
@@ -868,7 +896,9 @@ describe("AgentBuilder", () => {
       expect(result.action).toBe("proceed");
       expect(result.modifiedOptions?.temperature).toBe(0.5);
       expect(result.modifiedOptions?.messages).toHaveLength(2);
-      expect((result.modifiedOptions?.messages?.[1] as { content: string }).content).toBe("Test message");
+      expect((result.modifiedOptions?.messages?.[1] as { content: string }).content).toBe(
+        "Test message",
+      );
     });
 
     it("does not add trailing message when existing controller returns skip", async () => {
@@ -883,7 +913,13 @@ describe("AgentBuilder", () => {
       });
       builder.withTrailingMessage("Test message");
 
-      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> } } }).composeHooks();
+      const composedHooks = (
+        builder as unknown as {
+          composeHooks: () => {
+            controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> };
+          };
+        }
+      ).composeHooks();
       const controller = composedHooks?.controllers?.beforeLLMCall;
 
       const mockContext = {
@@ -893,7 +929,10 @@ describe("AgentBuilder", () => {
         logger: {} as never,
       };
 
-      const result = await controller?.(mockContext) as { action: string; syntheticResponse?: string };
+      const result = (await controller?.(mockContext)) as {
+        action: string;
+        syntheticResponse?: string;
+      };
 
       // Should return the skip action unchanged
       expect(result.action).toBe("skip");
@@ -901,14 +940,21 @@ describe("AgentBuilder", () => {
     });
 
     it("calls dynamic message function with correct context", async () => {
-      const messageFn = vi.fn((ctx: { iteration: number; maxIterations: number }) =>
-        `Iteration ${ctx.iteration}/${ctx.maxIterations}`
+      const messageFn = vi.fn(
+        (ctx: { iteration: number; maxIterations: number }) =>
+          `Iteration ${ctx.iteration}/${ctx.maxIterations}`,
       );
 
       const builder = new AgentBuilder();
       builder.withTrailingMessage(messageFn);
 
-      const composedHooks = (builder as unknown as { composeHooks: () => { controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> } } }).composeHooks();
+      const composedHooks = (
+        builder as unknown as {
+          composeHooks: () => {
+            controllers?: { beforeLLMCall?: (ctx: unknown) => Promise<unknown> };
+          };
+        }
+      ).composeHooks();
       const controller = composedHooks?.controllers?.beforeLLMCall;
 
       const mockContext = {
@@ -918,7 +964,9 @@ describe("AgentBuilder", () => {
         logger: {} as never,
       };
 
-      const result = await controller?.(mockContext) as { modifiedOptions?: { messages?: Array<{ role: string; content: string }> } };
+      const result = (await controller?.(mockContext)) as {
+        modifiedOptions?: { messages?: Array<{ role: string; content: string }> };
+      };
 
       // Message function should have been called with iteration context
       expect(messageFn).toHaveBeenCalledWith({ iteration: 3, maxIterations: 10 });

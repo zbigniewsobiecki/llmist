@@ -5,6 +5,7 @@
 
 import type { MessageContent } from "../core/messages.js";
 import { extractText, type LLMMessage, LLMMessageBuilder } from "../core/messages.js";
+import type { GadgetMediaOutput } from "../gadgets/types.js";
 import type { IConversationManager } from "./interfaces.js";
 
 /**
@@ -59,8 +60,14 @@ export class ConversationManager implements IConversationManager {
     this.historyBuilder.addAssistant(content);
   }
 
-  addGadgetCall(gadgetName: string, parameters: Record<string, unknown>, result: string): void {
-    this.historyBuilder.addGadgetCall(gadgetName, parameters, result);
+  addGadgetCall(
+    gadgetName: string,
+    parameters: Record<string, unknown>,
+    result: string,
+    media?: GadgetMediaOutput[],
+    mediaIds?: string[],
+  ): void {
+    this.historyBuilder.addGadgetCall(gadgetName, parameters, result, media, mediaIds);
   }
 
   getMessages(): LLMMessage[] {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { validateDockerConfig } from "./docker-config.js";
 import { ConfigError } from "../config.js";
+import { validateDockerConfig } from "./docker-config.js";
 
 describe("docker-config", () => {
   describe("validateDockerConfig", () => {
@@ -20,9 +20,7 @@ describe("docker-config", () => {
         "dev-mode": true,
         "dev-source": "~/Code/llmist",
         "docker-args": ["-p", "3000:3000", "--memory", "4g"],
-        mounts: [
-          { source: "~/data", target: "/data", permission: "ro" },
-        ],
+        mounts: [{ source: "~/data", target: "/data", permission: "ro" }],
       };
 
       const result = validateDockerConfig(raw, "docker");
@@ -261,9 +259,7 @@ describe("docker-config", () => {
 
       it("should reject mount with invalid permission", () => {
         const mounts = [{ source: "/data", target: "/data", permission: "invalid" }];
-        expect(() => validateDockerConfig({ mounts }, "docker")).toThrow(
-          "must be one of: ro, rw",
-        );
+        expect(() => validateDockerConfig({ mounts }, "docker")).toThrow("must be one of: ro, rw");
       });
 
       it("should reject mount with unknown keys", () => {

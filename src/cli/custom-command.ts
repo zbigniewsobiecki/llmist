@@ -2,11 +2,11 @@ import type { Command } from "commander";
 import { executeAgent } from "./agent-command.js";
 import { executeComplete } from "./complete-command.js";
 import type { CustomCommandConfig } from "./config.js";
-import { createLoggerFactory, type CLIEnvironment, type CLILoggerConfig } from "./environment.js";
+import { type CLIEnvironment, type CLILoggerConfig, createLoggerFactory } from "./environment.js";
 import {
+  type AgentCommandOptions,
   addAgentOptions,
   addCompleteOptions,
-  type AgentCommandOptions,
   type CompleteCommandOptions,
   configToAgentOptions,
   configToCompleteOptions,

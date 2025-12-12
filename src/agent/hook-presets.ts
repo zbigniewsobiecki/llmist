@@ -52,8 +52,8 @@
  * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md | Full documentation}
  */
 
-import type { AgentHooks } from "./hooks.js";
 import type { ModelRegistry } from "../core/model-registry.js";
+import type { AgentHooks } from "./hooks.js";
 
 /**
  * Options for logging preset.
@@ -601,13 +601,12 @@ export class HookPresets {
 
           // Optional console logging for quick debugging
           if (logProgress) {
-            const formattedTokens = stats.totalTokens >= 1000
-              ? `${(stats.totalTokens / 1000).toFixed(1)}k`
-              : `${stats.totalTokens}`;
+            const formattedTokens =
+              stats.totalTokens >= 1000
+                ? `${(stats.totalTokens / 1000).toFixed(1)}k`
+                : `${stats.totalTokens}`;
 
-            const formattedCost = stats.totalCost > 0
-              ? `$${stats.totalCost.toFixed(4)}`
-              : "$0";
+            const formattedCost = stats.totalCost > 0 ? `$${stats.totalCost.toFixed(4)}` : "$0";
 
             console.log(
               `📊 Progress: Iteration #${stats.currentIteration} | ${formattedTokens} tokens | ${formattedCost} | ${stats.elapsedSeconds}s`,
@@ -737,9 +736,7 @@ export class HookPresets {
           console.log(
             `🗜️  Compaction (${ctx.event.strategy}): ${ctx.event.tokensBefore} → ${ctx.event.tokensAfter} tokens (saved ${saved}, ${percent}%)`,
           );
-          console.log(
-            `   Messages: ${ctx.event.messagesBefore} → ${ctx.event.messagesAfter}`,
-          );
+          console.log(`   Messages: ${ctx.event.messagesBefore} → ${ctx.event.messagesAfter}`);
           if (ctx.stats.totalCompactions > 1) {
             console.log(
               `   Cumulative: ${ctx.stats.totalCompactions} compactions, ${ctx.stats.totalTokensSaved} tokens saved`,

@@ -3,8 +3,8 @@
  * Handles session ID generation, YAML persistence, and formatting.
  */
 import fs from "node:fs";
-import path from "node:path";
 import { homedir } from "node:os";
+import path from "node:path";
 import YAML from "yaml";
 
 // Generate session ID once at module load time

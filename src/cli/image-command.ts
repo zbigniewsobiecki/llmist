@@ -114,11 +114,7 @@ export function registerImageCommand(
     .command(COMMANDS.image)
     .description("Generate images from a text prompt.")
     .argument("[prompt]", "Image generation prompt. If omitted, stdin is used when available.")
-    .option(
-      OPTION_FLAGS.model,
-      OPTION_DESCRIPTIONS.model,
-      config?.model ?? DEFAULT_IMAGE_MODEL,
-    )
+    .option(OPTION_FLAGS.model, OPTION_DESCRIPTIONS.model, config?.model ?? DEFAULT_IMAGE_MODEL)
     .option(OPTION_FLAGS.imageSize, OPTION_DESCRIPTIONS.imageSize, config?.size)
     .option(OPTION_FLAGS.imageQuality, OPTION_DESCRIPTIONS.imageQuality, config?.quality)
     .option(OPTION_FLAGS.imageCount, OPTION_DESCRIPTIONS.imageCount, config?.count?.toString())

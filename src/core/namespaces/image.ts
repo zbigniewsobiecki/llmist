@@ -19,12 +19,12 @@
  * ```
  */
 
+import type { ProviderAdapter } from "../../providers/provider.js";
 import type {
   ImageGenerationOptions,
   ImageGenerationResult,
   ImageModelSpec,
 } from "../media-types.js";
-import type { ProviderAdapter } from "../../providers/provider.js";
 
 export class ImageNamespace {
   constructor(
@@ -47,7 +47,9 @@ export class ImageNamespace {
     if (!adapter || !adapter.generateImage) {
       throw new Error(
         `No provider supports image generation for model "${modelId}". ` +
-          `Available image models: ${this.listModels().map((m) => m.modelId).join(", ")}`,
+          `Available image models: ${this.listModels()
+            .map((m) => m.modelId)
+            .join(", ")}`,
       );
     }
 
@@ -75,8 +77,6 @@ export class ImageNamespace {
   }
 
   private findImageAdapter(modelId: string): ProviderAdapter | undefined {
-    return this.adapters.find(
-      (adapter) => adapter.supportsImageGeneration?.(modelId) ?? false,
-    );
+    return this.adapters.find((adapter) => adapter.supportsImageGeneration?.(modelId) ?? false);
   }
 }

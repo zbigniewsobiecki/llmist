@@ -5,10 +5,7 @@
 import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
-import {
-  BreakLoopException,
-  HumanInputException,
-} from "../gadgets/exceptions.js";
+import { BreakLoopException, HumanInputException } from "../gadgets/exceptions.js";
 
 /**
  * AskUser gadget - Asks the user a question and waits for their response.
@@ -20,9 +17,7 @@ export const askUser = createGadget({
   description:
     "Ask the user a question when you need more information or clarification. The user's response will be provided back to you.",
   schema: z.object({
-    question: z
-      .string()
-      .describe("The question to ask the user in plain-text or Markdown"),
+    question: z.string().describe("The question to ask the user in plain-text or Markdown"),
   }),
   examples: [
     {
@@ -52,10 +47,7 @@ export const tellUser = createGadget({
   name: "TellUser",
   description: "Tell the user something important.",
   schema: z.object({
-    message: z
-      .string()
-      .optional()
-      .describe("The message to display to the user in Markdown"),
+    message: z.string().optional().describe("The message to display to the user in Markdown"),
     type: z
       .enum(["info", "success", "warning", "error"])
       .default("info")
@@ -104,8 +96,7 @@ export const tellUser = createGadget({
  */
 export const finish = createGadget({
   name: "Finish",
-  description:
-    "Signal that you have completed your task. Call this when your work is done.",
+  description: "Signal that you have completed your task. Call this when your work is done.",
   schema: z.object({}),
   examples: [
     {

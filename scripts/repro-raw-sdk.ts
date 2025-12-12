@@ -111,12 +111,16 @@ try {
   // Analysis
   console.log("\n📊 Analysis:");
   console.log(`   Model: ${model}`);
-  console.log(`   Tokens: ${response.usage?.prompt_tokens} in, ${response.usage?.completion_tokens} out`);
+  console.log(
+    `   Tokens: ${response.usage?.prompt_tokens} in, ${response.usage?.completion_tokens} out`,
+  );
 
   // Check for gadget markers (TOML uses GDGT-STRT, YAML uses !!!GADGET_START)
   const hasTomlMarker = content.includes("GDGT-STRT:");
   const hasYamlMarker = content.includes("!!!GADGET_START:");
-  console.log(`   Gadget format: ${hasTomlMarker ? "TOML" : hasYamlMarker ? "YAML" : "Unknown/None"}`);
+  console.log(
+    `   Gadget format: ${hasTomlMarker ? "TOML" : hasYamlMarker ? "YAML" : "Unknown/None"}`,
+  );
 
   // Check if heredoc was used
   const usedHeredoc = content.includes("<<<EOF") || content.includes("<<<END");
@@ -129,7 +133,6 @@ try {
   if (hasNumberedList && !usedHeredoc) {
     console.log("\n⚠️  POTENTIAL PARSE ERROR: Numbered list without heredoc!");
   }
-
 } catch (error) {
   console.error("\n💥 API Error:", error);
   process.exit(1);

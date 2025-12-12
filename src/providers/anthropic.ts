@@ -6,11 +6,7 @@ import type {
   MessageStreamEvent,
   TextBlockParam,
 } from "@anthropic-ai/sdk/resources/messages";
-import type {
-  ContentPart,
-  ImageContentPart,
-  ImageMimeType,
-} from "../core/input-content.js";
+import type { ContentPart, ImageContentPart, ImageMimeType } from "../core/input-content.js";
 import type { LLMMessage, MessageContent } from "../core/messages.js";
 import { extractText, normalizeContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
+  type CLIConfig,
   ConfigError,
-  validateConfig,
   getCustomCommandNames,
   resolveInheritance,
   resolveTemplatesInConfig,
-  type CLIConfig,
+  validateConfig,
 } from "./config.js";
 
 describe("config", () => {
@@ -110,7 +110,7 @@ describe("config", () => {
 
     it("should validate custom command section with logging options", () => {
       const raw = {
-        "develop": {
+        develop: {
           type: "agent",
           model: "openai:gpt-4o",
           "log-level": "silly",
@@ -122,7 +122,11 @@ describe("config", () => {
       const result = validateConfig(raw);
 
       expect(result.develop).toBeDefined();
-      const cmd = result.develop as { "log-level"?: string; "log-file"?: string; "log-reset"?: boolean };
+      const cmd = result.develop as {
+        "log-level"?: string;
+        "log-file"?: string;
+        "log-reset"?: boolean;
+      };
       expect(cmd?.["log-level"]).toBe("silly");
       expect(cmd?.["log-file"]).toBe("/tmp/develop.log");
       expect(cmd?.["log-reset"]).toBe(true);
@@ -372,7 +376,7 @@ describe("config", () => {
         complete: { model: "test" },
         agent: { model: "test" },
         "code-review": { model: "test" },
-        "translate": { model: "test" },
+        translate: { model: "test" },
       };
 
       const result = getCustomCommandNames(config);
@@ -565,7 +569,11 @@ describe("config", () => {
       it("should error when mixing gadgets with gadget-remove", () => {
         const config = {
           agent: { gadgets: ["ListDirectory"] },
-          "my-command": { inherits: "agent", gadgets: ["ReadFile"], "gadget-remove": ["ListDirectory"] },
+          "my-command": {
+            inherits: "agent",
+            gadgets: ["ReadFile"],
+            "gadget-remove": ["ListDirectory"],
+          },
         } as unknown as CLIConfig;
 
         expect(() => resolveInheritance(config)).toThrow(ConfigError);
@@ -685,9 +693,9 @@ describe("config", () => {
 
       it("should detect circular inheritance in longer chains", () => {
         const config = {
-          "a": { inherits: "b" },
-          "b": { inherits: "c" },
-          "c": { inherits: "a" },
+          a: { inherits: "b" },
+          b: { inherits: "c" },
+          c: { inherits: "a" },
         } as unknown as CLIConfig;
 
         expect(() => resolveInheritance(config)).toThrow(ConfigError);

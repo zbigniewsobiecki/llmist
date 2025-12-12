@@ -271,7 +271,7 @@ type ProgressMode = "streaming" | "cumulative";
 
 // Import formatters from centralized formatting module
 // This showcases llmist's clean code organization
-import { formatTokens, formatCost } from "./ui/formatters.js";
+import { formatCost, formatTokens } from "./ui/formatters.js";
 
 /**
  * Progress indicator shown while waiting for LLM response.
@@ -353,9 +353,7 @@ export class StreamProgress {
       if (this.modelRegistry && this.model) {
         try {
           // Strip provider prefix if present (e.g., "openai:gpt-5-nano" -> "gpt-5-nano")
-          const modelName = this.model.includes(":")
-            ? this.model.split(":")[1]
-            : this.model;
+          const modelName = this.model.includes(":") ? this.model.split(":")[1] : this.model;
 
           const cost = this.modelRegistry.estimateCost(
             modelName,

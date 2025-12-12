@@ -26,6 +26,30 @@
  * ```
  */
 
+// CLI helpers
+export {
+  collectOutput,
+  createMockPrompt,
+  createMockReadable,
+  createMockWritable,
+  createTestEnvironment,
+  getBufferedOutput,
+  MockPromptRecorder,
+  type TestEnvironment,
+  type TestEnvironmentOptions,
+  waitFor,
+} from "./cli-helpers.js";
+// Conversation fixtures
+export {
+  createAssistantMessage,
+  createConversation,
+  createConversationWithGadgets,
+  createLargeConversation,
+  createMinimalConversation,
+  createSystemMessage,
+  createUserMessage,
+  estimateTokens,
+} from "./conversation-fixtures.js";
 // Gadget testing utilities
 export {
   type TestGadgetOptions,
@@ -39,6 +63,11 @@ export { createMockAdapter, MockProviderAdapter } from "./mock-adapter.js";
 export { MockBuilder, mockLLM } from "./mock-builder.js";
 // Mock client factory (separate file to avoid circular dependencies)
 export { createMockClient } from "./mock-client.js";
+// Mock conversation manager
+export {
+  createMockConversationManager,
+  MockConversationManager,
+} from "./mock-conversation.js";
 // Mock gadget utilities
 export {
   createMockGadget,
@@ -63,7 +92,6 @@ export type {
   MockResponse,
   MockStats,
 } from "./mock-types.js";
-
 // Stream helpers
 export {
   collectStream,
@@ -74,35 +102,3 @@ export {
   createTextStream,
   getStreamFinalChunk,
 } from "./stream-helpers.js";
-
-// Conversation fixtures
-export {
-  createAssistantMessage,
-  createConversation,
-  createConversationWithGadgets,
-  createLargeConversation,
-  createMinimalConversation,
-  createSystemMessage,
-  createUserMessage,
-  estimateTokens,
-} from "./conversation-fixtures.js";
-
-// Mock conversation manager
-export {
-  createMockConversationManager,
-  MockConversationManager,
-} from "./mock-conversation.js";
-
-// CLI helpers
-export {
-  collectOutput,
-  createMockPrompt,
-  createMockReadable,
-  createMockWritable,
-  createTestEnvironment,
-  getBufferedOutput,
-  MockPromptRecorder,
-  type TestEnvironment,
-  type TestEnvironmentOptions,
-  waitFor,
-} from "./cli-helpers.js";

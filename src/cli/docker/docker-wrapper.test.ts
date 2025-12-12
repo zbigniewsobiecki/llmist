@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
-  filterDockerArgs,
-  resolveDockerEnabled,
-  resolveDevMode,
   createDockerContext,
-  DockerUnavailableError,
   DockerRunError,
+  DockerUnavailableError,
+  filterDockerArgs,
+  resolveDevMode,
+  resolveDockerEnabled,
 } from "./docker-wrapper.js";
 import type { DockerConfig, DockerOptions } from "./types.js";
 

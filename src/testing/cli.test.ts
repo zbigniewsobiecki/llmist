@@ -167,7 +167,16 @@ describe("runCLI", () => {
     const usage: TokenUsage = { inputTokens: 1, outputTokens: 2, totalTokens: 3 };
     const env = createEnv({
       // Use --max-iterations 1 since CLI uses "acknowledge" for text-only responses
-      argv: ["node", "llmist", "agent", "--model", "test:model", "--max-iterations", "1", "Do the thing"],
+      argv: [
+        "node",
+        "llmist",
+        "agent",
+        "--model",
+        "test:model",
+        "--max-iterations",
+        "1",
+        "Do the thing",
+      ],
       stdin: createReadable("", { isTTY: true }),
       stdout: stdout.stream,
       stderr: stderr.stream,

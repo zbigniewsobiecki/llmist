@@ -165,7 +165,6 @@ export class TestAgentBuilder {
     return this;
   }
 
-
   build(): Agent {
     if (!this.userPrompt) {
       throw new Error("User prompt is required");

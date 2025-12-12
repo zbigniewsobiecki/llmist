@@ -16,9 +16,9 @@ import type {
   SpeechGenerationResult,
 } from "../core/media-types.js";
 import type { ModelRegistry } from "../core/model-registry.js";
+import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions, LLMStream, LLMStreamChunk } from "../core/options.js";
 import type { QuickOptions } from "../core/quick-methods.js";
-import { resolveModel } from "../core/model-shortcuts.js";
 import type {
   CostReportingImageNamespace,
   CostReportingLLMist,
@@ -106,7 +106,9 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
     let cacheCreationInputTokens = 0;
 
     const messages = [
-      ...(options?.systemPrompt ? [{ role: "system" as const, content: options.systemPrompt }] : []),
+      ...(options?.systemPrompt
+        ? [{ role: "system" as const, content: options.systemPrompt }]
+        : []),
       { role: "user" as const, content: prompt },
     ];
 
@@ -125,7 +127,13 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
       }
     }
 
-    this.reportCostFromUsage(model, inputTokens, outputTokens, cachedInputTokens, cacheCreationInputTokens);
+    this.reportCostFromUsage(
+      model,
+      inputTokens,
+      outputTokens,
+      cachedInputTokens,
+      cacheCreationInputTokens,
+    );
     return result;
   }
 
@@ -146,7 +154,9 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
     let cacheCreationInputTokens = 0;
 
     const messages = [
-      ...(options?.systemPrompt ? [{ role: "system" as const, content: options.systemPrompt }] : []),
+      ...(options?.systemPrompt
+        ? [{ role: "system" as const, content: options.systemPrompt }]
+        : []),
       { role: "user" as const, content: prompt },
     ];
 
@@ -169,7 +179,13 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
       }
     } finally {
       // Report cost when stream ends (success or early exit)
-      this.reportCostFromUsage(model, inputTokens, outputTokens, cachedInputTokens, cacheCreationInputTokens);
+      this.reportCostFromUsage(
+        model,
+        inputTokens,
+        outputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+      );
     }
   }
 
@@ -212,7 +228,13 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
       } finally {
         // Report cost when stream completes (success or early exit)
         if (inputTokens > 0 || outputTokens > 0) {
-          reportCostFromUsage(model, inputTokens, outputTokens, cachedInputTokens, cacheCreationInputTokens);
+          reportCostFromUsage(
+            model,
+            inputTokens,
+            outputTokens,
+            cachedInputTokens,
+            cacheCreationInputTokens,
+          );
         }
       }
     }

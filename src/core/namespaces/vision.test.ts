@@ -37,10 +37,7 @@ describe("VisionNamespace", () => {
     });
 
     it("analyzes image from Uint8Array", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("A beautiful landscape")
-        .register();
+      mockLLM().whenMessageHasImage().returns("A beautiful landscape").register();
 
       const client = createMockClient();
       // JPEG magic bytes
@@ -56,10 +53,7 @@ describe("VisionNamespace", () => {
     });
 
     it("analyzes image from HTTPS URL", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("Image shows a diagram")
-        .register();
+      mockLLM().whenMessageHasImage().returns("Image shows a diagram").register();
 
       const client = createMockClient();
 
@@ -73,10 +67,7 @@ describe("VisionNamespace", () => {
     });
 
     it("analyzes image from HTTP URL", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("Chart analysis result")
-        .register();
+      mockLLM().whenMessageHasImage().returns("Chart analysis result").register();
 
       const client = createMockClient();
 
@@ -90,14 +81,12 @@ describe("VisionNamespace", () => {
     });
 
     it("analyzes image from data URL", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("Small icon detected")
-        .register();
+      mockLLM().whenMessageHasImage().returns("Small icon detected").register();
 
       const client = createMockClient();
       // Small valid PNG as data URL
-      const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const dataUrl =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
       const result = await client.vision.analyze({
         model: "openai:gpt-4o",
@@ -109,10 +98,7 @@ describe("VisionNamespace", () => {
     });
 
     it("analyzes image from base64 string", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("Base64 image analyzed successfully")
-        .register();
+      mockLLM().whenMessageHasImage().returns("Base64 image analyzed successfully").register();
 
       const client = createMockClient();
       // PNG magic bytes as base64
@@ -159,10 +145,7 @@ describe("VisionNamespace", () => {
     });
 
     it("passes maxTokens to the stream", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("Brief response")
-        .register();
+      mockLLM().whenMessageHasImage().returns("Brief response").register();
 
       const client = createMockClient();
       const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -178,10 +161,7 @@ describe("VisionNamespace", () => {
     });
 
     it("passes temperature to the stream", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("Creative description")
-        .register();
+      mockLLM().whenMessageHasImage().returns("Creative description").register();
 
       const client = createMockClient();
       const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -241,10 +221,7 @@ describe("VisionNamespace", () => {
     });
 
     it("handles image from data URL", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("Data URL image result")
-        .register();
+      mockLLM().whenMessageHasImage().returns("Data URL image result").register();
 
       const client = createMockClient();
       const dataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
@@ -271,10 +248,7 @@ describe("VisionNamespace", () => {
     });
 
     it("handles base64 string with explicit mimeType", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("WEBP image result")
-        .register();
+      mockLLM().whenMessageHasImage().returns("WEBP image result").register();
 
       const client = createMockClient();
       const base64 = Buffer.from([0x52, 0x49, 0x46, 0x46]).toString("base64");
@@ -290,10 +264,7 @@ describe("VisionNamespace", () => {
     });
 
     it("includes system prompt when provided", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("System-guided analysis")
-        .register();
+      mockLLM().whenMessageHasImage().returns("System-guided analysis").register();
 
       const client = createMockClient();
       const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);

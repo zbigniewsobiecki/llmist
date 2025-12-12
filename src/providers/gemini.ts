@@ -32,9 +32,7 @@ import { createProviderFromEnv } from "./utils.js";
 /**
  * Gemini content part - can be text or inline data (images/audio).
  */
-type GeminiPart =
-  | { text: string }
-  | { inlineData: { mimeType: string; data: string } };
+type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 /**
  * Gemini content with role and multimodal parts.

@@ -1,10 +1,10 @@
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { LLMist } from "../core/client.js";
 import type { LLMStream, StreamChunk } from "../core/options.js";
+import { type AgentCommandOptions, executeAgent } from "./agent-command.js";
 import type { CLIEnvironment } from "./environment.js";
-import { executeAgent, type AgentCommandOptions } from "./agent-command.js";
 
 /**
  * Mock writable stream that captures all output.
@@ -518,9 +518,7 @@ describe("executeAgent cancellation", () => {
 
   describe("edge cases", () => {
     test("handles cancellation before stream yields any chunks", async () => {
-      const chunks: StreamChunk[] = [
-        { text: "This should not appear", finishReason: "stop" },
-      ];
+      const chunks: StreamChunk[] = [{ text: "This should not appear", finishReason: "stop" }];
       // Add significant delay before first chunk
       const mockClient = createMockClient(chunks, { delayBetweenChunks: 200 });
       const stdin = new MockStdin();
@@ -540,10 +538,7 @@ describe("executeAgent cancellation", () => {
     });
 
     test("handles rapid consecutive Ctrl+C presses", async () => {
-      const chunks: StreamChunk[] = [
-        { text: "Processing" },
-        { text: "...", finishReason: "stop" },
-      ];
+      const chunks: StreamChunk[] = [{ text: "Processing" }, { text: "...", finishReason: "stop" }];
       const mockClient = createMockClient(chunks, { delayBetweenChunks: 200 });
       const stdin = new MockStdin();
       const env = createMockEnv(mockClient, { stdin, isTTY: true });
@@ -567,10 +562,7 @@ describe("executeAgent cancellation", () => {
     });
 
     test("does not call process.exit on single cancellation", async () => {
-      const chunks: StreamChunk[] = [
-        { text: "Response" },
-        { text: " text", finishReason: "stop" },
-      ];
+      const chunks: StreamChunk[] = [{ text: "Response" }, { text: " text", finishReason: "stop" }];
       const mockClient = createMockClient(chunks, { delayBetweenChunks: 100 });
       const stdin = new MockStdin();
       const env = createMockEnv(mockClient, { stdin, isTTY: true });

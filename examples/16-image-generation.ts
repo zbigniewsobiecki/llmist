@@ -75,7 +75,9 @@ async function main() {
   console.log("4. Model support check:");
   console.log(`   dall-e-3: ${client.image.supportsModel("dall-e-3")}`);
   console.log(`   dall-e-2: ${client.image.supportsModel("dall-e-2")}`);
-  console.log(`   imagen-4.0-generate-001: ${client.image.supportsModel("imagen-4.0-generate-001")}`);
+  console.log(
+    `   imagen-4.0-generate-001: ${client.image.supportsModel("imagen-4.0-generate-001")}`,
+  );
 
   console.log("\n=== Done ===");
 }

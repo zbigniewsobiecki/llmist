@@ -24,10 +24,7 @@ export const runCommand = createGadget({
       .string()
       .optional()
       .describe("Working directory for the command (default: current directory)"),
-    timeout: z
-      .number()
-      .default(30000)
-      .describe("Timeout in milliseconds (default: 30000)"),
+    timeout: z.number().default(30000).describe("Timeout in milliseconds (default: 30000)"),
   }),
   examples: [
     {
@@ -52,18 +49,33 @@ export const runCommand = createGadget({
       comment: "Execute command in a specific directory",
     },
     {
-      params: { argv: ["gh", "pr", "review", "123", "--comment", "--body", "Review with `backticks` and 'quotes'"], timeout: 30000 },
+      params: {
+        argv: [
+          "gh",
+          "pr",
+          "review",
+          "123",
+          "--comment",
+          "--body",
+          "Review with `backticks` and 'quotes'",
+        ],
+        timeout: 30000,
+      },
       output: "status=0\n\n(no output)",
       comment: "Complex arguments with special characters - no escaping needed",
     },
     {
       params: {
         argv: [
-          "gh", "pr", "review", "123", "--approve",
+          "gh",
+          "pr",
+          "review",
+          "123",
+          "--approve",
           "--body",
-          "## Review Summary\n\n**Looks good!**\n\n- Clean code\n- Tests pass"
+          "## Review Summary\n\n**Looks good!**\n\n- Clean code\n- Tests pass",
         ],
-        timeout: 30000
+        timeout: 30000,
       },
       output: "status=0\n\nApproving pull request #123",
       comment: "Multiline body: --body flag and content must be SEPARATE array elements",

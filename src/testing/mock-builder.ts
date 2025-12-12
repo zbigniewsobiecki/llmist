@@ -1,11 +1,11 @@
 import {
+  type AudioMimeType,
   detectAudioMimeType,
   detectImageMimeType,
+  type ImageMimeType,
   isAudioPart,
   isImagePart,
   toBase64,
-  type AudioMimeType,
-  type ImageMimeType,
 } from "../core/input-content.js";
 import type { LLMMessage, MessageContent } from "../core/messages.js";
 import { extractText } from "../core/messages.js";
@@ -147,7 +147,9 @@ export class MockBuilder {
    */
   whenMessageContains(text: string): this {
     this.matchers.push((ctx) =>
-      ctx.messages.some((msg) => extractText(msg.content).toLowerCase().includes(text.toLowerCase())),
+      ctx.messages.some((msg) =>
+        extractText(msg.content).toLowerCase().includes(text.toLowerCase()),
+      ),
     );
     return this;
   }
@@ -187,7 +189,8 @@ export class MockBuilder {
   whenRoleContains(role: LLMMessage["role"], text: string): this {
     this.matchers.push((ctx) =>
       ctx.messages.some(
-        (msg) => msg.role === role && extractText(msg.content).toLowerCase().includes(text.toLowerCase()),
+        (msg) =>
+          msg.role === role && extractText(msg.content).toLowerCase().includes(text.toLowerCase()),
       ),
     );
     return this;

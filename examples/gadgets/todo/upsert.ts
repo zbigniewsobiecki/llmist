@@ -1,13 +1,14 @@
 /**
  * TodoUpsert gadget - Create or update todo items.
  */
-import { z } from "zod";
+
 import { createGadget } from "llmist";
+import { z } from "zod";
 import {
+  formatTodoList,
+  getNextId,
   loadTodos,
   saveTodos,
-  getNextId,
-  formatTodoList,
   type Todo,
   type TodoStatus,
 } from "./storage.js";
@@ -17,10 +18,7 @@ export const todoUpsert = createGadget({
   description:
     "Create a new todo or update an existing one. Omit 'id' to create, provide 'id' to update. Returns the full todo list.",
   schema: z.object({
-    id: z
-      .string()
-      .optional()
-      .describe("ID of existing todo to update. Omit to create a new todo."),
+    id: z.string().optional().describe("ID of existing todo to update. Omit to create a new todo."),
     content: z.string().min(1).describe("The todo item description/content."),
     status: z
       .enum(["pending", "in_progress", "done"])

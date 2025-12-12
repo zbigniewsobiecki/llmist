@@ -1,12 +1,12 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   DefaultContextProvider,
   EditFileContextProvider,
-  WriteFileContextProvider,
   formatGadgetSummary,
+  WriteFileContextProvider,
 } from "./context-providers.js";
 
 // Create a temporary directory for file-based tests

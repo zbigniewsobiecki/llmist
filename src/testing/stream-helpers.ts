@@ -169,10 +169,7 @@ export function createEmptyStream(): LLMStream {
  * @param chunksBeforeError - Chunks to yield before throwing
  * @param error - The error to throw
  */
-export function createErrorStream(
-  chunksBeforeError: LLMStreamChunk[],
-  error: Error,
-): LLMStream {
+export function createErrorStream(chunksBeforeError: LLMStreamChunk[], error: Error): LLMStream {
   return (async function* () {
     for (const chunk of chunksBeforeError) {
       yield chunk;

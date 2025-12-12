@@ -1,4 +1,5 @@
 import type { BaseGadget } from "../gadgets/gadget.js";
+import type { GadgetMediaOutput } from "../gadgets/types.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
 import type {
   AudioMimeType,
@@ -7,8 +8,10 @@ import type {
   TextContentPart,
 } from "./input-content.js";
 import {
+  audioFromBase64,
   audioFromBuffer,
   detectImageMimeType,
+  imageFromBase64,
   imageFromBuffer,
   imageFromUrl,
   text,
@@ -481,7 +484,13 @@ Produces: { "items": ["first", "second"] }`);
     return this;
   }
 
-  addGadgetCall(gadget: string, parameters: Record<string, unknown>, result: string) {
+  addGadgetCall(
+    gadget: string,
+    parameters: Record<string, unknown>,
+    result: string,
+    media?: GadgetMediaOutput[],
+    mediaIds?: string[],
+  ) {
     const paramStr = this.formatBlockParameters(parameters, "");
 
     // Assistant message with simplified gadget markers (no invocation ID)
@@ -490,11 +499,32 @@ Produces: { "items": ["first", "second"] }`);
       content: `${this.startPrefix}${gadget}\n${paramStr}\n${this.endPrefix}`,
     });
 
-    // User message with result
-    this.messages.push({
-      role: "user",
-      content: `Result: ${result}`,
-    });
+    // User message with result (potentially multimodal if media present)
+    if (media && media.length > 0 && mediaIds && mediaIds.length > 0) {
+      // Build text with ID references (include kind for clarity)
+      const idRefs = media.map((m, i) => `[Media: ${mediaIds[i]} (${m.kind})]`).join("\n");
+      const textWithIds = `Result: ${result}\n${idRefs}`;
+
+      // Build multimodal content: text + media content parts
+      const parts: ContentPart[] = [text(textWithIds)];
+      for (const item of media) {
+        // Convert based on media kind
+        if (item.kind === "image") {
+          parts.push(imageFromBase64(item.data, item.mimeType as ImageMimeType));
+        } else if (item.kind === "audio") {
+          parts.push(audioFromBase64(item.data, item.mimeType as AudioMimeType));
+        }
+        // Note: video and file types are stored but not included in LLM context
+        // as most providers don't support them yet
+      }
+      this.messages.push({ role: "user", content: parts });
+    } else {
+      // Simple text result (existing behavior)
+      this.messages.push({
+        role: "user",
+        content: `Result: ${result}`,
+      });
+    }
 
     return this;
   }
@@ -503,10 +533,7 @@ Produces: { "items": ["first", "second"] }`);
    * Format parameters as Block format with JSON Pointer paths.
    * Uses the configured argPrefix for consistency with system prompt.
    */
-  private formatBlockParameters(
-    params: Record<string, unknown>,
-    prefix: string,
-  ): string {
+  private formatBlockParameters(params: Record<string, unknown>, prefix: string): string {
     const lines: string[] = [];
 
     for (const [key, value] of Object.entries(params)) {

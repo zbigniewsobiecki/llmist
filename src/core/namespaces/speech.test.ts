@@ -5,8 +5,12 @@
  */
 
 import { describe, expect, it, mock } from "bun:test";
-import type { SpeechGenerationOptions, SpeechGenerationResult, SpeechModelSpec } from "../media-types.js";
 import type { ProviderAdapter } from "../../providers/provider.js";
+import type {
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+  SpeechModelSpec,
+} from "../media-types.js";
 import { SpeechNamespace } from "./speech.js";
 
 /**
@@ -24,17 +28,21 @@ function createMockAdapter(opts: {
     providerId,
     supports: () => false,
     stream: () => (async function* () {})(),
-    supportsSpeechGeneration: supportsSpeech ? (modelId: string) => speechModels.some(m => m.modelId === modelId) : undefined,
+    supportsSpeechGeneration: supportsSpeech
+      ? (modelId: string) => speechModels.some((m) => m.modelId === modelId)
+      : undefined,
     getSpeechModelSpecs: speechModels.length > 0 ? () => speechModels : undefined,
     generateSpeech: supportsSpeech
       ? mock(async (_options: SpeechGenerationOptions): Promise<SpeechGenerationResult> => {
-          return generateSpeechResult ?? {
-            audio: new ArrayBuffer(1000),
-            model: _options.model,
-            usage: { characterCount: _options.input.length },
-            cost: _options.input.length * 0.000015,
-            format: "mp3",
-          };
+          return (
+            generateSpeechResult ?? {
+              audio: new ArrayBuffer(1000),
+              model: _options.model,
+              usage: { characterCount: _options.input.length },
+              cost: _options.input.length * 0.000015,
+              format: "mp3",
+            }
+          );
         })
       : undefined,
   };
@@ -106,11 +114,13 @@ describe("SpeechNamespace", () => {
       });
       const namespace = new SpeechNamespace([adapter], "test");
 
-      await expect(namespace.generate({
-        model: "unknown-model",
-        input: "Test",
-        voice: "any",
-      })).rejects.toThrow(/No provider supports speech generation for model "unknown-model"/);
+      await expect(
+        namespace.generate({
+          model: "unknown-model",
+          input: "Test",
+          voice: "any",
+        }),
+      ).rejects.toThrow(/No provider supports speech generation for model "unknown-model"/);
     });
 
     it("selects correct provider when multiple are available", async () => {
@@ -205,7 +215,7 @@ describe("SpeechNamespace", () => {
       const models = namespace.listModels();
 
       expect(models).toHaveLength(3);
-      expect(models.map(m => m.modelId)).toEqual(["tts-1", "tts-2", "tts-hd"]);
+      expect(models.map((m) => m.modelId)).toEqual(["tts-1", "tts-2", "tts-hd"]);
     });
 
     it("includes voice information in model specs", () => {

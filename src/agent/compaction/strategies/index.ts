@@ -7,6 +7,6 @@
  * - HybridStrategy: Summarizes old + keeps recent (recommended)
  */
 
+export { HybridStrategy } from "./hybrid.js";
 export { SlidingWindowStrategy } from "./sliding-window.js";
 export { SummarizationStrategy } from "./summarization.js";
-export { HybridStrategy } from "./hybrid.js";

@@ -46,16 +46,14 @@ export interface BlockParseOptions {
  */
 export function parseBlockParams(
   content: string,
-  options?: BlockParseOptions
+  options?: BlockParseOptions,
 ): Record<string, unknown> {
   const argPrefix = options?.argPrefix ?? GADGET_ARG_PREFIX;
   const result: Record<string, unknown> = {};
   const seenPointers = new Set<string>();
 
   // Create schema introspector if schema is provided
-  const introspector = options?.schema
-    ? new SchemaIntrospector(options.schema)
-    : undefined;
+  const introspector = options?.schema ? new SchemaIntrospector(options.schema) : undefined;
 
   // Split content by arg prefix to get individual arg entries
   // First element will be empty or whitespace before first arg
@@ -123,10 +121,7 @@ export function parseBlockParams(
  * @param expectedType - Optional type hint from schema introspection
  * @returns Coerced value
  */
-function coerceValue(
-  value: string,
-  expectedType?: TypeHint
-): string | number | boolean {
+function coerceValue(value: string, expectedType?: TypeHint): string | number | boolean {
   // Don't coerce multiline values - they're likely code/content
   if (value.includes("\n")) {
     return value;
@@ -199,7 +194,7 @@ function setByPointer(
   obj: Record<string, unknown>,
   pointer: string,
   value: string,
-  introspector?: SchemaIntrospector
+  introspector?: SchemaIntrospector,
 ): void {
   const segments = pointer.split("/");
   let current: Record<string, unknown> | unknown[] = obj;

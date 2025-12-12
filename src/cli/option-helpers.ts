@@ -1,5 +1,10 @@
 import type { Command } from "commander";
-import type { AgentConfig, CompleteConfig, CustomCommandConfig, GadgetApprovalConfig } from "./config.js";
+import type {
+  AgentConfig,
+  CompleteConfig,
+  CustomCommandConfig,
+  GadgetApprovalConfig,
+} from "./config.js";
 import { DEFAULT_MODEL, OPTION_DESCRIPTIONS, OPTION_FLAGS } from "./constants.js";
 import { createNumericParser } from "./utils.js";
 
@@ -76,7 +81,11 @@ export function addCompleteOptions(cmd: Command, defaults?: CompleteConfig): Com
       defaults?.["max-tokens"],
     )
     .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet)
-    .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"])
+    .option(
+      OPTION_FLAGS.logLlmRequests,
+      OPTION_DESCRIPTIONS.logLlmRequests,
+      defaults?.["log-llm-requests"],
+    )
     .option(OPTION_FLAGS.inputImage, OPTION_DESCRIPTIONS.inputImage)
     .option(OPTION_FLAGS.inputAudio, OPTION_DESCRIPTIONS.inputAudio);
 }
@@ -121,7 +130,11 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
       defaults?.["builtin-interaction"] !== false,
     )
     .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, defaults?.quiet)
-    .option(OPTION_FLAGS.logLlmRequests, OPTION_DESCRIPTIONS.logLlmRequests, defaults?.["log-llm-requests"])
+    .option(
+      OPTION_FLAGS.logLlmRequests,
+      OPTION_DESCRIPTIONS.logLlmRequests,
+      defaults?.["log-llm-requests"],
+    )
     .option(OPTION_FLAGS.inputImage, OPTION_DESCRIPTIONS.inputImage)
     .option(OPTION_FLAGS.inputAudio, OPTION_DESCRIPTIONS.inputAudio)
     .option(OPTION_FLAGS.docker, OPTION_DESCRIPTIONS.docker)
@@ -133,7 +146,9 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
 /**
  * Converts kebab-case config to camelCase command options for complete command.
  */
-export function configToCompleteOptions(config: CustomCommandConfig): Partial<CompleteCommandOptions> {
+export function configToCompleteOptions(
+  config: CustomCommandConfig,
+): Partial<CompleteCommandOptions> {
   const result: Partial<CompleteCommandOptions> = {};
   if (config.model !== undefined) result.model = config.model;
   if (config.system !== undefined) result.system = config.system;
@@ -165,8 +180,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<Agent
     result.gadgetEndPrefix = config["gadget-end-prefix"];
   if (config["gadget-arg-prefix"] !== undefined)
     result.gadgetArgPrefix = config["gadget-arg-prefix"];
-  if (config["gadget-approval"] !== undefined)
-    result.gadgetApproval = config["gadget-approval"];
+  if (config["gadget-approval"] !== undefined) result.gadgetApproval = config["gadget-approval"];
   if (config.quiet !== undefined) result.quiet = config.quiet;
   if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
   if (config.docker !== undefined) result.docker = config.docker;

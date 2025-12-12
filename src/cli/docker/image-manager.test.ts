@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { needsRebuild, clearImageCache, DockerBuildError } from "./image-manager.js";
+import { join } from "node:path";
 import { computeDockerfileHash } from "./dockerfile.js";
+import { clearImageCache, DockerBuildError, needsRebuild } from "./image-manager.js";
 
 describe("image-manager", () => {
   describe("DockerBuildError", () => {

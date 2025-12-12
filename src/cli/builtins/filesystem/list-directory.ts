@@ -29,7 +29,7 @@ function listFiles(
   dirPath: string,
   basePath: string = dirPath,
   maxDepth: number = 1,
-  currentDepth: number = 1
+  currentDepth: number = 1,
 ): FileEntry[] {
   const entries: FileEntry[] = [];
 
@@ -147,7 +147,7 @@ function formatEntriesAsString(entries: FileEntry[]): string {
   // Build compact output
   const header = "#T|N|S|A";
   const rows = sortedEntries.map(
-    (e) => `${typeCode[e.type]}|${encodeName(e.relativePath)}|${e.size}|${formatAge(e.modified)}`
+    (e) => `${typeCode[e.type]}|${encodeName(e.relativePath)}|${e.size}|${formatAge(e.modified)}`,
   );
 
   return [header, ...rows].join("\n");
@@ -170,7 +170,7 @@ export const listDirectory = createGadget({
       .max(10)
       .default(1)
       .describe(
-        "Maximum depth to recurse (1 = immediate children only, 2 = include grandchildren, etc.)"
+        "Maximum depth to recurse (1 = immediate children only, 2 = include grandchildren, etc.)",
       ),
   }),
   examples: [

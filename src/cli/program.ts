@@ -10,12 +10,6 @@ import {
   getCustomCommandNames,
   loadConfig,
 } from "./config.js";
-import { registerGadgetCommand } from "./gadget-command.js";
-import { registerImageCommand } from "./image-command.js";
-import { registerModelsCommand } from "./models-command.js";
-import { registerSpeechCommand } from "./speech-command.js";
-import { registerVisionCommand } from "./vision-command.js";
-import { registerCustomCommand } from "./custom-command.js";
 import {
   CLI_DESCRIPTION,
   CLI_NAME,
@@ -24,8 +18,14 @@ import {
   OPTION_DESCRIPTIONS,
   OPTION_FLAGS,
 } from "./constants.js";
+import { registerCustomCommand } from "./custom-command.js";
 import type { CLIEnvironment, CLILoggerConfig } from "./environment.js";
 import { createDefaultEnvironment } from "./environment.js";
+import { registerGadgetCommand } from "./gadget-command.js";
+import { registerImageCommand } from "./image-command.js";
+import { registerModelsCommand } from "./models-command.js";
+import { registerSpeechCommand } from "./speech-command.js";
+import { registerVisionCommand } from "./vision-command.js";
 
 /**
  * Parses and validates the log level option value.

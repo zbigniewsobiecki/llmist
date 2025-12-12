@@ -28,6 +28,89 @@ export interface GadgetExample<TParams = Record<string, unknown>> {
   comment?: string;
 }
 
+// =============================================================================
+// Media Output Types (for gadgets returning images, audio, video, files)
+// =============================================================================
+
+/**
+ * Supported media types for gadget output.
+ * Extensible via union - add new types as needed.
+ */
+export type MediaKind = "image" | "audio" | "video" | "file";
+
+/**
+ * Type-specific metadata for media outputs.
+ * Extensible via index signature for future media types.
+ */
+export interface MediaMetadata {
+  /** Width in pixels (images, video) */
+  width?: number;
+  /** Height in pixels (images, video) */
+  height?: number;
+  /** Duration in milliseconds (audio, video) */
+  durationMs?: number;
+  /** Allow additional metadata for future extensions */
+  [key: string]: unknown;
+}
+
+/**
+ * Media output from a gadget execution.
+ * Supports images, audio, video, and arbitrary files.
+ *
+ * @example
+ * ```typescript
+ * // Image output
+ * const imageOutput: GadgetMediaOutput = {
+ *   kind: "image",
+ *   data: base64EncodedPng,
+ *   mimeType: "image/png",
+ *   description: "Screenshot of webpage",
+ *   metadata: { width: 1920, height: 1080 }
+ * };
+ * ```
+ */
+export interface GadgetMediaOutput {
+  /** Type of media (discriminator for type-specific handling) */
+  kind: MediaKind;
+  /** Base64-encoded media data */
+  data: string;
+  /** Full MIME type (e.g., "image/png", "audio/mp3", "video/mp4") */
+  mimeType: string;
+  /** Human-readable description of the media */
+  description?: string;
+  /** Type-specific metadata */
+  metadata?: MediaMetadata;
+  /** Optional filename to use when saving (if not provided, auto-generated) */
+  fileName?: string;
+}
+
+/**
+ * Stored media item with metadata and file path.
+ *
+ * Created by MediaStore when a gadget returns media outputs.
+ * Contains the abstract ID, file path, and metadata for display.
+ */
+export interface StoredMedia {
+  /** Unique ID for this media item (e.g., "media_a1b2c3") */
+  id: string;
+  /** Type of media */
+  kind: MediaKind;
+  /** Actual file path on disk (internal use) */
+  path: string;
+  /** MIME type */
+  mimeType: string;
+  /** File size in bytes */
+  sizeBytes: number;
+  /** Human-readable description */
+  description?: string;
+  /** Type-specific metadata */
+  metadata?: MediaMetadata;
+  /** Name of the gadget that created this media */
+  gadgetName: string;
+  /** When the media was stored */
+  createdAt: Date;
+}
+
 // Result of gadget execution
 export interface GadgetExecutionResult {
   gadgetName: string;
@@ -39,6 +122,12 @@ export interface GadgetExecutionResult {
   breaksLoop?: boolean;
   /** Cost of gadget execution in USD. Defaults to 0 if not provided by gadget. */
   cost?: number;
+  /** Media outputs from the gadget (images, audio, video, files) */
+  media?: GadgetMediaOutput[];
+  /** Abstract IDs for media outputs (e.g., ["media_a1b2c3"]) */
+  mediaIds?: string[];
+  /** Stored media with paths (for CLI display) */
+  storedMedia?: StoredMedia[];
 }
 
 /**
@@ -62,11 +151,41 @@ export interface GadgetExecuteResult {
 }
 
 /**
- * Union type for backwards-compatible execute() return type.
- * Gadgets can return either a string (legacy, cost = 0) or
- * an object with result and optional cost.
+ * Extended result type with media support.
+ * Use this when gadget returns images, audio, video, or files.
+ *
+ * @example
+ * ```typescript
+ * // Return with image
+ * execute: () => ({
+ *   result: "Screenshot captured",
+ *   media: [{
+ *     kind: "image",
+ *     data: base64EncodedPng,
+ *     mimeType: "image/png",
+ *     description: "Screenshot"
+ *   }],
+ *   cost: 0.001
+ * })
+ * ```
  */
-export type GadgetExecuteReturn = string | GadgetExecuteResult
+export interface GadgetExecuteResultWithMedia {
+  /** The execution result as a string */
+  result: string;
+  /** Media outputs (images, audio, video, files) */
+  media?: GadgetMediaOutput[];
+  /** Optional cost in USD (e.g., 0.001 for $0.001) */
+  cost?: number;
+}
+
+/**
+ * Union type for backwards-compatible execute() return type.
+ * Gadgets can return:
+ * - string (legacy, cost = 0)
+ * - GadgetExecuteResult (result + optional cost)
+ * - GadgetExecuteResultWithMedia (result + optional media + optional cost)
+ */
+export type GadgetExecuteReturn = string | GadgetExecuteResult | GadgetExecuteResultWithMedia;
 
 // Parsed gadget call from LLM stream
 export interface ParsedGadgetCall {

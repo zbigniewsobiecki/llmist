@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
-  TemplateError,
   createTemplateEngine,
   hasTemplateSyntax,
   resolveTemplate,
+  TemplateError,
   validateEnvVars,
   validatePrompts,
 } from "./templates.js";
@@ -181,10 +181,7 @@ describe("templates", () => {
 
       it("resolves multiple environment variables", () => {
         const eta = createTemplateEngine({});
-        const result = resolveTemplate(
-          eta,
-          "<%= it.env.TEST_VAR %> and <%= it.env.ANOTHER_VAR %>",
-        );
+        const result = resolveTemplate(eta, "<%= it.env.TEST_VAR %> and <%= it.env.ANOTHER_VAR %>");
         expect(result).toBe("test-value and another-value");
       });
 
@@ -203,9 +200,7 @@ describe("templates", () => {
 
       it("throws TemplateError on missing include", () => {
         const eta = createTemplateEngine({});
-        expect(() => resolveTemplate(eta, '<%~ include("@nonexistent") %>')).toThrow(
-          TemplateError,
-        );
+        expect(() => resolveTemplate(eta, '<%~ include("@nonexistent") %>')).toThrow(TemplateError);
       });
     });
   });
@@ -300,9 +295,9 @@ describe("templates", () => {
     it("validates all env vars in template", () => {
       process.env.VAR_A = "a";
       // VAR_B is not set
-      expect(() =>
-        validateEnvVars("<%= it.env.VAR_A %> and <%= it.env.VAR_B %>"),
-      ).toThrow(TemplateError);
+      expect(() => validateEnvVars("<%= it.env.VAR_A %> and <%= it.env.VAR_B %>")).toThrow(
+        TemplateError,
+      );
     });
 
     it("handles whitespace in env var syntax", () => {

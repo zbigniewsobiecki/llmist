@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
+  computeDockerfileHash,
   DEFAULT_DOCKERFILE,
   DEV_DOCKERFILE,
   resolveDockerfile,
-  computeDockerfileHash,
 } from "./dockerfile.js";
 import type { DockerConfig } from "./types.js";
 

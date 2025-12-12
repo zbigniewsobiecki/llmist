@@ -5,8 +5,12 @@
  */
 
 import { describe, expect, it, mock } from "bun:test";
-import type { ImageGenerationOptions, ImageGenerationResult, ImageModelSpec } from "../media-types.js";
 import type { ProviderAdapter } from "../../providers/provider.js";
+import type {
+  ImageGenerationOptions,
+  ImageGenerationResult,
+  ImageModelSpec,
+} from "../media-types.js";
 import { ImageNamespace } from "./image.js";
 
 /**
@@ -24,16 +28,20 @@ function createMockAdapter(opts: {
     providerId,
     supports: () => false,
     stream: () => (async function* () {})(),
-    supportsImageGeneration: supportsImage ? (modelId: string) => imageModels.some(m => m.modelId === modelId) : undefined,
+    supportsImageGeneration: supportsImage
+      ? (modelId: string) => imageModels.some((m) => m.modelId === modelId)
+      : undefined,
     getImageModelSpecs: imageModels.length > 0 ? () => imageModels : undefined,
     generateImage: supportsImage
       ? mock(async (_options: ImageGenerationOptions): Promise<ImageGenerationResult> => {
-          return generateImageResult ?? {
-            images: [{ url: "https://example.com/image.png" }],
-            model: _options.model,
-            usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
-            cost: 0.04,
-          };
+          return (
+            generateImageResult ?? {
+              images: [{ url: "https://example.com/image.png" }],
+              model: _options.model,
+              usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
+              cost: 0.04,
+            }
+          );
         })
       : undefined,
   };
@@ -106,10 +114,12 @@ describe("ImageNamespace", () => {
       });
       const namespace = new ImageNamespace([adapter], "test");
 
-      await expect(namespace.generate({
-        model: "unknown-model",
-        prompt: "Test",
-      })).rejects.toThrow(/No provider supports image generation for model "unknown-model"/);
+      await expect(
+        namespace.generate({
+          model: "unknown-model",
+          prompt: "Test",
+        }),
+      ).rejects.toThrow(/No provider supports image generation for model "unknown-model"/);
     });
 
     it("selects correct provider when multiple are available", async () => {
@@ -137,10 +147,12 @@ describe("ImageNamespace", () => {
         supportsImage: true,
         imageModels: [mockImageSpec],
         generateImageResult: {
-          images: [{
-            url: "https://example.com/image.png",
-            revisedPrompt: "An adorable orange cat floating in outer space",
-          }],
+          images: [
+            {
+              url: "https://example.com/image.png",
+              revisedPrompt: "An adorable orange cat floating in outer space",
+            },
+          ],
           model: "test-image-model",
           usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
           cost: 0.04,
@@ -209,7 +221,7 @@ describe("ImageNamespace", () => {
       const models = namespace.listModels();
 
       expect(models).toHaveLength(3);
-      expect(models.map(m => m.modelId)).toEqual(["model-1", "model-2", "model-3"]);
+      expect(models.map((m) => m.modelId)).toEqual(["model-1", "model-2", "model-3"]);
     });
   });
 

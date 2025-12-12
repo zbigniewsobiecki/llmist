@@ -197,11 +197,7 @@ export function isGeminiImageModel(modelId: string): boolean {
  * @param n - Number of images
  * @returns Cost in USD, or undefined if model not found
  */
-export function calculateGeminiImageCost(
-  modelId: string,
-  size = "1:1",
-  n = 1,
-): number | undefined {
+export function calculateGeminiImageCost(modelId: string, size = "1:1", n = 1): number | undefined {
   const spec = getGeminiImageModelSpec(modelId);
   if (!spec) return undefined;
 

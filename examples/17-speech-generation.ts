@@ -41,7 +41,8 @@ async function main() {
   console.log("2. Generating speech with TTS-1-HD (high quality)...");
   const hdResult = await client.speech.generate({
     model: "tts-1-hd",
-    input: "High definition audio provides richer, clearer voice synthesis for professional applications.",
+    input:
+      "High definition audio provides richer, clearer voice synthesis for professional applications.",
     voice: "alloy",
     responseFormat: "mp3",
     speed: 0.9, // Slightly slower for clarity
@@ -65,7 +66,9 @@ async function main() {
       input: `This is the ${voice} voice.`,
       voice,
     });
-    console.log(`   ${voice}: ${voiceResult.usage.characterCount} chars, $${voiceResult.cost?.toFixed(6) ?? "N/A"}`);
+    console.log(
+      `   ${voice}: ${voiceResult.usage.characterCount} chars, $${voiceResult.cost?.toFixed(6) ?? "N/A"}`,
+    );
   }
   console.log();
 
@@ -75,7 +78,9 @@ async function main() {
   for (const model of models) {
     console.log(`   - ${model.modelId} (${model.displayName})`);
     if (model.voices) {
-      console.log(`     Voices: ${model.voices.slice(0, 5).join(", ")}${model.voices.length > 5 ? "..." : ""}`);
+      console.log(
+        `     Voices: ${model.voices.slice(0, 5).join(", ")}${model.voices.length > 5 ? "..." : ""}`,
+      );
     }
     if (model.formats) {
       console.log(`     Formats: ${model.formats.join(", ")}`);

@@ -19,12 +19,12 @@
  * ```
  */
 
+import type { ProviderAdapter } from "../../providers/provider.js";
 import type {
   SpeechGenerationOptions,
   SpeechGenerationResult,
   SpeechModelSpec,
 } from "../media-types.js";
-import type { ProviderAdapter } from "../../providers/provider.js";
 
 export class SpeechNamespace {
   constructor(
@@ -47,7 +47,9 @@ export class SpeechNamespace {
     if (!adapter || !adapter.generateSpeech) {
       throw new Error(
         `No provider supports speech generation for model "${modelId}". ` +
-          `Available speech models: ${this.listModels().map((m) => m.modelId).join(", ")}`,
+          `Available speech models: ${this.listModels()
+            .map((m) => m.modelId)
+            .join(", ")}`,
       );
     }
 
@@ -75,8 +77,6 @@ export class SpeechNamespace {
   }
 
   private findSpeechAdapter(modelId: string): ProviderAdapter | undefined {
-    return this.adapters.find(
-      (adapter) => adapter.supportsSpeechGeneration?.(modelId) ?? false,
-    );
+    return this.adapters.find((adapter) => adapter.supportsSpeechGeneration?.(modelId) ?? false);
   }
 }

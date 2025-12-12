@@ -315,7 +315,9 @@ async function main() {
         },
       }),
     )
-    .askAndCollect("Process 'weather data' through MultiStepAPI and also query PaidAPI for 'forecast'");
+    .askAndCollect(
+      "Process 'weather data' through MultiStepAPI and also query PaidAPI for 'forecast'",
+    );
 
   console.log(`   ${answer5}`);
   console.log(`   Total cost (LLM + gadgets): $${totalCost5.toFixed(6)}\n`);

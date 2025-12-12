@@ -5,16 +5,16 @@
  * @module cli/gadget-command
  */
 
-import type { Command } from "commander";
 import chalk from "chalk";
+import type { Command } from "commander";
 
 import type { BaseGadget } from "../gadgets/gadget.js";
 import { schemaToJSONSchema } from "../gadgets/schema-to-json.js";
 import { validateGadgetSchema } from "../gadgets/schema-validator.js";
 
 import type { CLIEnvironment } from "./environment.js";
-import { loadGadgets } from "./gadgets.js";
 import { promptForParameters, readStdinJson } from "./gadget-prompts.js";
+import { loadGadgets } from "./gadgets.js";
 import { executeAction } from "./utils.js";
 
 /**
@@ -62,8 +62,7 @@ async function selectGadget(
 
   if (gadgets.length === 0) {
     throw new Error(
-      `No gadgets found in '${file}'.\n` +
-        "Ensure the file exports a Gadget class or instance.",
+      `No gadgets found in '${file}'.\n` + "Ensure the file exports a Gadget class or instance.",
     );
   }
 
@@ -474,7 +473,5 @@ export function registerGadgetCommand(program: Command, env: CLIEnvironment): vo
   gadgetCmd
     .command("validate <file>")
     .description("Check if file exports valid gadget(s).")
-    .action((file: string) =>
-      executeAction(() => executeGadgetValidate(file, env), env),
-    );
+    .action((file: string) => executeAction(() => executeGadgetValidate(file, env), env));
 }

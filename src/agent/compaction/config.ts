@@ -170,9 +170,7 @@ export interface ResolvedCompactionConfig {
 /**
  * Resolves partial configuration with defaults.
  */
-export function resolveCompactionConfig(
-  config: CompactionConfig = {},
-): ResolvedCompactionConfig {
+export function resolveCompactionConfig(config: CompactionConfig = {}): ResolvedCompactionConfig {
   const trigger =
     config.triggerThresholdPercent ?? DEFAULT_COMPACTION_CONFIG.triggerThresholdPercent;
   const target = config.targetPercent ?? DEFAULT_COMPACTION_CONFIG.targetPercent;

@@ -50,7 +50,9 @@ describe("Agent Architecture", () => {
       const baseMessages = [{ role: "system" as const, content: "You are helpful" }];
       const initialMessages = [{ role: "user" as const, content: "Hello" }];
 
-      const manager = new ConversationManager(baseMessages, initialMessages, { parameterFormat: "json" });
+      const manager = new ConversationManager(baseMessages, initialMessages, {
+        parameterFormat: "json",
+      });
 
       manager.addUserMessage("What is 1+1?");
       manager.addAssistantMessage("Let me calculate that.");

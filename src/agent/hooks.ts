@@ -600,9 +600,7 @@ export interface Controllers {
    * Called before skipping a gadget due to a failed dependency.
    * Can override the default skip behavior to execute anyway or provide a fallback.
    */
-  onDependencySkipped?: (
-    context: DependencySkipControllerContext,
-  ) => Promise<DependencySkipAction>;
+  onDependencySkipped?: (context: DependencySkipControllerContext) => Promise<DependencySkipAction>;
 }
 
 // ============================================================================

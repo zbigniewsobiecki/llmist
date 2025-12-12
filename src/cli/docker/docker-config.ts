@@ -6,10 +6,10 @@
 
 import { ConfigError } from "../config.js";
 import {
+  DOCKER_CONFIG_KEYS,
   type DockerConfig,
   type MountConfig,
   type MountPermission,
-  DOCKER_CONFIG_KEYS,
   VALID_MOUNT_PERMISSIONS,
 } from "./types.js";
 

@@ -9,10 +9,18 @@ import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
-import { ApprovalManager, type ApprovalConfig } from "./approval/index.js";
+import { type ApprovalConfig, ApprovalManager } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
+import {
+  createDockerContext,
+  type DockerOptions,
+  DockerSkipError,
+  executeInDocker,
+  resolveDevMode,
+  resolveDockerEnabled,
+} from "./docker/index.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
@@ -23,7 +31,12 @@ import {
   resolveLogDir,
   writeLogFile,
 } from "./llm-logging.js";
-import { addAgentOptions, type AgentCommandOptions } from "./option-helpers.js";
+import { type AgentCommandOptions, addAgentOptions } from "./option-helpers.js";
+import {
+  formatGadgetSummary,
+  renderMarkdownWithSeparators,
+  renderOverallSummary,
+} from "./ui/formatters.js";
 import {
   createEscKeyListener,
   createSigintListener,
@@ -34,19 +47,6 @@ import {
   StreamPrinter,
   StreamProgress,
 } from "./utils.js";
-import {
-  formatGadgetSummary,
-  renderMarkdownWithSeparators,
-  renderOverallSummary,
-} from "./ui/formatters.js";
-import {
-  createDockerContext,
-  DockerSkipError,
-  executeInDocker,
-  resolveDevMode,
-  resolveDockerEnabled,
-  type DockerOptions,
-} from "./docker/index.js";
 
 /**
  * Keyboard/signal listener management for ESC key and Ctrl+C (SIGINT) handling.
@@ -89,7 +89,9 @@ function createHumanInputHandler(
     const rl = createInterface({ input: env.stdin, output: env.stdout });
     try {
       // Display question on first prompt only (with markdown rendering and separators)
-      const questionLine = question.trim() ? `\n${renderMarkdownWithSeparators(question.trim())}` : "";
+      const questionLine = question.trim()
+        ? `\n${renderMarkdownWithSeparators(question.trim())}`
+        : "";
       let isFirst = true;
 
       // Loop until non-empty input (like a REPL)
@@ -206,7 +208,10 @@ export async function executeAgent(
       // Skip AskUser if:
       // 1. --no-builtin-interaction is set, OR
       // 2. stdin is not interactive (piped input) - AskUser can't work anyway
-      if (gadget.name === "AskUser" && (options.builtinInteraction === false || !stdinIsInteractive)) {
+      if (
+        gadget.name === "AskUser" &&
+        (options.builtinInteraction === false || !stdinIsInteractive)
+      ) {
         continue;
       }
       registry.registerByClass(gadget);
@@ -349,7 +354,9 @@ export async function executeAgent(
   };
 
   // Count tokens for gadget output text
-  const countGadgetOutputTokens = async (output: string | undefined): Promise<number | undefined> => {
+  const countGadgetOutputTokens = async (
+    output: string | undefined,
+  ): Promise<number | undefined> => {
     if (!output) return undefined;
     try {
       // Wrap gadget output as assistant message for accurate token counting
@@ -695,7 +702,9 @@ export async function executeAgent(
         } else {
           // Normal mode: show full gadget summary on stderr
           const tokenCount = await countGadgetOutputTokens(event.result.result);
-          env.stderr.write(`${formatGadgetSummary({ ...event.result, tokenCount })}\n`);
+          env.stderr.write(
+            `${formatGadgetSummary({ ...event.result, tokenCount, media: event.result.storedMedia })}\n`,
+          );
         }
         // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
       }

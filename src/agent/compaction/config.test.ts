@@ -1,9 +1,9 @@
-import { describe, expect, it, mock, afterEach } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 import {
+  type CompactionConfig,
   DEFAULT_COMPACTION_CONFIG,
   DEFAULT_SUMMARIZATION_PROMPT,
   resolveCompactionConfig,
-  type CompactionConfig,
 } from "./config.js";
 
 describe("CompactionConfig", () => {
@@ -88,7 +88,9 @@ describe("CompactionConfig", () => {
     });
 
     it("should allow different strategies", () => {
-      expect(resolveCompactionConfig({ strategy: "sliding-window" }).strategy).toBe("sliding-window");
+      expect(resolveCompactionConfig({ strategy: "sliding-window" }).strategy).toBe(
+        "sliding-window",
+      );
       expect(resolveCompactionConfig({ strategy: "summarization" }).strategy).toBe("summarization");
       expect(resolveCompactionConfig({ strategy: "hybrid" }).strategy).toBe("hybrid");
     });

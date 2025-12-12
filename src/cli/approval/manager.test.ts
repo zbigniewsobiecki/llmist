@@ -1,5 +1,5 @@
-import { Readable, Writable } from "node:stream";
 import { describe, expect, it, mock } from "bun:test";
+import { Readable, Writable } from "node:stream";
 import type { CLIEnvironment } from "../environment.js";
 import { ApprovalManager } from "./manager.js";
 import type { ApprovalConfig, ApprovalContextProvider } from "./types.js";

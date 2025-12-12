@@ -28,6 +28,18 @@
  * ```
  */
 
+// Context providers
+export {
+  builtinContextProviders,
+  DefaultContextProvider,
+  EditFileContextProvider,
+  formatGadgetSummary,
+  WriteFileContextProvider,
+} from "./context-providers.js";
+// Diff rendering
+export { formatNewFileDiff, renderColoredDiff } from "./diff-renderer.js";
+// Manager
+export { ApprovalManager } from "./manager.js";
 // Types
 export type {
   ApprovalConfig,
@@ -37,18 +49,3 @@ export type {
   ApprovalResult,
   KeyboardCoordinator,
 } from "./types.js";
-
-// Manager
-export { ApprovalManager } from "./manager.js";
-
-// Context providers
-export {
-  builtinContextProviders,
-  DefaultContextProvider,
-  EditFileContextProvider,
-  formatGadgetSummary,
-  WriteFileContextProvider,
-} from "./context-providers.js";
-
-// Diff rendering
-export { formatNewFileDiff, renderColoredDiff } from "./diff-renderer.js";

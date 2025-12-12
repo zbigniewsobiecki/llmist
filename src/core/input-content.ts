@@ -20,7 +20,13 @@ export type ImageMimeType = "image/jpeg" | "image/png" | "image/gif" | "image/we
  * Supported audio MIME types for input.
  * Currently only Gemini supports audio input.
  */
-export type AudioMimeType = "audio/mp3" | "audio/mpeg" | "audio/wav" | "audio/webm" | "audio/ogg";
+export type AudioMimeType =
+  | "audio/mp3"
+  | "audio/mpeg"
+  | "audio/wav"
+  | "audio/webm"
+  | "audio/ogg"
+  | "audio/flac";
 
 // ============================================================================
 // Content Part Types
@@ -218,6 +224,8 @@ const AUDIO_MAGIC_BYTES: Array<{ bytes: number[]; mimeType: AudioMimeType }> = [
   { bytes: [0x52, 0x49, 0x46, 0x46], mimeType: "audio/wav" },
   // WebM
   { bytes: [0x1a, 0x45, 0xdf, 0xa3], mimeType: "audio/webm" },
+  // FLAC (fLaC)
+  { bytes: [0x66, 0x4c, 0x61, 0x43], mimeType: "audio/flac" },
 ];
 
 /**

@@ -21,7 +21,8 @@ import {
 /**
  * Marker message inserted to indicate truncation.
  */
-const TRUNCATION_MARKER_TEMPLATE = "[Previous conversation truncated. Removed {count} turn(s) to fit context window.]";
+const TRUNCATION_MARKER_TEMPLATE =
+  "[Previous conversation truncated. Removed {count} turn(s) to fit context window.]";
 
 /**
  * Sliding window strategy - keeps recent turns, drops older ones.

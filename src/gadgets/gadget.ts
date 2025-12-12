@@ -99,7 +99,11 @@ function formatParamLine(
  * This presents parameters in a neutral, human-readable format
  * that complements the block format used for gadget invocation.
  */
-function formatSchemaAsPlainText(schema: Record<string, unknown>, indent = "", atRoot = true): string {
+function formatSchemaAsPlainText(
+  schema: Record<string, unknown>,
+  indent = "",
+  atRoot = true,
+): string {
   const lines: string[] = [];
   const properties = (schema.properties || {}) as Record<string, unknown>;
   const required = (schema.required || []) as string[];
@@ -409,11 +413,14 @@ export abstract class BaseGadget {
    * @param optionsOrArgPrefix - Optional custom prefixes for examples, or just argPrefix string for backwards compatibility
    * @returns Formatted instruction string
    */
-  getInstruction(optionsOrArgPrefix?: string | { argPrefix?: string; startPrefix?: string; endPrefix?: string }): string {
+  getInstruction(
+    optionsOrArgPrefix?: string | { argPrefix?: string; startPrefix?: string; endPrefix?: string },
+  ): string {
     // Handle backwards compatibility: if string is passed, treat it as argPrefix
-    const options = typeof optionsOrArgPrefix === "string"
-      ? { argPrefix: optionsOrArgPrefix }
-      : optionsOrArgPrefix;
+    const options =
+      typeof optionsOrArgPrefix === "string"
+        ? { argPrefix: optionsOrArgPrefix }
+        : optionsOrArgPrefix;
     const parts: string[] = [];
 
     // Add description
@@ -460,7 +467,9 @@ export abstract class BaseGadget {
         parts.push(`${effectiveStartPrefix}${gadgetName}`);
 
         // Render params in block format
-        parts.push(formatParamsAsBlock(example.params as Record<string, unknown>, "", effectiveArgPrefix));
+        parts.push(
+          formatParamsAsBlock(example.params as Record<string, unknown>, "", effectiveArgPrefix),
+        );
 
         // Add GADGET_END marker
         parts.push(effectiveEndPrefix);
