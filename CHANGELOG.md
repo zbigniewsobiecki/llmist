@@ -1,3 +1,9 @@
+## 2.6.0 (2025-12-12)
+
+* Merge pull request #166 from zbigniewsobiecki/feat/multimodal-media-output ([0c257c8](https://github.com/zbigniewsobiecki/llmist/commit/0c257c8)), closes [#166](https://github.com/zbigniewsobiecki/llmist/issues/166)
+* Merge pull request #167 from zbigniewsobiecki/dev ([c4c7164](https://github.com/zbigniewsobiecki/llmist/commit/c4c7164)), closes [#167](https://github.com/zbigniewsobiecki/llmist/issues/167)
+* feat(gadgets): add multimodal media output support with MediaStore ([71ffdb1](https://github.com/zbigniewsobiecki/llmist/commit/71ffdb1))
+
 ## 2.3.0 (2025-12-09)
 
 * Merge pull request #159 from zbigniewsobiecki/dev ([643d52d](https://github.com/zbigniewsobiecki/llmist/commit/643d52d)), closes [#159](https://github.com/zbigniewsobiecki/llmist/issues/159)
