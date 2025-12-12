@@ -854,11 +854,15 @@ ${GADGET_END_PREFIX}`),
 
       // Complete the first gadget and start a new partial
       const events = collectSyncEvents(
-        parser.feed(`value1\n${GADGET_END_PREFIX}\nSome text\n${GADGET_START_PREFIX}Second\n${GADGET_ARG_PREFIX}b\nval`),
+        parser.feed(
+          `value1\n${GADGET_END_PREFIX}\nSome text\n${GADGET_START_PREFIX}Second\n${GADGET_ARG_PREFIX}b\nval`,
+        ),
       );
 
       // Should have the completed first gadget
-      expect(events.some((e) => e.type === "gadget_call" && e.call.gadgetName === "First")).toBe(true);
+      expect(events.some((e) => e.type === "gadget_call" && e.call.gadgetName === "First")).toBe(
+        true,
+      );
 
       // Finalize to complete the second gadget
       const finalEvents = collectSyncEvents(parser.finalize());
@@ -939,9 +943,7 @@ ${GADGET_END_PREFIX}`;
       parser.reset();
 
       // Feed complete new content
-      const events = collectSyncEvents(
-        parser.feed(`Just plain text`),
-      );
+      const events = collectSyncEvents(parser.feed(`Just plain text`));
 
       // Should have no events (plain text buffered)
       expect(events).toHaveLength(0);
@@ -1138,5 +1140,4 @@ test`),
       expect(finalEvents[0].call.dependencies).toEqual(["dep_1", "dep_2"]);
     }
   });
-
 });

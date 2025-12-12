@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { flattenTurns, groupIntoTurns, type MessageTurn } from "./strategy.js";
 import type { LLMMessage } from "../../core/messages.js";
+import { flattenTurns, groupIntoTurns, type MessageTurn } from "./strategy.js";
 
 describe("Strategy utilities", () => {
   describe("groupIntoTurns", () => {
@@ -153,9 +153,7 @@ describe("Strategy utilities", () => {
     it("should preserve message order", () => {
       const turns: MessageTurn[] = [
         {
-          messages: [
-            { role: "assistant", content: "Preamble" },
-          ],
+          messages: [{ role: "assistant", content: "Preamble" }],
           tokenEstimate: 5,
         },
         {

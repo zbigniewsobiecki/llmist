@@ -77,7 +77,7 @@ async function main() {
     .withModel("haiku")
     .withSystem(
       "You are a helpful assistant. Use gadget dependencies to specify execution order. " +
-        "Use :id syntax for invocation IDs and :id:dep1,dep2 for dependencies."
+        "Use :id syntax for invocation IDs and :id:dep1,dep2 for dependencies.",
     )
     .withGadgets(FetchNumber, Calculate, FormatCurrency)
     .withMaxIterations(10)
@@ -87,7 +87,9 @@ async function main() {
       {
         onGadgetCall: (call) => {
           const deps =
-            call.dependencies.length > 0 ? ` (waits for: ${call.dependencies.join(", ")})` : " (immediate)";
+            call.dependencies.length > 0
+              ? ` (waits for: ${call.dependencies.join(", ")})`
+              : " (immediate)";
           console.log(`  📤 ${call.gadgetName}:${call.invocationId}${deps}`);
         },
         onGadgetResult: (result) => {
@@ -97,7 +99,7 @@ async function main() {
         onText: (text) => {
           if (text.trim()) process.stdout.write(text);
         },
-      }
+      },
     );
 
   console.log("\n\n=== Done ===");

@@ -18,6 +18,7 @@
  * ```
  */
 
+import type { LLMist } from "../client.js";
 import type { ImageMimeType } from "../input-content.js";
 import {
   detectImageMimeType,
@@ -28,7 +29,6 @@ import {
   text,
 } from "../input-content.js";
 import { LLMMessageBuilder } from "../messages.js";
-import type { LLMist } from "../client.js";
 
 /**
  * Options for vision analysis.
@@ -99,11 +99,7 @@ export class VisionNamespace {
         if (!parsed) {
           throw new Error("Invalid data URL format");
         }
-        builder.addUserWithImage(
-          options.prompt,
-          parsed.data,
-          parsed.mimeType as ImageMimeType,
-        );
+        builder.addUserWithImage(options.prompt, parsed.data, parsed.mimeType as ImageMimeType);
       } else {
         // Assume base64 string
         const buffer = Buffer.from(options.image, "base64");

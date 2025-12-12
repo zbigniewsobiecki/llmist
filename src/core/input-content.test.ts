@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+  type AudioContentPart,
   audioFromBase64,
   audioFromBuffer,
+  type ContentPart,
   detectAudioMimeType,
   detectImageMimeType,
+  type ImageContentPart,
   imageFromBase64,
   imageFromBuffer,
   imageFromUrl,
@@ -14,12 +17,9 @@ import {
   isTextPart,
   isUrlImageSource,
   parseDataUrl,
+  type TextContentPart,
   text,
   toBase64,
-  type AudioContentPart,
-  type ContentPart,
-  type ImageContentPart,
-  type TextContentPart,
 } from "./input-content.js";
 
 describe("input-content", () => {
@@ -79,7 +79,11 @@ describe("input-content", () => {
 
     describe("isBase64ImageSource / isUrlImageSource", () => {
       it("distinguishes base64 from URL sources", () => {
-        const base64Source = { type: "base64" as const, mediaType: "image/jpeg" as const, data: "abc" };
+        const base64Source = {
+          type: "base64" as const,
+          mediaType: "image/jpeg" as const,
+          data: "abc",
+        };
         const urlSource = { type: "url" as const, url: "https://example.com/image.jpg" };
 
         expect(isBase64ImageSource(base64Source)).toBe(true);
@@ -189,9 +193,18 @@ describe("input-content", () => {
       it("creates an image part from WebP buffer", () => {
         // WebP: RIFF....WEBP (bytes 0-3: RIFF, bytes 8-11: WEBP)
         const webpBuffer = Buffer.from([
-          0x52, 0x49, 0x46, 0x46, // RIFF
-          0x00, 0x00, 0x00, 0x00, // file size (placeholder)
-          0x57, 0x45, 0x42, 0x50, // WEBP
+          0x52,
+          0x49,
+          0x46,
+          0x46, // RIFF
+          0x00,
+          0x00,
+          0x00,
+          0x00, // file size (placeholder)
+          0x57,
+          0x45,
+          0x42,
+          0x50, // WEBP
         ]);
         const part = imageFromBuffer(webpBuffer);
 
@@ -213,9 +226,7 @@ describe("input-content", () => {
 
       it("throws when MIME type cannot be detected", () => {
         const unknownBuffer = Buffer.from([0x00, 0x00, 0x00, 0x00]);
-        expect(() => imageFromBuffer(unknownBuffer)).toThrow(
-          "Could not detect image MIME type",
-        );
+        expect(() => imageFromBuffer(unknownBuffer)).toThrow("Could not detect image MIME type");
       });
 
       it("works with Uint8Array", () => {
@@ -243,7 +254,13 @@ describe("input-content", () => {
       });
 
       it("supports all audio MIME types", () => {
-        const mimeTypes = ["audio/mp3", "audio/mpeg", "audio/wav", "audio/webm", "audio/ogg"] as const;
+        const mimeTypes = [
+          "audio/mp3",
+          "audio/mpeg",
+          "audio/wav",
+          "audio/webm",
+          "audio/ogg",
+        ] as const;
         for (const mimeType of mimeTypes) {
           const part = audioFromBase64("abc", mimeType);
           expect(part.source.mediaType).toBe(mimeType);
@@ -279,9 +296,18 @@ describe("input-content", () => {
       it("creates an audio part from WAV buffer", () => {
         // WAV: RIFF....WAVE
         const wavBuffer = Buffer.from([
-          0x52, 0x49, 0x46, 0x46, // RIFF
-          0x00, 0x00, 0x00, 0x00, // file size
-          0x57, 0x41, 0x56, 0x45, // WAVE
+          0x52,
+          0x49,
+          0x46,
+          0x46, // RIFF
+          0x00,
+          0x00,
+          0x00,
+          0x00, // file size
+          0x57,
+          0x41,
+          0x56,
+          0x45, // WAVE
         ]);
         const part = audioFromBuffer(wavBuffer);
 
@@ -305,9 +331,7 @@ describe("input-content", () => {
 
       it("throws when MIME type cannot be detected", () => {
         const unknownBuffer = Buffer.from([0x00, 0x00, 0x00, 0x00]);
-        expect(() => audioFromBuffer(unknownBuffer)).toThrow(
-          "Could not detect audio MIME type",
-        );
+        expect(() => audioFromBuffer(unknownBuffer)).toThrow("Could not detect audio MIME type");
       });
     });
   });
@@ -331,9 +355,7 @@ describe("input-content", () => {
 
       it("detects WebP", () => {
         const webp = Buffer.from([
-          0x52, 0x49, 0x46, 0x46,
-          0x00, 0x00, 0x00, 0x00,
-          0x57, 0x45, 0x42, 0x50,
+          0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
         ]);
         expect(detectImageMimeType(webp)).toBe("image/webp");
       });
@@ -351,9 +373,18 @@ describe("input-content", () => {
       it("does not detect RIFF as WebP if WEBP marker is missing", () => {
         // RIFF without WEBP marker (could be WAV or other RIFF format)
         const riff = Buffer.from([
-          0x52, 0x49, 0x46, 0x46,
-          0x00, 0x00, 0x00, 0x00,
-          0x41, 0x56, 0x49, 0x20, // "AVI " instead of "WEBP"
+          0x52,
+          0x49,
+          0x46,
+          0x46,
+          0x00,
+          0x00,
+          0x00,
+          0x00,
+          0x41,
+          0x56,
+          0x49,
+          0x20, // "AVI " instead of "WEBP"
         ]);
         expect(detectImageMimeType(riff)).toBeNull();
       });
@@ -382,9 +413,7 @@ describe("input-content", () => {
 
       it("detects WAV", () => {
         const wav = Buffer.from([
-          0x52, 0x49, 0x46, 0x46,
-          0x00, 0x00, 0x00, 0x00,
-          0x57, 0x41, 0x56, 0x45,
+          0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
         ]);
         expect(detectAudioMimeType(wav)).toBe("audio/wav");
       });
@@ -402,9 +431,18 @@ describe("input-content", () => {
       it("does not detect RIFF as WAV if WAVE marker is missing", () => {
         // RIFF without WAVE marker
         const riff = Buffer.from([
-          0x52, 0x49, 0x46, 0x46,
-          0x00, 0x00, 0x00, 0x00,
-          0x41, 0x56, 0x49, 0x20, // "AVI " instead of "WAVE"
+          0x52,
+          0x49,
+          0x46,
+          0x46,
+          0x00,
+          0x00,
+          0x00,
+          0x00,
+          0x41,
+          0x56,
+          0x49,
+          0x20, // "AVI " instead of "WAVE"
         ]);
         expect(detectAudioMimeType(riff)).toBeNull();
       });
@@ -505,10 +543,7 @@ describe("input-content", () => {
     it("creates mixed content array", () => {
       const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
 
-      const content: ContentPart[] = [
-        text("What's in this image?"),
-        imageFromBuffer(jpegBuffer),
-      ];
+      const content: ContentPart[] = [text("What's in this image?"), imageFromBuffer(jpegBuffer)];
 
       expect(content).toHaveLength(2);
       expect(isTextPart(content[0]!)).toBe(true);

@@ -8,7 +8,9 @@ import { SummarizationStrategy } from "./summarization.js";
 describe("SummarizationStrategy", () => {
   const strategy = new SummarizationStrategy();
 
-  const createConfig = (overrides?: Partial<ResolvedCompactionConfig>): ResolvedCompactionConfig => ({
+  const createConfig = (
+    overrides?: Partial<ResolvedCompactionConfig>,
+  ): ResolvedCompactionConfig => ({
     enabled: true,
     strategy: "summarization",
     triggerThresholdPercent: 80,
@@ -58,10 +60,7 @@ describe("SummarizationStrategy", () => {
     });
 
     it("should call LLM to summarize older turns", async () => {
-      mockLLM()
-        .forAnyModel()
-        .returns("This is a summary of the conversation.")
-        .register();
+      mockLLM().forAnyModel().returns("This is a summary of the conversation.").register();
 
       const messages = createConversation(5); // 5 turns
       const config = createConfig({ preserveRecentTurns: 2 }); // keep 2, summarize 3

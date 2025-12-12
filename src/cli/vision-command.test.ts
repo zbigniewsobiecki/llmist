@@ -1,11 +1,11 @@
-import { describe, expect, it, beforeAll, afterAll } from "bun:test";
-import { mkdir, writeFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
-import type { CLIEnvironment } from "./environment.js";
 import type { LLMist } from "../core/client.js";
 import { createLogger } from "../logging/logger.js";
+import type { CLIEnvironment } from "./environment.js";
 import { executeVision, type VisionCommandOptions } from "./vision-command.js";
 
 /**
@@ -226,9 +226,9 @@ describe("vision command", () => {
         model: "gpt-4o",
       };
 
-      await expect(
-        executeVision(join(TEST_DIR, "nonexistent.jpg"), options, env),
-      ).rejects.toThrow(/Failed to read file/);
+      await expect(executeVision(join(TEST_DIR, "nonexistent.jpg"), options, env)).rejects.toThrow(
+        /Failed to read file/,
+      );
     });
 
     it("should pass maxTokens option to vision.analyze", async () => {

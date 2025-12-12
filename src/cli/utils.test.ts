@@ -1,9 +1,9 @@
-import { describe, expect, test, mock, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import type { ModelRegistry } from "../core/model-registry.js";
-import { StreamProgress, createEscKeyListener, createSigintListener } from "./utils.js";
 import { formatCost } from "./ui/formatters.js";
+import { createEscKeyListener, createSigintListener, StreamProgress } from "./utils.js";
 
 /**
  * Mock writable stream that captures output for testing.
@@ -40,9 +40,7 @@ class MockModelRegistry implements Partial<ModelRegistry> {
     model: string,
     inputTokens: number,
     outputTokens: number,
-  ):
-    | { inputCost: number; outputCost: number; totalCost: number }
-    | undefined {
+  ): { inputCost: number; outputCost: number; totalCost: number } | undefined {
     if (this.shouldThrow) {
       throw new Error("Model not found");
     }

@@ -7,7 +7,9 @@ import { SlidingWindowStrategy } from "./sliding-window.js";
 describe("SlidingWindowStrategy", () => {
   const strategy = new SlidingWindowStrategy();
 
-  const createConfig = (overrides?: Partial<ResolvedCompactionConfig>): ResolvedCompactionConfig => ({
+  const createConfig = (
+    overrides?: Partial<ResolvedCompactionConfig>,
+  ): ResolvedCompactionConfig => ({
     enabled: true,
     strategy: "sliding-window",
     triggerThresholdPercent: 80,

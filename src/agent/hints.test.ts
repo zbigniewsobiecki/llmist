@@ -1,19 +1,16 @@
 import { describe, expect, it } from "bun:test";
+import type { LLMMessage } from "../core/messages.js";
 import { createLogger } from "../logging/logger.js";
 import {
   createHints,
-  iterationProgressHint,
-  parallelGadgetHint,
   type HintsConfig,
   type IterationHintOptions,
+  iterationProgressHint,
   type ParallelGadgetHintOptions,
+  parallelGadgetHint,
 } from "./hints.js";
 import { HookPresets } from "./hook-presets.js";
-import type { LLMMessage } from "../core/messages.js";
-import type {
-  AfterLLMCallControllerContext,
-  LLMCallControllerContext,
-} from "./hooks.js";
+import type { AfterLLMCallControllerContext, LLMCallControllerContext } from "./hooks.js";
 
 const logger = createLogger({ name: "test", minLevel: 6 }); // Silent
 
@@ -62,15 +59,13 @@ describe("iterationProgressHint", () => {
       expect(controller).toBeDefined();
 
       // Early iteration (iteration 0 = 10%)
-      const ctx = createBeforeLLMCallContext(0, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const ctx = createBeforeLLMCallContext(0, 10, [{ role: "user", content: "Hello" }]);
       const action = await controller!(ctx);
 
       expect(action.action).toBe("proceed");
       expect(action).toHaveProperty("modifiedOptions");
-      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-        .modifiedOptions.messages;
+      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+        .messages;
       expect(messages.some((m) => m.content.includes("[System Hint]"))).toBe(true);
       expect(messages.some((m) => m.content.includes("Iteration 1/10"))).toBe(true);
     });
@@ -80,17 +75,13 @@ describe("iterationProgressHint", () => {
       const controller = hooks.controllers?.beforeLLMCall;
 
       // Early (40%) - should NOT show
-      const earlyCtx = createBeforeLLMCallContext(3, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const earlyCtx = createBeforeLLMCallContext(3, 10, [{ role: "user", content: "Hello" }]);
       const earlyAction = await controller!(earlyCtx);
       expect(earlyAction.action).toBe("proceed");
       expect(earlyAction).not.toHaveProperty("modifiedOptions");
 
       // Late (60%) - should show
-      const lateCtx = createBeforeLLMCallContext(5, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const lateCtx = createBeforeLLMCallContext(5, 10, [{ role: "user", content: "Hello" }]);
       const lateAction = await controller!(lateCtx);
       expect(lateAction.action).toBe("proceed");
       expect(lateAction).toHaveProperty("modifiedOptions");
@@ -101,16 +92,12 @@ describe("iterationProgressHint", () => {
       const controller = hooks.controllers?.beforeLLMCall;
 
       // Early (70%) - should NOT show
-      const earlyCtx = createBeforeLLMCallContext(6, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const earlyCtx = createBeforeLLMCallContext(6, 10, [{ role: "user", content: "Hello" }]);
       const earlyAction = await controller!(earlyCtx);
       expect(earlyAction).not.toHaveProperty("modifiedOptions");
 
       // Late (90%) - should show
-      const lateCtx = createBeforeLLMCallContext(8, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const lateCtx = createBeforeLLMCallContext(8, 10, [{ role: "user", content: "Hello" }]);
       const lateAction = await controller!(lateCtx);
       expect(lateAction).toHaveProperty("modifiedOptions");
     });
@@ -121,32 +108,24 @@ describe("iterationProgressHint", () => {
       const hooks = iterationProgressHint();
       const controller = hooks.controllers?.beforeLLMCall;
 
-      const ctx = createBeforeLLMCallContext(8, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const ctx = createBeforeLLMCallContext(8, 10, [{ role: "user", content: "Hello" }]);
       const action = await controller!(ctx);
 
-      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-        .modifiedOptions.messages;
-      expect(
-        messages.some((m) => m.content.includes("Running low on iterations")),
-      ).toBe(true);
+      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+        .messages;
+      expect(messages.some((m) => m.content.includes("Running low on iterations"))).toBe(true);
     });
 
     it("does not add urgency when showUrgency=false", async () => {
       const hooks = iterationProgressHint({ showUrgency: false });
       const controller = hooks.controllers?.beforeLLMCall;
 
-      const ctx = createBeforeLLMCallContext(8, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const ctx = createBeforeLLMCallContext(8, 10, [{ role: "user", content: "Hello" }]);
       const action = await controller!(ctx);
 
-      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-        .modifiedOptions.messages;
-      expect(
-        messages.some((m) => m.content.includes("Running low on iterations")),
-      ).toBe(false);
+      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+        .messages;
+      expect(messages.some((m) => m.content.includes("Running low on iterations"))).toBe(false);
     });
   });
 
@@ -157,16 +136,12 @@ describe("iterationProgressHint", () => {
       });
       const controller = hooks.controllers?.beforeLLMCall;
 
-      const ctx = createBeforeLLMCallContext(2, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const ctx = createBeforeLLMCallContext(2, 10, [{ role: "user", content: "Hello" }]);
       const action = await controller!(ctx);
 
-      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-        .modifiedOptions.messages;
-      expect(messages.some((m) => m.content.includes("Turn 3 of 10. 7 left."))).toBe(
-        true,
-      );
+      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+        .messages;
+      expect(messages.some((m) => m.content.includes("Turn 3 of 10. 7 left."))).toBe(true);
     });
 
     it("supports custom function template", async () => {
@@ -175,13 +150,11 @@ describe("iterationProgressHint", () => {
       });
       const controller = hooks.controllers?.beforeLLMCall;
 
-      const ctx = createBeforeLLMCallContext(4, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const ctx = createBeforeLLMCallContext(4, 10, [{ role: "user", content: "Hello" }]);
       const action = await controller!(ctx);
 
-      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-        .modifiedOptions.messages;
+      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+        .messages;
       expect(messages.some((m) => m.content.includes("Step 5/10"))).toBe(true);
     });
 
@@ -192,16 +165,12 @@ describe("iterationProgressHint", () => {
       const controller = hooks.controllers?.beforeLLMCall;
 
       // iteration 2 (0-indexed), maxIterations 10 → remaining = 10 - 3 = 7
-      const ctx = createBeforeLLMCallContext(2, 10, [
-        { role: "user", content: "Hello" },
-      ]);
+      const ctx = createBeforeLLMCallContext(2, 10, [{ role: "user", content: "Hello" }]);
       const action = await controller!(ctx);
 
-      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-        .modifiedOptions.messages;
-      expect(messages.some((m) => m.content.includes("7 iterations left out of 10"))).toBe(
-        true,
-      );
+      const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+        .messages;
+      expect(messages.some((m) => m.content.includes("7 iterations left out of 10"))).toBe(true);
     });
   });
 
@@ -217,8 +186,8 @@ describe("iterationProgressHint", () => {
     ]);
     const action = await controller!(ctx);
 
-    const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-      .modifiedOptions.messages;
+    const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+      .messages;
 
     // Find hint message index
     const hintIndex = messages.findIndex((m) => m.content.includes("[System Hint]"));
@@ -250,8 +219,8 @@ describe("iterationProgressHint", () => {
     expect(action.action).toBe("proceed");
     expect(action).toHaveProperty("modifiedOptions");
 
-    const messages = (action as { modifiedOptions: { messages: LLMMessage[] } })
-      .modifiedOptions.messages;
+    const messages = (action as { modifiedOptions: { messages: LLMMessage[] } }).modifiedOptions
+      .messages;
 
     // Hint should be appended at the end
     expect(messages.length).toBe(3);

@@ -38,7 +38,9 @@ Example code:
   });
 `);
 
-  console.log("Vision namespace supports: analyze(), analyzeWithUsage(), supportsModel(), listModels()\n");
+  console.log(
+    "Vision namespace supports: analyze(), analyzeWithUsage(), supportsModel(), listModels()\n",
+  );
 }
 
 // =============================================================================
@@ -58,7 +60,9 @@ async function demoDirectStream() {
         text("What's in this image?"),
         // In a real scenario: imageFromBuffer(await readFile("image.jpg"))
         // For demo, showing URL-based image (OpenAI only)
-        imageFromUrl("https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/200px-PNG_transparency_demonstration_1.png"),
+        imageFromUrl(
+          "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/200px-PNG_transparency_demonstration_1.png",
+        ),
       ],
     },
   ];

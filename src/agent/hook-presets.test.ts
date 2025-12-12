@@ -510,7 +510,11 @@ describe("HookPresets", () => {
         finalMessage: "Response",
       };
 
-      await hooks.observers?.onLLMCallStart?.({ iteration: 1, messages: [], options: { model: "gpt-4o" } });
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+      });
       await hooks.observers?.onLLMCallComplete?.(llmCtx);
 
       // Should include gadget cost in totalCost
@@ -548,7 +552,11 @@ describe("HookPresets", () => {
       } as ObserveGadgetCompleteContext);
 
       // Trigger progress callback via LLM call
-      await hooks.observers?.onLLMCallStart?.({ iteration: 1, messages: [], options: { model: "gpt-4o" } });
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+      });
       await hooks.observers?.onLLMCallComplete?.({
         iteration: 1,
         messages: [],
@@ -603,7 +611,11 @@ describe("HookPresets", () => {
       } as ObserveGadgetCompleteContext);
 
       // Trigger progress callback
-      await hooks.observers?.onLLMCallStart?.({ iteration: 1, messages: [], options: { model: "gpt-4o" } });
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+      });
       await hooks.observers?.onLLMCallComplete?.({
         iteration: 1,
         messages: [],

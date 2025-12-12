@@ -9,14 +9,14 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
+  type AudioContentPart,
+  type AudioMimeType,
   audioFromBuffer,
   detectAudioMimeType,
   detectImageMimeType,
-  imageFromBuffer,
-  type AudioContentPart,
-  type AudioMimeType,
   type ImageContentPart,
   type ImageMimeType,
+  imageFromBuffer,
 } from "../core/input-content.js";
 
 /**

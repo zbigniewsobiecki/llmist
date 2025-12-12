@@ -237,7 +237,8 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
     }
 
     // System and assistant messages only support string content
-    const textContent = typeof message.content === "string" ? message.content : extractText(message.content);
+    const textContent =
+      typeof message.content === "string" ? message.content : extractText(message.content);
 
     if (role === "system") {
       return {
@@ -259,9 +260,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
    * Convert llmist content to OpenAI's content format.
    * Optimizes by returning string for text-only content, array for multimodal.
    */
-  private convertToOpenAIContent(
-    content: MessageContent,
-  ): string | ChatCompletionContentPart[] {
+  private convertToOpenAIContent(content: MessageContent): string | ChatCompletionContentPart[] {
     // Optimization: keep simple string content as-is
     if (typeof content === "string") {
       return content;

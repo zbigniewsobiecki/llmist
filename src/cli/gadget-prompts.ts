@@ -76,9 +76,7 @@ export async function promptForParameters(
   // Validate and apply defaults/transforms through Zod
   const result = schema.safeParse(params);
   if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `  ${i.path.join(".")}: ${i.message}`)
-      .join("\n");
+    const issues = result.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid parameters:\n${issues}`);
   }
 
@@ -181,7 +179,10 @@ function parseValue(input: string, prop: JsonSchemaProperty, key: string): unkno
 
   // Arrays (comma-separated)
   if (type === "array") {
-    const items = input.split(",").map((s) => s.trim()).filter(Boolean);
+    const items = input
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     const itemType = prop.items?.type;
 
     // Convert array items to appropriate type
@@ -222,7 +223,9 @@ function parseValue(input: string, prop: JsonSchemaProperty, key: string): unkno
  * @param stdin - Readable stream to read from
  * @returns Parsed JSON object
  */
-export async function readStdinJson(stdin: NodeJS.ReadableStream): Promise<Record<string, unknown>> {
+export async function readStdinJson(
+  stdin: NodeJS.ReadableStream,
+): Promise<Record<string, unknown>> {
   const chunks: string[] = [];
 
   for await (const chunk of stdin) {

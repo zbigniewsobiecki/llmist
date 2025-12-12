@@ -9,22 +9,22 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { resolveDockerfile } from "./dockerfile.js";
-import { ensureImage, DockerBuildError } from "./image-manager.js";
+import { DockerBuildError, ensureImage } from "./image-manager.js";
 import {
+  DEFAULT_CONFIG_PERMISSION,
+  DEFAULT_CWD_PERMISSION,
+  DEFAULT_IMAGE_NAME,
+  DEV_IMAGE_NAME,
+  DEV_SOURCE_MOUNT_TARGET,
   type DevModeSettings,
   type DockerConfig,
   type DockerExecutionContext,
   type DockerOptions,
-  type MountPermission,
-  DEFAULT_IMAGE_NAME,
-  DEFAULT_CWD_PERMISSION,
-  DEFAULT_CONFIG_PERMISSION,
-  DEV_IMAGE_NAME,
-  DEV_SOURCE_MOUNT_TARGET,
   FORWARDED_API_KEYS,
+  type MountPermission,
 } from "./types.js";
 
 /**

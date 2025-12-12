@@ -33,9 +33,7 @@ function getTypeName(schema: ZodTypeAny): string | undefined {
  * Handles both Zod v3 (shape()) and Zod v4 (shape) structures.
  * Note: We cast _def to any since Zod's internal structure isn't publicly typed.
  */
-function getShape(
-  schema: ZodTypeAny
-): Record<string, ZodTypeAny> | undefined {
+function getShape(schema: ZodTypeAny): Record<string, ZodTypeAny> | undefined {
   const def = getDef(schema);
   // Zod v4 uses _def.shape directly, Zod v3 uses _def.shape()
   if (typeof def?.shape === "function") {
@@ -241,8 +239,7 @@ export class SchemaIntrospector {
         const values = def?.values as unknown[] | undefined;
         const value = values?.[0] ?? def?.value;
         if (typeof value === "string") return "string";
-        if (typeof value === "number" || typeof value === "bigint")
-          return "number";
+        if (typeof value === "number" || typeof value === "bigint") return "number";
         if (typeof value === "boolean") return "boolean";
         return "unknown";
       }

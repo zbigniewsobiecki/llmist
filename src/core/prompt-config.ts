@@ -116,18 +116,19 @@ export interface PromptConfig {
  * Default hint templates used by llmist.
  */
 export const DEFAULT_HINTS = {
-  parallelGadgetsHint:
-    "Tip: You can call multiple gadgets in a single response for efficiency.",
+  parallelGadgetsHint: "Tip: You can call multiple gadgets in a single response for efficiency.",
 
-  iterationProgressHint:
-    "[Iteration {iteration}/{maxIterations}] Plan your actions accordingly.",
+  iterationProgressHint: "[Iteration {iteration}/{maxIterations}] Plan your actions accordingly.",
 } as const;
 
 /**
  * Default prompt templates used by llmist.
  */
 export const DEFAULT_PROMPTS: Required<
-  Omit<PromptConfig, "rules" | "customExamples" | "parallelGadgetsHint" | "iterationProgressHint"> & {
+  Omit<
+    PromptConfig,
+    "rules" | "customExamples" | "parallelGadgetsHint" | "iterationProgressHint"
+  > & {
     rules: (context: PromptContext) => string[];
     customExamples: null;
   }

@@ -80,10 +80,7 @@ export async function executeSpeech(
 
   // Show summary
   if (!options.quiet && stderrTTY) {
-    const parts = [
-      `${result.usage.characterCount} characters`,
-      `format: ${result.format}`,
-    ];
+    const parts = [`${result.usage.characterCount} characters`, `format: ${result.format}`];
     if (result.cost !== undefined) {
       parts.push(`cost: ${formatCost(result.cost)}`);
     }
@@ -107,11 +104,7 @@ export function registerSpeechCommand(
     .command(COMMANDS.speech)
     .description("Generate speech audio from text.")
     .argument("[text]", "Text to convert to speech. If omitted, stdin is used when available.")
-    .option(
-      OPTION_FLAGS.model,
-      OPTION_DESCRIPTIONS.model,
-      config?.model ?? DEFAULT_SPEECH_MODEL,
-    )
+    .option(OPTION_FLAGS.model, OPTION_DESCRIPTIONS.model, config?.model ?? DEFAULT_SPEECH_MODEL)
     .option(OPTION_FLAGS.voice, OPTION_DESCRIPTIONS.voice, config?.voice ?? DEFAULT_VOICE)
     .option(OPTION_FLAGS.speechFormat, OPTION_DESCRIPTIONS.speechFormat, config?.format)
     .option(OPTION_FLAGS.speechSpeed, OPTION_DESCRIPTIONS.speechSpeed, config?.speed?.toString())

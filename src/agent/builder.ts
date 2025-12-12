@@ -20,11 +20,7 @@ import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type { ContentPart, ImageMimeType } from "../core/input-content.js";
-import {
-  detectImageMimeType,
-  text,
-  toBase64,
-} from "../core/input-content.js";
+import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptConfig } from "../core/prompt-config.js";
@@ -35,11 +31,7 @@ import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
-import type {
-  AgentHooks,
-  BeforeLLMCallAction,
-  LLMCallControllerContext,
-} from "./hooks.js";
+import type { AgentHooks, BeforeLLMCallAction, LLMCallControllerContext } from "./hooks.js";
 
 /**
  * Message for conversation history.

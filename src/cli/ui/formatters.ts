@@ -14,9 +14,10 @@
  */
 
 import chalk from "chalk";
-import { marked, type MarkedExtension } from "marked";
+import { type MarkedExtension, marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import type { TokenUsage } from "../../core/options.js";
+import type { StoredMedia } from "../../gadgets/types.js";
 
 /**
  * Lazy-initialized flag for marked-terminal configuration.
@@ -425,6 +426,9 @@ export interface GadgetResult {
 
   /** Token count for output (calculated via provider API) */
   tokenCount?: number;
+
+  /** Media outputs (images, audio, etc.) produced by the gadget */
+  media?: StoredMedia[];
 }
 
 /**
@@ -515,6 +519,45 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Get icon for media kind.
+ *
+ * @param kind - Media kind (image, audio, video, file)
+ * @returns Emoji icon for the media kind
+ */
+function getMediaIcon(kind: string): string {
+  switch (kind) {
+    case "image":
+      return "📷";
+    case "audio":
+      return "🔊";
+    case "video":
+      return "🎬";
+    case "file":
+      return "📄";
+    default:
+      return "📎";
+  }
+}
+
+/**
+ * Formats a single media output for CLI display.
+ *
+ * Format: `[📷 media_a1b2c3 image/png 256KB] → /path/to/file.png`
+ *
+ * @param media - Stored media information
+ * @returns Formatted media line with icon, ID, MIME type, size, and path
+ */
+function formatMediaLine(media: StoredMedia): string {
+  const icon = getMediaIcon(media.kind);
+  const id = chalk.cyan(media.id);
+  const mimeType = chalk.dim(media.mimeType);
+  const size = chalk.yellow(formatBytes(media.sizeBytes));
+  const path = chalk.dim(media.path);
+
+  return `${chalk.dim("[")}${icon} ${id} ${mimeType} ${size}${chalk.dim("]")} ${chalk.dim("→")} ${path}`;
+}
+
 export function formatGadgetSummary(result: GadgetResult): string {
   // Format gadget name and execution time
   const gadgetLabel = chalk.magenta.bold(result.gadgetName);
@@ -543,7 +586,13 @@ export function formatGadgetSummary(result: GadgetResult): string {
 
   // Build the summary line
   const icon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
-  const summaryLine = `${icon} ${gadgetLabel}${paramsLabel} ${chalk.dim("→")} ${outputLabel} ${timeLabel}`;
+  let summaryLine = `${icon} ${gadgetLabel}${paramsLabel} ${chalk.dim("→")} ${outputLabel} ${timeLabel}`;
+
+  // Add media lines if present (images, audio, etc.)
+  if (result.media && result.media.length > 0) {
+    const mediaLines = result.media.map(formatMediaLine);
+    summaryLine += "\n" + mediaLines.join("\n");
+  }
 
   // TellUser gadget: display full message content below the summary (with markdown and separators)
   if (result.gadgetName === "TellUser" && result.parameters?.message) {

@@ -132,9 +132,7 @@ export function createConversationWithGadgets(
  * ```
  */
 export function estimateTokens(messages: LLMMessage[]): number {
-  return Math.ceil(
-    messages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0) / 4,
-  );
+  return Math.ceil(messages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0) / 4);
 }
 
 /**

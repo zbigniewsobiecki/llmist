@@ -6,9 +6,13 @@ import { BreakLoopException } from "../gadgets/exceptions.js";
 import { resetGlobalInvocationCounter } from "../gadgets/parser.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { createMockGadget, mockGadget } from "../testing/mock-gadget.js";
-import { createEmptyStream, createTestStream, createTextStream } from "../testing/stream-helpers.js";
-import { StreamProcessor } from "./stream-processor.js";
+import {
+  createEmptyStream,
+  createTestStream,
+  createTextStream,
+} from "../testing/stream-helpers.js";
 import type { AgentHooks } from "./hooks.js";
+import { StreamProcessor } from "./stream-processor.js";
 
 // Helper to create a gadget call string
 // Supports optional invocation ID and dependencies via the new syntax:
@@ -95,7 +99,9 @@ describe("StreamProcessor", () => {
       // Should have gadget_call and gadget_result with error
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toBeDefined();
+      expect(
+        gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error,
+      ).toBeDefined();
     });
 
     it("creates with stopOnGadgetError=false", async () => {
@@ -111,7 +117,8 @@ describe("StreamProcessor", () => {
       });
 
       // Two gadget calls in sequence
-      const gadgetCalls = createGadgetCallString("ErrorGadget") + "\n" + createGadgetCallString("OkGadget");
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget") + "\n" + createGadgetCallString("OkGadget");
       const stream = createTextStream(gadgetCalls);
 
       const result = await processor.process(stream);
@@ -135,7 +142,8 @@ describe("StreamProcessor", () => {
         shouldContinueAfterError: shouldContinue,
       });
 
-      const gadgetCalls = createGadgetCallString("RecoverableError") + "\n" + createGadgetCallString("AfterError");
+      const gadgetCalls =
+        createGadgetCallString("RecoverableError") + "\n" + createGadgetCallString("AfterError");
       const stream = createTextStream(gadgetCalls);
 
       const result = await processor.process(stream);
@@ -371,7 +379,9 @@ describe("StreamProcessor", () => {
 
       const gadgetCalls = result.outputs.filter((e) => e.type === "gadget_call");
       expect(gadgetCalls).toHaveLength(1);
-      expect(gadgetCalls[0].type === "gadget_call" && gadgetCalls[0].call.gadgetName).toBe("TestGadget");
+      expect(gadgetCalls[0].type === "gadget_call" && gadgetCalls[0].call.gadgetName).toBe(
+        "TestGadget",
+      );
     });
 
     it("emits gadget_result event after execution", async () => {
@@ -385,7 +395,9 @@ describe("StreamProcessor", () => {
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("test result");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "test result",
+      );
     });
 
     it("sets didExecuteGadgets=true when gadget executed", async () => {
@@ -408,7 +420,9 @@ describe("StreamProcessor", () => {
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toContain("not found");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toContain(
+        "not found",
+      );
     });
   });
 
@@ -439,7 +453,9 @@ describe("StreamProcessor", () => {
 
       expect(interceptGadgetParameters).toHaveBeenCalled();
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("Echo: intercepted");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "Echo: intercepted",
+      );
     });
 
     it("provides correct context", async () => {
@@ -488,7 +504,9 @@ describe("StreamProcessor", () => {
       expect(beforeGadgetExecution).toHaveBeenCalled();
       expect(testGadget.getCallCount()).toBe(1);
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("executed");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "executed",
+      );
     });
 
     it("skips execution when action='skip'", async () => {
@@ -511,7 +529,9 @@ describe("StreamProcessor", () => {
 
       expect(testGadget.getCallCount()).toBe(0);
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("skipped by controller");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "skipped by controller",
+      );
     });
 
     it("sets executionTimeMs=0 for skipped gadgets", async () => {
@@ -533,7 +553,9 @@ describe("StreamProcessor", () => {
       const result = await processor.process(stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.executionTimeMs).toBe(0);
+      expect(
+        gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.executionTimeMs,
+      ).toBe(0);
     });
 
     it("uses provided syntheticResult when skipping", async () => {
@@ -555,7 +577,9 @@ describe("StreamProcessor", () => {
       const result = await processor.process(stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("Custom skip message");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "Custom skip message",
+      );
     });
   });
 
@@ -652,7 +676,9 @@ describe("StreamProcessor", () => {
       const result = await processor.process(stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("[modified] original");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "[modified] original",
+      );
     });
 
     it("provides execution time in context", async () => {
@@ -674,7 +700,9 @@ describe("StreamProcessor", () => {
 
       await processor.process(stream);
 
-      expect((capturedContext as { executionTimeMs: number }).executionTimeMs).toBeGreaterThanOrEqual(10);
+      expect(
+        (capturedContext as { executionTimeMs: number }).executionTimeMs,
+      ).toBeGreaterThanOrEqual(10);
     });
   });
 
@@ -696,7 +724,9 @@ describe("StreamProcessor", () => {
 
       expect(afterGadgetExecution).toHaveBeenCalled();
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("original");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "original",
+      );
     });
 
     it("recovers from error when action='recover'", async () => {
@@ -720,8 +750,12 @@ describe("StreamProcessor", () => {
       const result = await processor.process(stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toBeUndefined();
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("recovered successfully");
+      expect(
+        gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error,
+      ).toBeUndefined();
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "recovered successfully",
+      );
     });
 
     it("clears error when recovering", async () => {
@@ -743,7 +777,9 @@ describe("StreamProcessor", () => {
       const result = await processor.process(stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toBeUndefined();
+      expect(
+        gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error,
+      ).toBeUndefined();
     });
   });
 
@@ -851,7 +887,8 @@ describe("StreamProcessor", () => {
         stopOnGadgetError: true,
       });
 
-      const gadgetCalls = createGadgetCallString("ErrorGadget") + "\n" + createGadgetCallString("AfterGadget");
+      const gadgetCalls =
+        createGadgetCallString("ErrorGadget") + "\n" + createGadgetCallString("AfterGadget");
       const stream = createTextStream(gadgetCalls);
 
       const result = await processor.process(stream);
@@ -956,7 +993,9 @@ describe("StreamProcessor", () => {
       const result = await processor.process(stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toContain("Invalid parameters");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toContain(
+        "Invalid parameters",
+      );
     });
   });
 
@@ -973,7 +1012,8 @@ describe("StreamProcessor", () => {
         stopOnGadgetError: false,
       });
 
-      const gadgetCalls = createGadgetCallString("Gadget1") + "\n" + createGadgetCallString("Gadget2");
+      const gadgetCalls =
+        createGadgetCallString("Gadget1") + "\n" + createGadgetCallString("Gadget2");
       const stream = createTextStream(gadgetCalls);
 
       const result = await processor.process(stream);
@@ -1027,7 +1067,9 @@ test value
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe("custom prefix result");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "custom prefix result",
+      );
     });
   });
 
@@ -1037,14 +1079,20 @@ test value
       registry.registerByClass(testGadget);
 
       const processor = new StreamProcessor({ iteration: 1, registry });
-      const gadgetCall = createGadgetCallString("TestGadget", { name: "test" }, { invocationId: "g1" });
+      const gadgetCall = createGadgetCallString(
+        "TestGadget",
+        { name: "test" },
+        { invocationId: "g1" },
+      );
       const stream = createTextStream(gadgetCall);
 
       const result = await processor.process(stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
-      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.invocationId).toBe("g1");
+      expect(
+        gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.invocationId,
+      ).toBe("g1");
     });
 
     it("executes dependent gadget after dependency completes", async () => {
@@ -1124,7 +1172,10 @@ test value
 
     it("skips gadget when dependency fails", async () => {
       const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Dependency failed" });
-      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      const dependentGadget = createMockGadget({
+        name: "DependentGadget",
+        result: "should_not_run",
+      });
       registry.registerByClass(errorGadget);
       registry.registerByClass(dependentGadget);
 
@@ -1137,7 +1188,11 @@ test value
       const gadgetCalls =
         createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
         "\n" +
-        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+        createGadgetCallString(
+          "DependentGadget",
+          {},
+          { invocationId: "dep1", dependencies: ["err1"] },
+        );
 
       const stream = createTextStream(gadgetCalls);
       const result = await processor.process(stream);
@@ -1279,10 +1334,14 @@ test value
       const processor = new StreamProcessor({ iteration: 1, registry });
 
       // Reference a non-existent dependency
-      const gadgetCall = createGadgetCallString("TestGadget", {}, {
-        invocationId: "t1",
-        dependencies: ["nonexistent"],
-      });
+      const gadgetCall = createGadgetCallString(
+        "TestGadget",
+        {},
+        {
+          invocationId: "t1",
+          dependencies: ["nonexistent"],
+        },
+      );
 
       const stream = createTextStream(gadgetCall);
       const result = await processor.process(stream);
@@ -1297,7 +1356,10 @@ test value
 
     it("calls onDependencySkipped controller", async () => {
       const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
-      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      const dependentGadget = createMockGadget({
+        name: "DependentGadget",
+        result: "should_not_run",
+      });
       registry.registerByClass(errorGadget);
       registry.registerByClass(dependentGadget);
 
@@ -1315,7 +1377,11 @@ test value
       const gadgetCalls =
         createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
         "\n" +
-        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+        createGadgetCallString(
+          "DependentGadget",
+          {},
+          { invocationId: "dep1", dependencies: ["err1"] },
+        );
 
       const stream = createTextStream(gadgetCalls);
       await processor.process(stream);
@@ -1330,7 +1396,10 @@ test value
 
     it("controller can override skip with execute_anyway", async () => {
       const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
-      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "executed_anyway" });
+      const dependentGadget = createMockGadget({
+        name: "DependentGadget",
+        result: "executed_anyway",
+      });
       registry.registerByClass(errorGadget);
       registry.registerByClass(dependentGadget);
 
@@ -1348,7 +1417,11 @@ test value
       const gadgetCalls =
         createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
         "\n" +
-        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+        createGadgetCallString(
+          "DependentGadget",
+          {},
+          { invocationId: "dep1", dependencies: ["err1"] },
+        );
 
       const stream = createTextStream(gadgetCalls);
       const result = await processor.process(stream);
@@ -1360,12 +1433,17 @@ test value
       const dependentResult = gadgetResults.find(
         (e) => e.type === "gadget_result" && e.result.invocationId === "dep1",
       );
-      expect(dependentResult?.type === "gadget_result" && dependentResult.result.result).toBe("executed_anyway");
+      expect(dependentResult?.type === "gadget_result" && dependentResult.result.result).toBe(
+        "executed_anyway",
+      );
     });
 
     it("controller can provide fallback result", async () => {
       const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
-      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      const dependentGadget = createMockGadget({
+        name: "DependentGadget",
+        result: "should_not_run",
+      });
       registry.registerByClass(errorGadget);
       registry.registerByClass(dependentGadget);
 
@@ -1386,7 +1464,11 @@ test value
       const gadgetCalls =
         createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
         "\n" +
-        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+        createGadgetCallString(
+          "DependentGadget",
+          {},
+          { invocationId: "dep1", dependencies: ["err1"] },
+        );
 
       const stream = createTextStream(gadgetCalls);
       const result = await processor.process(stream);
@@ -1398,12 +1480,17 @@ test value
       const dependentResult = gadgetResults.find(
         (e) => e.type === "gadget_result" && e.result.invocationId === "dep1",
       );
-      expect(dependentResult?.type === "gadget_result" && dependentResult.result.result).toBe("fallback_value");
+      expect(dependentResult?.type === "gadget_result" && dependentResult.result.result).toBe(
+        "fallback_value",
+      );
     });
 
     it("calls onGadgetSkipped observer", async () => {
       const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
-      const dependentGadget = createMockGadget({ name: "DependentGadget", result: "should_not_run" });
+      const dependentGadget = createMockGadget({
+        name: "DependentGadget",
+        result: "should_not_run",
+      });
       registry.registerByClass(errorGadget);
       registry.registerByClass(dependentGadget);
 
@@ -1421,7 +1508,11 @@ test value
       const gadgetCalls =
         createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
         "\n" +
-        createGadgetCallString("DependentGadget", {}, { invocationId: "dep1", dependencies: ["err1"] });
+        createGadgetCallString(
+          "DependentGadget",
+          {},
+          { invocationId: "dep1", dependencies: ["err1"] },
+        );
 
       const stream = createTextStream(gadgetCalls);
       await processor.process(stream);

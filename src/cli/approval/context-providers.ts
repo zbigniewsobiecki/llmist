@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createPatch } from "diff";
-import type { ApprovalContext, ApprovalContextProvider } from "./types.js";
 import { formatNewFileDiff } from "./diff-renderer.js";
+import type { ApprovalContext, ApprovalContextProvider } from "./types.js";
 
 /**
  * Formats a universal gadget summary: GadgetName(param1=value1, param2=value2)

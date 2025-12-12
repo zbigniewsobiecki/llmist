@@ -401,7 +401,7 @@ true`;
             z.object({
               id: z.string(),
               age: z.number(),
-            })
+            }),
           ),
         });
         const content = `!!!ARG:users/0/id
@@ -516,10 +516,12 @@ done`;
           userId: z.string(),
           limit: z.number().optional(),
           includeDeleted: z.boolean().default(false),
-          filters: z.object({
-            minScore: z.number(),
-            tags: z.array(z.string()),
-          }).optional(),
+          filters: z
+            .object({
+              minScore: z.number(),
+              tags: z.array(z.string()),
+            })
+            .optional(),
         });
         const content = `!!!ARG:userId
 user_123

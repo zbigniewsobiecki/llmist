@@ -86,9 +86,7 @@ describe("SchemaIntrospector", () => {
         }),
       });
       const introspector = new SchemaIntrospector(schema);
-      expect(introspector.getTypeAtPath("data/metadata/info/name")).toBe(
-        "string"
-      );
+      expect(introspector.getTypeAtPath("data/metadata/info/name")).toBe("string");
     });
 
     it("returns 'unknown' for non-existent nested path", () => {
@@ -139,7 +137,7 @@ describe("SchemaIntrospector", () => {
           z.object({
             name: z.string(),
             age: z.number(),
-          })
+          }),
         ),
       });
       const introspector = new SchemaIntrospector(schema);
@@ -359,7 +357,7 @@ describe("SchemaIntrospector", () => {
         z.object({
           name: z.string(),
           subcategories: z.array(categorySchema),
-        })
+        }),
       );
       const schema = z.object({ category: categorySchema });
       const introspector = new SchemaIntrospector(schema);
@@ -455,7 +453,7 @@ describe("SchemaIntrospector", () => {
                   loginCount: z.number().default(0),
                 })
                 .optional(),
-            })
+            }),
           ),
           pagination: z.object({
             page: z.number(),
@@ -471,12 +469,8 @@ describe("SchemaIntrospector", () => {
       expect(introspector.getTypeAtPath("data/users/0/age")).toBe("number");
       expect(introspector.getTypeAtPath("data/users/0/active")).toBe("boolean");
       expect(introspector.getTypeAtPath("data/users/0/role")).toBe("string");
-      expect(introspector.getTypeAtPath("data/users/0/metadata/lastLogin")).toBe(
-        "string"
-      );
-      expect(
-        introspector.getTypeAtPath("data/users/0/metadata/loginCount")
-      ).toBe("number");
+      expect(introspector.getTypeAtPath("data/users/0/metadata/lastLogin")).toBe("string");
+      expect(introspector.getTypeAtPath("data/users/0/metadata/loginCount")).toBe("number");
       expect(introspector.getTypeAtPath("data/pagination/page")).toBe("number");
       expect(introspector.getTypeAtPath("error")).toBe("string");
     });
@@ -487,7 +481,7 @@ describe("SchemaIntrospector", () => {
         items: z.array(
           z.object({
             itemId: z.union([z.string(), z.number()]),
-          })
+          }),
         ),
       });
       const introspector = new SchemaIntrospector(schema);

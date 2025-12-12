@@ -57,7 +57,8 @@ describe("prompt-config", () => {
 
     it("should handle complex string interpolation", () => {
       const template = (ctx: PromptContext) =>
-        `Gadgets: ${ctx.gadgetNames.join(", ")}, ` + `Markers: ${ctx.startPrefix} to ${ctx.endPrefix}`;
+        `Gadgets: ${ctx.gadgetNames.join(", ")}, ` +
+        `Markers: ${ctx.startPrefix} to ${ctx.endPrefix}`;
       const result = resolvePromptTemplate(template, "default", mockContext);
       expect(result).toBe(
         "Gadgets: Calculator, Weather, Search, Markers: !!!GADGET_START: to !!!GADGET_END",

@@ -4,6 +4,7 @@
  */
 
 import type { LLMMessage, MessageContent } from "../core/messages.js";
+import type { GadgetMediaOutput } from "../gadgets/types.js";
 
 /**
  * Manages the conversation history and message building.
@@ -23,8 +24,15 @@ export interface IConversationManager {
 
   /**
    * Adds a gadget call and its result to the conversation.
+   * Optionally includes media outputs (images, audio, etc.) for multimodal results.
    */
-  addGadgetCall(gadgetName: string, parameters: Record<string, unknown>, result: string): void;
+  addGadgetCall(
+    gadgetName: string,
+    parameters: Record<string, unknown>,
+    result: string,
+    media?: GadgetMediaOutput[],
+    mediaIds?: string[],
+  ): void;
 
   /**
    * Gets the complete conversation history including base messages (system prompts, gadget instructions).

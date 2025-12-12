@@ -12,14 +12,7 @@
 import type { AudioFormat, SpeechModelSpec } from "../core/media-types.js";
 
 /** OpenAI TTS voices for standard models (tts-1, tts-1-hd) */
-export const OPENAI_TTS_VOICES = [
-  "alloy",
-  "echo",
-  "fable",
-  "onyx",
-  "nova",
-  "shimmer",
-] as const;
+export const OPENAI_TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
 
 /** Additional voices available in gpt-4o-mini-tts */
 export const OPENAI_TTS_EXTENDED_VOICES = [

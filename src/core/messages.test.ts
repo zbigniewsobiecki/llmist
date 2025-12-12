@@ -3,8 +3,8 @@ import { z } from "zod";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import { MathGadget, TestGadget } from "../testing/helpers.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
-import { text, imageFromBase64, imageFromUrl, audioFromBase64 } from "./input-content.js";
-import { isLLMMessage, LLMMessageBuilder, extractText, normalizeContent } from "./messages.js";
+import { audioFromBase64, imageFromBase64, imageFromUrl, text } from "./input-content.js";
+import { extractText, isLLMMessage, LLMMessageBuilder, normalizeContent } from "./messages.js";
 import type { PromptConfig } from "./prompt-config.js";
 
 /** Test gadget with examples for testing argPrefix propagation */
@@ -453,10 +453,7 @@ describe("Multimodal Content Support", () => {
   describe("addUser with multimodal content", () => {
     it("accepts ContentPart array", () => {
       const builder = new LLMMessageBuilder();
-      builder.addUser([
-        text("What's in this image?"),
-        imageFromBase64("SGVsbG8=", "image/jpeg"),
-      ]);
+      builder.addUser([text("What's in this image?"), imageFromBase64("SGVsbG8=", "image/jpeg")]);
 
       const messages = builder.build();
 
@@ -601,19 +598,12 @@ describe("extractText", () => {
   });
 
   it("extracts text from ContentPart array", () => {
-    const content = [
-      text("First "),
-      imageFromBase64("abc", "image/png"),
-      text("Second"),
-    ];
+    const content = [text("First "), imageFromBase64("abc", "image/png"), text("Second")];
     expect(extractText(content)).toBe("First Second");
   });
 
   it("handles array with no text parts", () => {
-    const content = [
-      imageFromBase64("abc", "image/png"),
-      audioFromBase64("xyz", "audio/mp3"),
-    ];
+    const content = [imageFromBase64("abc", "image/png"), audioFromBase64("xyz", "audio/mp3")];
     expect(extractText(content)).toBe("");
   });
 
@@ -653,27 +643,35 @@ describe("normalizeContent", () => {
 
 describe("isLLMMessage with multimodal content", () => {
   it("returns true for messages with array content", () => {
-    expect(isLLMMessage({
-      role: "user",
-      content: [{ type: "text", text: "Hello" }],
-    })).toBe(true);
+    expect(
+      isLLMMessage({
+        role: "user",
+        content: [{ type: "text", text: "Hello" }],
+      }),
+    ).toBe(true);
   });
 
   it("returns true for messages with string content", () => {
-    expect(isLLMMessage({
-      role: "user",
-      content: "Hello",
-    })).toBe(true);
+    expect(
+      isLLMMessage({
+        role: "user",
+        content: "Hello",
+      }),
+    ).toBe(true);
   });
 
   it("returns false for invalid content types", () => {
-    expect(isLLMMessage({
-      role: "user",
-      content: 123,
-    })).toBe(false);
-    expect(isLLMMessage({
-      role: "user",
-      content: { invalid: true },
-    })).toBe(false);
+    expect(
+      isLLMMessage({
+        role: "user",
+        content: 123,
+      }),
+    ).toBe(false);
+    expect(
+      isLLMMessage({
+        role: "user",
+        content: { invalid: true },
+      }),
+    ).toBe(false);
   });
 });

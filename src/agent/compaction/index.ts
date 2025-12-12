@@ -39,24 +39,26 @@ export {
   type CompactionConfig,
   type CompactionEvent,
   type CompactionStats,
-  type ResolvedCompactionConfig,
   DEFAULT_COMPACTION_CONFIG,
   DEFAULT_SUMMARIZATION_PROMPT,
+  type ResolvedCompactionConfig,
   resolveCompactionConfig,
 } from "./config.js";
+// Manager
+export { CompactionManager } from "./manager.js";
 
+// Strategy implementations
+export {
+  HybridStrategy,
+  SlidingWindowStrategy,
+  SummarizationStrategy,
+} from "./strategies/index.js";
 // Strategy interface and utilities
 export {
   type CompactionContext,
   type CompactionResult,
   type CompactionStrategy,
-  type MessageTurn,
-  groupIntoTurns,
   flattenTurns,
+  groupIntoTurns,
+  type MessageTurn,
 } from "./strategy.js";
-
-// Strategy implementations
-export { HybridStrategy, SlidingWindowStrategy, SummarizationStrategy } from "./strategies/index.js";
-
-// Manager
-export { CompactionManager } from "./manager.js";

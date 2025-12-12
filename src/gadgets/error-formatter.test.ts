@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { z, ZodError } from "zod";
+import { type ZodError, z } from "zod";
 import { GadgetErrorFormatter } from "./error-formatter.js";
 import { Gadget } from "./typed-gadget.js";
 
@@ -7,7 +7,9 @@ import { Gadget } from "./typed-gadget.js";
 class CalculatorGadget extends Gadget({
   description: "Performs basic arithmetic operations",
   schema: z.object({
-    operation: z.enum(["add", "subtract", "multiply", "divide"]).describe("The operation to perform"),
+    operation: z
+      .enum(["add", "subtract", "multiply", "divide"])
+      .describe("The operation to perform"),
     a: z.number().describe("First operand"),
     b: z.number().describe("Second operand"),
   }),
@@ -64,7 +66,11 @@ describe("GadgetErrorFormatter", () => {
       const result = schema.safeParse({ operation: "modulo", a: 5, b: 3 });
       expect(result.success).toBe(false);
 
-      const formatted = formatter.formatValidationError("Calculator", (result as { error: ZodError }).error, gadget);
+      const formatted = formatter.formatValidationError(
+        "Calculator",
+        (result as { error: ZodError }).error,
+        gadget,
+      );
 
       // Check error header
       expect(formatted).toContain("Error: Invalid parameters for 'Calculator':");
@@ -90,7 +96,11 @@ describe("GadgetErrorFormatter", () => {
       const result = schema.safeParse({ operation: "bad", a: "not-a-number", b: "also-bad" });
       expect(result.success).toBe(false);
 
-      const formatted = formatter.formatValidationError("Calculator", (result as { error: ZodError }).error, gadget);
+      const formatted = formatter.formatValidationError(
+        "Calculator",
+        (result as { error: ZodError }).error,
+        gadget,
+      );
 
       // Should list all issues
       expect(formatted).toContain("operation:");
@@ -110,7 +120,11 @@ describe("GadgetErrorFormatter", () => {
       const result = schema.safeParse({ config: { host: 123, port: "bad" } });
       expect(result.success).toBe(false);
 
-      const formatted = formatter.formatValidationError("SimpleGadget", (result as { error: ZodError }).error, gadget);
+      const formatted = formatter.formatValidationError(
+        "SimpleGadget",
+        (result as { error: ZodError }).error,
+        gadget,
+      );
 
       // Should show nested paths
       expect(formatted).toContain("config.host:");

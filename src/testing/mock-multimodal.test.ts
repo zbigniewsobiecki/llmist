@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { imageFromBase64, text } from "../core/input-content.js";
-import { getMockManager, mockLLM, createMockClient } from "./index.js";
+import { createMockClient, getMockManager, mockLLM } from "./index.js";
 
 describe("Multimodal Mock Matchers", () => {
   beforeEach(() => {
@@ -22,10 +22,7 @@ describe("Multimodal Mock Matchers", () => {
 
   describe("whenMessageHasImage", () => {
     it("matches when message contains an image", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("I see an image of a sunset.")
-        .register();
+      mockLLM().whenMessageHasImage().returns("I see an image of a sunset.").register();
 
       const client = createMockClient();
 
@@ -51,15 +48,9 @@ describe("Multimodal Mock Matchers", () => {
     });
 
     it("does not match when message has no image", async () => {
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("I see an image")
-        .register();
+      mockLLM().whenMessageHasImage().returns("I see an image").register();
 
-      mockLLM()
-        .forProvider("openai")
-        .returns("No image found")
-        .register();
+      mockLLM().forProvider("openai").returns("No image found").register();
 
       const client = createMockClient();
 
@@ -82,10 +73,7 @@ describe("Multimodal Mock Matchers", () => {
       // Import here to avoid circular dependency issues
       const { audioFromBase64 } = await import("../core/input-content.js");
 
-      mockLLM()
-        .whenMessageHasAudio()
-        .returns("I hear music playing.")
-        .register();
+      mockLLM().whenMessageHasAudio().returns("I hear music playing.").register();
 
       const client = createMockClient();
 
@@ -94,10 +82,7 @@ describe("Multimodal Mock Matchers", () => {
         messages: [
           {
             role: "user",
-            content: [
-              text("What do you hear?"),
-              audioFromBase64("YXVkaW9fZGF0YQ==", "audio/mp3"),
-            ],
+            content: [text("What do you hear?"), audioFromBase64("YXVkaW9fZGF0YQ==", "audio/mp3")],
           },
         ],
       });
@@ -118,10 +103,7 @@ describe("Multimodal Mock Matchers", () => {
         .returns("I see multiple images")
         .register();
 
-      mockLLM()
-        .whenMessageHasImage()
-        .returns("I see one image")
-        .register();
+      mockLLM().whenMessageHasImage().returns("I see one image").register();
 
       const client = createMockClient();
 
@@ -131,10 +113,7 @@ describe("Multimodal Mock Matchers", () => {
         messages: [
           {
             role: "user",
-            content: [
-              text("Compare these"),
-              imageFromBase64("aW1hZ2Ux", "image/png"),
-            ],
+            content: [text("Compare these"), imageFromBase64("aW1hZ2Ux", "image/png")],
           },
         ],
       });
@@ -180,9 +159,7 @@ describe("Multimodal Response Helpers", () => {
 
   describe("returnsImage", () => {
     it("creates response with image data from base64 string", () => {
-      const builder = mockLLM()
-        .forModel("dall-e-3")
-        .returnsImage("iVBORw0KGgoAAAANS", "image/png");
+      const builder = mockLLM().forModel("dall-e-3").returnsImage("iVBORw0KGgoAAAANS", "image/png");
 
       // Access internal state through the build() result
       const registration = builder.build();
@@ -194,9 +171,7 @@ describe("Multimodal Response Helpers", () => {
       // PNG magic bytes
       const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-      const builder = mockLLM()
-        .forModel("dall-e-3")
-        .returnsImage(pngBuffer);
+      const builder = mockLLM().forModel("dall-e-3").returnsImage(pngBuffer);
 
       const registration = builder.build();
       expect(registration.response.images).toHaveLength(1);
@@ -205,10 +180,7 @@ describe("Multimodal Response Helpers", () => {
 
     it("throws when base64 string provided without MIME type", () => {
       expect(() => {
-        mockLLM()
-          .forModel("dall-e-3")
-          .returnsImage("some-base64-data")
-          .build();
+        mockLLM().forModel("dall-e-3").returnsImage("some-base64-data").build();
       }).toThrow("MIME type is required");
     });
   });
@@ -236,9 +208,7 @@ describe("Multimodal Response Helpers", () => {
       // MP3 ID3 header
       const mp3Buffer = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00]);
 
-      const builder = mockLLM()
-        .forModel("tts-1")
-        .returnsAudio(mp3Buffer);
+      const builder = mockLLM().forModel("tts-1").returnsAudio(mp3Buffer);
 
       const registration = builder.build();
       expect(registration.response.audio).toBeDefined();
@@ -246,9 +216,7 @@ describe("Multimodal Response Helpers", () => {
     });
 
     it("creates response with audio data from base64 string", () => {
-      const builder = mockLLM()
-        .forModel("tts-1")
-        .returnsAudio("YXVkaW9fZGF0YQ==", "audio/wav");
+      const builder = mockLLM().forModel("tts-1").returnsAudio("YXVkaW9fZGF0YQ==", "audio/wav");
 
       const registration = builder.build();
       expect(registration.response.audio?.mimeType).toBe("audio/wav");
@@ -270,10 +238,7 @@ describe("Mock Adapter Multimodal Generation", () => {
       // PNG magic bytes
       const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-      mockLLM()
-        .forModel("dall-e-3")
-        .returnsImage(pngBuffer)
-        .register();
+      mockLLM().forModel("dall-e-3").returnsImage(pngBuffer).register();
 
       const client = createMockClient();
 
@@ -305,10 +270,7 @@ describe("Mock Adapter Multimodal Generation", () => {
       // MP3 ID3 header
       const mp3Buffer = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00]);
 
-      mockLLM()
-        .forModel("tts-1")
-        .returnsAudio(mp3Buffer)
-        .register();
+      mockLLM().forModel("tts-1").returnsAudio(mp3Buffer).register();
 
       const client = createMockClient();
 
