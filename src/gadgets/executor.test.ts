@@ -7,7 +7,7 @@ import {
   MathGadget,
   TestGadget,
 } from "../testing/helpers.js";
-import { AbortError, BreakLoopException } from "./exceptions.js";
+import { AbortException, TaskCompletionSignal } from "./exceptions.js";
 import { GadgetExecutor } from "./executor.js";
 import { GadgetRegistry } from "./registry.js";
 import { Gadget } from "./typed-gadget.js";
@@ -468,8 +468,8 @@ describe("GadgetExecutor", () => {
     });
   });
 
-  describe("BreakLoopException handling", () => {
-    it("sets breaksLoop flag when gadget throws BreakLoopException", async () => {
+  describe("TaskCompletionSignal handling", () => {
+    it("sets breaksLoop flag when gadget throws TaskCompletionSignal", async () => {
       class FinishGadget extends Gadget({
         name: "FinishGadget",
         description: "Signals task completion",
@@ -479,7 +479,7 @@ describe("GadgetExecutor", () => {
       }) {
         execute(params: this["params"]): string {
           const message = params.message || "Task completed";
-          throw new BreakLoopException(message);
+          throw new TaskCompletionSignal(message);
         }
       }
 
@@ -505,14 +505,14 @@ describe("GadgetExecutor", () => {
       expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
     });
 
-    it("uses default message when BreakLoopException has no message", async () => {
+    it("uses default message when TaskCompletionSignal has no message", async () => {
       class QuietFinishGadget extends Gadget({
         name: "QuietFinishGadget",
         description: "Finishes silently",
         schema: z.object({}),
       }) {
         execute(): string {
-          throw new BreakLoopException();
+          throw new TaskCompletionSignal();
         }
       }
 
@@ -1016,15 +1016,15 @@ describe("GadgetExecutor", () => {
       expect(gadget.cleanupCalled).toBe(true);
     });
 
-    it("gadgets using throwIfAborted get AbortError handled gracefully", async () => {
-      // Create a gadget that throws AbortError directly
+    it("gadgets using throwIfAborted get AbortException handled gracefully", async () => {
+      // Create a gadget that throws AbortException directly
       class ManualAbortGadget extends Gadget({
         name: "ManualAbort",
-        description: "Throws AbortError manually",
+        description: "Throws AbortException manually",
         schema: z.object({}),
       }) {
         execute(): string {
-          throw new AbortError("Manually aborted");
+          throw new AbortException("Manually aborted");
         }
       }
 
@@ -1043,14 +1043,14 @@ describe("GadgetExecutor", () => {
       expect(result.result).toBeUndefined();
     });
 
-    it("AbortError with default message is handled", async () => {
+    it("AbortException with default message is handled", async () => {
       class DefaultAbortGadget extends Gadget({
         name: "DefaultAbort",
-        description: "Throws AbortError with default message",
+        description: "Throws AbortException with default message",
         schema: z.object({}),
       }) {
         execute(): string {
-          throw new AbortError();
+          throw new AbortException();
         }
       }
 

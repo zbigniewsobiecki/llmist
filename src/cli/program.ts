@@ -14,7 +14,7 @@ import {
   CLI_DESCRIPTION,
   CLI_NAME,
   LOG_LEVELS,
-  type LogLevelName,
+  type CLILogLevel,
   OPTION_DESCRIPTIONS,
   OPTION_FLAGS,
 } from "./constants.js";
@@ -30,8 +30,8 @@ import { registerVisionCommand } from "./vision-command.js";
 /**
  * Parses and validates the log level option value.
  */
-function parseLogLevel(value: string): LogLevelName {
-  const normalized = value.toLowerCase() as LogLevelName;
+function parseLogLevel(value: string): CLILogLevel {
+  const normalized = value.toLowerCase() as CLILogLevel;
   if (!LOG_LEVELS.includes(normalized)) {
     throw new InvalidArgumentError(`Log level must be one of: ${LOG_LEVELS.join(", ")}`);
   }
@@ -42,7 +42,7 @@ function parseLogLevel(value: string): LogLevelName {
  * Global CLI options that apply to all commands.
  */
 interface GlobalOptions {
-  logLevel?: LogLevelName;
+  logLevel?: CLILogLevel;
   logFile?: string;
   logReset?: boolean;
 }

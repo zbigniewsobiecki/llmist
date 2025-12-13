@@ -8,7 +8,7 @@ import {
   toBase64,
 } from "../core/input-content.js";
 import type { LLMMessage, MessageContent } from "../core/messages.js";
-import { extractText } from "../core/messages.js";
+import { extractMessageText } from "../core/messages.js";
 import { getMockManager } from "./mock-manager.js";
 import type {
   MockMatcher,
@@ -148,7 +148,7 @@ export class MockBuilder {
   whenMessageContains(text: string): this {
     this.matchers.push((ctx) =>
       ctx.messages.some((msg) =>
-        extractText(msg.content).toLowerCase().includes(text.toLowerCase()),
+        extractMessageText(msg.content).toLowerCase().includes(text.toLowerCase()),
       ),
     );
     return this;
@@ -164,7 +164,7 @@ export class MockBuilder {
     this.matchers.push((ctx) => {
       const lastMsg = ctx.messages[ctx.messages.length - 1];
       if (!lastMsg) return false;
-      return extractText(lastMsg.content).toLowerCase().includes(text.toLowerCase());
+      return extractMessageText(lastMsg.content).toLowerCase().includes(text.toLowerCase());
     });
     return this;
   }
@@ -176,7 +176,7 @@ export class MockBuilder {
    * mockLLM().whenMessageMatches(/calculate \d+/)
    */
   whenMessageMatches(regex: RegExp): this {
-    this.matchers.push((ctx) => ctx.messages.some((msg) => regex.test(extractText(msg.content))));
+    this.matchers.push((ctx) => ctx.messages.some((msg) => regex.test(extractMessageText(msg.content))));
     return this;
   }
 
@@ -190,7 +190,7 @@ export class MockBuilder {
     this.matchers.push((ctx) =>
       ctx.messages.some(
         (msg) =>
-          msg.role === role && extractText(msg.content).toLowerCase().includes(text.toLowerCase()),
+          msg.role === role && extractMessageText(msg.content).toLowerCase().includes(text.toLowerCase()),
       ),
     );
     return this;

@@ -9,7 +9,7 @@ import type {
   SpeechModelSpec,
 } from "../core/media-types.js";
 import type { LLMMessage, MessageContent } from "../core/messages.js";
-import { extractText, normalizeContent } from "../core/messages.js";
+import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
@@ -295,7 +295,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     };
   }
 
-  protected buildRequestPayload(
+  protected buildApiRequest(
     options: LLMGenerationOptions,
     descriptor: ModelDescriptor,
     _spec: ModelSpec | undefined,
@@ -373,7 +373,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
         // System messages are always text-only
         expandedMessages.push({
           role: "user",
-          content: extractText(message.content),
+          content: extractMessageText(message.content),
         });
         expandedMessages.push({
           role: "assistant",
@@ -436,7 +436,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
    * Handles text, images, and audio (Gemini supports all three).
    */
   private convertToGeminiParts(content: MessageContent): GeminiPart[] {
-    const parts = normalizeContent(content);
+    const parts = normalizeMessageContent(content);
 
     return parts.map((part) => {
       if (part.type === "text") {
@@ -492,10 +492,10 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     return Object.keys(config).length > 0 ? config : null;
   }
 
-  protected async *wrapStream(iterable: AsyncIterable<unknown>): LLMStream {
+  protected async *normalizeProviderStream(iterable: AsyncIterable<unknown>): LLMStream {
     const stream = iterable as AsyncIterable<GeminiChunk>;
     for await (const chunk of stream) {
-      const text = this.extractText(chunk);
+      const text = this.extractMessageText(chunk);
       if (text) {
         yield { text, rawEvent: chunk };
       }
@@ -509,7 +509,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     }
   }
 
-  private extractText(chunk: GeminiChunk): string {
+  private extractMessageText(chunk: GeminiChunk): string {
     if (!chunk?.candidates) {
       return "";
     }
@@ -598,7 +598,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
       let totalChars = 0;
       let mediaCount = 0;
       for (const msg of messages) {
-        const parts = normalizeContent(msg.content);
+        const parts = normalizeMessageContent(msg.content);
         for (const part of parts) {
           if (part.type === "text") {
             totalChars += part.text.length;

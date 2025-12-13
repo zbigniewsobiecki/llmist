@@ -15,10 +15,10 @@ import {
 } from "../core/constants.js";
 import type { ContentPart } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
-import { extractText, LLMMessageBuilder } from "../core/messages.js";
+import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions } from "../core/options.js";
-import type { PromptConfig } from "../core/prompt-config.js";
+import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import { MediaStore } from "../gadgets/media-store.js";
 import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
@@ -83,8 +83,8 @@ export interface AgentOptions {
   /** Clean hooks system */
   hooks?: AgentHooks;
 
-  /** Callback for human input */
-  onHumanInputRequired?: (question: string) => Promise<string>;
+  /** Callback for requesting human input during execution */
+  requestHumanInput?: (question: string) => Promise<string>;
 
   /** Custom gadget start prefix */
   gadgetStartPrefix?: string;
@@ -117,8 +117,8 @@ export interface AgentOptions {
   /** Stop on gadget error */
   stopOnGadgetError?: boolean;
 
-  /** Custom error continuation logic */
-  shouldContinueAfterError?: (context: {
+  /** Custom error recovery logic */
+  canRecoverFromGadgetError?: (context: {
     error: string;
     gadgetName: string;
     errorType: "parse" | "validation" | "execution";
@@ -129,7 +129,7 @@ export interface AgentOptions {
   defaultGadgetTimeoutMs?: number;
 
   /** Custom prompt configuration for gadget system prompts */
-  promptConfig?: PromptConfig;
+  promptConfig?: PromptTemplateConfig;
 
   /** Enable gadget output limiting (default: true) */
   gadgetOutputLimit?: boolean;
@@ -171,7 +171,7 @@ export class Agent {
   private readonly gadgetStartPrefix?: string;
   private readonly gadgetEndPrefix?: string;
   private readonly gadgetArgPrefix?: string;
-  private readonly onHumanInputRequired?: (question: string) => Promise<string>;
+  private readonly requestHumanInput?: (question: string) => Promise<string>;
   private readonly textOnlyHandler: TextOnlyHandler;
   private readonly textWithGadgetsHandler?: {
     gadgetName: string;
@@ -179,7 +179,7 @@ export class Agent {
     resultMapping?: (text: string) => string;
   };
   private readonly stopOnGadgetError: boolean;
-  private readonly shouldContinueAfterError?: (context: {
+  private readonly canRecoverFromGadgetError?: (context: {
     error: string;
     gadgetName: string;
     errorType: "parse" | "validation" | "execution";
@@ -187,7 +187,7 @@ export class Agent {
   }) => boolean | Promise<boolean>;
   private readonly defaultGadgetTimeoutMs?: number;
   private readonly defaultMaxTokens?: number;
-  private userPromptProvided: boolean;
+  private hasUserPrompt: boolean;
 
   // Gadget output limiting
   private readonly outputStore: GadgetOutputStore;
@@ -223,11 +223,11 @@ export class Agent {
     this.gadgetStartPrefix = options.gadgetStartPrefix;
     this.gadgetEndPrefix = options.gadgetEndPrefix;
     this.gadgetArgPrefix = options.gadgetArgPrefix;
-    this.onHumanInputRequired = options.onHumanInputRequired;
+    this.requestHumanInput = options.requestHumanInput;
     this.textOnlyHandler = options.textOnlyHandler ?? "terminate";
     this.textWithGadgetsHandler = options.textWithGadgetsHandler;
     this.stopOnGadgetError = options.stopOnGadgetError ?? true;
-    this.shouldContinueAfterError = options.shouldContinueAfterError;
+    this.canRecoverFromGadgetError = options.canRecoverFromGadgetError;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
@@ -253,8 +253,8 @@ export class Agent {
       );
     }
 
-    // Merge output limiter interceptor into hooks
-    this.hooks = this.mergeOutputLimiterHook(options.hooks);
+    // Chain output limiter interceptor with user hooks
+    this.hooks = this.chainOutputLimiterWithUserHooks(options.hooks);
 
     // Build conversation
     const baseBuilder = new LLMMessageBuilder(options.promptConfig);
@@ -279,7 +279,7 @@ export class Agent {
       endPrefix: options.gadgetEndPrefix,
       argPrefix: options.gadgetArgPrefix,
     });
-    this.userPromptProvided = !!options.userPrompt;
+    this.hasUserPrompt = !!options.userPrompt;
     if (options.userPrompt) {
       this.conversation.addUserMessage(options.userPrompt);
     }
@@ -408,7 +408,7 @@ export class Agent {
    * @throws {Error} If no user prompt was provided (when using build() without ask())
    */
   async *run(): AsyncGenerator<StreamEvent> {
-    if (!this.userPromptProvided) {
+    if (!this.hasUserPrompt) {
       throw new Error(
         "No user prompt provided. Use .ask(prompt) instead of .build(), or call agent.run() after providing a prompt.",
       );
@@ -555,9 +555,9 @@ export class Agent {
           gadgetArgPrefix: this.gadgetArgPrefix,
           hooks: this.hooks,
           logger: this.logger.getSubLogger({ name: "stream-processor" }),
-          onHumanInputRequired: this.onHumanInputRequired,
+          requestHumanInput: this.requestHumanInput,
           stopOnGadgetError: this.stopOnGadgetError,
-          shouldContinueAfterError: this.shouldContinueAfterError,
+          canRecoverFromGadgetError: this.canRecoverFromGadgetError,
           defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
           client: this.client,
           mediaStore: this.mediaStore,
@@ -628,10 +628,10 @@ export class Agent {
                 this.conversation.addUserMessage(msg.content);
               } else if (msg.role === "assistant") {
                 // Assistant messages are always text, extract if multimodal
-                this.conversation.addAssistantMessage(extractText(msg.content));
+                this.conversation.addAssistantMessage(extractMessageText(msg.content));
               } else if (msg.role === "system") {
                 // System messages can't be added mid-conversation, treat as user
-                this.conversation.addUserMessage(`[System] ${extractText(msg.content)}`);
+                this.conversation.addUserMessage(`[System] ${extractMessageText(msg.content)}`);
               }
             }
           }
@@ -650,7 +650,7 @@ export class Agent {
 
             if (textContent.trim()) {
               const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
-              this.conversation.addGadgetCall(
+              this.conversation.addGadgetCallResult(
                 gadgetName,
                 parameterMapping(textContent),
                 resultMapping ? resultMapping(textContent) : textContent,
@@ -662,7 +662,7 @@ export class Agent {
           for (const output of result.outputs) {
             if (output.type === "gadget_result") {
               const gadgetResult = output.result;
-              this.conversation.addGadgetCall(
+              this.conversation.addGadgetCallResult(
                 gadgetResult.gadgetName,
                 gadgetResult.parameters,
                 gadgetResult.error ?? gadgetResult.result ?? "",
@@ -676,7 +676,7 @@ export class Agent {
           // This keeps conversation history consistent (gadget-oriented) and
           // helps LLMs stay in the "gadget invocation" mindset
           if (finalMessage.trim()) {
-            this.conversation.addGadgetCall(
+            this.conversation.addGadgetCallResult(
               "TellUser",
               { message: finalMessage, done: false, type: "info" },
               `ℹ️  ${finalMessage}`,
@@ -830,10 +830,10 @@ export class Agent {
   }
 
   /**
-   * Merge the output limiter interceptor into user-provided hooks.
+   * Chain the output limiter interceptor with user-provided hooks.
    * The limiter runs first, then chains to any user interceptor.
    */
-  private mergeOutputLimiterHook(userHooks?: AgentHooks): AgentHooks {
+  private chainOutputLimiterWithUserHooks(userHooks?: AgentHooks): AgentHooks {
     if (!this.outputLimitEnabled) {
       return userHooks ?? {};
     }

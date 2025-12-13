@@ -15,7 +15,7 @@ import path from "node:path";
 import os from "node:os";
 import { pathToFileURL } from "node:url";
 
-import type { BaseGadget } from "../gadgets/gadget.js";
+import type { AbstractGadget } from "../gadgets/gadget.js";
 import { extractGadgetsFromModule } from "./gadgets.js";
 
 /**
@@ -272,7 +272,7 @@ function getPackagePath(cacheDir: string, packageName: string): string {
 export async function loadExternalGadgets(
   specifier: string,
   forceInstall = false,
-): Promise<BaseGadget[]> {
+): Promise<AbstractGadget[]> {
   const spec = parseGadgetSpecifier(specifier);
   if (!spec) {
     throw new Error(`Invalid external package specifier: ${specifier}`);

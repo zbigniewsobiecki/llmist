@@ -4,7 +4,7 @@ import { InvalidArgumentError } from "commander";
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { TokenUsage } from "../core/options.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
-import type { CLIEnvironment, TTYStream } from "./environment.js";
+import type { CLIEnvironment, TTYAwareStream } from "./environment.js";
 
 /**
  * Options for creating a numeric value parser.
@@ -91,7 +91,7 @@ export class StreamPrinter {
  * @param stream - Stream to check
  * @returns True if stream is a TTY
  */
-export function isInteractive(stream: TTYStream): boolean {
+export function isInteractive(stream: TTYAwareStream): boolean {
   return Boolean(stream.isTTY);
 }
 

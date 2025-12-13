@@ -5,7 +5,7 @@
  */
 
 import * as readline from "node:readline";
-import { BreakLoopException, Gadget, HumanInputException, LLMist } from "llmist";
+import { TaskCompletionSignal, Gadget, HumanInputRequiredException, LLMist } from "llmist";
 import { z } from "zod";
 
 // =============================================================================
@@ -19,7 +19,7 @@ class AskUser extends Gadget({
   }),
 }) {
   execute(params: this["params"]): string {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 
@@ -30,7 +30,7 @@ class Confirm extends Gadget({
   }),
 }) {
   execute(params: this["params"]): string {
-    throw new HumanInputException(`${params.action}\n\nProceed? (yes/no)`);
+    throw new HumanInputRequiredException(`${params.action}\n\nProceed? (yes/no)`);
   }
 }
 
@@ -41,7 +41,7 @@ class TaskComplete extends Gadget({
   }),
 }) {
   execute(params: this["params"]): string {
-    throw new BreakLoopException(params.summary);
+    throw new TaskCompletionSignal(params.summary);
   }
 }
 

@@ -101,11 +101,11 @@ describe("MockConversationManager", () => {
     });
   });
 
-  describe("addGadgetCall()", () => {
+  describe("addGadgetCallResult()", () => {
     it("adds gadget call and result as two messages", () => {
       const manager = new MockConversationManager();
 
-      manager.addGadgetCall("Calculator", { a: 1, b: 2 }, "3");
+      manager.addGadgetCallResult("Calculator", { a: 1, b: 2 }, "3");
 
       const messages = manager.getHistoryMessages();
       expect(messages).toHaveLength(2);
@@ -118,7 +118,7 @@ describe("MockConversationManager", () => {
     it("tracks both messages as added", () => {
       const manager = new MockConversationManager();
 
-      manager.addGadgetCall("Weather", { city: "NYC" }, "Sunny, 72°F");
+      manager.addGadgetCallResult("Weather", { city: "NYC" }, "Sunny, 72°F");
 
       expect(manager.getAddedMessages()).toHaveLength(2);
     });

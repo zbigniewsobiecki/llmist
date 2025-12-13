@@ -8,7 +8,7 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 
-import type { BaseGadget } from "../gadgets/gadget.js";
+import type { AbstractGadget } from "../gadgets/gadget.js";
 import { schemaToJSONSchema } from "../gadgets/schema-to-json.js";
 import { validateGadgetSchema } from "../gadgets/schema-validator.js";
 
@@ -21,7 +21,7 @@ import { executeAction } from "./utils.js";
  * Result of selecting a gadget from a file.
  */
 interface GadgetSelection {
-  gadget: BaseGadget;
+  gadget: AbstractGadget;
   name: string;
 }
 
@@ -283,7 +283,7 @@ async function executeGadgetInfo(
 /**
  * Builds a JSON-serializable info object for a gadget.
  */
-function buildGadgetInfo(gadget: BaseGadget, name: string): Record<string, unknown> {
+function buildGadgetInfo(gadget: AbstractGadget, name: string): Record<string, unknown> {
   const info: Record<string, unknown> = {
     name,
     description: gadget.description,

@@ -21,9 +21,9 @@ import { LLMMessageBuilder } from "./messages.js";
 import { resolveModel } from "./model-shortcuts.js";
 
 /**
- * Options for quick execution methods.
+ * Options for text generation methods (complete/stream).
  */
-export interface QuickOptions {
+export interface TextGenerationOptions {
   /** Model to use (supports aliases like "gpt4", "sonnet", "flash") */
   model?: string;
 
@@ -55,7 +55,7 @@ export interface QuickOptions {
 export async function complete(
   client: LLMist,
   prompt: string,
-  options: QuickOptions = {},
+  options: TextGenerationOptions = {},
 ): Promise<string> {
   const model = resolveModel(options.model ?? "gpt-5-nano");
 
@@ -98,7 +98,7 @@ export async function complete(
 export async function* stream(
   client: LLMist,
   prompt: string,
-  options: QuickOptions = {},
+  options: TextGenerationOptions = {},
 ): AsyncGenerator<string> {
   const model = resolveModel(options.model ?? "gpt-5-nano");
 

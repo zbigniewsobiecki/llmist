@@ -1,4 +1,4 @@
-import type { BaseGadget } from "../gadgets/gadget.js";
+import type { AbstractGadget } from "../gadgets/gadget.js";
 import type { GadgetMediaOutput } from "../gadgets/types.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
 import type {
@@ -17,10 +17,10 @@ import {
   text,
   toBase64,
 } from "./input-content.js";
-import type { PromptConfig } from "./prompt-config.js";
+import type { PromptTemplateConfig } from "./prompt-config.js";
 import { DEFAULT_PROMPTS, resolvePromptTemplate, resolveRulesTemplate } from "./prompt-config.js";
 
-export type LLMRole = "system" | "user" | "assistant";
+export type MessageRole = "system" | "user" | "assistant";
 
 /**
  * Message content can be a simple string (text only) or an array of content parts (multimodal).
@@ -29,7 +29,7 @@ export type LLMRole = "system" | "user" | "assistant";
 export type MessageContent = string | ContentPart[];
 
 export interface LLMMessage {
-  role: LLMRole;
+  role: MessageRole;
   content: MessageContent;
   name?: string;
   metadata?: Record<string, unknown>;
@@ -42,7 +42,7 @@ export interface LLMMessage {
  * @param content - Message content (string or ContentPart[])
  * @returns Array of content parts
  */
-export function normalizeContent(content: MessageContent): ContentPart[] {
+export function normalizeMessageContent(content: MessageContent): ContentPart[] {
   if (typeof content === "string") {
     return [{ type: "text", text: content }];
   }
@@ -56,7 +56,7 @@ export function normalizeContent(content: MessageContent): ContentPart[] {
  * @param content - Message content (string or ContentPart[])
  * @returns Combined text from all text parts
  */
-export function extractText(content: MessageContent): string {
+export function extractMessageText(content: MessageContent): string {
   if (typeof content === "string") {
     return content;
   }
@@ -71,9 +71,9 @@ export class LLMMessageBuilder {
   private startPrefix: string = GADGET_START_PREFIX;
   private endPrefix: string = GADGET_END_PREFIX;
   private argPrefix: string = GADGET_ARG_PREFIX;
-  private promptConfig: PromptConfig;
+  private promptConfig: PromptTemplateConfig;
 
-  constructor(promptConfig?: PromptConfig) {
+  constructor(promptConfig?: PromptTemplateConfig) {
     this.promptConfig = promptConfig ?? {};
   }
 
@@ -96,7 +96,7 @@ export class LLMMessageBuilder {
   }
 
   addGadgets(
-    gadgets: BaseGadget[],
+    gadgets: AbstractGadget[],
     options?: { startPrefix?: string; endPrefix?: string; argPrefix?: string },
   ): this {
     // Store custom prefixes for later use in addGadgetCall
@@ -135,7 +135,7 @@ export class LLMMessageBuilder {
     return this;
   }
 
-  private buildGadgetsSection(gadgets: BaseGadget[]): string {
+  private buildGadgetsSection(gadgets: AbstractGadget[]): string {
     const parts: string[] = [];
     parts.push("\n\nAVAILABLE GADGETS");
     parts.push("\n=================\n");
@@ -484,7 +484,17 @@ Produces: { "items": ["first", "second"] }`);
     return this;
   }
 
-  addGadgetCall(
+  /**
+   * Record a gadget execution result in the message history.
+   * Creates an assistant message with the gadget invocation and a user message with the result.
+   *
+   * @param gadget - Name of the gadget that was executed
+   * @param parameters - Parameters that were passed to the gadget
+   * @param result - Text result from the gadget execution
+   * @param media - Optional media outputs from the gadget
+   * @param mediaIds - Optional IDs for the media outputs
+   */
+  addGadgetCallResult(
     gadget: string,
     parameters: Record<string, unknown>,
     result: string,

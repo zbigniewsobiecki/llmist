@@ -6,7 +6,7 @@
 import type { Agent } from "../agent/agent.js";
 import { AgentBuilder } from "../agent/builder.js";
 import type { LLMist } from "../core/client.js";
-import type { BaseGadget } from "../gadgets/gadget.js";
+import type { AbstractGadget } from "../gadgets/gadget.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { createLogger } from "../logging/logger.js";
 import type { Logger } from "../logging/types.js";
@@ -65,7 +65,7 @@ export interface TestFixtureOptions {
   /** Which gadget groups to include */
   gadgets?: Array<keyof typeof GADGET_GROUPS>;
   /** Custom gadgets to add */
-  customGadgets?: BaseGadget[];
+  customGadgets?: AbstractGadget[];
   /** Whether to clear registry before setup */
   clearRegistry?: boolean;
   /** Logger configuration */
@@ -131,7 +131,7 @@ export function createTestFixture(options: TestFixtureOptions = {}): TestFixture
 export class TestAgentBuilder {
   private builder: AgentBuilder;
   private userPrompt?: string;
-  private gadgets: BaseGadget[] = [];
+  private gadgets: AbstractGadget[] = [];
 
   constructor(fixture: TestFixture) {
     this.builder = new AgentBuilder(fixture.client);

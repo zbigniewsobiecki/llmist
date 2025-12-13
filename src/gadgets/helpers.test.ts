@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "bun:test";
 import {
-  createMedia,
+  createMediaOutput,
   resultWithAudio,
   resultWithFile,
   resultWithImage,
@@ -37,7 +37,7 @@ const TINY_FLAC = Buffer.from([0x66, 0x4c, 0x61, 0x43, 0x00, 0x00, 0x00, 0x22]);
 
 describe("createMedia", () => {
   it("creates GadgetMediaOutput from Buffer", () => {
-    const media = createMedia("image", TINY_PNG, "image/png");
+    const media = createMediaOutput("image", TINY_PNG, "image/png");
 
     expect(media.kind).toBe("image");
     expect(media.mimeType).toBe("image/png");
@@ -46,14 +46,14 @@ describe("createMedia", () => {
 
   it("creates GadgetMediaOutput from Uint8Array", () => {
     const uint8 = new Uint8Array(TINY_PNG);
-    const media = createMedia("image", uint8, "image/png");
+    const media = createMediaOutput("image", uint8, "image/png");
 
     expect(media.kind).toBe("image");
     expect(media.data).toBe(TINY_PNG.toString("base64"));
   });
 
   it("includes optional description", () => {
-    const media = createMedia("image", TINY_PNG, "image/png", {
+    const media = createMediaOutput("image", TINY_PNG, "image/png", {
       description: "Test image",
     });
 
@@ -61,7 +61,7 @@ describe("createMedia", () => {
   });
 
   it("includes optional metadata", () => {
-    const media = createMedia("image", TINY_PNG, "image/png", {
+    const media = createMediaOutput("image", TINY_PNG, "image/png", {
       metadata: { width: 100, height: 200 },
     });
 
@@ -69,7 +69,7 @@ describe("createMedia", () => {
   });
 
   it("includes optional fileName", () => {
-    const media = createMedia("image", TINY_PNG, "image/png", {
+    const media = createMediaOutput("image", TINY_PNG, "image/png", {
       fileName: "custom.png",
     });
 
@@ -79,7 +79,7 @@ describe("createMedia", () => {
 
 describe("resultWithMedia", () => {
   it("creates result with media array", () => {
-    const media = [createMedia("image", TINY_PNG, "image/png")];
+    const media = [createMediaOutput("image", TINY_PNG, "image/png")];
     const result = resultWithMedia("Test result", media);
 
     expect(result.result).toBe("Test result");
@@ -88,7 +88,7 @@ describe("resultWithMedia", () => {
   });
 
   it("includes optional cost", () => {
-    const media = [createMedia("image", TINY_PNG, "image/png")];
+    const media = [createMediaOutput("image", TINY_PNG, "image/png")];
     const result = resultWithMedia("Test result", media, 0.001);
 
     expect(result.cost).toBe(0.001);

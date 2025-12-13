@@ -8,7 +8,7 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import type { ContentPart, ImageContentPart, ImageMimeType } from "../core/input-content.js";
 import type { LLMMessage, MessageContent } from "../core/messages.js";
-import { extractText, normalizeContent } from "../core/messages.js";
+import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { ANTHROPIC_MODELS } from "./anthropic-models.js";
@@ -55,7 +55,7 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     );
   }
 
-  protected buildRequestPayload(
+  protected buildApiRequest(
     options: LLMGenerationOptions,
     descriptor: ModelDescriptor,
     spec: ModelSpec | undefined,
@@ -70,7 +70,7 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
       systemMessages.length > 0
         ? systemMessages.map((m, index) => ({
             type: "text" as const,
-            text: extractText(m.content),
+            text: extractMessageText(m.content),
             // Add cache_control to the LAST system message block
             ...(index === systemMessages.length - 1
               ? { cache_control: { type: "ephemeral" as const } }
@@ -126,7 +126,7 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     content: MessageContent,
     addCacheControl: boolean,
   ): ContentBlockParam[] {
-    const parts = normalizeContent(content);
+    const parts = normalizeMessageContent(content);
 
     return parts.map((part, index) => {
       const isLastPart = index === parts.length - 1;
@@ -189,7 +189,7 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     return stream as unknown as AsyncIterable<MessageStreamEvent>;
   }
 
-  protected async *wrapStream(iterable: AsyncIterable<unknown>): LLMStream {
+  protected async *normalizeProviderStream(iterable: AsyncIterable<unknown>): LLMStream {
     const stream = iterable as AsyncIterable<MessageStreamEvent>;
     let inputTokens = 0;
     let cachedInputTokens = 0;
@@ -290,7 +290,7 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     const systemMessages = messages.filter((message) => message.role === "system");
     const system =
       systemMessages.length > 0
-        ? systemMessages.map((m) => extractText(m.content)).join("\n\n")
+        ? systemMessages.map((m) => extractMessageText(m.content)).join("\n\n")
         : undefined;
 
     // Convert messages to Anthropic format, handling multimodal content
@@ -324,7 +324,7 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
       let totalChars = 0;
       let imageCount = 0;
       for (const msg of messages) {
-        const parts = normalizeContent(msg.content);
+        const parts = normalizeMessageContent(msg.content);
         for (const part of parts) {
           if (part.type === "text") {
             totalChars += part.text.length;

@@ -7,9 +7,9 @@ import { createLogger } from "../logging/logger.js";
 import type { DockerConfig } from "./docker/types.js";
 
 /**
- * Stream type that may have TTY capabilities.
+ * Stream type that may have TTY detection capability.
  */
-export type TTYStream = NodeJS.ReadableStream & { isTTY?: boolean };
+export type TTYAwareStream = NodeJS.ReadableStream & { isTTY?: boolean };
 
 /**
  * Logger configuration for CLI commands.
@@ -26,7 +26,7 @@ export interface CLILoggerConfig {
  */
 export interface CLIEnvironment {
   argv: string[];
-  stdin: TTYStream;
+  stdin: TTYAwareStream;
   stdout: NodeJS.WritableStream;
   stderr: NodeJS.WritableStream;
   createClient: () => LLMist;

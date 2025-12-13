@@ -15,7 +15,7 @@ class TestProviderAdapter extends BaseProviderAdapter {
   public prepareMessagesCalled = false;
   public buildPayloadCalled = false;
   public executeStreamCalled = false;
-  public wrapStreamCalled = false;
+  public normalizeStreamCalled = false;
 
   public lastPayload: unknown = null;
   public lastPreparedMessages: LLMMessage[] = [];
@@ -37,7 +37,7 @@ class TestProviderAdapter extends BaseProviderAdapter {
     return messages;
   }
 
-  protected buildRequestPayload(
+  protected buildApiRequest(
     options: LLMGenerationOptions,
     descriptor: ModelDescriptor,
     _spec: ModelSpec | undefined,
@@ -65,8 +65,8 @@ class TestProviderAdapter extends BaseProviderAdapter {
     };
   }
 
-  protected async *wrapStream(rawStream: AsyncIterable<unknown>): AsyncGenerator<LLMStreamChunk> {
-    this.wrapStreamCalled = true;
+  protected async *normalizeProviderStream(rawStream: AsyncIterable<unknown>): AsyncGenerator<LLMStreamChunk> {
+    this.normalizeStreamCalled = true;
     for await (const chunk of rawStream) {
       yield chunk as LLMStreamChunk;
     }
@@ -117,7 +117,7 @@ describe("BaseProviderAdapter", () => {
       expect(adapter.prepareMessagesCalled).toBe(true);
       expect(adapter.buildPayloadCalled).toBe(true);
       expect(adapter.executeStreamCalled).toBe(true);
-      expect(adapter.wrapStreamCalled).toBe(true);
+      expect(adapter.normalizeStreamCalled).toBe(true);
     });
 
     it("should pass messages through prepareMessages", async () => {
@@ -195,8 +195,8 @@ describe("BaseProviderAdapter", () => {
       expect(chunks).toHaveLength(1);
     });
 
-    it("should pass model spec to buildRequestPayload", async () => {
-      const buildPayloadMock = mock(
+    it("should pass model spec to buildApiRequest", async () => {
+      const buildApiRequestMock = mock(
         (
           _options: LLMGenerationOptions,
           _descriptor: ModelDescriptor,
@@ -209,9 +209,9 @@ describe("BaseProviderAdapter", () => {
       );
 
       const adapter = new TestProviderAdapter(null);
-      // Override buildRequestPayload
-      (adapter as unknown as { buildRequestPayload: typeof buildPayloadMock }).buildRequestPayload =
-        buildPayloadMock;
+      // Override buildApiRequest
+      (adapter as unknown as { buildApiRequest: typeof buildApiRequestMock }).buildApiRequest =
+        buildApiRequestMock;
 
       const options: LLMGenerationOptions = {
         messages: [{ role: "user", content: "Hi" }],

@@ -40,7 +40,7 @@ import type {
  * @param options - Optional description, metadata, and fileName
  * @returns A GadgetMediaOutput ready to include in results
  */
-export function createMedia(
+export function createMediaOutput(
   kind: MediaKind,
   data: Buffer | Uint8Array,
   mimeType: string,
@@ -71,8 +71,8 @@ export function createMedia(
  * return resultWithMedia(
  *   "Generated 2 charts",
  *   [
- *     createMedia("image", barChartPng, "image/png", { description: "Bar chart" }),
- *     createMedia("image", pieChartPng, "image/png", { description: "Pie chart" }),
+ *     createMediaOutput("image", barChartPng, "image/png", { description: "Bar chart" }),
+ *     createMediaOutput("image", pieChartPng, "image/png", { description: "Pie chart" }),
  *   ],
  *   0.002
  * );

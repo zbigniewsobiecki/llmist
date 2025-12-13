@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { BaseGadget } from "../gadgets/gadget.js";
+import { AbstractGadget } from "../gadgets/gadget.js";
 import { getBuiltinGadget, isBuiltinGadgetName } from "./builtins/index.js";
 import { isExternalPackageSpecifier, loadExternalGadgets } from "./external-gadgets.js";
 
@@ -19,7 +19,7 @@ const BUILTIN_PREFIX = "builtin:";
  * This avoids instanceof issues when gadgets are loaded from external files
  * that import from the 'llmist' npm package (different class instance).
  */
-function isGadgetLike(value: unknown): value is BaseGadget {
+function isGadgetLike(value: unknown): value is AbstractGadget {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -39,7 +39,7 @@ function isGadgetLike(value: unknown): value is BaseGadget {
  * @param value - Value to check
  * @returns True if value is a Gadget constructor
  */
-function isGadgetConstructor(value: unknown): value is new () => BaseGadget {
+function isGadgetConstructor(value: unknown): value is new () => AbstractGadget {
   if (typeof value !== "function") {
     return false;
   }
@@ -49,8 +49,8 @@ function isGadgetConstructor(value: unknown): value is new () => BaseGadget {
     return false;
   }
 
-  // Check for BaseGadget inheritance (works for same package)
-  if (prototype instanceof BaseGadget) {
+  // Check for AbstractGadget inheritance (works for same package)
+  if (prototype instanceof AbstractGadget) {
     return true;
   }
 
@@ -105,7 +105,7 @@ function isFileLikeSpecifier(specifier: string): boolean {
  * @returns The built-in gadget if found, null otherwise
  * @throws Error if "builtin:" prefix is used but gadget doesn't exist
  */
-export function tryResolveBuiltin(specifier: string): BaseGadget | null {
+export function tryResolveBuiltin(specifier: string): AbstractGadget | null {
   // Handle explicit builtin: prefix
   if (specifier.startsWith(BUILTIN_PREFIX)) {
     const name = specifier.slice(BUILTIN_PREFIX.length);
@@ -156,8 +156,8 @@ export function resolveGadgetSpecifier(specifier: string, cwd: string): string {
  * @param moduleExports - Module exports object to search
  * @returns Array of Gadget instances found in exports
  */
-export function extractGadgetsFromModule(moduleExports: unknown): BaseGadget[] {
-  const results: BaseGadget[] = [];
+export function extractGadgetsFromModule(moduleExports: unknown): AbstractGadget[] {
+  const results: AbstractGadget[] = [];
   const visited = new Set<unknown>();
 
   const visit = (value: unknown) => {
@@ -171,8 +171,8 @@ export function extractGadgetsFromModule(moduleExports: unknown): BaseGadget[] {
     visited.add(value);
 
     // Use duck typing to handle gadgets from external packages
-    if (value instanceof BaseGadget || isGadgetLike(value)) {
-      results.push(value as BaseGadget);
+    if (value instanceof AbstractGadget || isGadgetLike(value)) {
+      results.push(value as AbstractGadget);
       return;
     }
 
@@ -225,8 +225,8 @@ export async function loadGadgets(
   specifiers: string[],
   cwd: string,
   importer: GadgetImportFunction = (specifier) => import(specifier),
-): Promise<BaseGadget[]> {
-  const gadgets: BaseGadget[] = [];
+): Promise<AbstractGadget[]> {
+  const gadgets: AbstractGadget[] = [];
 
   for (const specifier of specifiers) {
     // Try builtin resolution first
@@ -258,7 +258,7 @@ export async function loadGadgets(
       throw new Error(`Failed to load gadget module '${specifier}': ${message}`);
     }
 
-    let extracted: BaseGadget[];
+    let extracted: AbstractGadget[];
     try {
       extracted = extractGadgetsFromModule(exports);
     } catch (error) {

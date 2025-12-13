@@ -4,7 +4,7 @@
  */
 
 import type { MessageContent } from "../core/messages.js";
-import { extractText, type LLMMessage, LLMMessageBuilder } from "../core/messages.js";
+import { extractMessageText, type LLMMessage, LLMMessageBuilder } from "../core/messages.js";
 import type { GadgetMediaOutput } from "../gadgets/types.js";
 import type { IConversationManager } from "./interfaces.js";
 
@@ -60,14 +60,14 @@ export class ConversationManager implements IConversationManager {
     this.historyBuilder.addAssistant(content);
   }
 
-  addGadgetCall(
+  addGadgetCallResult(
     gadgetName: string,
     parameters: Record<string, unknown>,
     result: string,
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
   ): void {
-    this.historyBuilder.addGadgetCall(gadgetName, parameters, result, media, mediaIds);
+    this.historyBuilder.addGadgetCallResult(gadgetName, parameters, result, media, mediaIds);
   }
 
   getMessages(): LLMMessage[] {
@@ -95,7 +95,7 @@ export class ConversationManager implements IConversationManager {
         this.historyBuilder.addUser(msg.content);
       } else if (msg.role === "assistant") {
         // Assistant messages are always text, extract if multimodal
-        this.historyBuilder.addAssistant(extractText(msg.content));
+        this.historyBuilder.addAssistant(extractMessageText(msg.content));
       }
       // System messages are not added to history (they're in baseMessages)
     }

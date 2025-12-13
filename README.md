@@ -286,7 +286,7 @@ class AskUser extends Gadget({
   schema: z.object({ question: z.string() }),
 }) {
   execute(params: this['params']) {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 

@@ -23,24 +23,24 @@ export type { PromptsConfig } from "./templates.js";
 export type LogLevel = "silly" | "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
 /**
- * Gadget approval mode determines how a gadget execution is handled.
+ * Gadget permission level determines how a gadget execution is handled.
  * - "allowed": Auto-proceed without prompting
  * - "denied": Auto-reject, return denial message to LLM
  * - "approval-required": Prompt user for approval before execution
  */
-export type GadgetApprovalMode = "allowed" | "denied" | "approval-required";
+export type GadgetPermissionLevel = "allowed" | "denied" | "approval-required";
 
 /**
- * Valid gadget approval modes.
+ * Valid gadget permission levels.
  */
-const VALID_APPROVAL_MODES: GadgetApprovalMode[] = ["allowed", "denied", "approval-required"];
+const VALID_PERMISSION_LEVELS: GadgetPermissionLevel[] = ["allowed", "denied", "approval-required"];
 
 /**
- * Configuration for per-gadget approval behavior.
- * Keys are gadget names (case-insensitive), values are approval modes.
+ * Configuration for per-gadget permission behavior.
+ * Keys are gadget names (case-insensitive), values are permission levels.
  * Special key "*" sets the default for unconfigured gadgets.
  */
-export type GadgetApprovalConfig = Record<string, GadgetApprovalMode>;
+export type GadgetPermissionPolicy = Record<string, GadgetPermissionLevel>;
 
 /**
  * Global CLI options that apply to all commands.
@@ -52,9 +52,9 @@ export interface GlobalConfig {
 }
 
 /**
- * Base options shared by both complete and agent command configurations.
+ * Shared options used by both complete and agent command configurations.
  */
-export interface BaseCommandConfig {
+export interface SharedCommandConfig {
   model?: string;
   system?: string;
   temperature?: number;
@@ -68,7 +68,7 @@ export interface BaseCommandConfig {
 /**
  * Configuration for the complete command.
  */
-export interface CompleteConfig extends BaseCommandConfig {
+export interface CompleteConfig extends SharedCommandConfig {
   "max-tokens"?: number;
   quiet?: boolean;
   "log-level"?: LogLevel;
@@ -104,7 +104,7 @@ export interface SpeechConfig {
 /**
  * Configuration for the agent command.
  */
-export interface AgentConfig extends BaseCommandConfig {
+export interface AgentConfig extends SharedCommandConfig {
   "max-iterations"?: number;
   gadgets?: string[]; // Full replacement (preferred)
   "gadget-add"?: string[]; // Add to inherited gadgets
@@ -115,7 +115,7 @@ export interface AgentConfig extends BaseCommandConfig {
   "gadget-start-prefix"?: string;
   "gadget-end-prefix"?: string;
   "gadget-arg-prefix"?: string;
-  "gadget-approval"?: GadgetApprovalConfig;
+  "gadget-approval"?: GadgetPermissionPolicy;
   quiet?: boolean;
   "log-level"?: LogLevel;
   "log-file"?: string;
@@ -327,24 +327,24 @@ function validateInherits(value: unknown, section: string): string | string[] {
 /**
  * Validates that a value is a gadget approval config (object mapping gadget names to modes).
  */
-function validateGadgetApproval(value: unknown, section: string): GadgetApprovalConfig {
+function validateGadgetApproval(value: unknown, section: string): GadgetPermissionPolicy {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ConfigError(
       `[${section}].gadget-approval must be a table (e.g., { WriteFile = "approval-required" })`,
     );
   }
 
-  const result: GadgetApprovalConfig = {};
+  const result: GadgetPermissionPolicy = {};
   for (const [gadgetName, mode] of Object.entries(value as Record<string, unknown>)) {
     if (typeof mode !== "string") {
       throw new ConfigError(`[${section}].gadget-approval.${gadgetName} must be a string`);
     }
-    if (!VALID_APPROVAL_MODES.includes(mode as GadgetApprovalMode)) {
+    if (!VALID_PERMISSION_LEVELS.includes(mode as GadgetPermissionLevel)) {
       throw new ConfigError(
-        `[${section}].gadget-approval.${gadgetName} must be one of: ${VALID_APPROVAL_MODES.join(", ")}`,
+        `[${section}].gadget-approval.${gadgetName} must be one of: ${VALID_PERMISSION_LEVELS.join(", ")}`,
       );
     }
-    result[gadgetName] = mode as GadgetApprovalMode;
+    result[gadgetName] = mode as GadgetPermissionLevel;
   }
   return result;
 }
@@ -383,8 +383,8 @@ function validateLoggingConfig(
 function validateBaseConfig(
   raw: Record<string, unknown>,
   section: string,
-): Partial<BaseCommandConfig> {
-  const result: Partial<BaseCommandConfig> = {};
+): Partial<SharedCommandConfig> {
+  const result: Partial<SharedCommandConfig> = {};
 
   if ("model" in raw) {
     result.model = validateString(raw.model, "model", section);

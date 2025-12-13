@@ -77,7 +77,7 @@ for await (const chunk of client.streamText('Hello')) {
 ## Options
 
 ```typescript
-interface QuickOptions {
+interface TextGenerationOptions {
   model?: string;        // Model name or alias (default: 'gpt-5-mini')
   temperature?: number;  // 0-1 (default: provider default)
   systemPrompt?: string; // System prompt (default: none)
