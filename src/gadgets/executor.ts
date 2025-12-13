@@ -15,12 +15,14 @@ import type { MediaStore } from "./media-store.js";
 import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
 import type {
+  AgentContextConfig,
   ExecutionContext,
   GadgetExecuteResult,
   GadgetExecuteResultWithMedia,
   GadgetExecutionResult,
   GadgetMediaOutput,
   ParsedGadgetCall,
+  SubagentConfigMap,
 } from "./types.js";
 
 export class GadgetExecutor {
@@ -36,6 +38,8 @@ export class GadgetExecutor {
     errorFormatterOptions?: ErrorFormatterOptions,
     private readonly client?: LLMist,
     private readonly mediaStore?: MediaStore,
+    private readonly agentConfig?: AgentContextConfig,
+    private readonly subagentConfig?: SubagentConfigMap,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
@@ -222,11 +226,13 @@ export class GadgetExecutor {
         }
       };
 
-      // Build execution context with abort signal
+      // Build execution context with abort signal and agent config
       const ctx: ExecutionContext = {
         reportCost,
         llmist: this.client ? new CostReportingLLMistWrapper(this.client, reportCost) : undefined,
         signal: abortController.signal,
+        agentConfig: this.agentConfig,
+        subagentConfig: this.subagentConfig,
       };
 
       // Execute gadget (handle both sync and async)

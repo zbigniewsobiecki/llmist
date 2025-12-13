@@ -4,6 +4,12 @@ import { join } from "node:path";
 import { load as parseToml } from "js-toml";
 import { validateDockerConfig } from "./docker/docker-config.js";
 import type { DockerConfig } from "./docker/types.js";
+import type { SubagentConfig, SubagentConfigMap } from "../gadgets/types.js";
+import type { GlobalSubagentConfig } from "./subagent-config.js";
+
+// Re-export subagent config types for consumers
+export type { SubagentConfig, SubagentConfigMap } from "../gadgets/types.js";
+export type { GlobalSubagentConfig } from "./subagent-config.js";
 import {
   createTemplateEngine,
   hasTemplateSyntax,
@@ -116,6 +122,8 @@ export interface AgentConfig extends SharedCommandConfig {
   "gadget-end-prefix"?: string;
   "gadget-arg-prefix"?: string;
   "gadget-approval"?: GadgetPermissionPolicy;
+  /** Per-subagent configuration overrides for this profile/command */
+  subagents?: SubagentConfigMap;
   quiet?: boolean;
   "log-level"?: LogLevel;
   "log-file"?: string;
@@ -148,6 +156,8 @@ export interface CLIConfig {
   speech?: SpeechConfig;
   prompts?: PromptsConfig;
   docker?: DockerConfig;
+  /** Global subagent configuration defaults */
+  subagents?: GlobalSubagentConfig;
   [customCommand: string]:
     | CustomCommandConfig
     | CompleteConfig
@@ -157,6 +167,7 @@ export interface CLIConfig {
     | GlobalConfig
     | PromptsConfig
     | DockerConfig
+    | GlobalSubagentConfig
     | undefined;
 }
 
@@ -202,6 +213,7 @@ const AGENT_CONFIG_KEYS = new Set([
   "gadget-end-prefix",
   "gadget-arg-prefix",
   "gadget-approval",
+  "subagents", // Per-subagent configuration overrides
   "quiet",
   "inherits",
   "log-level",
@@ -322,6 +334,90 @@ function validateInherits(value: unknown, section: string): string | string[] {
     return value as string[];
   }
   throw new ConfigError(`[${section}].inherits must be a string or array of strings`);
+}
+
+/**
+ * Validates a single subagent configuration.
+ * Subagent configs are flexible objects with optional model and maxIterations.
+ */
+function validateSingleSubagentConfig(
+  value: unknown,
+  subagentName: string,
+  section: string,
+): SubagentConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(
+      `[${section}].${subagentName} must be a table (e.g., { model = "inherit", maxIterations = 20 })`,
+    );
+  }
+
+  const result: SubagentConfig = {};
+  const rawObj = value as Record<string, unknown>;
+
+  for (const [key, val] of Object.entries(rawObj)) {
+    if (key === "model") {
+      if (typeof val !== "string") {
+        throw new ConfigError(`[${section}].${subagentName}.model must be a string`);
+      }
+      result.model = val;
+    } else if (key === "maxIterations") {
+      if (typeof val !== "number" || !Number.isInteger(val) || val < 1) {
+        throw new ConfigError(
+          `[${section}].${subagentName}.maxIterations must be a positive integer`,
+        );
+      }
+      result.maxIterations = val;
+    } else {
+      // Allow arbitrary additional options (headless, etc.)
+      result[key] = val;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Validates a subagent configuration map (per-profile subagents).
+ */
+function validateSubagentConfigMap(value: unknown, section: string): SubagentConfigMap {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(
+      `[${section}].subagents must be a table (e.g., { BrowseWeb = { model = "inherit" } })`,
+    );
+  }
+
+  const result: SubagentConfigMap = {};
+  for (const [subagentName, config] of Object.entries(value as Record<string, unknown>)) {
+    result[subagentName] = validateSingleSubagentConfig(config, subagentName, `${section}.subagents`);
+  }
+  return result;
+}
+
+/**
+ * Validates the global [subagents] section.
+ * Contains default-model and per-subagent configurations.
+ */
+function validateGlobalSubagentConfig(value: unknown, section: string): GlobalSubagentConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(`[${section}] must be a table`);
+  }
+
+  const result: GlobalSubagentConfig = {};
+  const rawObj = value as Record<string, unknown>;
+
+  for (const [key, val] of Object.entries(rawObj)) {
+    if (key === "default-model") {
+      if (typeof val !== "string") {
+        throw new ConfigError(`[${section}].default-model must be a string`);
+      }
+      result["default-model"] = val;
+    } else {
+      // Per-subagent config (nested table)
+      result[key] = validateSingleSubagentConfig(val, key, section);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -557,6 +653,9 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
   if ("gadget-approval" in rawObj) {
     result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
   }
+  if ("subagents" in rawObj) {
+    result.subagents = validateSubagentConfigMap(rawObj.subagents, section);
+  }
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
@@ -766,6 +865,9 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
   if ("gadget-approval" in rawObj) {
     result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
   }
+  if ("subagents" in rawObj) {
+    result.subagents = validateSubagentConfigMap(rawObj.subagents, section);
+  }
 
   // Complete-specific fields
   if ("max-tokens" in rawObj) {
@@ -834,6 +936,8 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.prompts = validatePromptsConfig(value, key);
       } else if (key === "docker") {
         result.docker = validateDockerConfig(value, key);
+      } else if (key === "subagents") {
+        result.subagents = validateGlobalSubagentConfig(value, key);
       } else {
         // Custom command section
         result[key] = validateCustomConfig(value, key);
@@ -891,7 +995,16 @@ export function loadConfig(): CLIConfig {
  * Gets list of custom command names from config (excludes built-in sections).
  */
 export function getCustomCommandNames(config: CLIConfig): string[] {
-  const reserved = new Set(["global", "complete", "agent", "image", "speech", "prompts", "docker"]);
+  const reserved = new Set([
+    "global",
+    "complete",
+    "agent",
+    "image",
+    "speech",
+    "prompts",
+    "docker",
+    "subagents",
+  ]);
   return Object.keys(config).filter((key) => !reserved.has(key));
 }
 

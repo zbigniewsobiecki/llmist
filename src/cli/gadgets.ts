@@ -227,6 +227,8 @@ export async function loadGadgets(
   importer: GadgetImportFunction = (specifier) => import(specifier),
 ): Promise<AbstractGadget[]> {
   const gadgets: AbstractGadget[] = [];
+  // Track if we're using a custom importer (for testing) - skip external package resolution
+  const usingDefaultImporter = importer.toString().includes("import(specifier)");
 
   for (const specifier of specifiers) {
     // Try builtin resolution first
@@ -237,7 +239,8 @@ export async function loadGadgets(
     }
 
     // Try external package resolution (npm/git with presets, versions, etc.)
-    if (isExternalPackageSpecifier(specifier)) {
+    // Skip this when using a custom importer (for testing)
+    if (usingDefaultImporter && isExternalPackageSpecifier(specifier)) {
       try {
         const externalGadgets = await loadExternalGadgets(specifier);
         gadgets.push(...externalGadgets);

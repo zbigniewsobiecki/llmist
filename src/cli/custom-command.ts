@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { executeAgent } from "./agent-command.js";
 import { executeComplete } from "./complete-command.js";
-import type { CustomCommandConfig } from "./config.js";
+import type { CustomCommandConfig, GlobalSubagentConfig } from "./config.js";
 import { type CLIEnvironment, type CLILoggerConfig, createLoggerFactory } from "./environment.js";
 import {
   type CLIAgentOptions,
@@ -63,6 +63,7 @@ export function registerCustomCommand(
   name: string,
   config: CustomCommandConfig,
   env: CLIEnvironment,
+  globalSubagents?: GlobalSubagentConfig,
 ): void {
   const type = config.type ?? "agent";
   const description = config.description ?? `Custom ${type} command`;
@@ -102,6 +103,7 @@ export function registerCustomCommand(
         const options: CLIAgentOptions = {
           ...configDefaults,
           ...(cliOptions as Partial<CLIAgentOptions>),
+          globalSubagents,
         } as CLIAgentOptions;
         await executeAgent(prompt, options, cmdEnv);
       }, cmdEnv);

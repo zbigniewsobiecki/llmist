@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import type { LLMist } from "../core/client.js";
 import type { LLMStream, StreamChunk } from "../core/options.js";
-import { type AgentCommandOptions, executeAgent } from "./agent-command.js";
+import { type CLIAgentOptions, executeAgent } from "./agent-command.js";
 import type { CLIEnvironment } from "./environment.js";
 
 /**
@@ -145,7 +145,7 @@ function createMockEnv(
 /**
  * Default options for agent command tests.
  */
-const defaultOptions: AgentCommandOptions = {
+const defaultOptions: CLIAgentOptions = {
   model: "test:mock-model",
   maxIterations: 1,
   builtins: false, // Disable built-in gadgets for simpler testing

@@ -71,7 +71,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
 
   // Register built-in commands with config defaults
   registerCompleteCommand(program, env, config?.complete);
-  registerAgentCommand(program, env, config?.agent);
+  registerAgentCommand(program, env, config?.agent, config?.subagents);
   registerImageCommand(program, env, config?.image);
   registerSpeechCommand(program, env, config?.speech);
   registerVisionCommand(program, env);
@@ -83,7 +83,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
     const customNames = getCustomCommandNames(config);
     for (const name of customNames) {
       const cmdConfig = config[name] as CustomCommandConfig;
-      registerCustomCommand(program, name, cmdConfig, env);
+      registerCustomCommand(program, name, cmdConfig, env, config.subagents);
     }
   }
 

@@ -288,6 +288,63 @@ llmist agent "Find iPhone 16 Pro price on apple.com" -g webasto/BrowseWeb
 
 The subagent launches its own browser, navigates, clicks, and extracts data without requiring you to orchestrate individual browser operations.
 
+### Subagent Configuration
+
+Subagents like `BrowseWeb` can be configured via `cli.toml`. By default, subagents **inherit the parent agent's model** - no configuration needed!
+
+#### Global Subagent Defaults
+
+Configure subagent behavior for all profiles:
+
+```toml
+# ~/.llmist/cli.toml
+
+# Global subagent configuration
+[subagents]
+default-model = "inherit"              # Default: inherit from parent agent
+
+# Per-subagent configuration
+[subagents.BrowseWeb]
+model = "inherit"                      # Use parent agent's model
+maxIterations = 20                     # More iterations than default (15)
+headless = true                        # Run browser headless
+```
+
+#### Profile-Specific Overrides
+
+Override subagent settings per profile:
+
+```toml
+[research]
+inherits = "profile-research"
+model = "gemini-2.5-flash"             # Parent model for this profile
+
+# BrowseWeb will inherit gemini-2.5-flash
+[research.subagents.BrowseWeb]
+maxIterations = 30                     # More iterations for research
+headless = true
+
+[develop]
+inherits = "profile-readwrite"
+model = "sonnet"
+
+# Override: use cheaper model for dev browsing
+[develop.subagents.BrowseWeb]
+model = "haiku"                        # Explicit model (doesn't inherit)
+headless = false                       # Show browser for debugging
+```
+
+#### Resolution Priority
+
+Subagent configuration resolves in this order (highest to lowest):
+
+1. **Runtime params** - Explicit gadget call: `BrowseWeb(model="opus", ...)`
+2. **Profile subagent config** - `[profile.subagents.BrowseWeb]`
+3. **Global subagent config** - `[subagents.BrowseWeb]`
+4. **Global default** - `[subagents] default-model`
+5. **Parent agent model** - If any level specifies `"inherit"`
+6. **Package default** - Hardcoded in the subagent
+
 ### Cache Management
 
 External packages are cached in `~/.llmist/gadget-cache/`:
