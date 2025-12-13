@@ -61,20 +61,36 @@ jobs:
           git config core.hooksPath /dev/null
 
       - name: Run semantic-release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          BEFORE_SHA=$(git rev-parse HEAD)
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             echo "Running in dry-run mode"
             bunx semantic-release --dry-run
           else
-            bunx semantic-release
+            # Run semantic-release, capture exit code but don't fail yet
+            # This allows dev sync to run even if npm publish fails
+            bunx semantic-release || RELEASE_EXIT_CODE=$?
           fi
+          AFTER_SHA=$(git rev-parse HEAD)
+          # Check if a release commit was made (HEAD changed)
+          if [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
+            echo "released=true" >> $GITHUB_OUTPUT
+            echo "✅ Release commit detected - dev branch will be synced"
+          else
+            echo "released=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No release commit - skipping dev sync"
+          fi
+          # Exit with the original exit code if semantic-release failed
+          exit ${RELEASE_EXIT_CODE:-0}
 
       - name: Sync dev branch
-        if: ${{ success() && github.event.inputs.dry_run != 'true' }}
+        if: ${{ always() && steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' }}
+        continue-on-error: true
         run: |
           # Fetch latest changes from remote
           git fetch origin
