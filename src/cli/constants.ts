@@ -13,6 +13,7 @@ export const COMMANDS = {
   image: "image",
   speech: "speech",
   vision: "vision",
+  init: "init",
 } as const;
 
 /** Valid log level names */
