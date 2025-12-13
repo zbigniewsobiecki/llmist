@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   DEFAULT_PROMPTS,
-  type PromptConfig,
+  type PromptTemplateConfig,
   type PromptContext,
   resolvePromptTemplate,
   resolveRulesTemplate,
@@ -154,9 +154,9 @@ describe("prompt-config", () => {
     });
   });
 
-  describe("PromptConfig integration", () => {
+  describe("PromptTemplateConfig integration", () => {
     it("should support partial configuration", () => {
-      const config: PromptConfig = {
+      const config: PromptTemplateConfig = {
         mainInstruction: "Custom main",
       };
 
@@ -173,7 +173,7 @@ describe("prompt-config", () => {
     });
 
     it("should support full custom configuration", () => {
-      const config: PromptConfig = {
+      const config: PromptTemplateConfig = {
         mainInstruction: "Custom instruction",
         criticalUsage: "Custom usage",
         formatDescription: "Block format with !!!ARG: markers",
@@ -200,7 +200,7 @@ describe("prompt-config", () => {
     });
 
     it("should support mixed static and dynamic configuration", () => {
-      const config: PromptConfig = {
+      const config: PromptTemplateConfig = {
         mainInstruction: "Static instruction",
         rules: (ctx) => [`You have ${ctx.gadgetCount} available gadgets`],
       };

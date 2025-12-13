@@ -97,11 +97,11 @@ describe("ConversationManager", () => {
     });
   });
 
-  describe("addGadgetCall", () => {
+  describe("addGadgetCallResult", () => {
     it("should add gadget call with result", () => {
       const manager = new ConversationManager(createBaseMessages(), []);
 
-      manager.addGadgetCall("Calculator", { a: 5, b: 3 }, "8");
+      manager.addGadgetCallResult("Calculator", { a: 5, b: 3 }, "8");
 
       const messages = manager.getMessages();
       // Should have system + history (gadget calls are typically in assistant message)
@@ -111,7 +111,7 @@ describe("ConversationManager", () => {
     it("should include gadget name and parameters", () => {
       const manager = new ConversationManager(createBaseMessages(), []);
 
-      manager.addGadgetCall("FileReader", { path: "/test.txt" }, "file contents");
+      manager.addGadgetCallResult("FileReader", { path: "/test.txt" }, "file contents");
 
       const history = manager.getHistoryMessages();
       const assistantMsg = history.find((m) => m.role === "assistant");
@@ -256,7 +256,7 @@ describe("ConversationManager", () => {
       manager.replaceHistory([{ role: "user", content: "Replaced" }]);
 
       // Manager should still work with same prefixes
-      manager.addGadgetCall("Test", {}, "result");
+      manager.addGadgetCallResult("Test", {}, "result");
 
       const messages = manager.getMessages();
       expect(messages.length).toBeGreaterThanOrEqual(2);
@@ -287,7 +287,7 @@ describe("ConversationManager", () => {
       // Add conversation turns
       manager.addAssistantMessage("I'll help you with that.");
       manager.addUserMessage("Can you calculate 5 + 3?");
-      manager.addGadgetCall("Calculator", { operation: "add", a: 5, b: 3 }, "8");
+      manager.addGadgetCallResult("Calculator", { operation: "add", a: 5, b: 3 }, "8");
       manager.addAssistantMessage("The result is 8.");
 
       const messages = manager.getMessages();

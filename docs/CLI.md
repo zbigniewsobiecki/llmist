@@ -390,6 +390,43 @@ llmist --log-level trace --log-file ./debug.log agent "Debug this" -g ./tools.ts
 
 ## Commands
 
+### `init` - Initialize Configuration
+
+Create a starter configuration file at `~/.llmist/cli.toml`:
+
+```bash
+llmist init
+```
+
+This creates a minimal, well-commented config file to help you get started. If a config already exists, the command will print a message and exit without changes.
+
+**Output:**
+
+```
+Created ~/.llmist/cli.toml
+
+Next steps:
+  1. Set your API key:
+       export OPENAI_API_KEY=sk-...
+       export ANTHROPIC_API_KEY=sk-...
+       export GEMINI_API_KEY=...
+
+  2. Customize your config:
+       $EDITOR ~/.llmist/cli.toml
+
+  3. See all options:
+       https://github.com/zbigniewsobiecki/llmist/blob/main/examples/cli.example.toml
+
+Try it: llmist complete "Hello, world!"
+```
+
+The generated config includes:
+- Global logging options
+- Default model settings for `complete` and `agent` commands
+- A commented example of a custom command
+
+For a comprehensive example with all available options, see [`examples/cli.example.toml`](../examples/cli.example.toml).
+
 ### `complete` - Simple Completion
 
 Stream a single response without agent loop:

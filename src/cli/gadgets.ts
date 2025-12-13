@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { BaseGadget } from "../gadgets/gadget.js";
+import { AbstractGadget } from "../gadgets/gadget.js";
 import { getBuiltinGadget, isBuiltinGadgetName } from "./builtins/index.js";
+import { isExternalPackageSpecifier, loadExternalGadgets } from "./external-gadgets.js";
 
 /**
  * Function type for importing modules dynamically.
@@ -18,7 +19,7 @@ const BUILTIN_PREFIX = "builtin:";
  * This avoids instanceof issues when gadgets are loaded from external files
  * that import from the 'llmist' npm package (different class instance).
  */
-function isGadgetLike(value: unknown): value is BaseGadget {
+function isGadgetLike(value: unknown): value is AbstractGadget {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -32,18 +33,36 @@ function isGadgetLike(value: unknown): value is BaseGadget {
 
 /**
  * Type guard to check if a value is a Gadget constructor.
+ * Checks if the prototype has an execute method (gadget classes created via Gadget()
+ * factory put description/schema on instances, not prototype, so we just check for execute).
  *
  * @param value - Value to check
  * @returns True if value is a Gadget constructor
  */
-function isGadgetConstructor(value: unknown): value is new () => BaseGadget {
+function isGadgetConstructor(value: unknown): value is new () => AbstractGadget {
   if (typeof value !== "function") {
     return false;
   }
 
   const prototype = value.prototype as unknown;
-  // Use duck typing for prototype check too
-  return Boolean(prototype) && (prototype instanceof BaseGadget || isGadgetLike(prototype));
+  if (!prototype) {
+    return false;
+  }
+
+  // Check for AbstractGadget inheritance (works for same package)
+  if (prototype instanceof AbstractGadget) {
+    return true;
+  }
+
+  // Duck typing: check if prototype has execute method
+  // Gadget classes from external packages may not pass instanceof but have execute
+  const proto = prototype as Record<string, unknown>;
+  if (typeof proto.execute === "function") {
+    return true;
+  }
+
+  // Also check if prototype looks like a gadget (for edge cases)
+  return isGadgetLike(prototype);
 }
 
 /**
@@ -86,7 +105,7 @@ function isFileLikeSpecifier(specifier: string): boolean {
  * @returns The built-in gadget if found, null otherwise
  * @throws Error if "builtin:" prefix is used but gadget doesn't exist
  */
-export function tryResolveBuiltin(specifier: string): BaseGadget | null {
+export function tryResolveBuiltin(specifier: string): AbstractGadget | null {
   // Handle explicit builtin: prefix
   if (specifier.startsWith(BUILTIN_PREFIX)) {
     const name = specifier.slice(BUILTIN_PREFIX.length);
@@ -137,8 +156,8 @@ export function resolveGadgetSpecifier(specifier: string, cwd: string): string {
  * @param moduleExports - Module exports object to search
  * @returns Array of Gadget instances found in exports
  */
-export function extractGadgetsFromModule(moduleExports: unknown): BaseGadget[] {
-  const results: BaseGadget[] = [];
+export function extractGadgetsFromModule(moduleExports: unknown): AbstractGadget[] {
+  const results: AbstractGadget[] = [];
   const visited = new Set<unknown>();
 
   const visit = (value: unknown) => {
@@ -152,8 +171,8 @@ export function extractGadgetsFromModule(moduleExports: unknown): BaseGadget[] {
     visited.add(value);
 
     // Use duck typing to handle gadgets from external packages
-    if (value instanceof BaseGadget || isGadgetLike(value)) {
-      results.push(value as BaseGadget);
+    if (value instanceof AbstractGadget || isGadgetLike(value)) {
+      results.push(value as AbstractGadget);
       return;
     }
 
@@ -182,13 +201,19 @@ export function extractGadgetsFromModule(moduleExports: unknown): BaseGadget[] {
 
 /**
  * Loads gadgets from one or more specifiers.
- * Supports built-in gadgets (by name or "builtin:" prefix), file paths, and npm module names.
+ * Supports built-in gadgets, file paths, npm module names, and external packages.
  *
  * Resolution order:
  * 1. "builtin:Name" - explicit built-in lookup (error if not found)
  * 2. Bare "Name" without path chars - check built-in registry first
- * 3. File paths (starting with ., /, ~) - resolve and import
- * 4. npm module names - dynamic import
+ * 3. External packages (npm/git) - auto-install and load from cache
+ *    - "webasto" - npm package, all gadgets
+ *    - "webasto@2.0.0" - npm package with version
+ *    - "webasto:minimal" - npm package with preset
+ *    - "webasto/Navigate" - npm package with specific gadget
+ *    - "git+https://..." - git URL
+ * 4. File paths (starting with ., /, ~) - resolve and import
+ * 5. npm module names - dynamic import from node_modules
  *
  * @param specifiers - Array of gadget specifiers
  * @param cwd - Current working directory for resolving relative paths
@@ -200,8 +225,10 @@ export async function loadGadgets(
   specifiers: string[],
   cwd: string,
   importer: GadgetImportFunction = (specifier) => import(specifier),
-): Promise<BaseGadget[]> {
-  const gadgets: BaseGadget[] = [];
+): Promise<AbstractGadget[]> {
+  const gadgets: AbstractGadget[] = [];
+  // Track if we're using a custom importer (for testing) - skip external package resolution
+  const usingDefaultImporter = importer.toString().includes("import(specifier)");
 
   for (const specifier of specifiers) {
     // Try builtin resolution first
@@ -209,6 +236,19 @@ export async function loadGadgets(
     if (builtin) {
       gadgets.push(builtin);
       continue;
+    }
+
+    // Try external package resolution (npm/git with presets, versions, etc.)
+    // Skip this when using a custom importer (for testing)
+    if (usingDefaultImporter && isExternalPackageSpecifier(specifier)) {
+      try {
+        const externalGadgets = await loadExternalGadgets(specifier);
+        gadgets.push(...externalGadgets);
+        continue;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to load external package '${specifier}': ${message}`);
+      }
     }
 
     // Fall back to file/npm resolution
@@ -221,7 +261,7 @@ export async function loadGadgets(
       throw new Error(`Failed to load gadget module '${specifier}': ${message}`);
     }
 
-    let extracted: BaseGadget[];
+    let extracted: AbstractGadget[];
     try {
       extracted = extractGadgetsFromModule(exports);
     } catch (error) {

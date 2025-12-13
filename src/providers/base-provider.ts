@@ -43,13 +43,13 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     const preparedMessages = this.prepareMessages(options.messages);
 
     // Step 2: Build the provider-specific request payload
-    const payload = this.buildRequestPayload(options, descriptor, spec, preparedMessages);
+    const payload = this.buildApiRequest(options, descriptor, spec, preparedMessages);
 
     // Step 3: Execute the stream request using the provider's SDK (with optional abort signal)
     const rawStream = await this.executeStreamRequest(payload, options.signal);
 
-    // Step 4: Transform the provider-specific stream into universal format
-    yield* this.wrapStream(rawStream);
+    // Step 4: Normalize provider-specific stream into universal format
+    yield* this.normalizeProviderStream(rawStream);
   }
 
   /**
@@ -66,16 +66,16 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
   }
 
   /**
-   * Build the provider-specific request payload.
+   * Build the provider-specific API request.
    * This method must be implemented by each concrete provider.
    *
    * @param options - The generation options
    * @param descriptor - The model descriptor
    * @param spec - Optional model specification with metadata
    * @param messages - The prepared messages
-   * @returns Provider-specific payload ready for the API call
+   * @returns Provider-specific request object ready for the API call
    */
-  protected abstract buildRequestPayload(
+  protected abstract buildApiRequest(
     options: LLMGenerationOptions,
     descriptor: ModelDescriptor,
     spec: ModelSpec | undefined,
@@ -96,11 +96,11 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
   ): Promise<AsyncIterable<unknown>>;
 
   /**
-   * Wrap the provider-specific stream into the universal LLMStream format.
+   * Normalize the provider-specific stream into the universal LLMStream format.
    * This method must be implemented by each concrete provider.
    *
    * @param rawStream - The provider-specific stream
    * @returns Universal LLMStream
    */
-  protected abstract wrapStream(rawStream: AsyncIterable<unknown>): LLMStream;
+  protected abstract normalizeProviderStream(rawStream: AsyncIterable<unknown>): LLMStream;
 }

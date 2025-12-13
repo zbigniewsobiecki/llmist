@@ -99,14 +99,14 @@ export class FetchData extends Gadget({
 Create interactive gadgets:
 
 ```typescript
-import { Gadget, HumanInputException, z } from 'llmist';
+import { Gadget, HumanInputRequiredException, z } from 'llmist';
 
 export class AskUser extends Gadget({
   description: 'Ask the user a question',
   schema: z.object({ question: z.string() }),
 }) {
   execute(params: this['params']): string {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 ```
@@ -121,14 +121,14 @@ llmist agent "Interview me" --gadget ./ask-user.ts
 Stop the agent loop:
 
 ```typescript
-import { Gadget, BreakLoopException, z } from 'llmist';
+import { Gadget, TaskCompletionSignal, z } from 'llmist';
 
 export class Done extends Gadget({
   description: 'Call when task is complete',
   schema: z.object({ summary: z.string() }),
 }) {
   execute(params: this['params']): string {
-    throw new BreakLoopException(params.summary);
+    throw new TaskCompletionSignal(params.summary);
   }
 }
 ```
@@ -219,8 +219,168 @@ export class Shell extends Gadget({
 }
 ```
 
+## External Gadgets (npm/git)
+
+Load gadgets from npm packages or git repositories. Packages are auto-installed to `~/.llmist/gadget-cache/`.
+
+### npm Packages
+
+```bash
+# All gadgets from package
+llmist agent "Navigate to apple.com" -g webasto
+
+# Specific version
+llmist agent "Screenshot google.com" -g webasto@2.0.0
+
+# Preset (subset of gadgets)
+llmist agent "Browse the web" -g webasto:minimal
+
+# Single gadget
+llmist agent "Go to example.com" -g webasto/Navigate
+
+# Version + preset
+llmist agent "Take screenshots" -g webasto@2.0.0:readonly
+```
+
+### git URLs
+
+```bash
+# Clone and use gadgets from git
+llmist agent "task" -g git+https://github.com/user/repo.git
+
+# With specific ref (tag, branch, commit)
+llmist agent "task" -g git+https://github.com/user/repo.git#v1.0.0
+```
+
+### Combining Sources
+
+```bash
+# Mix local files, npm packages, git URLs, and builtins
+llmist agent "Complex task" \
+  -g ./local-gadget.ts \
+  -g webasto:minimal \
+  -g builtin:ReadFile \
+  -g git+https://github.com/user/my-gadgets.git
+```
+
+### Presets
+
+External packages can define presets - named subsets of gadgets for common use cases:
+
+```bash
+# webasto presets:
+# - all: All 26+ browser automation gadgets
+# - minimal: Navigate, Screenshot, GetFullPageContent
+# - readonly: Navigation and read-only operations
+# - subagent: BrowseWeb (high-level autonomous browser)
+
+llmist agent "Research task" -g webasto:subagent
+```
+
+### Subagents
+
+Some packages export **subagents** - gadgets that run their own agent loop internally:
+
+```bash
+# BrowseWeb is a subagent that handles web browsing autonomously
+llmist agent "Find iPhone 16 Pro price on apple.com" -g webasto/BrowseWeb
+```
+
+The subagent launches its own browser, navigates, clicks, and extracts data without requiring you to orchestrate individual browser operations.
+
+### Subagent Configuration
+
+Subagents like `BrowseWeb` can be configured via `cli.toml`. By default, subagents **inherit the parent agent's model** - no configuration needed!
+
+#### Global Subagent Defaults
+
+Configure subagent behavior for all profiles:
+
+```toml
+# ~/.llmist/cli.toml
+
+# Global subagent configuration
+[subagents]
+default-model = "inherit"              # Default: inherit from parent agent
+
+# Per-subagent configuration
+[subagents.BrowseWeb]
+model = "inherit"                      # Use parent agent's model
+maxIterations = 20                     # More iterations than default (15)
+headless = true                        # Run browser headless
+```
+
+#### Profile-Specific Overrides
+
+Override subagent settings per profile:
+
+```toml
+[research]
+inherits = "profile-research"
+model = "gemini-2.5-flash"             # Parent model for this profile
+
+# BrowseWeb will inherit gemini-2.5-flash
+[research.subagents.BrowseWeb]
+maxIterations = 30                     # More iterations for research
+headless = true
+
+[develop]
+inherits = "profile-readwrite"
+model = "sonnet"
+
+# Override: use cheaper model for dev browsing
+[develop.subagents.BrowseWeb]
+model = "haiku"                        # Explicit model (doesn't inherit)
+headless = false                       # Show browser for debugging
+```
+
+#### Resolution Priority
+
+Subagent configuration resolves in this order (highest to lowest):
+
+1. **Runtime params** - Explicit gadget call: `BrowseWeb(model="opus", ...)`
+2. **Profile subagent config** - `[profile.subagents.BrowseWeb]`
+3. **Global subagent config** - `[subagents.BrowseWeb]`
+4. **Global default** - `[subagents] default-model`
+5. **Parent agent model** - If any level specifies `"inherit"`
+6. **Package default** - Hardcoded in the subagent
+
+### Cache Management
+
+External packages are cached in `~/.llmist/gadget-cache/`:
+
+```
+~/.llmist/gadget-cache/
+├── npm/
+│   └── webasto@latest/
+└── git/
+    └── github.com-user-repo-v1.0.0/
+```
+
+To force reinstallation, delete the cached directory.
+
+### Creating External Gadget Packages
+
+To publish your own gadget package, add an `llmist` field to `package.json`:
+
+```json
+{
+  "name": "my-gadgets",
+  "llmist": {
+    "gadgets": "./dist/index.js",
+    "presets": {
+      "all": "*",
+      "minimal": ["GadgetA", "GadgetB"]
+    }
+  }
+}
+```
+
+See **[External Gadgets Example](../examples/20-external-gadgets.ts)** for more details.
+
 ## See Also
 
 - **[CLI Reference](./CLI.md)** - Full CLI docs
 - **[Gadgets Guide](./GADGETS.md)** - Library gadget docs
 - **[Human-in-the-Loop](./HUMAN_IN_LOOP.md)** - Interactive workflows
+- **[External Gadgets Example](../examples/20-external-gadgets.ts)** - Detailed examples

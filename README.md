@@ -85,11 +85,19 @@ bun add llmist
 ## 🖥️ Command Line Interface
 
 ```bash
+# Initialize config (creates ~/.llmist/cli.toml)
+bunx llmist init
+
 # Quick completion
 bunx llmist complete "Explain TypeScript generics" --model haiku
 
 # Agent with tools
 bunx llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
+
+# External gadgets (npm/git - auto-installed)
+bunx llmist agent "Browse apple.com" --gadget webasto --model sonnet
+bunx llmist agent "Screenshot google.com" --gadget webasto:minimal
+bunx llmist agent "Navigate to site" --gadget git+https://github.com/user/gadgets.git
 
 # Pipe input
 cat document.txt | llmist complete "Summarize" --model gpt-5-nano
@@ -281,7 +289,7 @@ class AskUser extends Gadget({
   schema: z.object({ question: z.string() }),
 }) {
   execute(params: this['params']) {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 
@@ -429,6 +437,7 @@ Comprehensive examples are available in the **[examples/](./examples/)** directo
 | **[07-logging.ts](./examples/07-logging.ts)** | Logging and debugging |
 | **[13-syntactic-sugar.ts](./examples/13-syntactic-sugar.ts)** | Fluent API showcase |
 | **[11-gadget-dependencies.ts](./examples/11-gadget-dependencies.ts)** | Gadget dependencies (DAG execution) |
+| **[20-external-gadgets.ts](./examples/20-external-gadgets.ts)** | npm/git gadget packages |
 
 **Run any example:**
 ```bash

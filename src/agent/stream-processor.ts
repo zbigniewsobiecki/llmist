@@ -10,13 +10,15 @@ import type { LLMist } from "../core/client.js";
 import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
 import { GadgetExecutor } from "../gadgets/executor.js";
 import type { MediaStore } from "../gadgets/media-store.js";
-import { StreamParser } from "../gadgets/parser.js";
+import { GadgetCallParser } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
+  AgentContextConfig,
   GadgetExecutionResult,
   GadgetSkippedEvent,
   ParsedGadgetCall,
   StreamEvent,
+  SubagentConfigMap,
 } from "../gadgets/types.js";
 import { createLogger } from "../logging/logger.js";
 import {
@@ -66,14 +68,14 @@ export interface StreamProcessorOptions {
   /** Logger instance */
   logger?: Logger<ILogObj>;
 
-  /** Callback for human input */
-  onHumanInputRequired?: (question: string) => Promise<string>;
+  /** Callback for requesting human input during execution */
+  requestHumanInput?: (question: string) => Promise<string>;
 
   /** Whether to stop on gadget errors */
   stopOnGadgetError?: boolean;
 
-  /** Custom error continuation logic */
-  shouldContinueAfterError?: (context: {
+  /** Custom error recovery logic */
+  canRecoverFromGadgetError?: (context: {
     error: string;
     gadgetName: string;
     errorType: "parse" | "validation" | "execution";
@@ -88,6 +90,12 @@ export interface StreamProcessorOptions {
 
   /** MediaStore for storing gadget media outputs */
   mediaStore?: MediaStore;
+
+  /** Parent agent configuration for subagents to inherit */
+  agentConfig?: AgentContextConfig;
+
+  /** Subagent-specific configuration overrides */
+  subagentConfig?: SubagentConfigMap;
 }
 
 /**
@@ -143,23 +151,23 @@ export class StreamProcessor {
   private readonly registry: GadgetRegistry;
   private readonly hooks: AgentHooks;
   private readonly logger: Logger<ILogObj>;
-  private readonly parser: StreamParser;
+  private readonly parser: GadgetCallParser;
   private readonly executor: GadgetExecutor;
   private readonly stopOnGadgetError: boolean;
-  private readonly shouldContinueAfterError?: (context: {
+  private readonly canRecoverFromGadgetError?: (context: {
     error: string;
     gadgetName: string;
     errorType: "parse" | "validation" | "execution";
     parameters?: Record<string, unknown>;
   }) => boolean | Promise<boolean>;
 
-  private accumulatedText = "";
-  private shouldStopExecution = false;
+  private responseText = "";
+  private executionHalted = false;
   private observerFailureCount = 0;
 
   // Dependency tracking for gadget execution DAG
   /** Gadgets waiting for their dependencies to complete */
-  private pendingGadgets: Map<string, ParsedGadgetCall> = new Map();
+  private gadgetsAwaitingDependencies: Map<string, ParsedGadgetCall> = new Map();
   /** Completed gadget results, keyed by invocation ID */
   private completedResults: Map<string, GadgetExecutionResult> = new Map();
   /** Invocation IDs of gadgets that have failed (error or skipped due to dependency) */
@@ -171,9 +179,9 @@ export class StreamProcessor {
     this.hooks = options.hooks ?? {};
     this.logger = options.logger ?? createLogger({ name: "llmist:stream-processor" });
     this.stopOnGadgetError = options.stopOnGadgetError ?? true;
-    this.shouldContinueAfterError = options.shouldContinueAfterError;
+    this.canRecoverFromGadgetError = options.canRecoverFromGadgetError;
 
-    this.parser = new StreamParser({
+    this.parser = new GadgetCallParser({
       startPrefix: options.gadgetStartPrefix,
       endPrefix: options.gadgetEndPrefix,
       argPrefix: options.gadgetArgPrefix,
@@ -181,12 +189,14 @@ export class StreamProcessor {
 
     this.executor = new GadgetExecutor(
       options.registry,
-      options.onHumanInputRequired,
+      options.requestHumanInput,
       this.logger.getSubLogger({ name: "executor" }),
       options.defaultGadgetTimeoutMs,
       { argPrefix: options.gadgetArgPrefix },
       options.client,
       options.mediaStore,
+      options.agentConfig,
+      options.subagentConfig,
     );
   }
 
@@ -214,7 +224,7 @@ export class StreamProcessor {
         if (this.hooks.interceptors?.interceptRawChunk) {
           const context: ChunkInterceptorContext = {
             iteration: this.iteration,
-            accumulatedText: this.accumulatedText,
+            accumulatedText: this.responseText,
             logger: this.logger,
           };
           const intercepted = this.hooks.interceptors.interceptRawChunk(processedChunk, context);
@@ -228,7 +238,7 @@ export class StreamProcessor {
 
         // Accumulate text
         if (processedChunk) {
-          this.accumulatedText += processedChunk;
+          this.responseText += processedChunk;
         }
       }
 
@@ -239,7 +249,7 @@ export class StreamProcessor {
           const context: ObserveChunkContext = {
             iteration: this.iteration,
             rawChunk: processedChunk,
-            accumulatedText: this.accumulatedText,
+            accumulatedText: this.responseText,
             usage,
             logger: this.logger,
           };
@@ -272,14 +282,14 @@ export class StreamProcessor {
       }
 
       // Break if we should stop execution
-      if (this.shouldStopExecution) {
+      if (this.executionHalted) {
         this.logger.info("Breaking from LLM stream due to gadget error");
         break;
       }
     }
 
     // Finalize parsing
-    if (!this.shouldStopExecution) {
+    if (!this.executionHalted) {
       for (const event of this.parser.finalize()) {
         const processedEvents = await this.processEvent(event);
         outputs.push(...processedEvents);
@@ -312,11 +322,11 @@ export class StreamProcessor {
     }
 
     // Step 4: Interceptor - Transform final message
-    let finalMessage = this.accumulatedText;
+    let finalMessage = this.responseText;
     if (this.hooks.interceptors?.interceptAssistantMessage) {
       const context: MessageInterceptorContext = {
         iteration: this.iteration,
-        rawResponse: this.accumulatedText,
+        rawResponse: this.responseText,
         logger: this.logger,
       };
       finalMessage = this.hooks.interceptors.interceptAssistantMessage(finalMessage, context);
@@ -328,7 +338,7 @@ export class StreamProcessor {
       didExecuteGadgets,
       finishReason,
       usage,
-      rawResponse: this.accumulatedText,
+      rawResponse: this.responseText,
       finalMessage,
     };
   }
@@ -355,7 +365,7 @@ export class StreamProcessor {
     if (this.hooks.interceptors?.interceptTextChunk) {
       const context: ChunkInterceptorContext = {
         iteration: this.iteration,
-        accumulatedText: this.accumulatedText,
+        accumulatedText: this.responseText,
         logger: this.logger,
       };
       const intercepted = this.hooks.interceptors.interceptTextChunk(content, context);
@@ -378,7 +388,7 @@ export class StreamProcessor {
    */
   private async processGadgetCall(call: ParsedGadgetCall): Promise<StreamEvent[]> {
     // Check if we should skip due to previous error
-    if (this.shouldStopExecution) {
+    if (this.executionHalted) {
       this.logger.debug("Skipping gadget execution due to previous error", {
         gadgetName: call.gadgetName,
       });
@@ -429,7 +439,7 @@ export class StreamProcessor {
           invocationId: call.invocationId,
           waitingOn: unsatisfied,
         });
-        this.pendingGadgets.set(call.invocationId, call);
+        this.gadgetsAwaitingDependencies.set(call.invocationId, call);
         return events; // Return call event only, execution deferred
       }
     }
@@ -460,7 +470,7 @@ export class StreamProcessor {
         rawParameters: call.parametersRaw,
       });
 
-      const shouldContinue = await this.checkContinueAfterError(
+      const shouldContinue = await this.checkCanRecoverFromError(
         call.parseError,
         call.gadgetName,
         "parse",
@@ -468,7 +478,7 @@ export class StreamProcessor {
       );
 
       if (!shouldContinue) {
-        this.shouldStopExecution = true;
+        this.executionHalted = true;
       }
     }
 
@@ -624,7 +634,7 @@ export class StreamProcessor {
     // Check if we should stop after error
     if (result.error) {
       const errorType = this.determineErrorType(call, result);
-      const shouldContinue = await this.checkContinueAfterError(
+      const shouldContinue = await this.checkCanRecoverFromError(
         result.error,
         result.gadgetName,
         errorType,
@@ -632,7 +642,7 @@ export class StreamProcessor {
       );
 
       if (!shouldContinue) {
-        this.shouldStopExecution = true;
+        this.executionHalted = true;
       }
     }
 
@@ -739,14 +749,14 @@ export class StreamProcessor {
     const events: StreamEvent[] = [];
     let progress = true;
 
-    while (progress && this.pendingGadgets.size > 0) {
+    while (progress && this.gadgetsAwaitingDependencies.size > 0) {
       progress = false;
 
       // Find all gadgets that are ready to execute
       const readyToExecute: ParsedGadgetCall[] = [];
       const readyToSkip: Array<{ call: ParsedGadgetCall; failedDep: string }> = [];
 
-      for (const [invocationId, call] of this.pendingGadgets) {
+      for (const [invocationId, call] of this.gadgetsAwaitingDependencies) {
         // Check for failed dependency
         const failedDep = call.dependencies.find((dep) => this.failedInvocations.has(dep));
         if (failedDep) {
@@ -763,7 +773,7 @@ export class StreamProcessor {
 
       // Handle skipped gadgets
       for (const { call, failedDep } of readyToSkip) {
-        this.pendingGadgets.delete(call.invocationId);
+        this.gadgetsAwaitingDependencies.delete(call.invocationId);
         const skipEvents = await this.handleFailedDependency(call, failedDep);
         events.push(...skipEvents);
         progress = true;
@@ -778,7 +788,7 @@ export class StreamProcessor {
 
         // Remove from pending before executing
         for (const call of readyToExecute) {
-          this.pendingGadgets.delete(call.invocationId);
+          this.gadgetsAwaitingDependencies.delete(call.invocationId);
         }
 
         // Execute all ready gadgets in parallel
@@ -795,11 +805,11 @@ export class StreamProcessor {
     }
 
     // Warn about any remaining unresolved gadgets (circular or missing dependencies)
-    if (this.pendingGadgets.size > 0) {
+    if (this.gadgetsAwaitingDependencies.size > 0) {
       // Collect all pending invocation IDs to detect circular dependencies
-      const pendingIds = new Set(this.pendingGadgets.keys());
+      const pendingIds = new Set(this.gadgetsAwaitingDependencies.keys());
 
-      for (const [invocationId, call] of this.pendingGadgets) {
+      for (const [invocationId, call] of this.gadgetsAwaitingDependencies) {
         const missingDeps = call.dependencies.filter((dep) => !this.completedResults.has(dep));
 
         // Categorize the dependency issue
@@ -837,7 +847,7 @@ export class StreamProcessor {
         };
         events.push(skipEvent);
       }
-      this.pendingGadgets.clear();
+      this.gadgetsAwaitingDependencies.clear();
     }
 
     return events;
@@ -877,25 +887,25 @@ export class StreamProcessor {
   }
 
   /**
-   * Check if execution should continue after an error.
+   * Check if execution can recover from an error.
    *
    * Returns true if we should continue processing subsequent gadgets, false if we should stop.
    *
    * Logic:
-   * - If custom shouldContinueAfterError is provided, use it
+   * - If custom canRecoverFromGadgetError is provided, use it
    * - Otherwise, use stopOnGadgetError config:
    *   - stopOnGadgetError=true → return false (stop execution)
    *   - stopOnGadgetError=false → return true (continue execution)
    */
-  private async checkContinueAfterError(
+  private async checkCanRecoverFromError(
     error: string,
     gadgetName: string,
     errorType: "parse" | "validation" | "execution",
     parameters?: Record<string, unknown>,
   ): Promise<boolean> {
-    // Custom error continuation logic takes precedence
-    if (this.shouldContinueAfterError) {
-      return await this.shouldContinueAfterError({
+    // Custom error recovery logic takes precedence
+    if (this.canRecoverFromGadgetError) {
+      return await this.canRecoverFromGadgetError({
         error,
         gadgetName,
         errorType,

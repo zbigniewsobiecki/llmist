@@ -11,7 +11,8 @@ import { GadgetRegistry } from "../gadgets/registry.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import { type ApprovalConfig, ApprovalManager } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
-import type { AgentConfig } from "./config.js";
+import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
+import { buildSubagentConfigMap } from "./subagent-config.js";
 import { COMMANDS } from "./constants.js";
 import {
   createDockerContext,
@@ -31,7 +32,7 @@ import {
   resolveLogDir,
   writeLogFile,
 } from "./llm-logging.js";
-import { type AgentCommandOptions, addAgentOptions } from "./option-helpers.js";
+import { type CLIAgentOptions, addAgentOptions } from "./option-helpers.js";
 import {
   formatGadgetSummary,
   renderMarkdownWithSeparators,
@@ -141,7 +142,7 @@ function createHumanInputHandler(
  */
 export async function executeAgent(
   promptArg: string | undefined,
-  options: AgentCommandOptions,
+  options: CLIAgentOptions,
   env: CLIEnvironment,
 ): Promise<void> {
   // Check if Docker sandboxing is enabled
@@ -379,8 +380,16 @@ export async function executeAgent(
   //
   // The CLI uses custom hooks for fine-grained control over the spinner animation
   // and real-time updates, showcasing llmist's flexibility for building polished UIs.
+  // Build resolved subagent config map for subagent gadgets to inherit settings
+  const resolvedSubagentConfig = buildSubagentConfigMap(
+    options.model,
+    options.subagents,
+    options.globalSubagents,
+  );
+
   const builder = new AgentBuilder(client)
     .withModel(options.model)
+    .withSubagentConfig(resolvedSubagentConfig)
     .withLogger(env.createLogger("llmist:cli:agent"))
     .withHooks({
       observers: {
@@ -766,6 +775,7 @@ export function registerAgentCommand(
   program: Command,
   env: CLIEnvironment,
   config?: AgentConfig,
+  globalSubagents?: GlobalSubagentConfig,
 ): void {
   const cmd = program
     .command(COMMANDS.agent)
@@ -777,9 +787,11 @@ export function registerAgentCommand(
   cmd.action((prompt, options) =>
     executeAction(() => {
       // Merge config-only options (no CLI flags) into command options
-      const mergedOptions: AgentCommandOptions = {
-        ...(options as AgentCommandOptions),
+      const mergedOptions: CLIAgentOptions = {
+        ...(options as CLIAgentOptions),
         gadgetApproval: config?.["gadget-approval"],
+        subagents: config?.subagents,
+        globalSubagents,
       };
       return executeAgent(prompt, mergedOptions, env);
     }, env),

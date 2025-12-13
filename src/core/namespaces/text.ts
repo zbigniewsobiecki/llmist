@@ -19,7 +19,7 @@
  */
 
 import type { LLMist } from "../client.js";
-import { complete, type QuickOptions, stream } from "../quick-methods.js";
+import { complete, type TextGenerationOptions, stream } from "../quick-methods.js";
 
 export class TextNamespace {
   constructor(private readonly client: LLMist) {}
@@ -31,7 +31,7 @@ export class TextNamespace {
    * @param options - Optional configuration
    * @returns Complete text response
    */
-  async complete(prompt: string, options?: QuickOptions): Promise<string> {
+  async complete(prompt: string, options?: TextGenerationOptions): Promise<string> {
     return complete(this.client, prompt, options);
   }
 
@@ -42,7 +42,7 @@ export class TextNamespace {
    * @param options - Optional configuration
    * @returns Async generator yielding text chunks
    */
-  stream(prompt: string, options?: QuickOptions): AsyncGenerator<string> {
+  stream(prompt: string, options?: TextGenerationOptions): AsyncGenerator<string> {
     return stream(this.client, prompt, options);
   }
 }

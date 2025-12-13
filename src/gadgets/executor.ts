@@ -4,41 +4,45 @@ import { GADGET_ARG_PREFIX } from "../core/constants.js";
 import { createLogger } from "../logging/logger.js";
 import { parseBlockParams } from "./block-params.js";
 import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
-import { type ErrorFormatterOptions, GadgetErrorFormatter } from "./error-formatter.js";
+import { type ErrorFormatterOptions, GadgetExecutionErrorFormatter } from "./error-formatter.js";
 import {
-  AbortError,
-  BreakLoopException,
-  HumanInputException,
+  AbortException,
+  HumanInputRequiredException,
+  TaskCompletionSignal,
   TimeoutException,
 } from "./exceptions.js";
 import type { MediaStore } from "./media-store.js";
 import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
 import type {
+  AgentContextConfig,
   ExecutionContext,
   GadgetExecuteResult,
   GadgetExecuteResultWithMedia,
   GadgetExecutionResult,
   GadgetMediaOutput,
   ParsedGadgetCall,
+  SubagentConfigMap,
 } from "./types.js";
 
 export class GadgetExecutor {
   private readonly logger: Logger<ILogObj>;
-  private readonly errorFormatter: GadgetErrorFormatter;
+  private readonly errorFormatter: GadgetExecutionErrorFormatter;
   private readonly argPrefix: string;
 
   constructor(
     private readonly registry: GadgetRegistry,
-    private readonly onHumanInputRequired?: (question: string) => Promise<string>,
+    private readonly requestHumanInput?: (question: string) => Promise<string>,
     logger?: Logger<ILogObj>,
     private readonly defaultGadgetTimeoutMs?: number,
     errorFormatterOptions?: ErrorFormatterOptions,
     private readonly client?: LLMist,
     private readonly mediaStore?: MediaStore,
+    private readonly agentConfig?: AgentContextConfig,
+    private readonly subagentConfig?: SubagentConfigMap,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
-    this.errorFormatter = new GadgetErrorFormatter(errorFormatterOptions);
+    this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
     this.argPrefix = errorFormatterOptions?.argPrefix ?? GADGET_ARG_PREFIX;
   }
 
@@ -63,11 +67,11 @@ export class GadgetExecutor {
   }
 
   /**
-   * Normalizes gadget execute result to consistent format.
+   * Unify gadget execute result to consistent internal format.
    * Handles string returns (backwards compat), object returns with cost,
    * and object returns with media.
    */
-  private normalizeExecuteResult(
+  private unifyExecuteResult(
     raw: string | GadgetExecuteResult | GadgetExecuteResultWithMedia,
   ): { result: string; media?: GadgetMediaOutput[]; cost: number } {
     if (typeof raw === "string") {
@@ -222,11 +226,13 @@ export class GadgetExecutor {
         }
       };
 
-      // Build execution context with abort signal
+      // Build execution context with abort signal and agent config
       const ctx: ExecutionContext = {
         reportCost,
         llmist: this.client ? new CostReportingLLMistWrapper(this.client, reportCost) : undefined,
         signal: abortController.signal,
+        agentConfig: this.agentConfig,
+        subagentConfig: this.subagentConfig,
       };
 
       // Execute gadget (handle both sync and async)
@@ -247,7 +253,7 @@ export class GadgetExecutor {
       }
 
       // Normalize result: handle string returns (legacy), object returns with cost, and media
-      const { result, media, cost: returnCost } = this.normalizeExecuteResult(rawResult);
+      const { result, media, cost: returnCost } = this.unifyExecuteResult(rawResult);
 
       // Sum callback costs + return costs
       const totalCost = callbackCost + returnCost;
@@ -300,8 +306,8 @@ export class GadgetExecutor {
         storedMedia,
       };
     } catch (error) {
-      // Check if this is a BreakLoopException
-      if (error instanceof BreakLoopException) {
+      // Check if this is a TaskCompletionSignal
+      if (error instanceof TaskCompletionSignal) {
         this.logger.info("Gadget requested loop termination", {
           gadgetName: call.gadgetName,
           message: error.message,
@@ -332,8 +338,8 @@ export class GadgetExecutor {
         };
       }
 
-      // Check if this is an AbortError (thrown by gadgets when they detect abort signal)
-      if (error instanceof AbortError) {
+      // Check if this is an AbortException (thrown by gadgets when they detect abort signal)
+      if (error instanceof AbortException) {
         this.logger.info("Gadget execution was aborted", {
           gadgetName: call.gadgetName,
           executionTimeMs: Date.now() - startTime,
@@ -347,17 +353,17 @@ export class GadgetExecutor {
         };
       }
 
-      // Check if this is a HumanInputException
-      if (error instanceof HumanInputException) {
+      // Check if this is a HumanInputRequiredException
+      if (error instanceof HumanInputRequiredException) {
         this.logger.info("Gadget requested human input", {
           gadgetName: call.gadgetName,
           question: error.question,
         });
 
         // If callback is provided, call it and wait for answer
-        if (this.onHumanInputRequired) {
+        if (this.requestHumanInput) {
           try {
-            const answer = await this.onHumanInputRequired(error.question);
+            const answer = await this.requestHumanInput(error.question);
             this.logger.debug("Human input received", {
               gadgetName: call.gadgetName,
               answerLength: answer.length,

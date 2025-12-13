@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { type ZodError, z } from "zod";
-import { GadgetErrorFormatter } from "./error-formatter.js";
+import { GadgetExecutionErrorFormatter } from "./error-formatter.js";
 import { Gadget } from "./typed-gadget.js";
 
 // Test gadget with schema and examples
@@ -39,10 +39,10 @@ class CalculatorGadget extends Gadget({
   }
 }
 
-// Simple gadget without schema (using BaseGadget for parameterless gadgets)
-import { BaseGadget } from "./gadget.js";
+// Simple gadget without schema (using AbstractGadget for parameterless gadgets)
+import { AbstractGadget } from "./gadget.js";
 
-class SimpleGadget extends BaseGadget {
+class SimpleGadget extends AbstractGadget {
   name = "SimpleGadget";
   description = "A simple gadget with no parameters";
 
@@ -51,8 +51,8 @@ class SimpleGadget extends BaseGadget {
   }
 }
 
-describe("GadgetErrorFormatter", () => {
-  const formatter = new GadgetErrorFormatter();
+describe("GadgetExecutionErrorFormatter", () => {
+  const formatter = new GadgetExecutionErrorFormatter();
 
   describe("formatValidationError", () => {
     it("formats single validation error with gadget instructions", () => {
@@ -188,7 +188,7 @@ describe("GadgetErrorFormatter", () => {
 
   describe("custom prefixes", () => {
     it("uses custom argument prefix in formatted errors", () => {
-      const customFormatter = new GadgetErrorFormatter({
+      const customFormatter = new GadgetExecutionErrorFormatter({
         argPrefix: "@@PARAM:",
         startPrefix: "@@START:",
         endPrefix: "@@END",

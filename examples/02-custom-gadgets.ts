@@ -5,7 +5,7 @@
  */
 
 import {
-  BreakLoopException,
+  TaskCompletionSignal,
   createGadget,
   type ExecutionContext,
   Gadget,
@@ -140,7 +140,7 @@ class TaskComplete extends Gadget({
   }),
 }) {
   execute(params: this["params"]): string {
-    throw new BreakLoopException(params.summary);
+    throw new TaskCompletionSignal(params.summary);
   }
 }
 

@@ -5,7 +5,7 @@
 import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
-import { BreakLoopException, HumanInputException } from "../gadgets/exceptions.js";
+import { TaskCompletionSignal, HumanInputRequiredException } from "../gadgets/exceptions.js";
 
 /**
  * AskUser gadget - Asks the user a question and waits for their response.
@@ -33,7 +33,7 @@ export const askUser = createGadget({
     },
   ],
   execute: ({ question }) => {
-    throw new HumanInputException(question);
+    throw new HumanInputRequiredException(question);
   },
 });
 
@@ -105,7 +105,7 @@ export const finish = createGadget({
     },
   ],
   execute: () => {
-    throw new BreakLoopException("Task completed");
+    throw new TaskCompletionSignal("Task completed");
   },
 });
 

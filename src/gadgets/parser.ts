@@ -45,9 +45,13 @@ export function resetGlobalInvocationCounter(): void {
   globalInvocationCounter = 0;
 }
 
-export class StreamParser {
+/**
+ * Parser for extracting gadget invocations from LLM text output.
+ * Processes text chunks incrementally and emits events for text and gadget calls.
+ */
+export class GadgetCallParser {
   private buffer = "";
-  private lastReportedTextLength = 0;
+  private lastEmittedTextOffset = 0;
   private readonly startPrefix: string;
   private readonly endPrefix: string;
   private readonly argPrefix: string;
@@ -58,19 +62,23 @@ export class StreamParser {
     this.argPrefix = options.argPrefix ?? GADGET_ARG_PREFIX;
   }
 
-  private takeTextUntil(index: number): string | undefined {
-    if (index <= this.lastReportedTextLength) {
+  /**
+   * Extract and consume text up to the given index.
+   * Returns undefined if no meaningful text to emit.
+   */
+  private extractTextSegment(index: number): string | undefined {
+    if (index <= this.lastEmittedTextOffset) {
       return undefined;
     }
 
-    const segment = this.buffer.slice(this.lastReportedTextLength, index);
-    this.lastReportedTextLength = index;
+    const segment = this.buffer.slice(this.lastEmittedTextOffset, index);
+    this.lastEmittedTextOffset = index;
 
     return segment.trim().length > 0 ? segment : undefined;
   }
 
   /**
-   * Parse gadget name with optional invocation ID and dependencies.
+   * Parse gadget invocation metadata from the header line.
    *
    * Supported formats:
    * - `GadgetName` - Auto-generate ID, no dependencies
@@ -79,24 +87,24 @@ export class StreamParser {
    *
    * Dependencies must be comma-separated invocation IDs.
    */
-  private parseGadgetName(gadgetName: string): {
-    actualName: string;
+  private parseInvocationMetadata(headerLine: string): {
+    gadgetName: string;
     invocationId: string;
     dependencies: string[];
   } {
-    const parts = gadgetName.split(":");
+    const parts = headerLine.split(":");
 
     if (parts.length === 1) {
       // Just name: GadgetName
       return {
-        actualName: parts[0],
+        gadgetName: parts[0],
         invocationId: `gadget_${++globalInvocationCounter}`,
         dependencies: [],
       };
     } else if (parts.length === 2) {
       // Name + ID: GadgetName:calc_1
       return {
-        actualName: parts[0],
+        gadgetName: parts[0],
         invocationId: parts[1].trim(),
         dependencies: [],
       };
@@ -107,7 +115,7 @@ export class StreamParser {
         .map((d) => d.trim())
         .filter((d) => d.length > 0);
       return {
-        actualName: parts[0],
+        gadgetName: parts[0],
         invocationId: parts[1].trim(),
         dependencies: deps,
       };
@@ -151,22 +159,18 @@ export class StreamParser {
       if (partStartIndex === -1) break;
 
       // Yield any text before the gadget
-      const textBefore = this.takeTextUntil(partStartIndex);
+      const textBefore = this.extractTextSegment(partStartIndex);
       if (textBefore !== undefined) {
         yield { type: "text", content: textBefore };
       }
 
-      // Extract gadget name (no more invocation ID)
+      // Extract gadget metadata from header line
       const metadataStartIndex = partStartIndex + this.startPrefix.length;
       const metadataEndIndex = this.buffer.indexOf("\n", metadataStartIndex);
       if (metadataEndIndex === -1) break; // Wait for more data
 
-      const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
-      const {
-        actualName: actualGadgetName,
-        invocationId,
-        dependencies,
-      } = this.parseGadgetName(gadgetName);
+      const headerLine = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
+      const { gadgetName, invocationId, dependencies } = this.parseInvocationMetadata(headerLine);
 
       const contentStartIndex = metadataEndIndex + 1;
 
@@ -207,7 +211,7 @@ export class StreamParser {
       yield {
         type: "gadget_call",
         call: {
-          gadgetName: actualGadgetName,
+          gadgetName,
           invocationId,
           parametersRaw,
           parameters,
@@ -219,39 +223,35 @@ export class StreamParser {
       // Move past this gadget
       startIndex = partEndIndex + endMarkerLength;
 
-      this.lastReportedTextLength = startIndex;
+      this.lastEmittedTextOffset = startIndex;
     }
 
     // Keep unprocessed data in buffer
     if (startIndex > 0) {
       this.buffer = this.buffer.substring(startIndex);
-      this.lastReportedTextLength = 0;
+      this.lastEmittedTextOffset = 0;
     }
   }
 
   // Finalize parsing and return remaining text or incomplete gadgets
   *finalize(): Generator<StreamEvent> {
     // Check if there's an incomplete gadget in the buffer
-    const startIndex = this.buffer.indexOf(this.startPrefix, this.lastReportedTextLength);
+    const startIndex = this.buffer.indexOf(this.startPrefix, this.lastEmittedTextOffset);
 
     if (startIndex !== -1) {
       // There's an incomplete gadget - try to parse it
-      const textBefore = this.takeTextUntil(startIndex);
+      const textBefore = this.extractTextSegment(startIndex);
       if (textBefore !== undefined) {
         yield { type: "text", content: textBefore };
       }
 
-      // Extract gadget name
+      // Extract gadget metadata from header line
       const metadataStartIndex = startIndex + this.startPrefix.length;
       const metadataEndIndex = this.buffer.indexOf("\n", metadataStartIndex);
 
       if (metadataEndIndex !== -1) {
-        const gadgetName = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
-        const {
-          actualName: actualGadgetName,
-          invocationId,
-          dependencies,
-        } = this.parseGadgetName(gadgetName);
+        const headerLine = this.buffer.substring(metadataStartIndex, metadataEndIndex).trim();
+        const { gadgetName, invocationId, dependencies } = this.parseInvocationMetadata(headerLine);
         const contentStartIndex = metadataEndIndex + 1;
 
         // Extract parameters (everything after the newline to end of buffer)
@@ -262,7 +262,7 @@ export class StreamParser {
         yield {
           type: "gadget_call",
           call: {
-            gadgetName: actualGadgetName,
+            gadgetName,
             invocationId,
             parametersRaw: parametersRaw,
             parameters,
@@ -276,7 +276,7 @@ export class StreamParser {
     }
 
     // No incomplete gadget - just emit remaining text
-    const remainingText = this.takeTextUntil(this.buffer.length);
+    const remainingText = this.extractTextSegment(this.buffer.length);
     if (remainingText !== undefined) {
       yield { type: "text", content: remainingText };
     }
@@ -285,6 +285,7 @@ export class StreamParser {
   // Reset parser state (note: global invocation counter is NOT reset to ensure unique IDs)
   reset(): void {
     this.buffer = "";
-    this.lastReportedTextLength = 0;
+    this.lastEmittedTextOffset = 0;
   }
 }
+

@@ -110,8 +110,8 @@ export {
   toBase64,
 } from "./core/input-content.js";
 
-export type { LLMMessage, LLMRole, MessageContent } from "./core/messages.js";
-export { extractText, LLMMessageBuilder, normalizeContent } from "./core/messages.js";
+export type { LLMMessage, MessageContent, MessageRole } from "./core/messages.js";
+export { extractMessageText, LLMMessageBuilder, normalizeMessageContent } from "./core/messages.js";
 // Model catalog
 export type {
   CostEstimate,
@@ -143,9 +143,9 @@ export { ModelIdentifierParser } from "./core/options.js";
 export type {
   HintContext,
   HintTemplate,
-  PromptConfig,
   PromptContext,
   PromptTemplate,
+  PromptTemplateConfig,
 } from "./core/prompt-config.js";
 export {
   DEFAULT_HINTS,
@@ -154,17 +154,22 @@ export {
   resolvePromptTemplate,
   resolveRulesTemplate,
 } from "./core/prompt-config.js";
-export type { QuickOptions } from "./core/quick-methods.js";
+export type { TextGenerationOptions } from "./core/quick-methods.js";
 export { complete, stream } from "./core/quick-methods.js";
 export type { CreateGadgetConfig } from "./gadgets/create-gadget.js";
 export { createGadget } from "./gadgets/create-gadget.js";
 // Gadget infrastructure
-export { AbortError, BreakLoopException, HumanInputException } from "./gadgets/exceptions.js";
+export {
+  AbortException,
+  HumanInputRequiredException,
+  TaskCompletionSignal,
+  TimeoutException,
+} from "./gadgets/exceptions.js";
 export { GadgetExecutor } from "./gadgets/executor.js";
-export { BaseGadget } from "./gadgets/gadget.js";
+export { AbstractGadget } from "./gadgets/gadget.js";
 // Gadget output viewer (for custom output store integration)
 export { createGadgetOutputViewer } from "./gadgets/output-viewer.js";
-export { StreamParser } from "./gadgets/parser.js";
+export { GadgetCallParser } from "./gadgets/parser.js";
 export type { GadgetClass, GadgetOrClass } from "./gadgets/registry.js";
 export { GadgetRegistry } from "./gadgets/registry.js";
 
@@ -195,7 +200,7 @@ export type {
 } from "./gadgets/types.js";
 // Media output helpers for gadgets
 export {
-  createMedia,
+  createMediaOutput,
   resultWithAudio,
   resultWithFile,
   resultWithImage,

@@ -1,79 +1,82 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  AbortError,
-  BreakLoopException,
-  HumanInputException,
+  AbortException,
+  TaskCompletionSignal,
+  HumanInputRequiredException,
   TimeoutException,
 } from "./exceptions.js";
 
-describe("BreakLoopException", () => {
+describe("TaskCompletionSignal", () => {
   it("creates with custom message", () => {
-    const exception = new BreakLoopException("Task completed successfully");
+    const exception = new TaskCompletionSignal("Task completed successfully");
 
     expect(exception.message).toBe("Task completed successfully");
   });
 
   it("creates with default message when no message provided", () => {
-    const exception = new BreakLoopException();
+    const exception = new TaskCompletionSignal();
 
     expect(exception.message).toBe("Agent loop terminated by gadget");
   });
 
   it("creates with default message when undefined passed", () => {
-    const exception = new BreakLoopException(undefined);
+    const exception = new TaskCompletionSignal(undefined);
 
     expect(exception.message).toBe("Agent loop terminated by gadget");
   });
 
   it("has correct name property", () => {
-    const exception = new BreakLoopException();
+    const exception = new TaskCompletionSignal();
 
-    expect(exception.name).toBe("BreakLoopException");
+    // TaskCompletionSignal is now a deprecated alias for TaskCompletionSignal
+    expect(exception.name).toBe("TaskCompletionSignal");
   });
 
   it("is instanceof Error", () => {
-    const exception = new BreakLoopException();
+    const exception = new TaskCompletionSignal();
 
     expect(exception).toBeInstanceOf(Error);
   });
 
   it("has a stack trace", () => {
-    const exception = new BreakLoopException();
+    const exception = new TaskCompletionSignal();
 
     expect(exception.stack).toBeDefined();
-    expect(exception.stack).toContain("BreakLoopException");
+    // Stack trace contains the actual class name
+    expect(exception.stack).toContain("TaskCompletionSignal");
   });
 });
 
-describe("HumanInputException", () => {
+describe("HumanInputRequiredException", () => {
   it("creates with question", () => {
-    const exception = new HumanInputException("What is your name?");
+    const exception = new HumanInputRequiredException("What is your name?");
 
     expect(exception.question).toBe("What is your name?");
   });
 
   it("has correct message format", () => {
-    const exception = new HumanInputException("What is your name?");
+    const exception = new HumanInputRequiredException("What is your name?");
 
     expect(exception.message).toBe("Human input required: What is your name?");
   });
 
   it("has correct name property", () => {
-    const exception = new HumanInputException("test");
+    const exception = new HumanInputRequiredException("test");
 
-    expect(exception.name).toBe("HumanInputException");
+    // HumanInputRequiredException is now a deprecated alias for HumanInputRequiredException
+    expect(exception.name).toBe("HumanInputRequiredException");
   });
 
   it("is instanceof Error", () => {
-    const exception = new HumanInputException("test");
+    const exception = new HumanInputRequiredException("test");
 
     expect(exception).toBeInstanceOf(Error);
   });
 
   it("stores the question property separately from message", () => {
     const question = "Do you want to continue?";
-    const exception = new HumanInputException(question);
+    const exception = new HumanInputRequiredException(question);
 
     expect(exception.question).toBe(question);
     expect(exception.message).toContain(question);
@@ -81,7 +84,7 @@ describe("HumanInputException", () => {
   });
 
   it("handles empty question", () => {
-    const exception = new HumanInputException("");
+    const exception = new HumanInputRequiredException("");
 
     expect(exception.question).toBe("");
     expect(exception.message).toBe("Human input required: ");
@@ -89,7 +92,7 @@ describe("HumanInputException", () => {
 
   it("handles question with special characters", () => {
     const question = "Are you sure? (yes/no)";
-    const exception = new HumanInputException(question);
+    const exception = new HumanInputRequiredException(question);
 
     expect(exception.question).toBe(question);
     expect(exception.message).toBe(`Human input required: ${question}`);
@@ -156,54 +159,56 @@ describe("TimeoutException", () => {
   });
 });
 
-describe("AbortError", () => {
+describe("AbortException", () => {
   it("creates with custom message", () => {
-    const exception = new AbortError("Custom abort message");
+    const exception = new AbortException("Custom abort message");
 
     expect(exception.message).toBe("Custom abort message");
   });
 
   it("creates with default message when no message provided", () => {
-    const exception = new AbortError();
+    const exception = new AbortException();
 
     expect(exception.message).toBe("Gadget execution was aborted");
   });
 
   it("has correct name property", () => {
-    const exception = new AbortError();
+    const exception = new AbortException();
 
-    expect(exception.name).toBe("AbortError");
+    // AbortException is now a deprecated alias for AbortException
+    expect(exception.name).toBe("AbortException");
   });
 
   it("is instanceof Error", () => {
-    const exception = new AbortError();
+    const exception = new AbortException();
 
     expect(exception).toBeInstanceOf(Error);
   });
 
   it("has a stack trace", () => {
-    const exception = new AbortError();
+    const exception = new AbortException();
 
     expect(exception.stack).toBeDefined();
-    expect(exception.stack).toContain("AbortError");
+    // Stack trace contains the actual class name
+    expect(exception.stack).toContain("AbortException");
   });
 
   it("handles empty message by using default", () => {
-    const exception = new AbortError("");
+    const exception = new AbortException("");
 
     // Empty string should fall back to default message
     expect(exception.message).toBe("Gadget execution was aborted");
   });
 
   it("handles undefined message by using default", () => {
-    const exception = new AbortError(undefined);
+    const exception = new AbortException(undefined);
 
     expect(exception.message).toBe("Gadget execution was aborted");
   });
 
   it("handles message with special characters", () => {
     const message = "Aborted: timeout (30s) exceeded!";
-    const exception = new AbortError(message);
+    const exception = new AbortException(message);
 
     expect(exception.message).toBe(message);
   });

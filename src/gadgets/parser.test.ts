@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { collectSyncEvents } from "../testing/helpers.js";
-import { resetGlobalInvocationCounter, StreamParser } from "./parser.js";
+import { resetGlobalInvocationCounter, GadgetCallParser } from "./parser.js";
 import type { StreamEvent } from "./types.js";
 
-describe("StreamParser", () => {
-  let parser: StreamParser;
+describe("GadgetCallParser", () => {
+  let parser: GadgetCallParser;
 
   beforeEach(() => {
     resetGlobalInvocationCounter();
-    parser = new StreamParser();
+    parser = new GadgetCallParser();
   });
 
   describe("basic parsing", () => {
@@ -429,7 +429,7 @@ ${GADGET_END_PREFIX}`;
 
   describe("custom prefixes", () => {
     it("uses custom start and end prefixes", () => {
-      const customParser = new StreamParser({
+      const customParser = new GadgetCallParser({
         startPrefix: "<<<START:",
         endPrefix: "<<<END:",
       });
@@ -452,7 +452,7 @@ value
     });
 
     it("does not parse default prefixes when using custom ones", () => {
-      const customParser = new StreamParser({
+      const customParser = new GadgetCallParser({
         startPrefix: "<<<START:",
         endPrefix: "<<<END:",
       });
@@ -474,7 +474,7 @@ ${GADGET_END_PREFIX}`;
 
     it("generates globally unique IDs across multiple parser instances", () => {
       // First parser gets gadget_1
-      const parser1 = new StreamParser();
+      const parser1 = new GadgetCallParser();
       const input = `${GADGET_START_PREFIX}TestGadget
 ${GADGET_ARG_PREFIX}x
 1
@@ -482,11 +482,11 @@ ${GADGET_END_PREFIX}`;
       const events1 = collectSyncEvents(parser1.feed(input));
 
       // Second parser gets gadget_2 (not gadget_1 again!)
-      const parser2 = new StreamParser();
+      const parser2 = new GadgetCallParser();
       const events2 = collectSyncEvents(parser2.feed(input));
 
       // Third parser gets gadget_3
-      const parser3 = new StreamParser();
+      const parser3 = new GadgetCallParser();
       const events3 = collectSyncEvents(parser3.feed(input));
 
       expect(events1[0]).toMatchObject({
@@ -694,7 +694,7 @@ describe("custom arg prefix", () => {
   });
 
   it("uses custom arg prefix when specified", () => {
-    const customParser = new StreamParser({
+    const customParser = new GadgetCallParser({
       argPrefix: "@param:",
     });
 
@@ -722,11 +722,11 @@ ${GADGET_END_PREFIX}`;
 });
 
 describe("parse error handling", () => {
-  let parser: StreamParser;
+  let parser: GadgetCallParser;
 
   beforeEach(() => {
     resetGlobalInvocationCounter();
-    parser = new StreamParser();
+    parser = new GadgetCallParser();
   });
 
   it("captures parse error when block format has duplicate pointers", () => {
@@ -957,11 +957,11 @@ ${GADGET_END_PREFIX}`;
 });
 
 describe("dependency parsing", () => {
-  let parser: StreamParser;
+  let parser: GadgetCallParser;
 
   beforeEach(() => {
     resetGlobalInvocationCounter();
-    parser = new StreamParser();
+    parser = new GadgetCallParser();
   });
 
   it("parses gadget with no ID and no dependencies", () => {

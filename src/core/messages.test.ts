@@ -4,8 +4,8 @@ import { Gadget } from "../gadgets/typed-gadget.js";
 import { MathGadget, TestGadget } from "../testing/helpers.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
 import { audioFromBase64, imageFromBase64, imageFromUrl, text } from "./input-content.js";
-import { extractText, isLLMMessage, LLMMessageBuilder, normalizeContent } from "./messages.js";
-import type { PromptConfig } from "./prompt-config.js";
+import { extractMessageText, isLLMMessage, LLMMessageBuilder, normalizeMessageContent } from "./messages.js";
+import type { PromptTemplateConfig } from "./prompt-config.js";
 
 /** Test gadget with examples for testing argPrefix propagation */
 class ExampleGadget extends Gadget({
@@ -200,10 +200,10 @@ describe("LLMMessageBuilder", () => {
     });
   });
 
-  describe("addGadgetCall", () => {
+  describe("addGadgetCallResult", () => {
     it("adds gadget call as assistant message and result as user message", () => {
       const builder = new LLMMessageBuilder();
-      builder.addGadgetCall("TestGadget", { message: "hello" }, "Echo: hello");
+      builder.addGadgetCallResult("TestGadget", { message: "hello" }, "Echo: hello");
 
       const messages = builder.build();
 
@@ -214,7 +214,7 @@ describe("LLMMessageBuilder", () => {
 
     it("formats gadget call with block format parameters", () => {
       const builder = new LLMMessageBuilder();
-      builder.addGadgetCall("MathGadget", { operation: "add", a: 5, b: 3 }, "8");
+      builder.addGadgetCallResult("MathGadget", { operation: "add", a: 5, b: 3 }, "8");
 
       const messages = builder.build();
 
@@ -235,7 +235,7 @@ describe("LLMMessageBuilder", () => {
 
     it("handles complex parameter objects", () => {
       const builder = new LLMMessageBuilder();
-      builder.addGadgetCall(
+      builder.addGadgetCallResult(
         "ComplexGadget",
         {
           nested: { value: 42 },
@@ -256,7 +256,7 @@ describe("LLMMessageBuilder", () => {
 
     it("handles empty parameters", () => {
       const builder = new LLMMessageBuilder();
-      builder.addGadgetCall("EmptyGadget", {}, "done");
+      builder.addGadgetCallResult("EmptyGadget", {}, "done");
 
       const messages = builder.build();
       const callMessage = messages[0]?.content ?? "";
@@ -294,7 +294,7 @@ describe("LLMMessageBuilder", () => {
 
   describe("custom prompt configuration", () => {
     it("allows custom main instruction", () => {
-      const customConfig: PromptConfig = {
+      const customConfig: PromptTemplateConfig = {
         mainInstruction: "CUSTOM INSTRUCTION: Use gadgets only",
       };
 
@@ -308,7 +308,7 @@ describe("LLMMessageBuilder", () => {
     });
 
     it("allows custom rules", () => {
-      const customConfig: PromptConfig = {
+      const customConfig: PromptTemplateConfig = {
         rules: ["Custom rule 1", "Custom rule 2"],
       };
 
@@ -341,7 +341,7 @@ describe("LLMMessageBuilder", () => {
     it("configures custom prefixes for history building", () => {
       const builder = new LLMMessageBuilder();
       builder.withPrefixes("<<<START:", "<<<END:");
-      builder.addGadgetCall("TestGadget", { message: "hello" }, "done");
+      builder.addGadgetCallResult("TestGadget", { message: "hello" }, "done");
 
       const messages = builder.build();
       const callMessage = messages[0]?.content ?? "";
@@ -415,10 +415,10 @@ describe("custom argPrefix propagation", () => {
     expect(content).toContain("$ARG$content");
   });
 
-  it("propagates custom argPrefix to addGadgetCall via withPrefixes", () => {
+  it("propagates custom argPrefix to addGadgetCallResult via withPrefixes", () => {
     const builder = new LLMMessageBuilder();
     builder.withPrefixes("<<<START:", "<<<END:", "@param:");
-    builder.addGadgetCall("TestGadget", { message: "hello" }, "done");
+    builder.addGadgetCallResult("TestGadget", { message: "hello" }, "done");
 
     const messages = builder.build();
     const callMessage = messages[0]?.content ?? "";
@@ -594,49 +594,49 @@ describe("Multimodal Content Support", () => {
 
 describe("extractText", () => {
   it("returns string content as-is", () => {
-    expect(extractText("Hello, world!")).toBe("Hello, world!");
+    expect(extractMessageText("Hello, world!")).toBe("Hello, world!");
   });
 
   it("extracts text from ContentPart array", () => {
     const content = [text("First "), imageFromBase64("abc", "image/png"), text("Second")];
-    expect(extractText(content)).toBe("First Second");
+    expect(extractMessageText(content)).toBe("First Second");
   });
 
   it("handles array with no text parts", () => {
     const content = [imageFromBase64("abc", "image/png"), audioFromBase64("xyz", "audio/mp3")];
-    expect(extractText(content)).toBe("");
+    expect(extractMessageText(content)).toBe("");
   });
 
   it("handles empty array", () => {
-    expect(extractText([])).toBe("");
+    expect(extractMessageText([])).toBe("");
   });
 
   it("handles empty string", () => {
-    expect(extractText("")).toBe("");
+    expect(extractMessageText("")).toBe("");
   });
 });
 
 describe("normalizeContent", () => {
   it("wraps string in text part array", () => {
-    const result = normalizeContent("Hello");
+    const result = normalizeMessageContent("Hello");
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({ type: "text", text: "Hello" });
   });
 
   it("passes through ContentPart array unchanged", () => {
     const parts = [text("Hello"), imageFromUrl("https://example.com/img.jpg")];
-    const result = normalizeContent(parts);
+    const result = normalizeMessageContent(parts);
     expect(result).toBe(parts);
   });
 
   it("handles empty string", () => {
-    const result = normalizeContent("");
+    const result = normalizeMessageContent("");
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({ type: "text", text: "" });
   });
 
   it("handles empty array", () => {
-    const result = normalizeContent([]);
+    const result = normalizeMessageContent([]);
     expect(result).toHaveLength(0);
   });
 });

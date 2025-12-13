@@ -1,9 +1,9 @@
-import type { GadgetApprovalMode } from "../config.js";
+import type { GadgetPermissionLevel } from "../config.js";
 
 /**
  * Re-export for convenience.
  */
-export type ApprovalMode = GadgetApprovalMode;
+export type ApprovalMode = GadgetPermissionLevel;
 
 /**
  * Interface for managing keyboard listeners during approval prompts.

@@ -1,14 +1,14 @@
-import type { BaseGadget } from "./gadget.js";
+import type { AbstractGadget } from "./gadget.js";
 import { validateGadgetSchema } from "./schema-validator.js";
 
 // Type for gadget constructor
-export type GadgetClass = new (...args: unknown[]) => BaseGadget;
+export type GadgetClass = new (...args: unknown[]) => AbstractGadget;
 
 // Type for gadget or gadget class
-export type GadgetOrClass = BaseGadget | GadgetClass;
+export type GadgetOrClass = AbstractGadget | GadgetClass;
 
 export class GadgetRegistry {
-  private readonly gadgets = new Map<string, BaseGadget>();
+  private readonly gadgets = new Map<string, AbstractGadget>();
 
   /**
    * Creates a registry from an array of gadget classes or instances,
@@ -70,7 +70,7 @@ export class GadgetRegistry {
   }
 
   // Register a gadget by name
-  register(name: string, gadget: BaseGadget): void {
+  register(name: string, gadget: AbstractGadget): void {
     const normalizedName = name.toLowerCase();
     if (this.gadgets.has(normalizedName)) {
       throw new Error(`Gadget '${name}' is already registered`);
@@ -85,13 +85,13 @@ export class GadgetRegistry {
   }
 
   // Register a gadget using its name property or class name
-  registerByClass(gadget: BaseGadget): void {
+  registerByClass(gadget: AbstractGadget): void {
     const name = gadget.name ?? gadget.constructor.name;
     this.register(name, gadget);
   }
 
   // Get gadget by name (case-insensitive)
-  get(name: string): BaseGadget | undefined {
+  get(name: string): AbstractGadget | undefined {
     return this.gadgets.get(name.toLowerCase());
   }
 
@@ -106,7 +106,7 @@ export class GadgetRegistry {
   }
 
   // Get all gadgets for instruction generation
-  getAll(): BaseGadget[] {
+  getAll(): AbstractGadget[] {
     return Array.from(this.gadgets.values());
   }
 

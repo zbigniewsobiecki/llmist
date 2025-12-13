@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { createGadget } from "./create-gadget.js";
-import type { BaseGadget } from "./gadget.js";
+import type { AbstractGadget } from "./gadget.js";
 
 describe("createGadget", () => {
   it("should create a gadget with correct properties", () => {

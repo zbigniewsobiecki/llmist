@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
 
-import { AbortError } from "./exceptions.js";
+import { AbortException } from "./exceptions.js";
 import { Gadget } from "./typed-gadget.js";
 import type { ExecutionContext } from "./types.js";
 
@@ -610,7 +610,7 @@ describe("BaseGadget.throwIfAborted", () => {
     expect(() => gadget.throwIfAborted(ctx)).not.toThrow();
   });
 
-  it("throws AbortError when signal is aborted", () => {
+  it("throws AbortException when signal is aborted", () => {
     const gadget = new TestGadget();
     const abortController = new AbortController();
     abortController.abort();
@@ -620,10 +620,10 @@ describe("BaseGadget.throwIfAborted", () => {
       signal: abortController.signal,
     };
 
-    expect(() => gadget.throwIfAborted(ctx)).toThrow(AbortError);
+    expect(() => gadget.throwIfAborted(ctx)).toThrow(AbortException);
   });
 
-  it("throws AbortError with default message", () => {
+  it("throws AbortException with default message", () => {
     const gadget = new TestGadget();
     const abortController = new AbortController();
     abortController.abort();
@@ -637,8 +637,8 @@ describe("BaseGadget.throwIfAborted", () => {
       gadget.throwIfAborted(ctx);
       expect.fail("Should have thrown");
     } catch (error) {
-      expect(error).toBeInstanceOf(AbortError);
-      expect((error as AbortError).message).toBe("Gadget execution was aborted");
+      expect(error).toBeInstanceOf(AbortException);
+      expect((error as AbortException).message).toBe("Gadget execution was aborted");
     }
   });
 });

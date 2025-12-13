@@ -15,7 +15,7 @@ import type {
   SpeechModelSpec,
 } from "../core/media-types.js";
 import type { LLMMessage, MessageContent } from "../core/messages.js";
-import { extractText, normalizeContent } from "../core/messages.js";
+import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
@@ -189,7 +189,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
     };
   }
 
-  protected buildRequestPayload(
+  protected buildApiRequest(
     options: LLMGenerationOptions,
     descriptor: ModelDescriptor,
     spec: ModelSpec | undefined,
@@ -238,7 +238,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
 
     // System and assistant messages only support string content
     const textContent =
-      typeof message.content === "string" ? message.content : extractText(message.content);
+      typeof message.content === "string" ? message.content : extractMessageText(message.content);
 
     if (role === "system") {
       return {
@@ -317,7 +317,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
     return stream as unknown as AsyncIterable<ChatCompletionChunk>;
   }
 
-  protected async *wrapStream(iterable: AsyncIterable<unknown>): LLMStream {
+  protected async *normalizeProviderStream(iterable: AsyncIterable<unknown>): LLMStream {
     const stream = iterable as AsyncIterable<ChatCompletionChunk>;
     for await (const chunk of stream) {
       const text = chunk.choices.map((choice) => choice.delta?.content ?? "").join("");
@@ -403,11 +403,11 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
           tokenCount += encoding.encode(roleText).length;
 
           // Handle multimodal content
-          const textContent = extractText(message.content);
+          const textContent = extractMessageText(message.content);
           tokenCount += encoding.encode(textContent).length;
 
           // Count images for estimation (each image ~85 tokens base + variable)
-          const parts = normalizeContent(message.content);
+          const parts = normalizeMessageContent(message.content);
           for (const part of parts) {
             if (part.type === "image") {
               imageCount++;
@@ -441,7 +441,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
       let totalChars = 0;
       let imageCount = 0;
       for (const msg of messages) {
-        const parts = normalizeContent(msg.content);
+        const parts = normalizeMessageContent(msg.content);
         for (const part of parts) {
           if (part.type === "text") {
             totalChars += part.text.length;

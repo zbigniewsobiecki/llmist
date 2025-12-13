@@ -26,7 +26,7 @@ export interface IConversationManager {
    * Adds a gadget call and its result to the conversation.
    * Optionally includes media outputs (images, audio, etc.) for multimodal results.
    */
-  addGadgetCall(
+  addGadgetCallResult(
     gadgetName: string,
     parameters: Record<string, unknown>,
     result: string,

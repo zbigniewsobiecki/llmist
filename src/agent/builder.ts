@@ -23,10 +23,10 @@ import type { ContentPart, ImageMimeType } from "../core/input-content.js";
 import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
-import type { PromptConfig } from "../core/prompt-config.js";
+import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { TextOnlyHandler } from "../gadgets/types.js";
+import type { SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
@@ -68,13 +68,13 @@ export class AgentBuilder {
   private maxIterations?: number;
   private logger?: Logger<ILogObj>;
   private hooks?: AgentHooks;
-  private promptConfig?: PromptConfig;
+  private promptConfig?: PromptTemplateConfig;
   private gadgets: GadgetOrClass[] = [];
   private initialMessages: Array<{
     role: "system" | "user" | "assistant";
     content: MessageContent;
   }> = [];
-  private onHumanInputRequired?: (question: string) => Promise<string>;
+  private requestHumanInput?: (question: string) => Promise<string>;
   private gadgetStartPrefix?: string;
   private gadgetEndPrefix?: string;
   private gadgetArgPrefix?: string;
@@ -85,7 +85,7 @@ export class AgentBuilder {
     resultMapping?: (text: string) => string;
   };
   private stopOnGadgetError?: boolean;
-  private shouldContinueAfterError?: (context: {
+  private canRecoverFromGadgetError?: (context: {
     error: string;
     gadgetName: string;
     errorType: "parse" | "validation" | "execution";
@@ -97,6 +97,7 @@ export class AgentBuilder {
   private compactionConfig?: CompactionConfig;
   private signal?: AbortSignal;
   private trailingMessage?: TrailingMessage;
+  private subagentConfig?: SubagentConfigMap;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -195,13 +196,13 @@ export class AgentBuilder {
    *
    * @example
    * ```typescript
-   * .withPromptConfig({
+   * .withPromptTemplateConfig({
    *   mainInstruction: "Use the gadget markers below:",
    *   rules: ["Always use markers", "Never use function calling"]
    * })
    * ```
    */
-  withPromptConfig(config: PromptConfig): this {
+  withPromptTemplateConfig(config: PromptTemplateConfig): this {
     this.promptConfig = config;
     return this;
   }
@@ -285,7 +286,7 @@ export class AgentBuilder {
    * ```
    */
   onHumanInput(handler: (question: string) => Promise<string>): this {
-    this.onHumanInputRequired = handler;
+    this.requestHumanInput = handler;
     return this;
   }
 
@@ -431,9 +432,9 @@ export class AgentBuilder {
    * Provides fine-grained control over whether to continue after different types of errors.
    * Overrides `stopOnGadgetError` when provided.
    *
-   * **Note:** This builder method configures the underlying `shouldContinueAfterError` option
+   * **Note:** This builder method configures the underlying `canRecoverFromGadgetError` option
    * in `AgentOptions`. The method is named `withErrorHandler` for better developer experience,
-   * but maps to the `shouldContinueAfterError` property internally.
+   * but maps to the `canRecoverFromGadgetError` property internally.
    *
    * @param handler - Function that decides whether to continue after an error.
    *                  Return `true` to continue execution, `false` to stop.
@@ -461,7 +462,7 @@ export class AgentBuilder {
       parameters?: Record<string, unknown>;
     }) => boolean | Promise<boolean>,
   ): this {
-    this.shouldContinueAfterError = handler;
+    this.canRecoverFromGadgetError = handler;
     return this;
   }
 
@@ -606,6 +607,28 @@ export class AgentBuilder {
    */
   withSignal(signal: AbortSignal): this {
     this.signal = signal;
+    return this;
+  }
+
+  /**
+   * Set subagent configuration overrides.
+   *
+   * Subagent gadgets (like BrowseWeb) can read these settings from ExecutionContext
+   * to inherit model and other options from the CLI configuration.
+   *
+   * @param config - Subagent configuration map keyed by gadget name
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withSubagentConfig({
+   *   BrowseWeb: { model: "inherit", maxIterations: 20, headless: true },
+   *   CodeAnalyzer: { model: "sonnet", maxIterations: 10 }
+   * })
+   * ```
+   */
+  withSubagentConfig(config: SubagentConfigMap): this {
+    this.subagentConfig = config;
     return this;
   }
 
@@ -812,19 +835,20 @@ export class AgentBuilder {
       hooks: this.composeHooks(),
       promptConfig: this.promptConfig,
       initialMessages: this.initialMessages,
-      onHumanInputRequired: this.onHumanInputRequired,
+      requestHumanInput: this.requestHumanInput,
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
       gadgetArgPrefix: this.gadgetArgPrefix,
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,
-      shouldContinueAfterError: this.shouldContinueAfterError,
+      canRecoverFromGadgetError: this.canRecoverFromGadgetError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
       signal: this.signal,
+      subagentConfig: this.subagentConfig,
     };
   }
 
@@ -1011,19 +1035,20 @@ export class AgentBuilder {
       hooks: this.composeHooks(),
       promptConfig: this.promptConfig,
       initialMessages: this.initialMessages,
-      onHumanInputRequired: this.onHumanInputRequired,
+      requestHumanInput: this.requestHumanInput,
       gadgetStartPrefix: this.gadgetStartPrefix,
       gadgetEndPrefix: this.gadgetEndPrefix,
       gadgetArgPrefix: this.gadgetArgPrefix,
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       stopOnGadgetError: this.stopOnGadgetError,
-      shouldContinueAfterError: this.shouldContinueAfterError,
+      canRecoverFromGadgetError: this.canRecoverFromGadgetError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
       signal: this.signal,
+      subagentConfig: this.subagentConfig,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

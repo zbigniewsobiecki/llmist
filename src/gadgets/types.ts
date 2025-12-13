@@ -233,7 +233,7 @@ import type {
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { LLMGenerationOptions, LLMStream } from "../core/options.js";
-import type { QuickOptions } from "../core/quick-methods.js";
+import type { TextGenerationOptions } from "../core/quick-methods.js";
 
 // Text-only response handler types
 export type TextOnlyHandler =
@@ -342,13 +342,13 @@ export interface CostReportingLLMist {
    * Quick completion - returns final text response.
    * Costs are automatically reported to the execution context.
    */
-  complete(prompt: string, options?: QuickOptions): Promise<string>;
+  complete(prompt: string, options?: TextGenerationOptions): Promise<string>;
 
   /**
    * Quick streaming - returns async generator of text chunks.
    * Costs are automatically reported when the stream completes.
    */
-  streamText(prompt: string, options?: QuickOptions): AsyncGenerator<string>;
+  streamText(prompt: string, options?: TextGenerationOptions): AsyncGenerator<string>;
 
   /**
    * Low-level stream access for full control.
@@ -504,4 +504,108 @@ export interface ExecutionContext {
    * ```
    */
   signal: AbortSignal;
+
+  /**
+   * Parent agent configuration for subagents to inherit.
+   *
+   * Contains the model and settings of the agent that invoked this gadget.
+   * Subagent gadgets (like BrowseWeb) can use this to inherit the parent's
+   * model by default, rather than using hardcoded defaults.
+   *
+   * This is optional - it will be `undefined` for:
+   * - Gadgets executed via CLI `gadget run` command
+   * - Direct gadget testing without agent context
+   *
+   * @example
+   * ```typescript
+   * execute: async (params, ctx) => {
+   *   // Inherit parent model unless explicitly specified
+   *   const model = params.model ?? ctx.agentConfig?.model ?? "sonnet";
+   *
+   *   const agent = new AgentBuilder(new LLMist())
+   *     .withModel(model)
+   *     .build();
+   *   // ...
+   * }
+   * ```
+   */
+  agentConfig?: AgentContextConfig;
+
+  /**
+   * Subagent-specific configuration overrides from CLI config.
+   *
+   * Contains per-subagent settings defined in `[subagents.Name]` or
+   * `[profile.subagents.Name]` sections of cli.toml. Allows users to
+   * customize subagent behavior without modifying gadget parameters.
+   *
+   * Resolution priority (highest to lowest):
+   * 1. Runtime params (explicit gadget call)
+   * 2. Profile-level subagent config
+   * 3. Global subagent config
+   * 4. Parent model (if "inherit")
+   * 5. Package defaults
+   *
+   * @example
+   * ```typescript
+   * execute: async (params, ctx) => {
+   *   const subagentConfig = ctx.subagentConfig?.BrowseWeb ?? {};
+   *
+   *   const model = params.model
+   *     ?? subagentConfig.model
+   *     ?? ctx.agentConfig?.model
+   *     ?? "sonnet";
+   *
+   *   const maxIterations = params.maxIterations
+   *     ?? subagentConfig.maxIterations
+   *     ?? 15;
+   *   // ...
+   * }
+   * ```
+   */
+  subagentConfig?: SubagentConfigMap;
 }
+
+// =============================================================================
+// Subagent Configuration Types
+// =============================================================================
+
+/**
+ * Parent agent configuration passed to gadgets.
+ * Contains settings that subagents can inherit.
+ */
+export interface AgentContextConfig {
+  /** Model identifier used by the parent agent */
+  model: string;
+  /** Temperature setting used by the parent agent */
+  temperature?: number;
+}
+
+/**
+ * Configuration for a single subagent.
+ * Can be defined globally in `[subagents.Name]` or per-profile in `[profile.subagents.Name]`.
+ *
+ * @example
+ * ```toml
+ * [subagents.BrowseWeb]
+ * model = "inherit"      # Use parent agent's model
+ * maxIterations = 20
+ * headless = true
+ * ```
+ */
+export interface SubagentConfig {
+  /**
+   * Model to use for this subagent.
+   * - "inherit": Use parent agent's model (default behavior)
+   * - Any model ID: Use specific model (e.g., "sonnet", "haiku", "gpt-4o")
+   */
+  model?: string;
+  /** Maximum iterations for the subagent loop */
+  maxIterations?: number;
+  /** Additional subagent-specific options */
+  [key: string]: unknown;
+}
+
+/**
+ * Map of subagent names to their configurations.
+ */
+export type SubagentConfigMap = Record<string, SubagentConfig>;

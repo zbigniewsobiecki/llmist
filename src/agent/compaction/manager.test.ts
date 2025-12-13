@@ -39,7 +39,7 @@ describe("CompactionManager", () => {
       },
       addUserMessage: () => {},
       addAssistantMessage: () => {},
-      addGadgetCall: () => {},
+      addGadgetCallResult: () => {},
     };
   };
 

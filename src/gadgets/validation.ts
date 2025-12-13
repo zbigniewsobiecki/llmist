@@ -8,7 +8,7 @@
  */
 
 import type { ZodTypeAny } from "zod";
-import type { BaseGadget } from "./gadget.js";
+import type { AbstractGadget } from "./gadget.js";
 
 /**
  * Individual validation issue with path and message.
@@ -123,7 +123,7 @@ export function validateAndApplyDefaults<T = Record<string, unknown>>(
  * ```
  */
 export function validateGadgetParams(
-  gadget: BaseGadget,
+  gadget: AbstractGadget,
   params: Record<string, unknown>,
 ): ValidationResult {
   if (!gadget.parameterSchema) {

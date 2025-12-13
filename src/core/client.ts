@@ -12,7 +12,7 @@ import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "./options
 import { ModelIdentifierParser } from "./options.js";
 import {
   complete as completeHelper,
-  type QuickOptions,
+  type TextGenerationOptions,
   stream as streamHelper,
 } from "./quick-methods.js";
 
@@ -221,7 +221,7 @@ export class LLMist {
    * });
    * ```
    */
-  static async complete(prompt: string, options?: QuickOptions): Promise<string> {
+  static async complete(prompt: string, options?: TextGenerationOptions): Promise<string> {
     const client = new LLMist();
     return completeHelper(client, prompt, options);
   }
@@ -249,7 +249,7 @@ export class LLMist {
    * }
    * ```
    */
-  static stream(prompt: string, options?: QuickOptions): AsyncGenerator<string> {
+  static stream(prompt: string, options?: TextGenerationOptions): AsyncGenerator<string> {
     const client = new LLMist();
     return streamHelper(client, prompt, options);
   }
@@ -261,7 +261,7 @@ export class LLMist {
    * @param options - Optional configuration
    * @returns Complete text response
    */
-  async complete(prompt: string, options?: QuickOptions): Promise<string> {
+  async complete(prompt: string, options?: TextGenerationOptions): Promise<string> {
     return completeHelper(this, prompt, options);
   }
 
@@ -272,7 +272,7 @@ export class LLMist {
    * @param options - Optional configuration
    * @returns Async generator yielding text chunks
    */
-  streamText(prompt: string, options?: QuickOptions): AsyncGenerator<string> {
+  streamText(prompt: string, options?: TextGenerationOptions): AsyncGenerator<string> {
     return streamHelper(this, prompt, options);
   }
 

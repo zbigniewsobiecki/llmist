@@ -1,20 +1,20 @@
 import type { ZodTypeAny } from "zod";
 
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
-import { AbortError } from "./exceptions.js";
+import { AbortException } from "./exceptions.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
 import { validateGadgetSchema } from "./schema-validator.js";
 import type { ExecutionContext, GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
- * Format parameters object as Block format.
+ * Format parameters object as Block format for use in examples.
  * Uses JSON Pointer paths for nested structures.
  *
  * @param params - The parameters object to format
  * @param prefix - Path prefix for nested structures (internal use)
  * @param argPrefix - The argument prefix marker (defaults to GADGET_ARG_PREFIX)
  */
-function formatParamsAsBlock(
+function formatParamsForBlockExample(
   params: Record<string, unknown>,
   prefix: string = "",
   argPrefix: string = GADGET_ARG_PREFIX,
@@ -30,7 +30,7 @@ function formatParamsAsBlock(
         const itemPath = `${fullPath}/${index}`;
         if (typeof item === "object" && item !== null) {
           // Nested object in array
-          lines.push(formatParamsAsBlock(item as Record<string, unknown>, itemPath, argPrefix));
+          lines.push(formatParamsForBlockExample(item as Record<string, unknown>, itemPath, argPrefix));
         } else {
           lines.push(`${argPrefix}${itemPath}`);
           lines.push(String(item));
@@ -38,7 +38,7 @@ function formatParamsAsBlock(
       });
     } else if (typeof value === "object" && value !== null) {
       // Nested objects: recurse with path prefix
-      lines.push(formatParamsAsBlock(value as Record<string, unknown>, fullPath, argPrefix));
+      lines.push(formatParamsForBlockExample(value as Record<string, unknown>, fullPath, argPrefix));
     } else {
       // Simple values
       lines.push(`${argPrefix}${fullPath}`);
@@ -178,13 +178,13 @@ function formatSchemaAsPlainText(
 }
 
 /**
- * Internal base class for gadgets. Most users should use the `Gadget` class
- * (formerly TypedGadget) or `createGadget()` function instead, as they provide
- * better type safety and simpler APIs.
+ * Abstract base class for gadgets. Most users should use the `Gadget()` factory
+ * or `createGadget()` function instead, as they provide better type safety
+ * and simpler APIs.
  *
- * @internal
+ * Extend this class directly only when you need advanced control over gadget behavior.
  */
-export abstract class BaseGadget {
+export abstract class AbstractGadget {
   /**
    * The name of the gadget. Used for identification when LLM calls it.
    * If not provided, defaults to the class name.
@@ -259,14 +259,14 @@ export abstract class BaseGadget {
   ): GadgetExecuteReturn | Promise<GadgetExecuteReturn>;
 
   /**
-   * Throws an AbortError if the execution has been aborted.
+   * Throws an AbortException if the execution has been aborted.
    *
    * Call this at key checkpoints in long-running gadgets to allow early exit
    * when the gadget has been cancelled (e.g., due to timeout). This enables
    * resource cleanup and prevents unnecessary work after cancellation.
    *
    * @param ctx - The execution context containing the abort signal
-   * @throws AbortError if ctx.signal.aborted is true
+   * @throws AbortException if ctx.signal.aborted is true
    *
    * @example
    * ```typescript
@@ -291,7 +291,7 @@ export abstract class BaseGadget {
    */
   throwIfAborted(ctx?: ExecutionContext): void {
     if (ctx?.signal?.aborted) {
-      throw new AbortError();
+      throw new AbortException();
     }
   }
 
@@ -468,7 +468,7 @@ export abstract class BaseGadget {
 
         // Render params in block format
         parts.push(
-          formatParamsAsBlock(example.params as Record<string, unknown>, "", effectiveArgPrefix),
+          formatParamsForBlockExample(example.params as Record<string, unknown>, "", effectiveArgPrefix),
         );
 
         // Add GADGET_END marker
@@ -486,3 +486,4 @@ export abstract class BaseGadget {
     return parts.join("\n");
   }
 }
+

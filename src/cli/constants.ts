@@ -13,11 +13,12 @@ export const COMMANDS = {
   image: "image",
   speech: "speech",
   vision: "vision",
+  init: "init",
 } as const;
 
 /** Valid log level names */
 export const LOG_LEVELS = ["silly", "trace", "debug", "info", "warn", "error", "fatal"] as const;
-export type LogLevelName = (typeof LOG_LEVELS)[number];
+export type CLILogLevel = (typeof LOG_LEVELS)[number];
 
 /** Default model used when --model is not specified */
 export const DEFAULT_MODEL = "openai:gpt-5-nano";

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:te
 import { z } from "zod";
 
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
-import { BreakLoopException } from "../gadgets/exceptions.js";
+import { TaskCompletionSignal } from "../gadgets/exceptions.js";
 import { resetGlobalInvocationCounter } from "../gadgets/parser.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { createMockGadget, mockGadget } from "../testing/mock-gadget.js";
@@ -128,7 +128,7 @@ describe("StreamProcessor", () => {
       expect(gadgetResults).toHaveLength(2);
     });
 
-    it("creates with custom shouldContinueAfterError callback", async () => {
+    it("creates with custom canRecoverFromGadgetError callback", async () => {
       const errorGadget = createMockGadget({ name: "RecoverableError", error: "recoverable" });
       const okGadget = createMockGadget({ name: "AfterError", result: "OK" });
       registry.registerByClass(errorGadget);
@@ -139,7 +139,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        shouldContinueAfterError: shouldContinue,
+        canRecoverFromGadgetError: shouldContinue,
       });
 
       const gadgetCalls =
@@ -834,7 +834,7 @@ describe("StreamProcessor", () => {
       const breakingGadget = createMockGadget({
         name: "BreakGadget",
         resultFn: () => {
-          throw new BreakLoopException("Done!");
+          throw new TaskCompletionSignal("Done!");
         },
       });
       registry.registerByClass(breakingGadget);
@@ -862,7 +862,7 @@ describe("StreamProcessor", () => {
       const breakingGadget = createMockGadget({
         name: "BreakGadget",
         resultFn: () => {
-          throw new BreakLoopException("Loop terminated");
+          throw new TaskCompletionSignal("Loop terminated");
         },
       });
       registry.registerByClass(breakingGadget);
