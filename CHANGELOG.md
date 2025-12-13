@@ -1,3 +1,55 @@
+## 3.0.0 (2025-12-13)
+
+* Merge pull request #171 from zbigniewsobiecki/dev ([4241d45](https://github.com/zbigniewsobiecki/llmist/commit/4241d45)), closes [#171](https://github.com/zbigniewsobiecki/llmist/issues/171)
+* refactor!: improve naming across codebase for clarity (#168) ([baf1de1](https://github.com/zbigniewsobiecki/llmist/commit/baf1de1)), closes [#168](https://github.com/zbigniewsobiecki/llmist/issues/168)
+* feat(cli): add external gadget loading from npm/git ([278c6e7](https://github.com/zbigniewsobiecki/llmist/commit/278c6e7))
+* feat(cli): add init command to create starter configuration (#170) ([d192147](https://github.com/zbigniewsobiecki/llmist/commit/d192147)), closes [#170](https://github.com/zbigniewsobiecki/llmist/issues/170)
+* feat(cli): add subagent configuration system (#169) ([13863fc](https://github.com/zbigniewsobiecki/llmist/commit/13863fc)), closes [#169](https://github.com/zbigniewsobiecki/llmist/issues/169)
+
+
+### BREAKING CHANGE
+
+* This is a major refactoring of class, type, and function names
+to improve code clarity and self-documentation. All backwards-compatible aliases
+have been removed.
+
+Exception classes (clearer intent):
+- BreakLoopException → TaskCompletionSignal
+- HumanInputException → HumanInputRequiredException
+- AbortError → AbortException
+
+Core types (more descriptive):
+- BaseGadget → AbstractGadget
+- StreamParser → GadgetCallParser
+- GadgetErrorFormatter → GadgetExecutionErrorFormatter
+- QuickOptions → TextGenerationOptions
+- PromptConfig → PromptTemplateConfig
+
+Helper functions:
+- createMedia → createMediaOutput
+
+Agent options:
+- shouldContinueAfterError → canRecoverFromGadgetError
+
+Message utilities:
+- extractText → extractMessageText
+- normalizeContent → normalizeMessageContent
+- addGadgetCall → addGadgetCallResult
+
+CLI types:
+- GadgetApprovalMode → GadgetPermissionLevel
+- GadgetApprovalConfig → GadgetPermissionPolicy
+- AgentCommandOptions → CLIAgentOptions
+- CompleteCommandOptions → CLICompleteOptions
+- LogLevelName → CLILogLevel
+- TTYStream → StreamWithTTYDetection
+
+All documentation and examples have been updated to use the new names.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 2.6.0 (2025-12-12)
 
 * Merge pull request #166 from zbigniewsobiecki/feat/multimodal-media-output ([0c257c8](https://github.com/zbigniewsobiecki/llmist/commit/0c257c8)), closes [#166](https://github.com/zbigniewsobiecki/llmist/issues/166)
