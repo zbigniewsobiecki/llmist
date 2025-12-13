@@ -219,8 +219,111 @@ export class Shell extends Gadget({
 }
 ```
 
+## External Gadgets (npm/git)
+
+Load gadgets from npm packages or git repositories. Packages are auto-installed to `~/.llmist/gadget-cache/`.
+
+### npm Packages
+
+```bash
+# All gadgets from package
+llmist agent "Navigate to apple.com" -g webasto
+
+# Specific version
+llmist agent "Screenshot google.com" -g webasto@2.0.0
+
+# Preset (subset of gadgets)
+llmist agent "Browse the web" -g webasto:minimal
+
+# Single gadget
+llmist agent "Go to example.com" -g webasto/Navigate
+
+# Version + preset
+llmist agent "Take screenshots" -g webasto@2.0.0:readonly
+```
+
+### git URLs
+
+```bash
+# Clone and use gadgets from git
+llmist agent "task" -g git+https://github.com/user/repo.git
+
+# With specific ref (tag, branch, commit)
+llmist agent "task" -g git+https://github.com/user/repo.git#v1.0.0
+```
+
+### Combining Sources
+
+```bash
+# Mix local files, npm packages, git URLs, and builtins
+llmist agent "Complex task" \
+  -g ./local-gadget.ts \
+  -g webasto:minimal \
+  -g builtin:ReadFile \
+  -g git+https://github.com/user/my-gadgets.git
+```
+
+### Presets
+
+External packages can define presets - named subsets of gadgets for common use cases:
+
+```bash
+# webasto presets:
+# - all: All 26+ browser automation gadgets
+# - minimal: Navigate, Screenshot, GetFullPageContent
+# - readonly: Navigation and read-only operations
+# - subagent: BrowseWeb (high-level autonomous browser)
+
+llmist agent "Research task" -g webasto:subagent
+```
+
+### Subagents
+
+Some packages export **subagents** - gadgets that run their own agent loop internally:
+
+```bash
+# BrowseWeb is a subagent that handles web browsing autonomously
+llmist agent "Find iPhone 16 Pro price on apple.com" -g webasto/BrowseWeb
+```
+
+The subagent launches its own browser, navigates, clicks, and extracts data without requiring you to orchestrate individual browser operations.
+
+### Cache Management
+
+External packages are cached in `~/.llmist/gadget-cache/`:
+
+```
+~/.llmist/gadget-cache/
+├── npm/
+│   └── webasto@latest/
+└── git/
+    └── github.com-user-repo-v1.0.0/
+```
+
+To force reinstallation, delete the cached directory.
+
+### Creating External Gadget Packages
+
+To publish your own gadget package, add an `llmist` field to `package.json`:
+
+```json
+{
+  "name": "my-gadgets",
+  "llmist": {
+    "gadgets": "./dist/index.js",
+    "presets": {
+      "all": "*",
+      "minimal": ["GadgetA", "GadgetB"]
+    }
+  }
+}
+```
+
+See **[External Gadgets Example](../examples/20-external-gadgets.ts)** for more details.
+
 ## See Also
 
 - **[CLI Reference](./CLI.md)** - Full CLI docs
 - **[Gadgets Guide](./GADGETS.md)** - Library gadget docs
 - **[Human-in-the-Loop](./HUMAN_IN_LOOP.md)** - Interactive workflows
+- **[External Gadgets Example](../examples/20-external-gadgets.ts)** - Detailed examples
