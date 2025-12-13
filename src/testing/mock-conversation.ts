@@ -49,7 +49,7 @@ export class MockConversationManager implements IConversationManager {
     this.addedMessages.push(msg);
   }
 
-  addGadgetCall(gadgetName: string, parameters: Record<string, unknown>, result: string): void {
+  addGadgetCallResult(gadgetName: string, parameters: Record<string, unknown>, result: string): void {
     // Simplified gadget call format for testing
     const assistantMsg: LLMMessage = {
       role: "assistant",

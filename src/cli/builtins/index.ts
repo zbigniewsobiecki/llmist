@@ -4,7 +4,7 @@
  * with the explicit "builtin:" prefix (e.g., "builtin:ListDirectory").
  */
 
-import type { BaseGadget } from "../../gadgets/gadget.js";
+import type { AbstractGadget } from "../../gadgets/gadget.js";
 import { editFile } from "./filesystem/edit-file.js";
 import { listDirectory } from "./filesystem/list-directory.js";
 import { readFile } from "./filesystem/read-file.js";
@@ -15,7 +15,7 @@ import { runCommand } from "./run-command.js";
  * Registry mapping gadget names to their instances.
  * Names are case-sensitive and match the gadget's declared name.
  */
-export const builtinGadgetRegistry: Record<string, BaseGadget> = {
+export const builtinGadgetRegistry: Record<string, AbstractGadget> = {
   ListDirectory: listDirectory,
   ReadFile: readFile,
   WriteFile: writeFile,
@@ -29,7 +29,7 @@ export const builtinGadgetRegistry: Record<string, BaseGadget> = {
  * @param name - The gadget name (e.g., "ListDirectory")
  * @returns The gadget instance, or undefined if not found
  */
-export function getBuiltinGadget(name: string): BaseGadget | undefined {
+export function getBuiltinGadget(name: string): AbstractGadget | undefined {
   return builtinGadgetRegistry[name];
 }
 

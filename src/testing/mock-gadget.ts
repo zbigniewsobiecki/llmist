@@ -8,7 +8,7 @@
  */
 
 import type { ZodType } from "zod";
-import { BaseGadget } from "../gadgets/gadget.js";
+import { AbstractGadget } from "../gadgets/gadget.js";
 
 /**
  * Recorded gadget call for tracking.
@@ -23,7 +23,7 @@ export interface RecordedCall {
 /**
  * Mock gadget with call tracking capabilities.
  */
-export interface MockGadget extends BaseGadget {
+export interface MockGadget extends AbstractGadget {
   /** Get all recorded calls */
   getCalls(): RecordedCall[];
   /** Get number of times the gadget was executed */
@@ -63,7 +63,7 @@ export interface MockGadgetConfig<TSchema extends ZodType = ZodType> {
 /**
  * Implementation of MockGadget.
  */
-class MockGadgetImpl extends BaseGadget implements MockGadget {
+class MockGadgetImpl extends AbstractGadget implements MockGadget {
   override name: string;
   override description: string;
   override parameterSchema?: ZodType;

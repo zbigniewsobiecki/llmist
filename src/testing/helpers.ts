@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { LLMStream, LLMStreamChunk } from "../core/options.js";
-import { HumanInputException } from "../gadgets/exceptions.js";
+import { HumanInputRequiredException } from "../gadgets/exceptions.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 
 /**
@@ -85,7 +85,7 @@ export class AskUserGadget extends Gadget({
   }),
 }) {
   execute(params: this["params"]): string {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 

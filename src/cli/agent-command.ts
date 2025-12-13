@@ -31,7 +31,7 @@ import {
   resolveLogDir,
   writeLogFile,
 } from "./llm-logging.js";
-import { type AgentCommandOptions, addAgentOptions } from "./option-helpers.js";
+import { type CLIAgentOptions, addAgentOptions } from "./option-helpers.js";
 import {
   formatGadgetSummary,
   renderMarkdownWithSeparators,
@@ -141,7 +141,7 @@ function createHumanInputHandler(
  */
 export async function executeAgent(
   promptArg: string | undefined,
-  options: AgentCommandOptions,
+  options: CLIAgentOptions,
   env: CLIEnvironment,
 ): Promise<void> {
   // Check if Docker sandboxing is enabled
@@ -777,8 +777,8 @@ export function registerAgentCommand(
   cmd.action((prompt, options) =>
     executeAction(() => {
       // Merge config-only options (no CLI flags) into command options
-      const mergedOptions: AgentCommandOptions = {
-        ...(options as AgentCommandOptions),
+      const mergedOptions: CLIAgentOptions = {
+        ...(options as CLIAgentOptions),
         gadgetApproval: config?.["gadget-approval"],
       };
       return executeAgent(prompt, mergedOptions, env);

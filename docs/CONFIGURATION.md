@@ -135,7 +135,7 @@ LLMist.createAgent()
 
 | Method | Type | Description |
 |--------|------|-------------|
-| `.withPromptConfig(config)` | `PromptConfig` | Custom prompt templates |
+| `.withPromptConfig(config)` | `PromptTemplateConfig` | Custom prompt templates |
 | `.withGadgetStartPrefix(prefix)` | `string` | Custom gadget marker start (default: `!!!GADGET_START:`) |
 | `.withGadgetEndPrefix(prefix)` | `string` | Custom gadget marker end (default: `!!!GADGET_END`) |
 | `.withGadgetArgPrefix(prefix)` | `string` | Custom argument prefix for block format (default: `!!!ARG:`) |

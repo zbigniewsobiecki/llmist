@@ -26,10 +26,10 @@ describe("v3.0 Breaking Changes", () => {
       expect((llmist as any).TypedGadget).toBeUndefined();
     });
 
-    it("should export BaseGadget for internal/advanced use", () => {
-      // BaseGadget should be exported but it's the old Gadget class
-      expect(llmist.BaseGadget).toBeDefined();
-      expect(typeof llmist.BaseGadget).toBe("function");
+    it("should export AbstractGadget for internal/advanced use", () => {
+      // AbstractGadget should be exported but it's the old Gadget class
+      expect(llmist.AbstractGadget).toBeDefined();
+      expect(typeof llmist.AbstractGadget).toBe("function");
     });
 
     it("should export createGadget unchanged", () => {
@@ -56,8 +56,8 @@ describe("v3.0 Breaking Changes", () => {
 
   describe("Import Error Messages", () => {
     it("should provide helpful error when trying to use old Gadget pattern", () => {
-      // Test that BaseGadget requires manual type casting (old behavior)
-      const baseGadget = new (class extends llmist.BaseGadget {
+      // Test that AbstractGadget requires manual type casting (old behavior)
+      const baseGadget = new (class extends llmist.AbstractGadget {
         description = "test";
         execute(params: Record<string, unknown>): string {
           // This should require manual casting - the old way
@@ -141,8 +141,8 @@ describe("v3.0 Breaking Changes", () => {
         execute: () => "functional",
       });
 
-      // Should work with BaseGadget (though not recommended)
-      class OldStyleGadget extends llmist.BaseGadget {
+      // Should work with AbstractGadget (though not recommended)
+      class OldStyleGadget extends llmist.AbstractGadget {
         description = "old style";
         execute(): string {
           return "old";

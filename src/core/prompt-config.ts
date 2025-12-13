@@ -46,7 +46,7 @@ export type HintTemplate = string | ((context: HintContext) => string);
  *
  * @example
  * ```typescript
- * const customConfig: PromptConfig = {
+ * const customConfig: PromptTemplateConfig = {
  *   mainInstruction: "USE ONLY THE GADGET MARKERS BELOW:",
  *   criticalUsage: "Important: Follow the exact format shown.",
  *   rules: (ctx) => [
@@ -57,7 +57,7 @@ export type HintTemplate = string | ((context: HintContext) => string);
  * };
  * ```
  */
-export interface PromptConfig {
+export interface PromptTemplateConfig {
   /**
    * Main instruction block that appears at the start of the gadget system prompt.
    * Default emphasizes using text markers instead of function calling.
@@ -126,7 +126,7 @@ export const DEFAULT_HINTS = {
  */
 export const DEFAULT_PROMPTS: Required<
   Omit<
-    PromptConfig,
+    PromptTemplateConfig,
     "rules" | "customExamples" | "parallelGadgetsHint" | "iterationProgressHint"
   > & {
     rules: (context: PromptContext) => string[];
@@ -172,7 +172,7 @@ export function resolvePromptTemplate(
  * Resolve rules template to an array of strings.
  */
 export function resolveRulesTemplate(
-  rules: PromptConfig["rules"] | undefined,
+  rules: PromptTemplateConfig["rules"] | undefined,
   context: PromptContext,
 ): string[] {
   const resolved = rules ?? DEFAULT_PROMPTS.rules;

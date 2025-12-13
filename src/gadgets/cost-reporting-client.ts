@@ -18,7 +18,7 @@ import type {
 import type { ModelRegistry } from "../core/model-registry.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions, LLMStream, LLMStreamChunk } from "../core/options.js";
-import type { QuickOptions } from "../core/quick-methods.js";
+import type { TextGenerationOptions } from "../core/quick-methods.js";
 import type {
   CostReportingImageNamespace,
   CostReportingLLMist,
@@ -97,7 +97,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
    * @param options - Optional configuration (model, temperature, etc.)
    * @returns Complete text response
    */
-  async complete(prompt: string, options?: QuickOptions): Promise<string> {
+  async complete(prompt: string, options?: TextGenerationOptions): Promise<string> {
     const model = resolveModel(options?.model ?? "haiku");
     let result = "";
     let inputTokens = 0;
@@ -146,7 +146,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
    * @param options - Optional configuration (model, temperature, etc.)
    * @returns Async generator yielding text chunks
    */
-  async *streamText(prompt: string, options?: QuickOptions): AsyncGenerator<string> {
+  async *streamText(prompt: string, options?: TextGenerationOptions): AsyncGenerator<string> {
     const model = resolveModel(options?.model ?? "haiku");
     let inputTokens = 0;
     let outputTokens = 0;

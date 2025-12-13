@@ -3,15 +3,15 @@ import type {
   AgentConfig,
   CompleteConfig,
   CustomCommandConfig,
-  GadgetApprovalConfig,
+  GadgetPermissionPolicy,
 } from "./config.js";
 import { DEFAULT_MODEL, OPTION_DESCRIPTIONS, OPTION_FLAGS } from "./constants.js";
 import { createNumericParser } from "./utils.js";
 
 /**
- * Options for the complete command (camelCase, matching Commander output).
+ * CLI options for the complete command (camelCase, matching Commander output).
  */
-export interface CompleteCommandOptions {
+export interface CLICompleteOptions {
   model: string;
   system?: string;
   temperature?: number;
@@ -25,9 +25,9 @@ export interface CompleteCommandOptions {
 }
 
 /**
- * Options for the agent command (camelCase, matching Commander output).
+ * CLI options for the agent command (camelCase, matching Commander output).
  */
-export interface AgentCommandOptions {
+export interface CLIAgentOptions {
   model: string;
   system?: string;
   temperature?: number;
@@ -38,7 +38,7 @@ export interface AgentCommandOptions {
   gadgetStartPrefix?: string;
   gadgetEndPrefix?: string;
   gadgetArgPrefix?: string;
-  gadgetApproval?: GadgetApprovalConfig;
+  gadgetApproval?: GadgetPermissionPolicy;
   quiet?: boolean;
   logLlmRequests?: string | boolean;
   /** Path to image file to include with the initial prompt */
@@ -148,8 +148,8 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
  */
 export function configToCompleteOptions(
   config: CustomCommandConfig,
-): Partial<CompleteCommandOptions> {
-  const result: Partial<CompleteCommandOptions> = {};
+): Partial<CLICompleteOptions> {
+  const result: Partial<CLICompleteOptions> = {};
   if (config.model !== undefined) result.model = config.model;
   if (config.system !== undefined) result.system = config.system;
   if (config.temperature !== undefined) result.temperature = config.temperature;
@@ -162,8 +162,8 @@ export function configToCompleteOptions(
 /**
  * Converts kebab-case config to camelCase command options for agent command.
  */
-export function configToAgentOptions(config: CustomCommandConfig): Partial<AgentCommandOptions> {
-  const result: Partial<AgentCommandOptions> = {};
+export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAgentOptions> {
+  const result: Partial<CLIAgentOptions> = {};
   if (config.model !== undefined) result.model = config.model;
   if (config.system !== undefined) result.system = config.system;
   if (config.temperature !== undefined) result.temperature = config.temperature;

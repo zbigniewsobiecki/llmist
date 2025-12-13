@@ -4,7 +4,7 @@ import * as dotenv from "dotenv";
 import { z } from "zod";
 
 import { LLMist } from "../core/client.js";
-import { BreakLoopException, HumanInputException } from "../gadgets/exceptions.js";
+import { TaskCompletionSignal, HumanInputRequiredException } from "../gadgets/exceptions.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import type { StreamEvent } from "../gadgets/types.js";
@@ -282,7 +282,7 @@ export class StateTrackerGadget extends Gadget({
 }
 
 /**
- * Loop breaking gadget for testing BreakLoopException
+ * Loop breaking gadget for testing TaskCompletionSignal
  */
 export class LoopBreakerGadget extends Gadget({
   name: "LoopBreaker",
@@ -298,7 +298,7 @@ export class LoopBreakerGadget extends Gadget({
 
     if (currentValue >= threshold) {
       const breakMessage = message || `Threshold ${threshold} reached with value ${currentValue}`;
-      throw new BreakLoopException(breakMessage);
+      throw new TaskCompletionSignal(breakMessage);
     }
 
     return `Current value ${currentValue} is below threshold ${threshold}`;
@@ -306,7 +306,7 @@ export class LoopBreakerGadget extends Gadget({
 }
 
 /**
- * User input gadget for testing HumanInputException
+ * User input gadget for testing HumanInputRequiredException
  */
 export class UserInputGadget extends Gadget({
   name: "UserInput",
@@ -321,7 +321,7 @@ export class UserInputGadget extends Gadget({
 
     const fullQuestion = context ? `${context}\n\n${question}` : question;
 
-    throw new HumanInputException(fullQuestion);
+    throw new HumanInputRequiredException(fullQuestion);
   }
 }
 

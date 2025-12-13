@@ -24,7 +24,7 @@
  */
 
 import type { ZodType } from "zod";
-import { BaseGadget } from "./gadget.js";
+import { AbstractGadget } from "./gadget.js";
 import type { ExecutionContext, GadgetExample, GadgetExecuteReturn } from "./types.js";
 
 /**
@@ -108,7 +108,7 @@ export interface GadgetConfig<TSchema extends ZodType> {
  * ```
  */
 export function Gadget<TSchema extends ZodType>(config: GadgetConfig<TSchema>) {
-  abstract class GadgetBase extends BaseGadget {
+  abstract class GadgetBase extends AbstractGadget {
     description = config.description;
     parameterSchema = config.schema;
     name = config.name;

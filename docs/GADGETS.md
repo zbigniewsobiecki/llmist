@@ -504,14 +504,14 @@ execute: async ({ url }, ctx) => {
 Stop the agent loop from within a gadget:
 
 ```typescript
-import { BreakLoopException } from 'llmist';
+import { TaskCompletionSignal } from 'llmist';
 
 class FinishTask extends Gadget({
   description: 'Call when task is complete',
   schema: z.object({ summary: z.string() }),
 }) {
   execute(params: this['params']): string {
-    throw new BreakLoopException(params.summary);
+    throw new TaskCompletionSignal(params.summary);
   }
 }
 ```
@@ -521,14 +521,14 @@ class FinishTask extends Gadget({
 Request user input mid-execution:
 
 ```typescript
-import { HumanInputException } from 'llmist';
+import { HumanInputRequiredException } from 'llmist';
 
 class AskUser extends Gadget({
   description: 'Ask the user a question',
   schema: z.object({ question: z.string() }),
 }) {
   execute(params: this['params']): string {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 

@@ -138,7 +138,7 @@ class Done extends Gadget({
   description: 'Call when task is complete',
   schema: z.object({ summary: z.string() }),
 }) {
-  execute(params) { throw new BreakLoopException(params.summary); }
+  execute(params) { throw new TaskCompletionSignal(params.summary); }
 }
 ```
 

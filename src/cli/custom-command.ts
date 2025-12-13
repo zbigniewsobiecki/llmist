@@ -4,10 +4,10 @@ import { executeComplete } from "./complete-command.js";
 import type { CustomCommandConfig } from "./config.js";
 import { type CLIEnvironment, type CLILoggerConfig, createLoggerFactory } from "./environment.js";
 import {
-  type AgentCommandOptions,
+  type CLIAgentOptions,
   addAgentOptions,
   addCompleteOptions,
-  type CompleteCommandOptions,
+  type CLICompleteOptions,
   configToAgentOptions,
   configToCompleteOptions,
 } from "./option-helpers.js";
@@ -82,10 +82,10 @@ export function registerCustomCommand(
       return executeAction(async () => {
         // Config values are base, CLI options override
         const configDefaults = configToCompleteOptions(config);
-        const options: CompleteCommandOptions = {
+        const options: CLICompleteOptions = {
           ...configDefaults,
-          ...(cliOptions as Partial<CompleteCommandOptions>),
-        } as CompleteCommandOptions;
+          ...(cliOptions as Partial<CLICompleteOptions>),
+        } as CLICompleteOptions;
         await executeComplete(prompt, options, cmdEnv);
       }, cmdEnv);
     });
@@ -99,10 +99,10 @@ export function registerCustomCommand(
       return executeAction(async () => {
         // Config values are base, CLI options override
         const configDefaults = configToAgentOptions(config);
-        const options: AgentCommandOptions = {
+        const options: CLIAgentOptions = {
           ...configDefaults,
-          ...(cliOptions as Partial<AgentCommandOptions>),
-        } as AgentCommandOptions;
+          ...(cliOptions as Partial<CLIAgentOptions>),
+        } as CLIAgentOptions;
         await executeAgent(prompt, options, cmdEnv);
       }, cmdEnv);
     });

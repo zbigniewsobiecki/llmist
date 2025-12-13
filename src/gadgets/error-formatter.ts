@@ -1,6 +1,6 @@
 import type { ZodError } from "zod";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
-import type { BaseGadget } from "./gadget.js";
+import type { AbstractGadget } from "./gadget.js";
 
 export interface ErrorFormatterOptions {
   /** Custom argument prefix for block format examples. Default: "!!!ARG:" */
@@ -12,7 +12,7 @@ export interface ErrorFormatterOptions {
 }
 
 /**
- * Formats gadget errors with helpful context for LLMs.
+ * Formats gadget execution errors with helpful context for LLM self-correction.
  *
  * This class generates error messages that include:
  * - Clear error description
@@ -21,7 +21,7 @@ export interface ErrorFormatterOptions {
  *
  * The goal is to help LLMs self-correct on subsequent invocation attempts.
  */
-export class GadgetErrorFormatter {
+export class GadgetExecutionErrorFormatter {
   private readonly argPrefix: string;
   private readonly startPrefix: string;
   private readonly endPrefix: string;
@@ -40,7 +40,7 @@ export class GadgetErrorFormatter {
    * @param gadget - The gadget instance (for generating instructions)
    * @returns Formatted error message with usage instructions
    */
-  formatValidationError(gadgetName: string, zodError: ZodError, gadget: BaseGadget): string {
+  formatValidationError(gadgetName: string, zodError: ZodError, gadget: AbstractGadget): string {
     const parts: string[] = [];
 
     // Error header
@@ -68,7 +68,7 @@ export class GadgetErrorFormatter {
    * @param gadget - The gadget instance if found (for generating instructions)
    * @returns Formatted error message with format reference
    */
-  formatParseError(gadgetName: string, parseError: string, gadget: BaseGadget | undefined): string {
+  formatParseError(gadgetName: string, parseError: string, gadget: AbstractGadget | undefined): string {
     const parts: string[] = [];
 
     // Error header
@@ -123,8 +123,10 @@ export class GadgetErrorFormatter {
  * Create a pre-configured error formatter instance.
  *
  * @param options - Formatter options
- * @returns Configured GadgetErrorFormatter instance
+ * @returns Configured GadgetExecutionErrorFormatter instance
  */
-export function createErrorFormatter(options: ErrorFormatterOptions = {}): GadgetErrorFormatter {
-  return new GadgetErrorFormatter(options);
+export function createErrorFormatter(
+  options: ErrorFormatterOptions = {},
+): GadgetExecutionErrorFormatter {
+  return new GadgetExecutionErrorFormatter(options);
 }

@@ -5,7 +5,7 @@ Enable interactive conversations where the agent can ask the user questions.
 ## Quick Start
 
 ```typescript
-import { LLMist, Gadget, HumanInputException, z } from 'llmist';
+import { LLMist, Gadget, HumanInputRequiredException, z } from 'llmist';
 
 // Gadget that requests user input
 class AskUser extends Gadget({
@@ -15,7 +15,7 @@ class AskUser extends Gadget({
   }),
 }) {
   execute(params: this['params']): string {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 
@@ -33,7 +33,7 @@ const answer = await LLMist.createAgent()
 ## How It Works
 
 1. LLM calls the `AskUser` gadget with a question
-2. Gadget throws `HumanInputException`
+2. Gadget throws `HumanInputRequiredException`
 3. Agent pauses and emits `human_input_required` event
 4. Your `onHumanInput` handler is called
 5. User's response is sent back to the LLM
@@ -118,7 +118,7 @@ class AskUser extends Gadget({
     const fullQuestion = params.context
       ? `${params.context}\n\n${params.question}`
       : params.question;
-    throw new HumanInputException(fullQuestion);
+    throw new HumanInputRequiredException(fullQuestion);
   }
 }
 
@@ -144,7 +144,7 @@ class ConfirmAction extends Gadget({
     const message = params.consequences
       ? `${params.action}\n\nNote: ${params.consequences}\n\nProceed? (yes/no)`
       : `${params.action}\n\nProceed? (yes/no)`;
-    throw new HumanInputException(message);
+    throw new HumanInputRequiredException(message);
   }
 }
 

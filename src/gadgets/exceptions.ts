@@ -1,9 +1,9 @@
 /**
- * Exception that gadgets can throw to signal the agent loop should terminate.
+ * Signal that a gadget throws to indicate task completion and agent termination.
  *
- * When a gadget throws this exception, the agent loop will:
+ * When a gadget throws this signal, the agent loop will:
  * 1. Complete the current iteration
- * 2. Return the exception message as the gadget's result
+ * 2. Return the signal message as the gadget's result
  * 3. Exit the loop instead of continuing to the next iteration
  *
  * @example
@@ -19,15 +19,15 @@
  * }) {
  *   execute(params: this['params']): string {
  *     const message = params.message || 'Task completed';
- *     throw new BreakLoopException(message);
+ *     throw new TaskCompletionSignal(message);
  *   }
  * }
  * ```
  */
-export class BreakLoopException extends Error {
+export class TaskCompletionSignal extends Error {
   constructor(message?: string) {
     super(message ?? "Agent loop terminated by gadget");
-    this.name = "BreakLoopException";
+    this.name = "TaskCompletionSignal";
   }
 }
 
@@ -36,7 +36,7 @@ export class BreakLoopException extends Error {
  *
  * When a gadget throws this exception, the agent loop will:
  * 1. Pause execution and wait for human input
- * 2. If `onHumanInputRequired` callback is provided, call it and await the answer
+ * 2. If `requestHumanInput` callback is provided, call it and await the answer
  * 3. Return the user's answer as the gadget's result
  * 4. Continue the loop with the answer added to conversation history
  *
@@ -55,17 +55,17 @@ export class BreakLoopException extends Error {
  *   }),
  * }) {
  *   execute(params: this['params']): string {
- *     throw new HumanInputException(params.question);
+ *     throw new HumanInputRequiredException(params.question);
  *   }
  * }
  * ```
  */
-export class HumanInputException extends Error {
+export class HumanInputRequiredException extends Error {
   public readonly question: string;
 
   constructor(question: string) {
     super(`Human input required: ${question}`);
-    this.name = "HumanInputException";
+    this.name = "HumanInputRequiredException";
     this.question = question;
   }
 }
@@ -126,7 +126,7 @@ export class TimeoutException extends Error {
  *   schema: z.object({ data: z.string() }),
  * }) {
  *   async execute(params: this['params'], ctx: ExecutionContext): Promise<string> {
- *     // Check at key points - throws AbortError if aborted
+ *     // Check at key points - throws AbortException if aborted
  *     this.throwIfAborted(ctx);
  *
  *     await this.doPartOne(params.data);
@@ -140,9 +140,10 @@ export class TimeoutException extends Error {
  * }
  * ```
  */
-export class AbortError extends Error {
+export class AbortException extends Error {
   constructor(message?: string) {
     super(message || "Gadget execution was aborted");
-    this.name = "AbortError";
+    this.name = "AbortException";
   }
 }
+

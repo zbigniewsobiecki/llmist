@@ -99,14 +99,14 @@ export class FetchData extends Gadget({
 Create interactive gadgets:
 
 ```typescript
-import { Gadget, HumanInputException, z } from 'llmist';
+import { Gadget, HumanInputRequiredException, z } from 'llmist';
 
 export class AskUser extends Gadget({
   description: 'Ask the user a question',
   schema: z.object({ question: z.string() }),
 }) {
   execute(params: this['params']): string {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 ```
@@ -121,14 +121,14 @@ llmist agent "Interview me" --gadget ./ask-user.ts
 Stop the agent loop:
 
 ```typescript
-import { Gadget, BreakLoopException, z } from 'llmist';
+import { Gadget, TaskCompletionSignal, z } from 'llmist';
 
 export class Done extends Gadget({
   description: 'Call when task is complete',
   schema: z.object({ summary: z.string() }),
 }) {
   execute(params: this['params']): string {
-    throw new BreakLoopException(params.summary);
+    throw new TaskCompletionSignal(params.summary);
   }
 }
 ```

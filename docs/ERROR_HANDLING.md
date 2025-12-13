@@ -280,30 +280,30 @@ Implement retries with a controller:
 
 ## Gadget Exception Types
 
-### BreakLoopException
+### TaskCompletionSignal
 
 Gracefully terminate the agent loop:
 
 ```typescript
-import { BreakLoopException } from 'llmist';
+import { TaskCompletionSignal } from 'llmist';
 
 class Done extends Gadget({ ... }) {
   execute(params: this['params']): string {
-    throw new BreakLoopException('Task completed successfully');
+    throw new TaskCompletionSignal('Task completed successfully');
   }
 }
 ```
 
-### HumanInputException
+### HumanInputRequiredException
 
 Pause for user input:
 
 ```typescript
-import { HumanInputException } from 'llmist';
+import { HumanInputRequiredException } from 'llmist';
 
 class AskUser extends Gadget({ ... }) {
   execute(params: this['params']): string {
-    throw new HumanInputException(params.question);
+    throw new HumanInputRequiredException(params.question);
   }
 }
 ```
@@ -324,16 +324,16 @@ Thrown when a gadget exceeds its timeout:
 })
 ```
 
-### AbortError
+### AbortException
 
-Thrown by gadgets when they detect the abort signal. Typically thrown via the `BaseGadget.throwIfAborted(ctx)` helper method:
+Thrown by gadgets when they detect the abort signal. Typically thrown via the `AbstractGadget.throwIfAborted(ctx)` helper method:
 
 ```typescript
-import { AbortError } from 'llmist';
+import { AbortException } from 'llmist';
 
 class LongRunningGadget extends Gadget({ ... }) {
   async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
-    // Check at key points - throws AbortError if aborted
+    // Check at key points - throws AbortException if aborted
     this.throwIfAborted(ctx);
 
     await this.doPartOne(params.data);

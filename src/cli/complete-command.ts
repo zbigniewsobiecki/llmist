@@ -11,7 +11,7 @@ import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
 import { createSessionDir, formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
-import { addCompleteOptions, type CompleteCommandOptions } from "./option-helpers.js";
+import { addCompleteOptions, type CLICompleteOptions } from "./option-helpers.js";
 import {
   executeAction,
   renderSummary,
@@ -30,7 +30,7 @@ import {
  */
 export async function executeComplete(
   promptArg: string | undefined,
-  options: CompleteCommandOptions,
+  options: CLICompleteOptions,
   env: CLIEnvironment,
 ): Promise<void> {
   const prompt = await resolvePrompt(promptArg, env);
@@ -155,6 +155,6 @@ export function registerCompleteCommand(
   addCompleteOptions(cmd, config);
 
   cmd.action((prompt, options) =>
-    executeAction(() => executeComplete(prompt, options as CompleteCommandOptions, env), env),
+    executeAction(() => executeComplete(prompt, options as CLICompleteOptions, env), env),
   );
 }

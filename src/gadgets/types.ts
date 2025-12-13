@@ -233,7 +233,7 @@ import type {
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { LLMGenerationOptions, LLMStream } from "../core/options.js";
-import type { QuickOptions } from "../core/quick-methods.js";
+import type { TextGenerationOptions } from "../core/quick-methods.js";
 
 // Text-only response handler types
 export type TextOnlyHandler =
@@ -342,13 +342,13 @@ export interface CostReportingLLMist {
    * Quick completion - returns final text response.
    * Costs are automatically reported to the execution context.
    */
-  complete(prompt: string, options?: QuickOptions): Promise<string>;
+  complete(prompt: string, options?: TextGenerationOptions): Promise<string>;
 
   /**
    * Quick streaming - returns async generator of text chunks.
    * Costs are automatically reported when the stream completes.
    */
-  streamText(prompt: string, options?: QuickOptions): AsyncGenerator<string>;
+  streamText(prompt: string, options?: TextGenerationOptions): AsyncGenerator<string>;
 
   /**
    * Low-level stream access for full control.

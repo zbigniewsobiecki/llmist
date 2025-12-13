@@ -7,7 +7,7 @@
  * @module testing/gadget-testing
  */
 
-import type { BaseGadget } from "../gadgets/gadget.js";
+import type { AbstractGadget } from "../gadgets/gadget.js";
 import { type ValidationResult, validateGadgetParams } from "../gadgets/validation.js";
 
 /**
@@ -77,7 +77,7 @@ export interface TestGadgetOptions {
  * ```
  */
 export async function testGadget(
-  gadget: BaseGadget,
+  gadget: AbstractGadget,
   params: Record<string, unknown>,
   options?: TestGadgetOptions,
 ): Promise<TestGadgetResult> {
@@ -145,7 +145,7 @@ export async function testGadget(
  * ```
  */
 export async function testGadgetBatch(
-  gadget: BaseGadget,
+  gadget: AbstractGadget,
   paramSets: Record<string, unknown>[],
   options?: TestGadgetOptions,
 ): Promise<TestGadgetResult[]> {
