@@ -26,7 +26,7 @@ import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { TextOnlyHandler } from "../gadgets/types.js";
+import type { SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
@@ -97,6 +97,7 @@ export class AgentBuilder {
   private compactionConfig?: CompactionConfig;
   private signal?: AbortSignal;
   private trailingMessage?: TrailingMessage;
+  private subagentConfig?: SubagentConfigMap;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -610,6 +611,28 @@ export class AgentBuilder {
   }
 
   /**
+   * Set subagent configuration overrides.
+   *
+   * Subagent gadgets (like BrowseWeb) can read these settings from ExecutionContext
+   * to inherit model and other options from the CLI configuration.
+   *
+   * @param config - Subagent configuration map keyed by gadget name
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withSubagentConfig({
+   *   BrowseWeb: { model: "inherit", maxIterations: 20, headless: true },
+   *   CodeAnalyzer: { model: "sonnet", maxIterations: 10 }
+   * })
+   * ```
+   */
+  withSubagentConfig(config: SubagentConfigMap): this {
+    this.subagentConfig = config;
+    return this;
+  }
+
+  /**
    * Add an ephemeral trailing message that appears at the end of each LLM request.
    *
    * The message is NOT persisted to conversation history - it only appears in the
@@ -825,6 +848,7 @@ export class AgentBuilder {
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
       signal: this.signal,
+      subagentConfig: this.subagentConfig,
     };
   }
 
@@ -1024,6 +1048,7 @@ export class AgentBuilder {
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
       signal: this.signal,
+      subagentConfig: this.subagentConfig,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

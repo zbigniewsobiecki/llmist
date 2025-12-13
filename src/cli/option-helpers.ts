@@ -4,6 +4,8 @@ import type {
   CompleteConfig,
   CustomCommandConfig,
   GadgetPermissionPolicy,
+  GlobalSubagentConfig,
+  SubagentConfigMap,
 } from "./config.js";
 import { DEFAULT_MODEL, OPTION_DESCRIPTIONS, OPTION_FLAGS } from "./constants.js";
 import { createNumericParser } from "./utils.js";
@@ -55,6 +57,10 @@ export interface CLIAgentOptions {
   dockerDev?: boolean;
   /** Per-profile CWD mount permission override */
   dockerCwdPermission?: "ro" | "rw";
+  /** Profile-level subagent configuration overrides */
+  subagents?: SubagentConfigMap;
+  /** Global subagent configuration (from [subagents] section) */
+  globalSubagents?: GlobalSubagentConfig;
 }
 
 /**
@@ -186,5 +192,6 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
   if (config.docker !== undefined) result.docker = config.docker;
   if (config["docker-cwd-permission"] !== undefined)
     result.dockerCwdPermission = config["docker-cwd-permission"];
+  if (config.subagents !== undefined) result.subagents = config.subagents;
   return result;
 }

@@ -13,10 +13,12 @@ import type { MediaStore } from "../gadgets/media-store.js";
 import { GadgetCallParser } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
+  AgentContextConfig,
   GadgetExecutionResult,
   GadgetSkippedEvent,
   ParsedGadgetCall,
   StreamEvent,
+  SubagentConfigMap,
 } from "../gadgets/types.js";
 import { createLogger } from "../logging/logger.js";
 import {
@@ -88,6 +90,12 @@ export interface StreamProcessorOptions {
 
   /** MediaStore for storing gadget media outputs */
   mediaStore?: MediaStore;
+
+  /** Parent agent configuration for subagents to inherit */
+  agentConfig?: AgentContextConfig;
+
+  /** Subagent-specific configuration overrides */
+  subagentConfig?: SubagentConfigMap;
 }
 
 /**
@@ -187,6 +195,8 @@ export class StreamProcessor {
       { argPrefix: options.gadgetArgPrefix },
       options.client,
       options.mediaStore,
+      options.agentConfig,
+      options.subagentConfig,
     );
   }
 

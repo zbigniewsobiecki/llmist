@@ -22,7 +22,12 @@ import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import { MediaStore } from "../gadgets/media-store.js";
 import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
-import type { StreamEvent, TextOnlyHandler } from "../gadgets/types.js";
+import type {
+  AgentContextConfig,
+  StreamEvent,
+  SubagentConfigMap,
+  TextOnlyHandler,
+} from "../gadgets/types.js";
 import { createLogger } from "../logging/logger.js";
 import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.js";
 import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
@@ -142,6 +147,9 @@ export interface AgentOptions {
 
   /** Optional abort signal for cancelling requests mid-flight */
   signal?: AbortSignal;
+
+  /** Subagent-specific configuration overrides (from CLI config) */
+  subagentConfig?: SubagentConfigMap;
 }
 
 /**
@@ -202,6 +210,10 @@ export class Agent {
 
   // Cancellation
   private readonly signal?: AbortSignal;
+
+  // Subagent configuration
+  private readonly agentContextConfig: AgentContextConfig;
+  private readonly subagentConfig?: SubagentConfigMap;
 
   /**
    * Creates a new Agent instance.
@@ -296,6 +308,13 @@ export class Agent {
 
     // Store abort signal for cancellation
     this.signal = options.signal;
+
+    // Build agent context config for subagents to inherit
+    this.agentContextConfig = {
+      model: this.model,
+      temperature: this.temperature,
+    };
+    this.subagentConfig = options.subagentConfig;
   }
 
   /**
@@ -561,6 +580,8 @@ export class Agent {
           defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
           client: this.client,
           mediaStore: this.mediaStore,
+          agentConfig: this.agentContextConfig,
+          subagentConfig: this.subagentConfig,
         });
 
         const result = await processor.process(stream);
