@@ -85,6 +85,9 @@ bun add llmist
 ## 🖥️ Command Line Interface
 
 ```bash
+# Initialize config (creates ~/.llmist/cli.toml)
+bunx llmist init
+
 # Quick completion
 bunx llmist complete "Explain TypeScript generics" --model haiku
 
