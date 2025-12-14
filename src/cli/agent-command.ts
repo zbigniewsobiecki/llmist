@@ -674,8 +674,7 @@ export async function executeAgent(
         const info = subagentEvent.event as LLMCallInfo;
         const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
         progress.updateNestedAgent(subagentId, info.outputTokens);
-        // Remove after brief delay to show completion
-        setTimeout(() => progress.removeNestedAgent(subagentId), 100);
+        // Note: No removal - nested agent stays visible with frozen timer and ✓ indicator
       } else if (subagentEvent.type === "gadget_call") {
         const gadgetEvent = subagentEvent.event as { call: { invocationId: string; gadgetName: string } };
         progress.addNestedGadget(

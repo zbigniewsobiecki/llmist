@@ -327,6 +327,8 @@ export class StreamProgress {
       startTime: number;
       inputTokens?: number;
       outputTokens?: number;
+      completed?: boolean;
+      completedTime?: number;
     }
   > = new Map();
 
@@ -407,11 +409,14 @@ export class StreamProgress {
 
   /**
    * Update a nested agent with completion info (called when nested llm_call_end event received).
+   * Records completion time to freeze the elapsed timer.
    */
   updateNestedAgent(id: string, outputTokens?: number): void {
     const agent = this.nestedAgents.get(id);
     if (agent) {
       agent.outputTokens = outputTokens;
+      agent.completed = true;
+      agent.completedTime = Date.now();
       if (this.isRunning && this.isTTY) {
         this.render();
       }
@@ -460,7 +465,7 @@ export class StreamProgress {
 
   /**
    * Mark a nested gadget as completed (keeps it visible with ✓ indicator).
-   * Records completion time to freeze the elapsed timer, then removes after a short delay.
+   * Records completion time to freeze the elapsed timer.
    */
   completeNestedGadget(id: string): void {
     const gadget = this.nestedGadgets.get(id);
@@ -470,13 +475,6 @@ export class StreamProgress {
       if (this.isRunning && this.isTTY) {
         this.render();
       }
-      // Remove after brief delay so completion checkmark is visible
-      setTimeout(() => {
-        this.nestedGadgets.delete(id);
-        if (this.isRunning && this.isTTY) {
-          this.render();
-        }
-      }, 100);
     }
   }
 
@@ -649,10 +647,13 @@ export class StreamProgress {
         for (const [_agentId, nested] of this.nestedAgents) {
           if (nested.parentInvocationId !== gadgetId) continue;
           const indent = "  ".repeat(nested.depth + 1);
-          const nestedElapsed = ((Date.now() - nested.startTime) / 1000).toFixed(1);
+          // Use frozen completedTime for elapsed calculation when agent is done
+          const endTime = nested.completedTime ?? Date.now();
+          const nestedElapsed = ((endTime - nested.startTime) / 1000).toFixed(1);
           const tokens = nested.inputTokens ? ` ${chalk.dim("↑")}${chalk.yellow(formatTokens(nested.inputTokens))}` : "";
           const outTokens = nested.outputTokens ? ` ${chalk.dim("↓")}${chalk.green(formatTokens(nested.outputTokens))}` : "";
-          const nestedLine = `${indent}${chalk.cyan(`#${nested.iteration}`)} ${chalk.dim(nested.model)}${tokens}${outTokens} ${chalk.dim(nestedElapsed + "s")} ${chalk.cyan(spinner)}`;
+          const statusIcon = nested.completed ? chalk.green("✓") : chalk.cyan(spinner);
+          const nestedLine = `${indent}${chalk.cyan(`#${nested.iteration}`)} ${chalk.dim(nested.model)}${tokens}${outTokens} ${chalk.dim(nestedElapsed + "s")} ${statusIcon}`;
           lines.push(nestedLine);
         }
 
