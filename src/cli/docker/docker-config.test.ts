@@ -17,8 +17,6 @@ describe("docker-config", () => {
         "config-permission": "ro",
         "image-name": "my-sandbox",
         "env-vars": ["GH_TOKEN", "CUSTOM_VAR"],
-        "dev-mode": true,
-        "dev-source": "~/Code/llmist",
         "docker-args": ["-p", "3000:3000", "--memory", "4g"],
         mounts: [{ source: "~/data", target: "/data", permission: "ro" }],
       };
@@ -31,8 +29,6 @@ describe("docker-config", () => {
       expect(result["config-permission"]).toBe("ro");
       expect(result["image-name"]).toBe("my-sandbox");
       expect(result["env-vars"]).toEqual(["GH_TOKEN", "CUSTOM_VAR"]);
-      expect(result["dev-mode"]).toBe(true);
-      expect(result["dev-source"]).toBe("~/Code/llmist");
       expect(result["docker-args"]).toEqual(["-p", "3000:3000", "--memory", "4g"]);
       expect(result.mounts).toHaveLength(1);
       expect(result.mounts![0]).toEqual({
@@ -142,32 +138,6 @@ describe("docker-config", () => {
       it("should reject array with non-strings", () => {
         expect(() => validateDockerConfig({ "env-vars": ["VAR1", 123] }, "docker")).toThrow(
           "[docker].env-vars[1] must be a string",
-        );
-      });
-    });
-
-    describe("dev-mode field", () => {
-      it("should accept boolean", () => {
-        const result = validateDockerConfig({ "dev-mode": true }, "docker");
-        expect(result["dev-mode"]).toBe(true);
-      });
-
-      it("should reject non-boolean", () => {
-        expect(() => validateDockerConfig({ "dev-mode": "yes" }, "docker")).toThrow(
-          "[docker].dev-mode must be a boolean",
-        );
-      });
-    });
-
-    describe("dev-source field", () => {
-      it("should accept string", () => {
-        const result = validateDockerConfig({ "dev-source": "/path/to/source" }, "docker");
-        expect(result["dev-source"]).toBe("/path/to/source");
-      });
-
-      it("should reject non-string", () => {
-        expect(() => validateDockerConfig({ "dev-source": null }, "docker")).toThrow(
-          "[docker].dev-source must be a string",
         );
       });
     });

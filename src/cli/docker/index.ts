@@ -9,7 +9,6 @@
 export { validateDockerConfig } from "./docker-config.js";
 // Docker execution
 export {
-  autoDetectDevSource,
   checkDockerAvailable,
   createDockerContext,
   DockerRunError,
@@ -18,14 +17,12 @@ export {
   executeInDocker,
   filterDockerArgs,
   isInsideContainer,
-  resolveDevMode,
   resolveDockerEnabled,
 } from "./docker-wrapper.js";
 // Dockerfile handling
 export {
   computeDockerfileHash,
   DEFAULT_DOCKERFILE,
-  DEV_DOCKERFILE,
   resolveDockerfile,
 } from "./dockerfile.js";
 // Image management
@@ -37,7 +34,6 @@ export {
 } from "./image-manager.js";
 // Types
 export type {
-  DevModeSettings,
   DockerConfig,
   DockerExecutionContext,
   DockerOptions,
@@ -48,9 +44,8 @@ export {
   DEFAULT_CONFIG_PERMISSION,
   DEFAULT_CWD_PERMISSION,
   DEFAULT_IMAGE_NAME,
-  DEV_IMAGE_NAME,
-  DEV_SOURCE_MOUNT_TARGET,
   DOCKER_CONFIG_KEYS,
   FORWARDED_API_KEYS,
+  GADGET_CACHE_VOLUME,
   VALID_MOUNT_PERMISSIONS,
 } from "./types.js";

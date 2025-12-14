@@ -167,8 +167,8 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
   const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
 
   try {
-    // Use npm install with specific options for isolated install
-    execSync(`npm install --prefix "${cacheDir}" "${packageSpec}" --save`, {
+    // Use bun add for isolated install (works in Docker containers that only have bun)
+    execSync(`bun add "${packageSpec}"`, {
       stdio: "pipe",
       cwd: cacheDir,
     });
@@ -212,7 +212,7 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
     // Install dependencies and build
     if (fs.existsSync(path.join(cacheDir, "package.json"))) {
       try {
-        execSync("npm install", { cwd: cacheDir, stdio: "pipe" });
+        execSync("bun install", { cwd: cacheDir, stdio: "inherit" });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to install dependencies for '${spec.package}': ${message}`);
@@ -222,7 +222,7 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
       try {
         const packageJson = JSON.parse(fs.readFileSync(path.join(cacheDir, "package.json"), "utf-8"));
         if (packageJson.scripts?.build) {
-          execSync("npm run build", { cwd: cacheDir, stdio: "pipe" });
+          execSync("bun run build", { cwd: cacheDir, stdio: "inherit" });
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
