@@ -24,6 +24,8 @@ import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
   AgentContextConfig,
+  NestedAgentEvent,
+  StreamCompletionEvent,
   StreamEvent,
   SubagentConfigMap,
   TextOnlyHandler,
@@ -150,6 +152,9 @@ export interface AgentOptions {
 
   /** Subagent-specific configuration overrides (from CLI config) */
   subagentConfig?: SubagentConfigMap;
+
+  /** Callback for subagent gadgets to report nested events to parent */
+  onNestedEvent?: (event: NestedAgentEvent) => void;
 }
 
 /**
@@ -214,6 +219,9 @@ export class Agent {
   // Subagent configuration
   private readonly agentContextConfig: AgentContextConfig;
   private readonly subagentConfig?: SubagentConfigMap;
+
+  // Nested event callback for subagent gadgets
+  private readonly onNestedEvent?: (event: NestedAgentEvent) => void;
 
   /**
    * Creates a new Agent instance.
@@ -315,6 +323,7 @@ export class Agent {
       temperature: this.temperature,
     };
     this.subagentConfig = options.subagentConfig;
+    this.onNestedEvent = options.onNestedEvent;
   }
 
   /**
@@ -582,14 +591,44 @@ export class Agent {
           mediaStore: this.mediaStore,
           agentConfig: this.agentContextConfig,
           subagentConfig: this.subagentConfig,
+          onNestedEvent: this.onNestedEvent,
         });
 
-        const result = await processor.process(stream);
+        // Consume the stream processor generator, yielding events in real-time
+        // The final event is a StreamCompletionEvent containing metadata
+        let streamMetadata: StreamCompletionEvent | null = null;
+        let gadgetCallCount = 0;
 
-        // Yield all outputs to user
-        for (const output of result.outputs) {
-          yield output;
+        // Track outputs for conversation history (since we stream instead of batch)
+        const textOutputs: string[] = [];
+        const gadgetResults: StreamEvent[] = [];
+
+        for await (const event of processor.process(stream)) {
+          if (event.type === "stream_complete") {
+            // Completion event - extract metadata, don't yield to consumer
+            streamMetadata = event;
+            continue;
+          }
+
+          // Track outputs for later conversation history updates
+          if (event.type === "text") {
+            textOutputs.push(event.content);
+          } else if (event.type === "gadget_result") {
+            gadgetCallCount++;
+            gadgetResults.push(event);
+          }
+
+          // Yield event to consumer in real-time
+          yield event;
         }
+
+        // Ensure we received the completion metadata
+        if (!streamMetadata) {
+          throw new Error("Stream processing completed without metadata event");
+        }
+
+        // Use streamMetadata as the result for remaining logic
+        const result = streamMetadata;
 
         this.logger.info("LLM response completed", {
           finishReason: result.finishReason,
@@ -619,11 +658,7 @@ export class Agent {
         // Controller: After LLM call
         let finalMessage = result.finalMessage;
         if (this.hooks.controllers?.afterLLMCall) {
-          // Count gadget calls in this response
-          const gadgetCallCount = result.outputs.filter(
-            (output) => output.type === "gadget_result",
-          ).length;
-
+          // gadgetCallCount was tracked during the streaming loop above
           const context: AfterLLMCallControllerContext = {
             iteration: currentIteration,
             maxIterations: this.maxIterations,
@@ -662,12 +697,8 @@ export class Agent {
         if (result.didExecuteGadgets) {
           // If configured, wrap accompanying text as a synthetic gadget call (before actual gadgets)
           if (this.textWithGadgetsHandler) {
-            const textContent = result.outputs
-              .filter(
-                (output): output is { type: "text"; content: string } => output.type === "text",
-              )
-              .map((output) => output.content)
-              .join("");
+            // Use tracked textOutputs from streaming loop (replaces result.outputs filtering)
+            const textContent = textOutputs.join("");
 
             if (textContent.trim()) {
               const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
@@ -680,7 +711,8 @@ export class Agent {
           }
 
           // Extract and add all gadget results to conversation
-          for (const output of result.outputs) {
+          // Use tracked gadgetResults from streaming loop (replaces result.outputs iteration)
+          for (const output of gadgetResults) {
             if (output.type === "gadget_result") {
               const gadgetResult = output.result;
               this.conversation.addGadgetCallResult(

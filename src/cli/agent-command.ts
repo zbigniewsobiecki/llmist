@@ -8,6 +8,7 @@ import { text } from "../core/input-content.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
+import type { LLMCallInfo, NestedAgentEvent } from "../gadgets/types.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import { type ApprovalConfig, ApprovalManager } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
@@ -34,6 +35,7 @@ import {
 } from "./llm-logging.js";
 import { type CLIAgentOptions, addAgentOptions } from "./option-helpers.js";
 import {
+  formatGadgetStarted,
   formatGadgetSummary,
   renderMarkdownWithSeparators,
   renderOverallSummary,
@@ -648,6 +650,42 @@ export async function executeAgent(
     ].join(" "),
   );
 
+  // Handle nested subagent events for hierarchical progress display
+  // Subagent gadgets (like BrowseWeb) forward their internal events via ExecutionContext.onNestedEvent
+  if (!options.quiet) {
+    builder.withNestedEventCallback((event: NestedAgentEvent) => {
+      if (event.type === "llm_call_start") {
+        const info = event.event as LLMCallInfo;
+        const nestedId = `${event.gadgetInvocationId}:${info.iteration}`;
+        progress.addNestedAgent(
+          nestedId,
+          event.gadgetInvocationId,
+          event.depth,
+          info.model,
+          info.iteration,
+          info.inputTokens,
+        );
+      } else if (event.type === "llm_call_end") {
+        const info = event.event as LLMCallInfo;
+        const nestedId = `${event.gadgetInvocationId}:${info.iteration}`;
+        progress.updateNestedAgent(nestedId, info.outputTokens);
+        // Remove after a brief delay to show completion
+        setTimeout(() => progress.removeNestedAgent(nestedId), 100);
+      } else if (event.type === "gadget_call") {
+        const gadgetEvent = event.event as { call: { invocationId: string; gadgetName: string } };
+        progress.addNestedGadget(
+          gadgetEvent.call.invocationId,
+          event.depth,
+          event.gadgetInvocationId,
+          gadgetEvent.call.gadgetName,
+        );
+      } else if (event.type === "gadget_result") {
+        const resultEvent = event.event as { result: { invocationId: string } };
+        progress.removeNestedGadget(resultEvent.result.invocationId);
+      }
+    });
+  }
+
   // Build and start the agent
   // Use multimodal content if --image or --audio flags are present
   let agent;
@@ -694,12 +732,33 @@ export async function executeAgent(
     for await (const event of agent.run()) {
       if (event.type === "text") {
         // Accumulate text chunks - we'll render markdown when complete
-        progress.pause();
+        // Don't pause progress - it can continue showing while we buffer text
         textBuffer += event.content;
+      } else if (event.type === "gadget_call") {
+        // Flush any accumulated text before tracking gadget
+        flushTextBuffer();
+
+        if (!options.quiet) {
+          // Add gadget to progress tracking - it will show in multi-line status
+          progress.addGadget(
+            event.call.invocationId,
+            event.call.gadgetName,
+            event.call.parameters,
+          );
+          // Ensure progress is running to show gadget execution in real-time
+          // (flushTextBuffer may have paused it)
+          progress.start();
+        }
       } else if (event.type === "gadget_result") {
         // Flush any accumulated text before showing gadget result
         flushTextBuffer();
-        // Show gadget execution feedback on stderr
+
+        if (!options.quiet) {
+          // Remove gadget from in-flight tracking
+          progress.removeGadget(event.result.invocationId);
+        }
+
+        // Pause progress to write the completion summary
         progress.pause();
 
         if (options.quiet) {
@@ -715,7 +774,12 @@ export async function executeAgent(
             `${formatGadgetSummary({ ...event.result, tokenCount, media: event.result.storedMedia })}\n`,
           );
         }
-        // Progress automatically resumes on next LLM call (via onLLMCallStart hook)
+
+        // Resume progress if there are more gadgets in flight or LLM is still streaming
+        if (progress.hasInFlightGadgets()) {
+          progress.start();
+        }
+        // Otherwise, progress resumes on next LLM call (via onLLMCallStart hook)
       }
       // Note: human_input_required handled by callback (see createHumanInputHandler)
     }

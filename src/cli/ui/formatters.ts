@@ -504,6 +504,29 @@ function formatParametersInline(params: Record<string, unknown> | undefined): st
 }
 
 /**
+ * Formats a gadget start indication as a compact one-liner for stderr output.
+ *
+ * Shows that a gadget is about to execute, providing immediate feedback
+ * before the potentially long-running execution completes.
+ *
+ * Format: `⏵ GadgetName(param=value, ...) ...`
+ *
+ * @param gadgetName - Name of the gadget being executed
+ * @param parameters - Parameters passed to the gadget
+ * @returns Formatted one-liner string with ANSI colors
+ */
+export function formatGadgetStarted(
+  gadgetName: string,
+  parameters?: Record<string, unknown>,
+): string {
+  const gadgetLabel = chalk.magenta.bold(gadgetName);
+  const paramsStr = formatParametersInline(parameters);
+  const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
+
+  return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel} ${chalk.dim("...")}`;
+}
+
+/**
  * Formats byte count in human-readable form.
  *
  * @param bytes - Number of bytes
@@ -561,7 +584,12 @@ function formatMediaLine(media: StoredMedia): string {
 export function formatGadgetSummary(result: GadgetResult): string {
   // Format gadget name and execution time
   const gadgetLabel = chalk.magenta.bold(result.gadgetName);
-  const timeLabel = chalk.dim(`${Math.round(result.executionTimeMs)}ms`);
+  // Show seconds for values >= 1000ms, otherwise milliseconds
+  const timeLabel = chalk.dim(
+    result.executionTimeMs >= 1000
+      ? `${(result.executionTimeMs / 1000).toFixed(1)}s`
+      : `${Math.round(result.executionTimeMs)}ms`,
+  );
 
   // Format parameters inline (parentheses are dim, content is color-coded)
   const paramsStr = formatParametersInline(result.parameters);

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { TaskCompletionSignal } from "../gadgets/exceptions.js";
+import type { StreamCompletionEvent, StreamEvent } from "../gadgets/types.js";
 import { resetGlobalInvocationCounter } from "../gadgets/parser.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { createMockGadget, mockGadget } from "../testing/mock-gadget.js";
@@ -11,8 +12,52 @@ import {
   createTestStream,
   createTextStream,
 } from "../testing/stream-helpers.js";
+import type { LLMStreamChunk } from "../core/client.js";
 import type { AgentHooks } from "./hooks.js";
 import { StreamProcessor } from "./stream-processor.js";
+
+/**
+ * Helper to consume the async generator from StreamProcessor.process()
+ * and return a result object matching the old synchronous return format.
+ * This allows existing tests to work with minimal changes.
+ */
+async function consumeStream(
+  processor: StreamProcessor,
+  stream: AsyncIterable<LLMStreamChunk>,
+): Promise<{
+  outputs: StreamEvent[];
+  finishReason: string | null;
+  usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  rawResponse: string;
+  finalMessage: string;
+  didExecuteGadgets: boolean;
+  shouldBreakLoop: boolean;
+}> {
+  const outputs: StreamEvent[] = [];
+  let metadata: StreamCompletionEvent | null = null;
+
+  for await (const event of processor.process(stream)) {
+    if (event.type === "stream_complete") {
+      metadata = event;
+    } else {
+      outputs.push(event);
+    }
+  }
+
+  if (!metadata) {
+    throw new Error("Stream completed without metadata event");
+  }
+
+  return {
+    outputs,
+    finishReason: metadata.finishReason,
+    usage: metadata.usage,
+    rawResponse: metadata.rawResponse,
+    finalMessage: metadata.finalMessage,
+    didExecuteGadgets: metadata.didExecuteGadgets,
+    shouldBreakLoop: metadata.shouldBreakLoop,
+  };
+}
 
 // Helper to create a gadget call string
 // Supports optional invocation ID and dependencies via the new syntax:
@@ -94,7 +139,7 @@ describe("StreamProcessor", () => {
       const gadgetCall = createGadgetCallString("ErrorGadget");
       const stream = createTextStream(gadgetCall);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Should have gadget_call and gadget_result with error
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -121,7 +166,7 @@ describe("StreamProcessor", () => {
         createGadgetCallString("ErrorGadget") + "\n" + createGadgetCallString("OkGadget");
       const stream = createTextStream(gadgetCalls);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Both gadgets should have been processed
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -146,7 +191,7 @@ describe("StreamProcessor", () => {
         createGadgetCallString("RecoverableError") + "\n" + createGadgetCallString("AfterError");
       const stream = createTextStream(gadgetCalls);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(shouldContinue).toHaveBeenCalled();
       // Should continue because error is "recoverable"
@@ -160,7 +205,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createEmptyStream();
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.outputs).toHaveLength(0);
       expect(result.didExecuteGadgets).toBe(false);
@@ -174,7 +219,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createTextStream("Hello, world!");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const textEvents = result.outputs.filter((e) => e.type === "text");
       expect(textEvents).toHaveLength(1);
@@ -190,7 +235,7 @@ describe("StreamProcessor", () => {
         { text: " world", finishReason: "end_turn" },
       ]);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.finishReason).toBe("end_turn");
     });
@@ -203,7 +248,7 @@ describe("StreamProcessor", () => {
         { text: " world", finishReason: "stop" },
       ]);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.usage).toEqual(usage);
     });
@@ -212,7 +257,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createTextStream("Hello world", { chunkSize: 3 });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.rawResponse).toBe("Hello world");
     });
@@ -229,7 +274,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello world");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.rawResponse).toBe("hello world");
       expect(result.finalMessage).toBe("HELLO WORLD");
@@ -247,7 +292,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(interceptRawChunk).toHaveBeenCalledWith("hello", expect.any(Object));
       expect(result.rawResponse).toBe("HELLO");
@@ -263,7 +308,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.rawResponse).toBe("");
       expect(result.outputs).toHaveLength(0);
@@ -283,7 +328,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("test");
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(capturedContext).toMatchObject({
         iteration: 5,
@@ -304,7 +349,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello", { chunkSize: 2 });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onStreamChunk).toHaveBeenCalled();
     });
@@ -322,7 +367,7 @@ describe("StreamProcessor", () => {
         { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
       ]);
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onStreamChunk).toHaveBeenCalled();
     });
@@ -340,7 +385,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("test");
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(capturedContext).toMatchObject({
         iteration: 3,
@@ -360,7 +405,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello world");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Should still process successfully
       expect(result.rawResponse).toBe("hello world");
@@ -375,7 +420,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetCalls = result.outputs.filter((e) => e.type === "gadget_call");
       expect(gadgetCalls).toHaveLength(1);
@@ -391,7 +436,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
@@ -407,7 +452,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.didExecuteGadgets).toBe(true);
     });
@@ -416,7 +461,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createTextStream(createGadgetCallString("UnknownGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
@@ -449,7 +494,7 @@ describe("StreamProcessor", () => {
       const gadgetCall = createGadgetCallString("EchoGadget", { message: "original" });
       const stream = createTextStream(gadgetCall);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(interceptGadgetParameters).toHaveBeenCalled();
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -475,7 +520,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(capturedContext).toMatchObject({
         iteration: 7,
@@ -499,7 +544,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(beforeGadgetExecution).toHaveBeenCalled();
       expect(testGadget.getCallCount()).toBe(1);
@@ -525,7 +570,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(testGadget.getCallCount()).toBe(0);
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -550,7 +595,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(
@@ -574,7 +619,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
@@ -601,7 +646,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(startObserverCalled).toBe(true);
       expect(testGadget.getCallCount()).toBe(1);
@@ -627,7 +672,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget", { value: "test" }));
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(capturedContext).toMatchObject({
         iteration: 4,
@@ -651,7 +696,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Execution should still complete
       expect(testGadget.getCallCount()).toBe(1);
@@ -673,7 +718,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
@@ -698,7 +743,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(
         (capturedContext as { executionTimeMs: number }).executionTimeMs,
@@ -720,7 +765,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(afterGadgetExecution).toHaveBeenCalled();
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -747,7 +792,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(
@@ -774,7 +819,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(
@@ -797,7 +842,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionComplete).toHaveBeenCalled();
     });
@@ -823,7 +868,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("TestGadget"));
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       const ctx = capturedContext as { originalResult: string; finalResult: string };
       expect(ctx.originalResult).toBe("original");
@@ -851,7 +896,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream(createGadgetCallString("BreakGadget"));
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect((capturedContext as { breaksLoop: boolean }).breaksLoop).toBe(true);
     });
@@ -870,7 +915,7 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({ iteration: 1, registry });
       const stream = createTextStream(createGadgetCallString("BreakGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.shouldBreakLoop).toBe(true);
     });
@@ -891,7 +936,7 @@ describe("StreamProcessor", () => {
         createGadgetCallString("ErrorGadget") + "\n" + createGadgetCallString("AfterGadget");
       const stream = createTextStream(gadgetCalls);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Only one gadget result (ErrorGadget)
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -911,7 +956,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const textEvents = result.outputs.filter((e) => e.type === "text");
       expect(textEvents[0].type === "text" && textEvents[0].content).toBe("HELLO");
@@ -927,7 +972,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const textEvents = result.outputs.filter((e) => e.type === "text");
       expect(textEvents).toHaveLength(0);
@@ -947,7 +992,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("hello world");
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(interceptAssistantMessage).toHaveBeenCalledWith("hello world", expect.any(Object));
       expect(result.finalMessage).toBe("[TRANSFORMED] hello world");
@@ -968,7 +1013,7 @@ describe("StreamProcessor", () => {
       });
       const stream = createTextStream("test message");
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(capturedContext).toMatchObject({
         iteration: 9,
@@ -990,7 +1035,7 @@ describe("StreamProcessor", () => {
       // Missing required parameter
       const stream = createTextStream(createGadgetCallString("ValidatedGadget"));
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toContain(
@@ -1016,7 +1061,7 @@ describe("StreamProcessor", () => {
         createGadgetCallString("Gadget1") + "\n" + createGadgetCallString("Gadget2");
       const stream = createTextStream(gadgetCalls);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(gadget1.getCallCount()).toBe(1);
       expect(gadget2.getCallCount()).toBe(1);
@@ -1034,7 +1079,7 @@ describe("StreamProcessor", () => {
       const content = `Some text before\n${createGadgetCallString("TestGadget")}\nSome text after`;
       const stream = createTextStream(content);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const textEvents = result.outputs.filter((e) => e.type === "text");
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -1063,7 +1108,7 @@ test value
 <<<END`;
       const stream = createTextStream(customGadgetCall);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
@@ -1086,7 +1131,7 @@ test value
       );
       const stream = createTextStream(gadgetCall);
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(1);
@@ -1123,7 +1168,7 @@ test value
         createGadgetCallString("GadgetB", {}, { invocationId: "b1", dependencies: ["a1"] });
 
       const stream = createTextStream(gadgetCalls);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Both should execute
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -1161,7 +1206,7 @@ test value
         createGadgetCallString("GadgetA", {}, { invocationId: "a1" });
 
       const stream = createTextStream(gadgetCalls);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Both should execute, but A runs first (dependency)
       expect(executionOrder).toEqual(["A", "B"]);
@@ -1195,7 +1240,7 @@ test value
         );
 
       const stream = createTextStream(gadgetCalls);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Should have one gadget_result (error) and one gadget_skipped
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -1233,7 +1278,7 @@ test value
         createGadgetCallString("GadgetC", {}, { invocationId: "c1", dependencies: ["b1"] });
 
       const stream = createTextStream(gadgetCalls);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // A executes with error, B and C are skipped
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -1279,7 +1324,7 @@ test value
       const stream = createTextStream(gadgetCalls);
 
       const startTime = Date.now();
-      await processor.process(stream);
+      await consumeStream(processor, stream);
       const totalTime = Date.now() - startTime;
 
       // B and C should run in parallel after Root (~50ms each but parallel, not ~100ms sequential)
@@ -1314,7 +1359,7 @@ test value
       ].join("\n");
 
       const stream = createTextStream(gadgetCalls);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(4);
@@ -1344,7 +1389,7 @@ test value
       );
 
       const stream = createTextStream(gadgetCall);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Should be skipped due to unresolvable dependency
       const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
@@ -1384,7 +1429,7 @@ test value
         );
 
       const stream = createTextStream(gadgetCalls);
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onDependencySkipped).toHaveBeenCalledTimes(1);
       expect(onDependencySkipped.mock.calls[0][0]).toMatchObject({
@@ -1424,7 +1469,7 @@ test value
         );
 
       const stream = createTextStream(gadgetCalls);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Both should have results (no skip)
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -1471,7 +1516,7 @@ test value
         );
 
       const stream = createTextStream(gadgetCalls);
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Both should have results
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
@@ -1515,7 +1560,7 @@ test value
         );
 
       const stream = createTextStream(gadgetCalls);
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetSkipped).toHaveBeenCalledTimes(1);
       expect(onGadgetSkipped.mock.calls[0][0]).toMatchObject({
