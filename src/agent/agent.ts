@@ -221,7 +221,11 @@ export class Agent {
   private readonly subagentConfig?: SubagentConfigMap;
 
   // Nested event callback for subagent gadgets
-  private readonly onNestedEvent?: (event: NestedAgentEvent) => void;
+  private readonly userNestedEventCallback?: (event: NestedAgentEvent) => void;
+  // Internal queue for yielding nested events in run()
+  private readonly pendingNestedEvents: NestedAgentEvent[] = [];
+  // Combined callback that queues events AND calls user callback
+  private readonly onNestedEvent: (event: NestedAgentEvent) => void;
 
   /**
    * Creates a new Agent instance.
@@ -323,7 +327,26 @@ export class Agent {
       temperature: this.temperature,
     };
     this.subagentConfig = options.subagentConfig;
-    this.onNestedEvent = options.onNestedEvent;
+
+    // Store user callback and create combined callback that:
+    // 1. Queues events for yielding in run()
+    // 2. Calls user callback if provided
+    this.userNestedEventCallback = options.onNestedEvent;
+    this.onNestedEvent = (event: NestedAgentEvent) => {
+      this.pendingNestedEvents.push(event);
+      this.userNestedEventCallback?.(event);
+    };
+  }
+
+  /**
+   * Flush pending nested events as StreamEvents.
+   * Called from run() to yield queued nested events from subagent gadgets.
+   */
+  private *flushPendingNestedEvents(): Generator<StreamEvent> {
+    while (this.pendingNestedEvents.length > 0) {
+      const event = this.pendingNestedEvents.shift()!;
+      yield { type: "nested_agent_event", nestedEvent: event };
+    }
   }
 
   /**
@@ -620,6 +643,10 @@ export class Agent {
 
           // Yield event to consumer in real-time
           yield event;
+
+          // Yield any nested events that accumulated during gadget execution
+          // This enables real-time display of subagent activity (Navigate, Screenshot, etc.)
+          yield* this.flushPendingNestedEvents();
         }
 
         // Ensure we received the completion metadata

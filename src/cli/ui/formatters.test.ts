@@ -1,5 +1,10 @@
-import { describe, expect, it } from "bun:test";
-import { formatGadgetSummary, formatTokens, renderMarkdown } from "./formatters.js";
+import { afterEach, describe, expect, it } from "bun:test";
+import {
+  formatGadgetStarted,
+  formatGadgetSummary,
+  formatTokens,
+  renderMarkdown,
+} from "./formatters.js";
 
 describe("renderMarkdown", () => {
   describe("basic text transformation", () => {
@@ -275,6 +280,88 @@ describe("formatGadgetSummary", () => {
       expect(result).toContain("TellUser");
       expect(result).toContain("Done!");
       expect(result).toContain("Task completed");
+    });
+  });
+});
+
+describe("width-aware parameter truncation", () => {
+  const originalColumns = process.stdout.columns;
+
+  afterEach(() => {
+    // Restore original columns value
+    Object.defineProperty(process.stdout, "columns", {
+      value: originalColumns,
+      writable: true,
+    });
+  });
+
+  describe("formatGadgetSummary with wide terminal", () => {
+    it("shows more parameter content on wider terminals", () => {
+      // Set wide terminal
+      Object.defineProperty(process.stdout, "columns", {
+        value: 200,
+        writable: true,
+      });
+
+      const longTask = "Extract the core features and key selling points from the README";
+      const longUrl = "https://github.com/vadimdemedes/ink";
+
+      const result = formatGadgetSummary({
+        gadgetName: "BrowseWeb",
+        executionTimeMs: 22900,
+        parameters: { task: longTask, url: longUrl },
+        result: "content",
+        tokenCount: 883,
+      });
+
+      // On a 200-column terminal, should show more content
+      expect(result).toContain("Extract");
+      expect(result).toContain("github.com");
+      // Full URL should be visible on wide terminal
+      expect(result).toContain("vadimdemedes/ink");
+    });
+  });
+
+  describe("formatGadgetSummary with narrow terminal", () => {
+    it("truncates more aggressively on narrow terminals", () => {
+      // Set narrow terminal
+      Object.defineProperty(process.stdout, "columns", {
+        value: 80,
+        writable: true,
+      });
+
+      const longTask = "Extract the core features and key selling points from the README";
+      const longUrl = "https://github.com/vadimdemedes/ink";
+
+      const result = formatGadgetSummary({
+        gadgetName: "BrowseWeb",
+        executionTimeMs: 22900,
+        parameters: { task: longTask, url: longUrl },
+        result: "content",
+        tokenCount: 883,
+      });
+
+      // Should have ellipsis for truncated content
+      expect(result).toContain("…");
+      // Should NOT show the full URL
+      expect(result).not.toContain("vadimdemedes/ink");
+    });
+  });
+
+  describe("formatGadgetStarted with terminal width", () => {
+    it("expands parameters on wide terminals", () => {
+      Object.defineProperty(process.stdout, "columns", {
+        value: 150,
+        writable: true,
+      });
+
+      const result = formatGadgetStarted("BrowseWeb", {
+        task: "Extract the core features and key selling points",
+        url: "https://github.com/vadimdemedes/ink",
+      });
+
+      expect(result).toContain("Extract");
+      expect(result).toContain("github.com");
     });
   });
 });

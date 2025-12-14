@@ -26,7 +26,7 @@ import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { ExecutionContext, LLMCallInfo, NestedAgentEvent, SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
+import type { ExecutionContext, LLMCallInfo, NestedAgentEvent, StreamEvent, SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
@@ -792,11 +792,13 @@ export class AgentBuilder {
   private composeHooks(): AgentHooks | undefined {
     let hooks = this.hooks;
 
-    // Inject nested event forwarding for LLM calls when parentContext is set
+    // Inject nested event forwarding for LLM and gadget events when parentContext is set
     if (this.parentContext) {
       const { invocationId, onNestedEvent, depth } = this.parentContext;
       const existingOnLLMCallStart = hooks?.observers?.onLLMCallStart;
       const existingOnLLMCallComplete = hooks?.observers?.onLLMCallComplete;
+      const existingOnGadgetExecutionStart = hooks?.observers?.onGadgetExecutionStart;
+      const existingOnGadgetExecutionComplete = hooks?.observers?.onGadgetExecutionComplete;
 
       hooks = {
         ...hooks,
@@ -834,6 +836,42 @@ export class AgentBuilder {
             // Chain to existing hook if present
             if (existingOnLLMCallComplete) {
               await existingOnLLMCallComplete(context);
+            }
+          },
+          onGadgetExecutionStart: async (context) => {
+            // Forward gadget start to parent
+            onNestedEvent({
+              type: "gadget_call",
+              gadgetInvocationId: invocationId,
+              depth,
+              event: {
+                call: {
+                  invocationId: context.invocationId,
+                  gadgetName: context.gadgetName,
+                  parameters: context.parameters,
+                },
+              } as unknown as StreamEvent,
+            });
+            // Chain to existing hook if present
+            if (existingOnGadgetExecutionStart) {
+              await existingOnGadgetExecutionStart(context);
+            }
+          },
+          onGadgetExecutionComplete: async (context) => {
+            // Forward gadget completion to parent
+            onNestedEvent({
+              type: "gadget_result",
+              gadgetInvocationId: invocationId,
+              depth,
+              event: {
+                result: {
+                  invocationId: context.invocationId,
+                },
+              } as unknown as StreamEvent,
+            });
+            // Chain to existing hook if present
+            if (existingOnGadgetExecutionComplete) {
+              await existingOnGadgetExecutionComplete(context);
             }
           },
         },

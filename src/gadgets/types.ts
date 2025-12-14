@@ -241,7 +241,14 @@ export type StreamEvent =
   | GadgetSkippedEvent
   | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string }
   | { type: "compaction"; event: CompactionEvent }
+  | NestedAgentStreamEvent
   | StreamCompletionEvent;
+
+/** Event for forwarding nested subagent activity through the stream */
+export interface NestedAgentStreamEvent {
+  type: "nested_agent_event";
+  nestedEvent: NestedAgentEvent;
+}
 
 // =============================================================================
 // Nested Subagent Event Types

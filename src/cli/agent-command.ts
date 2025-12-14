@@ -8,7 +8,7 @@ import { text } from "../core/input-content.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { LLMCallInfo, NestedAgentEvent } from "../gadgets/types.js";
+import type { LLMCallInfo } from "../gadgets/types.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import { type ApprovalConfig, ApprovalManager } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
@@ -650,38 +650,43 @@ export async function executeAgent(
     ].join(" "),
   );
 
-  // Handle nested subagent events for hierarchical progress display
-  // Subagent gadgets (like BrowseWeb) forward their internal events via ExecutionContext.onNestedEvent
+  // Nested subagent events (from BrowseWeb, etc.) require callback-based handling
+  // for REAL-TIME display. Stream-based events are delayed until the gadget completes
+  // because flushPendingNestedEvents() only runs after each stream processor yield.
+  //
+  // withNestedEventCallback() fires IMMEDIATELY when events occur, enabling real-time
+  // progress updates during long-running gadgets like BrowseWeb (45+ seconds).
+  // The stream-based events (nested_agent_event) are still useful for simpler apps.
   if (!options.quiet) {
-    builder.withNestedEventCallback((event: NestedAgentEvent) => {
-      if (event.type === "llm_call_start") {
-        const info = event.event as LLMCallInfo;
-        const nestedId = `${event.gadgetInvocationId}:${info.iteration}`;
+    builder.withNestedEventCallback((nestedEvent) => {
+      if (nestedEvent.type === "llm_call_start") {
+        const info = nestedEvent.event as LLMCallInfo;
+        const nestedId = `${nestedEvent.gadgetInvocationId}:${info.iteration}`;
         progress.addNestedAgent(
           nestedId,
-          event.gadgetInvocationId,
-          event.depth,
+          nestedEvent.gadgetInvocationId,
+          nestedEvent.depth,
           info.model,
           info.iteration,
           info.inputTokens,
         );
-      } else if (event.type === "llm_call_end") {
-        const info = event.event as LLMCallInfo;
-        const nestedId = `${event.gadgetInvocationId}:${info.iteration}`;
+      } else if (nestedEvent.type === "llm_call_end") {
+        const info = nestedEvent.event as LLMCallInfo;
+        const nestedId = `${nestedEvent.gadgetInvocationId}:${info.iteration}`;
         progress.updateNestedAgent(nestedId, info.outputTokens);
-        // Remove after a brief delay to show completion
+        // Remove after brief delay to show completion
         setTimeout(() => progress.removeNestedAgent(nestedId), 100);
-      } else if (event.type === "gadget_call") {
-        const gadgetEvent = event.event as { call: { invocationId: string; gadgetName: string } };
+      } else if (nestedEvent.type === "gadget_call") {
+        const gadgetEvent = nestedEvent.event as { call: { invocationId: string; gadgetName: string } };
         progress.addNestedGadget(
           gadgetEvent.call.invocationId,
-          event.depth,
-          event.gadgetInvocationId,
+          nestedEvent.depth,
+          nestedEvent.gadgetInvocationId,
           gadgetEvent.call.gadgetName,
         );
-      } else if (event.type === "gadget_result") {
-        const resultEvent = event.event as { result: { invocationId: string } };
-        progress.removeNestedGadget(resultEvent.result.invocationId);
+      } else if (nestedEvent.type === "gadget_result") {
+        const resultEvent = nestedEvent.event as { result: { invocationId: string } };
+        progress.completeNestedGadget(resultEvent.result.invocationId);
       }
     });
   }
@@ -780,6 +785,11 @@ export async function executeAgent(
           progress.start();
         }
         // Otherwise, progress resumes on next LLM call (via onLLMCallStart hook)
+      } else if (event.type === "nested_agent_event") {
+        // Nested events are handled by withNestedEventCallback() for real-time updates.
+        // Stream-based events arrive AFTER gadget completes (too late for progress display).
+        // This branch exists for apps that prefer stream-based handling over callbacks.
+        // CLI uses callback for immediate updates; nothing to do here.
       }
       // Note: human_input_required handled by callback (see createHumanInputHandler)
     }
