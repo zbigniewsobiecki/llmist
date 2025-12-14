@@ -338,6 +338,7 @@ export class StreamProgress {
       parentInvocationId: string;
       name: string;
       startTime: number;
+      completed?: boolean;
     }
   > = new Map();
 
@@ -453,6 +454,19 @@ export class StreamProgress {
     this.nestedGadgets.delete(id);
     if (this.isRunning && this.isTTY) {
       this.render();
+    }
+  }
+
+  /**
+   * Mark a nested gadget as completed (keeps it visible with ✓ indicator).
+   */
+  completeNestedGadget(id: string): void {
+    const gadget = this.nestedGadgets.get(id);
+    if (gadget) {
+      gadget.completed = true;
+      if (this.isRunning && this.isTTY) {
+        this.render();
+      }
     }
   }
 
@@ -633,11 +647,14 @@ export class StreamProgress {
         }
 
         // Show nested gadgets associated with this parent gadget
-        for (const [_nestedId, nestedGadget] of this.nestedGadgets) {
+        // console.error(`[DEBUG] Render: gadgetId=${gadgetId}, nestedGadgets.size=${this.nestedGadgets.size}`);
+        for (const [nestedId, nestedGadget] of this.nestedGadgets) {
+          // console.error(`[DEBUG]   nestedGadget: id=${nestedId}, parentId=${nestedGadget.parentInvocationId}, match=${nestedGadget.parentInvocationId === gadgetId}`);
           if (nestedGadget.parentInvocationId === gadgetId) {
             const indent = "  ".repeat(nestedGadget.depth + 1);
             const nestedElapsed = ((Date.now() - nestedGadget.startTime) / 1000).toFixed(1);
-            const nestedGadgetLine = `${indent}${chalk.blue("⏵")} ${chalk.dim(nestedGadget.name + "(...)")} ${chalk.dim(nestedElapsed + "s")}`;
+            const icon = nestedGadget.completed ? chalk.green("✓") : chalk.blue("⏵");
+            const nestedGadgetLine = `${indent}${icon} ${chalk.dim(nestedGadget.name + "(...)")} ${chalk.dim(nestedElapsed + "s")}`;
             lines.push(nestedGadgetLine);
           }
         }

@@ -69,6 +69,8 @@ export type {
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
   Observers,
+  // Subagent context for distinguishing subagent events in hooks
+  SubagentContext,
 } from "./hooks.js";
 export type { IConversationManager } from "./interfaces.js";
 // StreamProcessor for advanced use cases

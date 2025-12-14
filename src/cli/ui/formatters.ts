@@ -473,31 +473,89 @@ export interface GadgetResult {
  * ```
  */
 /**
+ * Gets the raw string value for a parameter (without truncation or colors).
+ */
+function getRawValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "boolean" || typeof value === "number") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Truncates a string to maxLen characters with ellipsis if needed.
+ */
+function truncateValue(str: string, maxLen: number): string {
+  if (maxLen <= 0) return "";
+  if (str.length <= maxLen) return str;
+  return `${str.slice(0, maxLen)}…`;
+}
+
+/**
  * Formats parameters as a compact inline string with color-coded keys and values.
+ * Expands to fit available terminal width when maxWidth is provided.
  *
  * @param params - Parameter key-value pairs
+ * @param maxWidth - Optional maximum width for the entire parameters string (excluding parentheses)
  * @returns Formatted string with dim keys and cyan values, e.g., "path=., recursive=true"
  */
-function formatParametersInline(params: Record<string, unknown> | undefined): string {
+function formatParametersInline(
+  params: Record<string, unknown> | undefined,
+  maxWidth?: number,
+): string {
   if (!params || Object.keys(params).length === 0) {
     return "";
   }
 
-  return Object.entries(params)
-    .map(([key, value]) => {
-      // Format value compactly
-      let formatted: string;
-      if (typeof value === "string") {
-        // Truncate long strings
-        formatted = value.length > 30 ? `${value.slice(0, 30)}…` : value;
-      } else if (typeof value === "boolean" || typeof value === "number") {
-        formatted = String(value);
+  const entries = Object.entries(params);
+  const defaultLimit = 30;
+
+  // Get raw values for each entry
+  const rawValues = entries.map(([, value]) => getRawValue(value));
+
+  // Calculate overhead: "key=" for each entry, ", " between entries
+  const overhead = entries.reduce((sum, [key], i) => {
+    return sum + key.length + 1 + (i > 0 ? 2 : 0); // "key=" + ", " separator
+  }, 0);
+
+  // Determine limits for each value
+  let limits: number[];
+
+  if (maxWidth && maxWidth > overhead) {
+    const availableForValues = maxWidth - overhead;
+    const totalRawLength = rawValues.reduce((sum, v) => sum + v.length, 0);
+
+    if (totalRawLength <= availableForValues) {
+      // Everything fits - no truncation needed
+      limits = rawValues.map(() => Infinity);
+    } else {
+      // Distribute space proportionally, with minimum of 10 chars per value
+      const minPerValue = 10;
+      const minTotal = entries.length * minPerValue;
+
+      if (availableForValues <= minTotal) {
+        // Very tight - give each value equal minimum space
+        limits = rawValues.map(() => Math.max(1, Math.floor(availableForValues / entries.length)));
       } else {
-        // For arrays/objects, show compact JSON
-        const json = JSON.stringify(value);
-        formatted = json.length > 30 ? `${json.slice(0, 30)}…` : json;
+        // Proportional distribution
+        limits = rawValues.map((v) => {
+          const proportion = v.length / totalRawLength;
+          return Math.max(minPerValue, Math.floor(proportion * availableForValues));
+        });
       }
-      // Color: dim key, = sign, cyan value
+    }
+  } else {
+    // No maxWidth or too small - use default limit
+    limits = rawValues.map(() => defaultLimit);
+  }
+
+  // Format each entry with its limit
+  return entries
+    .map(([key, _], i) => {
+      const formatted = truncateValue(rawValues[i], limits[i]);
       return `${chalk.dim(key)}${chalk.dim("=")}${chalk.cyan(formatted)}`;
     })
     .join(chalk.dim(", "));
@@ -519,8 +577,19 @@ export function formatGadgetStarted(
   gadgetName: string,
   parameters?: Record<string, unknown>,
 ): string {
+  // Get terminal width (default to 80 if not available)
+  const terminalWidth = process.stdout.columns || 80;
+
   const gadgetLabel = chalk.magenta.bold(gadgetName);
-  const paramsStr = formatParametersInline(parameters);
+
+  // Calculate fixed parts length: "⏵ " + gadgetName + "()" + " ..."
+  // Icon=2, parens=2, suffix=4
+  const fixedLength = 2 + gadgetName.length + 2 + 4;
+
+  // Available width for parameters
+  const availableForParams = Math.max(40, terminalWidth - fixedLength - 2);
+
+  const paramsStr = formatParametersInline(parameters, availableForParams);
   const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
 
   return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel} ${chalk.dim("...")}`;
@@ -582,17 +651,39 @@ function formatMediaLine(media: StoredMedia): string {
 }
 
 export function formatGadgetSummary(result: GadgetResult): string {
+  // Get terminal width (default to 80 if not available)
+  const terminalWidth = process.stdout.columns || 80;
+
   // Format gadget name and execution time
   const gadgetLabel = chalk.magenta.bold(result.gadgetName);
   // Show seconds for values >= 1000ms, otherwise milliseconds
-  const timeLabel = chalk.dim(
+  const timeStr =
     result.executionTimeMs >= 1000
       ? `${(result.executionTimeMs / 1000).toFixed(1)}s`
-      : `${Math.round(result.executionTimeMs)}ms`,
-  );
+      : `${Math.round(result.executionTimeMs)}ms`;
+  const timeLabel = chalk.dim(timeStr);
 
-  // Format parameters inline (parentheses are dim, content is color-coded)
-  const paramsStr = formatParametersInline(result.parameters);
+  // Pre-calculate output label to know its length
+  let outputStr: string;
+  if (result.tokenCount !== undefined && result.tokenCount > 0) {
+    outputStr = `${formatTokens(result.tokenCount)} tokens`;
+  } else if (result.result) {
+    const outputBytes = Buffer.byteLength(result.result, "utf-8");
+    outputStr = outputBytes > 0 ? formatBytes(outputBytes) : "no output";
+  } else {
+    outputStr = "no output";
+  }
+
+  // Calculate fixed parts length (without params):
+  // "✓ " + gadgetName + "()" + " → " + output + " " + time
+  // Icon=2, space after name=0 (params attached), parens=2, arrow=3, spaces=2
+  const fixedLength = 2 + result.gadgetName.length + 2 + 3 + outputStr.length + 1 + timeStr.length;
+
+  // Available width for parameters (minimum 40 to avoid over-truncation)
+  const availableForParams = Math.max(40, terminalWidth - fixedLength - 2);
+
+  // Format parameters inline with available width
+  const paramsStr = formatParametersInline(result.parameters, availableForParams);
   const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
 
   // Error case - show error message in red (one-liner)
@@ -601,16 +692,9 @@ export function formatGadgetSummary(result: GadgetResult): string {
     return `${chalk.red("✗")} ${gadgetLabel}${paramsLabel} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
   }
 
-  // Format output size: prefer token count if available, fallback to bytes
-  let outputLabel: string;
-  if (result.tokenCount !== undefined && result.tokenCount > 0) {
-    outputLabel = chalk.green(`${formatTokens(result.tokenCount)} tokens`);
-  } else if (result.result) {
-    const outputBytes = Buffer.byteLength(result.result, "utf-8");
-    outputLabel = outputBytes > 0 ? chalk.green(formatBytes(outputBytes)) : chalk.dim("no output");
-  } else {
-    outputLabel = chalk.dim("no output");
-  }
+  // Format output label with colors (outputStr was calculated above for length)
+  const outputLabel =
+    outputStr === "no output" ? chalk.dim(outputStr) : chalk.green(outputStr);
 
   // Build the summary line
   const icon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");

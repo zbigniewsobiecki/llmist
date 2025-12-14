@@ -961,13 +961,78 @@ Async control with short-circuit capability:
 
 | Hook | Context Properties |
 |------|-------------------|
-| `onLLMCallStart` | `iteration`, `options`, `logger` |
-| `onLLMCallReady` | `iteration`, `maxIterations`, `options`, `logger` |
-| `onLLMCallComplete` | `iteration`, `options`, `finishReason`, `usage`, `rawResponse`, `finalMessage`, `logger` |
-| `onLLMCallError` | `iteration`, `options`, `error`, `recovered`, `logger` |
-| `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger` |
-| `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `originalResult`, `finalResult`, `error`, `executionTimeMs`, `breaksLoop`, `logger` |
-| `onStreamChunk` | `iteration`, `rawChunk`, `accumulatedText`, `logger` |
+| `onLLMCallStart` | `iteration`, `options`, `logger`, `subagentContext?` |
+| `onLLMCallReady` | `iteration`, `maxIterations`, `options`, `logger`, `subagentContext?` |
+| `onLLMCallComplete` | `iteration`, `options`, `finishReason`, `usage`, `rawResponse`, `finalMessage`, `logger`, `subagentContext?` |
+| `onLLMCallError` | `iteration`, `options`, `error`, `recovered`, `logger`, `subagentContext?` |
+| `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger`, `subagentContext?` |
+| `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `originalResult`, `finalResult`, `error`, `executionTimeMs`, `breaksLoop`, `logger`, `subagentContext?` |
+| `onStreamChunk` | `iteration`, `rawChunk`, `accumulatedText`, `logger`, `subagentContext?` |
+
+## Subagent Events
+
+When using subagent gadgets (like BrowseWeb), hook observers receive events from
+both the main agent AND subagents. Check `ctx.subagentContext` to distinguish:
+
+### Detecting Subagent Events
+
+```typescript
+observers: {
+  onLLMCallStart: (ctx) => {
+    if (ctx.subagentContext) {
+      // Event from a subagent (BrowseWeb, etc.)
+      console.log(`↳ Subagent LLM call at depth ${ctx.subagentContext.depth}`);
+    } else {
+      // Event from the main agent
+      console.log(`Main agent LLM call #${ctx.iteration}`);
+    }
+  },
+  onGadgetExecutionStart: (ctx) => {
+    if (ctx.subagentContext) {
+      console.log(`↳ Subagent gadget: ${ctx.gadgetName}`);
+    } else {
+      console.log(`Gadget: ${ctx.gadgetName}`);
+    }
+  },
+}
+```
+
+### SubagentContext Interface
+
+```typescript
+interface SubagentContext {
+  /** Invocation ID of the parent gadget that spawned this subagent */
+  parentGadgetInvocationId: string;
+  /** Nesting depth: 1 = direct child, 2 = grandchild, etc. */
+  depth: number;
+}
+```
+
+### Filtering Patterns
+
+**Top-level only:** Skip subagent events
+```typescript
+onLLMCallComplete: (ctx) => {
+  if (ctx.subagentContext) return; // Skip subagent events
+  // Only main agent events reach here
+}
+```
+
+**Subagents only:** Only process subagent events
+```typescript
+onLLMCallComplete: (ctx) => {
+  if (!ctx.subagentContext) return; // Skip main agent
+  // Only subagent events reach here
+}
+```
+
+**All events with depth awareness:**
+```typescript
+onLLMCallComplete: (ctx) => {
+  const indent = ctx.subagentContext ? "  ".repeat(ctx.subagentContext.depth) : "";
+  console.log(`${indent}LLM complete`);
+}
+```
 
 ## Merging Hooks
 
