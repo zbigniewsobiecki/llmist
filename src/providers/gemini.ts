@@ -578,6 +578,11 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     // This now handles multimodal content
     const contents = this.convertMessagesToContents(messages);
 
+    // Return 0 for empty messages - Gemini API requires non-empty contents
+    if (!contents || contents.length === 0) {
+      return 0;
+    }
+
     try {
       // Use Gemini's count_tokens method
       const response = await client.models.countTokens({

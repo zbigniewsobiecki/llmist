@@ -676,4 +676,126 @@ describe("HookPresets", () => {
       expect(consoleLogSpy).toHaveBeenCalledWith("📊 Tokens this call: 15");
     });
   });
+
+  describe("subagent context handling", () => {
+    it("logging preset handles events with subagentContext", async () => {
+      const hooks = HookPresets.logging();
+
+      const ctx: ObserveLLMCallStartContext = {
+        iteration: 1,
+        options: { model: "gpt-4o" },
+        messages: [],
+        subagentContext: {
+          parentGadgetInvocationId: "browse-123",
+          depth: 1,
+        },
+      };
+
+      // Should not throw when subagentContext is present
+      await hooks.observers?.onLLMCallStart?.(ctx);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith("[LLM] Starting call (iteration 1)");
+    });
+
+    it("tokenTracking preset handles subagent tokens", async () => {
+      const hooks = HookPresets.tokenTracking();
+
+      const ctxWithSubagent: ObserveLLMCallCompleteContext = {
+        iteration: 1,
+        options: { model: "gpt-4o" },
+        messages: [],
+        response: { role: "assistant", content: "test" },
+        usage: { promptTokens: 50, completionTokens: 50, totalTokens: 100 },
+        finalMessage: "Response",
+        subagentContext: {
+          parentGadgetInvocationId: "browse-123",
+          depth: 1,
+        },
+      };
+
+      // Should handle subagent context without errors and track tokens
+      await hooks.observers?.onLLMCallComplete?.(ctxWithSubagent);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith("📊 Tokens this call: 100");
+      expect(consoleLogSpy).toHaveBeenCalledWith("📊 Total tokens: 100 (across 1 calls)");
+    });
+
+    it("timing preset handles subagent events", async () => {
+      const hooks = HookPresets.timing();
+
+      // Create context that will be shared between start and complete
+      const ctx: any = {
+        iteration: 1,
+        options: { model: "gpt-4o" },
+        messages: [],
+        subagentContext: {
+          parentGadgetInvocationId: "browse-123",
+          depth: 1,
+        },
+      };
+
+      await hooks.observers?.onLLMCallStart?.(ctx);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      ctx.finalMessage = "Done";
+      ctx.response = { role: "assistant", content: "Done" };
+      await hooks.observers?.onLLMCallComplete?.(ctx);
+
+      // Should log timing even for subagent events
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("⏱️  LLM call took"));
+    });
+
+    it("errorLogging preset handles subagent errors", async () => {
+      const hooks = HookPresets.errorLogging();
+
+      const ctx: ObserveLLMCallErrorContext = {
+        iteration: 1,
+        options: { model: "gpt-4o" },
+        messages: [],
+        error: new Error("Subagent API error"),
+        recovered: false,
+        subagentContext: {
+          parentGadgetInvocationId: "browse-123",
+          depth: 2,
+        },
+      };
+
+      await hooks.observers?.onLLMCallError?.(ctx);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "❌ LLM Error (iteration 1):",
+        "Subagent API error",
+      );
+    });
+
+    it("gadget events with subagentContext are handled correctly", async () => {
+      const hooks = HookPresets.logging();
+
+      const startCtx: ObserveGadgetStartContext = {
+        gadgetName: "Click",
+        parameters: { selector: "#button" },
+        subagentContext: {
+          parentGadgetInvocationId: "browse-123",
+          depth: 1,
+        },
+      };
+
+      await hooks.observers?.onGadgetExecutionStart?.(startCtx);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith("[GADGET] Executing Click");
+
+      const completeCtx: ObserveGadgetCompleteContext = {
+        gadgetName: "Click",
+        parameters: { selector: "#button" },
+        finalResult: "Clicked successfully",
+        subagentContext: {
+          parentGadgetInvocationId: "browse-123",
+          depth: 1,
+        },
+      };
+
+      await hooks.observers?.onGadgetExecutionComplete?.(completeCtx);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith("[GADGET] Completed Click");
+    });
+  });
 });

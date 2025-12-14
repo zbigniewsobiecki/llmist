@@ -240,6 +240,79 @@ describe("AgentBuilder", () => {
     });
   });
 
+  describe("withSubagentEventCallback", () => {
+    it("returns this for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withSubagentEventCallback(() => {});
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts a callback function", () => {
+      const builder = new AgentBuilder();
+      const callback = vi.fn();
+      const result = builder.withSubagentEventCallback(callback);
+
+      expect(result).toBe(builder);
+    });
+
+    it("chains correctly with other builder methods", () => {
+      const builder = new AgentBuilder();
+      const result = builder
+        .withModel("sonnet")
+        .withSubagentEventCallback(() => {})
+        .withMaxIterations(5);
+
+      expect(result).toBe(builder);
+    });
+  });
+
+  describe("withParentContext", () => {
+    it("returns this for chaining", () => {
+      const builder = new AgentBuilder();
+      const mockCtx = {
+        invocationId: "test-123",
+        onSubagentEvent: vi.fn(),
+      };
+      const result = builder.withParentContext(mockCtx as never);
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts optional depth parameter", () => {
+      const builder = new AgentBuilder();
+      const mockCtx = {
+        invocationId: "test-123",
+        onSubagentEvent: vi.fn(),
+      };
+      const result = builder.withParentContext(mockCtx as never, 2);
+
+      expect(result).toBe(builder);
+    });
+
+    it("handles context without onSubagentEvent gracefully", () => {
+      const builder = new AgentBuilder();
+      const mockCtx = { invocationId: "test-123" };
+      const result = builder.withParentContext(mockCtx as never);
+
+      expect(result).toBe(builder);
+    });
+
+    it("chains correctly with other builder methods", () => {
+      const builder = new AgentBuilder();
+      const mockCtx = {
+        invocationId: "test-123",
+        onSubagentEvent: vi.fn(),
+      };
+      const result = builder
+        .withModel("sonnet")
+        .withParentContext(mockCtx as never)
+        .withMaxIterations(5);
+
+      expect(result).toBe(builder);
+    });
+  });
+
   describe("onHumanInput", () => {
     it("sets human input handler", () => {
       const builder = new AgentBuilder();
