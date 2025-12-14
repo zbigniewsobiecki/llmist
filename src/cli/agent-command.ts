@@ -682,15 +682,24 @@ export async function executeAgent(
       } else if (subagentEvent.type === "llm_call_end") {
         const info = subagentEvent.event as LLMCallInfo;
         const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
-        progress.updateNestedAgent(subagentId, info.outputTokens);
+        // Pass full metrics for first-class subagent display
+        progress.updateNestedAgent(subagentId, {
+          inputTokens: info.usage?.inputTokens ?? info.inputTokens,
+          outputTokens: info.usage?.outputTokens ?? info.outputTokens,
+          cachedInputTokens: info.usage?.cachedInputTokens,
+          cacheCreationInputTokens: info.usage?.cacheCreationInputTokens,
+          finishReason: info.finishReason,
+          cost: info.cost,
+        });
         // Note: No removal - nested agent stays visible with frozen timer and ✓ indicator
       } else if (subagentEvent.type === "gadget_call") {
-        const gadgetEvent = subagentEvent.event as { call: { invocationId: string; gadgetName: string } };
+        const gadgetEvent = subagentEvent.event as { call: { invocationId: string; gadgetName: string; parameters?: Record<string, unknown> } };
         progress.addNestedGadget(
           gadgetEvent.call.invocationId,
           subagentEvent.depth,
           subagentEvent.gadgetInvocationId,
           gadgetEvent.call.gadgetName,
+          gadgetEvent.call.parameters,
         );
       } else if (subagentEvent.type === "gadget_result") {
         const resultEvent = subagentEvent.event as { result: { invocationId: string } };

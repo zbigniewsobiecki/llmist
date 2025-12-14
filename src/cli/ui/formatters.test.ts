@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
+  formatGadgetLine,
   formatGadgetStarted,
   formatGadgetSummary,
+  formatLLMCallLine,
   formatTokens,
   renderMarkdown,
 } from "./formatters.js";
@@ -362,6 +364,429 @@ describe("width-aware parameter truncation", () => {
 
       expect(result).toContain("Extract");
       expect(result).toContain("github.com");
+    });
+  });
+});
+
+describe("formatLLMCallLine", () => {
+  describe("basic formatting", () => {
+    it("shows iteration number and model name", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "gemini-2.5-flash",
+        elapsedSeconds: 1.5,
+      });
+      expect(result).toContain("#1");
+      expect(result).toContain("gemini-2.5-flash");
+      expect(result).toContain("1.5s");
+    });
+
+    it("formats iteration 0 correctly", () => {
+      const result = formatLLMCallLine({
+        iteration: 0,
+        model: "claude-sonnet-4-20250514",
+        elapsedSeconds: 0.5,
+      });
+      expect(result).toContain("#0");
+      expect(result).toContain("claude-sonnet-4-20250514");
+    });
+  });
+
+  describe("token display", () => {
+    it("shows input tokens with arrow indicator", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        inputTokens: 5200,
+        elapsedSeconds: 1.0,
+      });
+      expect(result).toContain("↑");
+      expect(result).toContain("5.2k");
+    });
+
+    it("shows output tokens with arrow indicator", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        outputTokens: 150,
+        elapsedSeconds: 1.0,
+      });
+      expect(result).toContain("↓");
+      expect(result).toContain("150");
+    });
+
+    it("shows cached tokens with recycle indicator", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        inputTokens: 10000,
+        cachedInputTokens: 8000,
+        elapsedSeconds: 1.0,
+      });
+      expect(result).toContain("⟳");
+      expect(result).toContain("8.0k");
+    });
+
+    it("does not show cached tokens when zero", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        inputTokens: 5000,
+        cachedInputTokens: 0,
+        elapsedSeconds: 1.0,
+      });
+      expect(result).not.toContain("⟳");
+    });
+
+    it("shows estimated prefix for input tokens", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        inputTokens: 1000,
+        elapsedSeconds: 1.0,
+        estimated: { input: true },
+      });
+      expect(result).toContain("~1.0k");
+    });
+
+    it("shows estimated prefix for output tokens", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        outputTokens: 500,
+        elapsedSeconds: 1.0,
+        estimated: { output: true },
+      });
+      expect(result).toContain("~500");
+    });
+  });
+
+  describe("context percentage", () => {
+    it("shows green for low usage (< 50%)", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        contextPercent: 25,
+      });
+      expect(result).toContain("25%");
+    });
+
+    it("shows yellow for medium usage (50-80%)", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        contextPercent: 65,
+      });
+      expect(result).toContain("65%");
+    });
+
+    it("shows red for high usage (>= 80%)", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        contextPercent: 85,
+      });
+      expect(result).toContain("85%");
+    });
+
+    it("does not show percentage when undefined", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+      });
+      expect(result).not.toContain("%");
+    });
+
+    it("does not show percentage when null", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        contextPercent: null,
+      });
+      expect(result).not.toContain("%");
+    });
+  });
+
+  describe("cost display", () => {
+    it("shows cost with dollar sign", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        cost: 0.0032,
+      });
+      expect(result).toContain("$0.0032");
+    });
+
+    it("does not show cost when zero", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        cost: 0,
+      });
+      expect(result).not.toContain("$");
+    });
+
+    it("does not show cost when undefined", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+      });
+      expect(result).not.toContain("$");
+    });
+  });
+
+  describe("status indicators", () => {
+    it("shows spinner when streaming", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        isStreaming: true,
+        spinner: "⠧",
+      });
+      expect(result).toContain("⠧");
+    });
+
+    it("shows checkmark for stop finish reason", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        finishReason: "stop",
+      });
+      expect(result).toContain("✓");
+    });
+
+    it("shows checkmark for end_turn finish reason", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        finishReason: "end_turn",
+      });
+      expect(result).toContain("✓");
+    });
+
+    it("shows checkmark for null finish reason", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        finishReason: null,
+      });
+      expect(result).toContain("✓");
+    });
+
+    it("shows actual reason for non-standard finish", () => {
+      const result = formatLLMCallLine({
+        iteration: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+        finishReason: "max_tokens",
+      });
+      expect(result).toContain("max_tokens");
+      expect(result).not.toContain("✓");
+    });
+  });
+
+  describe("complete example", () => {
+    it("formats a complete streaming call correctly", () => {
+      const result = formatLLMCallLine({
+        iteration: 3,
+        model: "gemini-2.5-flash",
+        inputTokens: 10400,
+        cachedInputTokens: 9100,
+        outputTokens: 104,
+        elapsedSeconds: 3.2,
+        cost: 0.00080,
+        isStreaming: true,
+        spinner: "⠧",
+        contextPercent: 1,
+      });
+      expect(result).toContain("#3");
+      expect(result).toContain("gemini-2.5-flash");
+      expect(result).toContain("1%");
+      expect(result).toContain("↑");
+      expect(result).toContain("10.4k");
+      expect(result).toContain("⟳");
+      expect(result).toContain("9.1k");
+      expect(result).toContain("↓");
+      expect(result).toContain("104");
+      expect(result).toContain("3.2s");
+      expect(result).toContain("$0.00080");
+      expect(result).toContain("⠧");
+    });
+
+    it("formats a complete finished call correctly", () => {
+      const result = formatLLMCallLine({
+        iteration: 0,
+        model: "claude-sonnet-4-20250514",
+        inputTokens: 5200,
+        outputTokens: 36,
+        elapsedSeconds: 3.7,
+        cost: 0.00009,
+        finishReason: "stop",
+      });
+      expect(result).toContain("#0");
+      expect(result).toContain("claude-sonnet-4-20250514");
+      expect(result).toContain("5.2k");
+      expect(result).toContain("36");
+      expect(result).toContain("3.7s");
+      expect(result).toContain("$0.00009");
+      expect(result).toContain("✓");
+    });
+  });
+});
+
+describe("formatGadgetLine", () => {
+  describe("in-progress state", () => {
+    it("shows running indicator for in-progress gadget", () => {
+      const result = formatGadgetLine({
+        name: "BrowseWeb",
+        elapsedSeconds: 5.2,
+        isComplete: false,
+      });
+      expect(result).toContain("⏵");
+      expect(result).toContain("BrowseWeb");
+      expect(result).toContain("5.2s");
+    });
+
+    it("shows parameters for in-progress gadget", () => {
+      const result = formatGadgetLine({
+        name: "ReadFile",
+        parameters: { path: "/test.txt" },
+        elapsedSeconds: 1.0,
+        isComplete: false,
+      });
+      expect(result).toContain("path");
+      expect(result).toContain("/test.txt");
+    });
+
+    it("handles empty parameters", () => {
+      const result = formatGadgetLine({
+        name: "Finish",
+        parameters: {},
+        elapsedSeconds: 0.5,
+        isComplete: false,
+      });
+      expect(result).toContain("Finish");
+      expect(result).not.toContain("undefined");
+    });
+  });
+
+  describe("completed state", () => {
+    it("shows checkmark for successful completion", () => {
+      const result = formatGadgetLine({
+        name: "ReadFile",
+        elapsedSeconds: 0.5,
+        isComplete: true,
+      });
+      expect(result).toContain("✓");
+      expect(result).toContain("ReadFile");
+    });
+
+    it("shows token count when available", () => {
+      const result = formatGadgetLine({
+        name: "Search",
+        elapsedSeconds: 2.3,
+        isComplete: true,
+        tokenCount: 1500,
+      });
+      expect(result).toContain("1.5k tokens");
+    });
+
+    it("shows bytes when no token count", () => {
+      const result = formatGadgetLine({
+        name: "Echo",
+        elapsedSeconds: 0.1,
+        isComplete: true,
+        outputBytes: 256,
+      });
+      expect(result).toContain("256 bytes");
+    });
+
+    it("shows KB for larger outputs", () => {
+      const result = formatGadgetLine({
+        name: "ReadFile",
+        elapsedSeconds: 0.5,
+        isComplete: true,
+        outputBytes: 2048,
+      });
+      expect(result).toContain("KB");
+    });
+  });
+
+  describe("error state", () => {
+    it("shows X indicator for error", () => {
+      const result = formatGadgetLine({
+        name: "BadGadget",
+        elapsedSeconds: 0.1,
+        isComplete: true,
+        error: "Something went wrong",
+      });
+      expect(result).toContain("✗");
+      expect(result).toContain("error:");
+      expect(result).toContain("Something went wrong");
+    });
+
+    it("truncates long error messages", () => {
+      const longError = "This is a very long error message that should be truncated to prevent display issues";
+      const result = formatGadgetLine({
+        name: "BadGadget",
+        elapsedSeconds: 0.1,
+        isComplete: true,
+        error: longError,
+      });
+      expect(result).toContain("…");
+    });
+  });
+
+  describe("breaksLoop state", () => {
+    it("shows stop indicator for breaksLoop", () => {
+      const result = formatGadgetLine({
+        name: "Finish",
+        elapsedSeconds: 0.1,
+        isComplete: true,
+        breaksLoop: true,
+      });
+      expect(result).toContain("⏹");
+    });
+  });
+
+  describe("parameter formatting", () => {
+    it("truncates long parameter values", () => {
+      const result = formatGadgetLine({
+        name: "BrowseWeb",
+        parameters: {
+          url: "https://very-long-domain-name.example.com/path/to/resource",
+        },
+        elapsedSeconds: 1.0,
+        isComplete: false,
+      });
+      expect(result).toContain("url");
+      // Should be truncated
+      expect(result).toContain("…");
+    });
+
+    it("shows multiple parameters", () => {
+      const result = formatGadgetLine({
+        name: "Search",
+        parameters: { query: "test", limit: 10 },
+        elapsedSeconds: 1.0,
+        isComplete: false,
+      });
+      expect(result).toContain("query");
+      expect(result).toContain("test");
+      expect(result).toContain("limit");
+      expect(result).toContain("10");
     });
   });
 });

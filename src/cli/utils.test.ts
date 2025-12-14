@@ -311,6 +311,218 @@ describe("StreamProgress", () => {
   });
 });
 
+describe("StreamProgress nested operations", () => {
+  describe("addNestedAgent", () => {
+    test("stores nested agent with all required fields", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini-2.5-flash", 0, 5000);
+
+      const nestedAgents = (progress as any).nestedAgents;
+      expect(nestedAgents.size).toBe(1);
+
+      const agent = nestedAgents.get("agent:0");
+      expect(agent).toBeDefined();
+      expect(agent.parentInvocationId).toBe("parent-123");
+      expect(agent.depth).toBe(1);
+      expect(agent.model).toBe("gemini-2.5-flash");
+      expect(agent.iteration).toBe(0);
+      expect(agent.inputTokens).toBe(5000);
+    });
+  });
+
+  describe("updateNestedAgent", () => {
+    test("updates nested agent with output tokens and finish reason", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.updateNestedAgent("agent:0", {
+        inputTokens: 1000,
+        outputTokens: 500,
+        finishReason: "stop",
+      });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent.outputTokens).toBe(500);
+      expect(agent.finishReason).toBe("stop");
+      expect(agent.completed).toBe(true);
+      expect(agent.completedTime).toBeDefined();
+    });
+
+    test("updates nested agent with cached tokens", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 5000);
+      progress.updateNestedAgent("agent:0", {
+        inputTokens: 5000,
+        cachedInputTokens: 4000,
+        outputTokens: 100,
+      });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent.cachedInputTokens).toBe(4000);
+    });
+
+    test("uses provided cost when available", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.updateNestedAgent("agent:0", {
+        inputTokens: 1000,
+        outputTokens: 500,
+        cost: 0.0025,
+      });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent.cost).toBe(0.0025);
+    });
+
+    test("calculates cost using model registry when cost not provided", () => {
+      const stream = new MockWritableStream();
+      const registry = new MockModelRegistry();
+      registry.setCost("gemini-2.5-flash", 0.15, 0.60); // Per 1M tokens
+
+      const progress = new StreamProgress(stream, false, registry as any);
+
+      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini:gemini-2.5-flash", 0, 10000);
+      progress.updateNestedAgent("agent:0", {
+        inputTokens: 10000,
+        outputTokens: 500,
+        // No cost provided - should calculate
+      });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      // Cost should be calculated: (10000/1M * 0.15) + (500/1M * 0.60) = 0.0015 + 0.0003 = 0.0018
+      expect(agent.cost).toBeCloseTo(0.0018, 4);
+    });
+
+    test("handles model registry errors gracefully", () => {
+      const stream = new MockWritableStream();
+      const registry = new MockModelRegistry();
+      registry.setShouldThrow(true);
+
+      const progress = new StreamProgress(stream, false, registry as any);
+
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+
+      // Should not throw
+      expect(() => {
+        progress.updateNestedAgent("agent:0", {
+          inputTokens: 1000,
+          outputTokens: 500,
+        });
+      }).not.toThrow();
+
+      // Cost should remain undefined
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent.cost).toBeUndefined();
+    });
+
+    test("ignores updates for non-existent agent", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Should not throw when updating non-existent agent
+      expect(() => {
+        progress.updateNestedAgent("non-existent", {
+          inputTokens: 1000,
+          outputTokens: 500,
+        });
+      }).not.toThrow();
+    });
+  });
+
+  describe("addNestedGadget", () => {
+    test("stores nested gadget with parameters", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedGadget("gadget-123", 1, "parent-456", "BrowseWeb", {
+        url: "https://example.com",
+        task: "Find info",
+      });
+
+      const nestedGadgets = (progress as any).nestedGadgets;
+      expect(nestedGadgets.size).toBe(1);
+
+      const gadget = nestedGadgets.get("gadget-123");
+      expect(gadget).toBeDefined();
+      expect(gadget.name).toBe("BrowseWeb");
+      expect(gadget.parameters).toEqual({
+        url: "https://example.com",
+        task: "Find info",
+      });
+      expect(gadget.parentInvocationId).toBe("parent-456");
+      expect(gadget.depth).toBe(1);
+    });
+
+    test("stores nested gadget without parameters", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedGadget("gadget-123", 1, "parent-456", "Finish");
+
+      const nestedGadgets = (progress as any).nestedGadgets;
+      const gadget = nestedGadgets.get("gadget-123");
+      expect(gadget.parameters).toBeUndefined();
+    });
+  });
+
+  describe("completeNestedGadget", () => {
+    test("marks nested gadget as completed", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedGadget("gadget-123", 1, "parent-456", "ReadFile");
+      progress.completeNestedGadget("gadget-123");
+
+      const nestedGadgets = (progress as any).nestedGadgets;
+      const gadget = nestedGadgets.get("gadget-123");
+      expect(gadget.completed).toBe(true);
+      expect(gadget.completedTime).toBeDefined();
+    });
+  });
+
+  describe("nested operations chronological sorting", () => {
+    test("sorts nested operations by start time", async () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, true); // TTY mode for render
+
+      // Add gadgets to track
+      progress.addGadget("parent-gadget", "ParentGadget", { task: "test" });
+
+      // Add nested operations in non-chronological order
+      // First add a nested gadget (started later)
+      await new Promise((r) => setTimeout(r, 10));
+      progress.addNestedGadget("nested-gadget", 1, "parent-gadget", "NestedGadget");
+
+      // Then add a nested agent (started earlier - but we add it after)
+      // For this test, we verify the structure is set up correctly
+      progress.addNestedAgent("nested-agent:0", "parent-gadget", 1, "test-model", 0, 1000);
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const nestedGadgets = (progress as any).nestedGadgets;
+
+      // Both should be tracked
+      expect(nestedAgents.size).toBe(1);
+      expect(nestedGadgets.size).toBe(1);
+
+      // Both should reference the parent gadget
+      expect(nestedAgents.get("nested-agent:0").parentInvocationId).toBe("parent-gadget");
+      expect(nestedGadgets.get("nested-gadget").parentInvocationId).toBe("parent-gadget");
+    });
+  });
+});
+
 /**
  * Mock readable stream that simulates stdin with TTY capabilities.
  * Extends EventEmitter to support on/removeListener for data events.

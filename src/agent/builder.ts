@@ -821,7 +821,7 @@ export class AgentBuilder {
             }
           },
           onLLMCallComplete: async (context) => {
-            // Forward to parent
+            // Forward to parent with full context (first-class subagent metrics)
             onSubagentEvent({
               type: "llm_call_end",
               gadgetInvocationId: invocationId,
@@ -829,8 +829,13 @@ export class AgentBuilder {
               event: {
                 iteration: context.iteration,
                 model: context.options.model,
+                // Backward compat fields
+                inputTokens: context.usage?.inputTokens,
                 outputTokens: context.usage?.outputTokens,
-                finishReason: context.finishReason,
+                finishReason: context.finishReason ?? undefined,
+                // Full usage object with cache details (for first-class display)
+                usage: context.usage,
+                // Cost will be calculated by parent if it has model registry
               } as LLMCallInfo,
             });
             // Chain to existing hook if present
