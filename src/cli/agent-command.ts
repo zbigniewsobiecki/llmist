@@ -397,7 +397,10 @@ export async function executeAgent(
       observers: {
         // onLLMCallStart: Start progress indicator for each LLM call
         // This showcases how to react to agent lifecycle events
+        // Skip for subagent events (tracked separately via nested display)
         onLLMCallStart: async (context) => {
+          if (context.subagentContext) return; // Subagent calls handled via withSubagentEventCallback
+
           isStreaming = true; // Mark that we're actively streaming (for SIGINT handling)
           llmCallCounter++;
 
@@ -428,7 +431,10 @@ export async function executeAgent(
         },
         // onStreamChunk: Real-time updates as LLM generates tokens
         // This enables responsive UIs that show progress during generation
+        // Skip for subagent events (tracked separately via nested display)
         onStreamChunk: async (context) => {
+          if (context.subagentContext) return; // Subagent chunks handled via withSubagentEventCallback
+
           // Update estimated output tokens from accumulated text length
           progress.update(context.accumulatedText.length);
 
@@ -451,7 +457,10 @@ export async function executeAgent(
 
         // onLLMCallComplete: Finalize metrics after each LLM call
         // This is where you'd typically log metrics or update dashboards
+        // Skip progress updates for subagent events (tracked separately via nested display)
         onLLMCallComplete: async (context) => {
+          if (context.subagentContext) return; // Subagent calls handled via withSubagentEventCallback
+
           isStreaming = false; // Mark that streaming is complete (for SIGINT handling)
 
           // Capture completion metadata for final summary
@@ -499,8 +508,8 @@ export async function executeAgent(
 
           // SHOWCASE: Print per-call summary after each LLM call
           // This gives users visibility into each iteration's metrics
-          // Skip summaries in quiet mode
-          if (!options.quiet) {
+          // Skip summaries in quiet mode or for subagent events (tracked separately via nested display)
+          if (!options.quiet && !context.subagentContext) {
             const summary = renderSummary({
               iterations: context.iteration + 1,
               model: options.model,
