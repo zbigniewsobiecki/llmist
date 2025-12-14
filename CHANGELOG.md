@@ -1,3 +1,10 @@
+## 3.1.0 (2025-12-14)
+
+* Merge pull request #173 from zbigniewsobiecki/dev ([0c10dc3](https://github.com/zbigniewsobiecki/llmist/commit/0c10dc3)), closes [#173](https://github.com/zbigniewsobiecki/llmist/issues/173)
+* Merge pull request #174 from zbigniewsobiecki/dev ([3d1041e](https://github.com/zbigniewsobiecki/llmist/commit/3d1041e)), closes [#174](https://github.com/zbigniewsobiecki/llmist/issues/174)
+* feat(agent): add nested subagent event forwarding with withParentContext() ([a89b82d](https://github.com/zbigniewsobiecki/llmist/commit/a89b82d))
+* fix(ci): improve release workflow dev branch sync reliability (#172) ([13ae5a6](https://github.com/zbigniewsobiecki/llmist/commit/13ae5a6)), closes [#172](https://github.com/zbigniewsobiecki/llmist/issues/172)
+
 ## 3.0.0 (2025-12-13)
 
 * Merge pull request #171 from zbigniewsobiecki/dev ([4241d45](https://github.com/zbigniewsobiecki/llmist/commit/4241d45)), closes [#171](https://github.com/zbigniewsobiecki/llmist/issues/171)
