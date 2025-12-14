@@ -339,6 +339,7 @@ export class StreamProgress {
       name: string;
       startTime: number;
       completed?: boolean;
+      completedTime?: number;
     }
   > = new Map();
 
@@ -459,14 +460,23 @@ export class StreamProgress {
 
   /**
    * Mark a nested gadget as completed (keeps it visible with ✓ indicator).
+   * Records completion time to freeze the elapsed timer, then removes after a short delay.
    */
   completeNestedGadget(id: string): void {
     const gadget = this.nestedGadgets.get(id);
     if (gadget) {
       gadget.completed = true;
+      gadget.completedTime = Date.now();
       if (this.isRunning && this.isTTY) {
         this.render();
       }
+      // Remove after brief delay so completion checkmark is visible
+      setTimeout(() => {
+        this.nestedGadgets.delete(id);
+        if (this.isRunning && this.isTTY) {
+          this.render();
+        }
+      }, 100);
     }
   }
 
@@ -652,7 +662,9 @@ export class StreamProgress {
           // console.error(`[DEBUG]   nestedGadget: id=${nestedId}, parentId=${nestedGadget.parentInvocationId}, match=${nestedGadget.parentInvocationId === gadgetId}`);
           if (nestedGadget.parentInvocationId === gadgetId) {
             const indent = "  ".repeat(nestedGadget.depth + 1);
-            const nestedElapsed = ((Date.now() - nestedGadget.startTime) / 1000).toFixed(1);
+            // Use frozen completedTime for elapsed calculation when gadget is done
+            const endTime = nestedGadget.completedTime ?? Date.now();
+            const nestedElapsed = ((endTime - nestedGadget.startTime) / 1000).toFixed(1);
             const icon = nestedGadget.completed ? chalk.green("✓") : chalk.blue("⏵");
             const nestedGadgetLine = `${indent}${icon} ${chalk.dim(nestedGadget.name + "(...)")} ${chalk.dim(nestedElapsed + "s")}`;
             lines.push(nestedGadgetLine);
