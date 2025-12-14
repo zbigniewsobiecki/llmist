@@ -37,6 +37,49 @@ import type {
 import { createLogger } from "../logging/logger.js";
 import { collectEvents, ErrorGadget, TestGadget } from "../testing/helpers.js";
 import { GadgetRegistry } from "./registry.js";
+import type { StreamCompletionEvent, StreamEvent } from "./types.js";
+
+/**
+ * Helper to consume the async generator from StreamProcessor.process()
+ * and return a result object matching the old synchronous return format.
+ */
+async function consumeStream(
+  processor: StreamProcessor,
+  stream: AsyncIterable<LLMStreamChunk>,
+): Promise<{
+  outputs: StreamEvent[];
+  finishReason: string | null;
+  usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  rawResponse: string;
+  finalMessage: string;
+  didExecuteGadgets: boolean;
+  shouldBreakLoop: boolean;
+}> {
+  const outputs: StreamEvent[] = [];
+  let metadata: StreamCompletionEvent | null = null;
+
+  for await (const event of processor.process(stream)) {
+    if (event.type === "stream_complete") {
+      metadata = event;
+    } else {
+      outputs.push(event);
+    }
+  }
+
+  if (!metadata) {
+    throw new Error("Stream completed without metadata event");
+  }
+
+  return {
+    outputs,
+    finishReason: metadata.finishReason,
+    usage: metadata.usage,
+    rawResponse: metadata.rawResponse,
+    finalMessage: metadata.finalMessage,
+    didExecuteGadgets: metadata.didExecuteGadgets,
+    shouldBreakLoop: metadata.shouldBreakLoop,
+  };
+}
 
 // ============================================================================
 // TEST UTILITIES
@@ -431,7 +474,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionStart).toHaveBeenCalledTimes(1);
       expect(onGadgetExecutionStart).toHaveBeenCalledWith(
@@ -468,7 +511,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionStart).toHaveBeenCalledTimes(2);
       expect(onGadgetExecutionStart).toHaveBeenNthCalledWith(
@@ -503,7 +546,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionComplete).toHaveBeenCalledTimes(1);
       expect(onGadgetExecutionComplete).toHaveBeenCalledWith(
@@ -542,7 +585,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionComplete).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -576,7 +619,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionComplete).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -606,7 +649,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onStreamChunk).toHaveBeenCalledTimes(2); // Empty chunks are skipped
       expect(onStreamChunk).toHaveBeenNthCalledWith(
@@ -644,7 +687,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onStreamChunk).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -686,7 +729,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(observer1).toHaveBeenCalled();
       // Observers run independently and don't block each other
@@ -715,7 +758,7 @@ describe("Observers (Read-Only Hooks)", () => {
       });
 
       // Should not throw
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
       expect(result.rawResponse).toBe("Hello");
       expect(failingObserver).toHaveBeenCalled();
     });
@@ -752,7 +795,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(interceptRawChunk).toHaveBeenCalledTimes(2);
       expect(result.rawResponse).toBe("HELLO WORLD");
@@ -780,7 +823,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.rawResponse).toBe("public data");
     });
@@ -808,7 +851,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
       expect(interceptRawChunk).toHaveBeenCalled();
     });
   });
@@ -831,7 +874,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const textEvents = result.outputs.filter((e) => e.type === "text");
       expect(textEvents).toHaveLength(1);
@@ -860,7 +903,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const textEvents = result.outputs.filter((e) => e.type === "text");
       // All text was suppressed
@@ -889,7 +932,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(result.finalMessage).toBe("Result: secret_key=[REDACTED]");
       expect(result.rawResponse).toBe("Result: secret_key=abc123");
@@ -921,7 +964,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
       expect(interceptAssistantMessage).toHaveBeenCalled();
     });
 
@@ -942,7 +985,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Empty string is still stored
       expect(result.finalMessage).toBe("");
@@ -972,7 +1015,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(interceptGadgetParameters).toHaveBeenCalledWith(
         { message: "hello" },
@@ -1009,7 +1052,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionStart).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1048,7 +1091,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
       expect(interceptGadgetParameters).toHaveBeenCalled();
     });
   });
@@ -1076,7 +1119,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResult = result.outputs.find((e) => e.type === "gadget_result");
       expect(gadgetResult).toBeDefined();
@@ -1117,7 +1160,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
       expect(interceptGadgetResult).toHaveBeenCalled();
     });
 
@@ -1141,7 +1184,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResult = result.outputs.find((e) => e.type === "gadget_result");
       if (gadgetResult && gadgetResult.type === "gadget_result") {
@@ -1179,7 +1222,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // interceptRawChunk runs first, then interceptTextChunk
       expect(executionOrder).toEqual(["interceptor1", "interceptor2"]);
@@ -1570,7 +1613,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(beforeGadgetExecution).toHaveBeenCalled();
 
@@ -1604,7 +1647,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(beforeGadgetExecution).toHaveBeenCalled();
 
@@ -1645,7 +1688,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
       expect(beforeGadgetExecution).toHaveBeenCalled();
     });
   });
@@ -1677,7 +1720,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(afterGadgetExecution).toHaveBeenCalled();
 
@@ -1711,7 +1754,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       expect(afterGadgetExecution).toHaveBeenCalled();
 
@@ -1755,7 +1798,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
       expect(afterGadgetExecution).toHaveBeenCalled();
     });
   });
@@ -2019,7 +2062,7 @@ describe("Hook System Integration", () => {
         },
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       const gadgetResult = result.outputs.find((e) => e.type === "gadget_result");
       if (gadgetResult && gadgetResult.type === "gadget_result") {
@@ -2084,7 +2127,7 @@ describe("Hook System Integration", () => {
         hooks,
       });
 
-      const result = await processor.process(stream);
+      const result = await consumeStream(processor, stream);
 
       // Raw chunk was uppercased
       expect(result.rawResponse).toContain("HELLO");
@@ -2139,7 +2182,7 @@ describe("Hook System Integration", () => {
         },
       });
 
-      await processor.process(stream);
+      await consumeStream(processor, stream);
 
       expect(onGadgetExecutionComplete).toHaveBeenCalled();
       expect(executionTimeTracked).toBeGreaterThanOrEqual(0);

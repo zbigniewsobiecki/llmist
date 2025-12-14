@@ -213,6 +213,26 @@ export interface GadgetSkippedEvent {
   failedDependencyError: string;
 }
 
+/**
+ * Event emitted when stream processing completes, containing metadata.
+ * This allows the async generator to "return" metadata while still yielding events.
+ */
+export interface StreamCompletionEvent {
+  type: "stream_complete";
+  /** The reason the LLM stopped generating (e.g., "stop", "tool_use") */
+  finishReason: string | null;
+  /** Token usage statistics from the LLM call */
+  usage?: TokenUsage;
+  /** Raw response text from the LLM */
+  rawResponse: string;
+  /** Final message after all interceptors applied */
+  finalMessage: string;
+  /** Whether any gadgets were executed during this iteration */
+  didExecuteGadgets: boolean;
+  /** Whether to break the agent loop (e.g., TaskComplete was called) */
+  shouldBreakLoop: boolean;
+}
+
 // Stream chunk with text or gadget metadata
 export type StreamEvent =
   | { type: "text"; content: string }
@@ -220,7 +240,59 @@ export type StreamEvent =
   | { type: "gadget_result"; result: GadgetExecutionResult }
   | GadgetSkippedEvent
   | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string }
-  | { type: "compaction"; event: CompactionEvent };
+  | { type: "compaction"; event: CompactionEvent }
+  | StreamCompletionEvent;
+
+// =============================================================================
+// Nested Subagent Event Types
+// =============================================================================
+
+/**
+ * Information about an LLM call within a nested subagent.
+ * Used by parent agents to display real-time progress of subagent LLM calls.
+ */
+export interface LLMCallInfo {
+  /** Iteration number within the subagent loop */
+  iteration: number;
+  /** Model identifier (e.g., "sonnet", "gpt-4o") */
+  model: string;
+  /** Input tokens sent to the LLM */
+  inputTokens?: number;
+  /** Output tokens received from the LLM */
+  outputTokens?: number;
+  /** Reason the LLM stopped generating (e.g., "stop", "tool_use") */
+  finishReason?: string;
+  /** Elapsed time in milliseconds */
+  elapsedMs?: number;
+}
+
+/**
+ * Event emitted by subagent gadgets to report internal agent activity.
+ * Enables real-time display of nested LLM calls and gadget executions.
+ *
+ * @example
+ * ```typescript
+ * // Forwarding events from subagent to parent
+ * for await (const event of subagent.run()) {
+ *   ctx.onNestedEvent?.({
+ *     type: event.type === "gadget_call" ? "gadget_call" : "gadget_result",
+ *     gadgetInvocationId: parentInvocationId,
+ *     depth: 1,
+ *     event,
+ *   });
+ * }
+ * ```
+ */
+export interface NestedAgentEvent {
+  /** Type of nested event */
+  type: "llm_call_start" | "llm_call_end" | "gadget_call" | "gadget_result";
+  /** Invocation ID of the parent gadget this nested event belongs to */
+  gadgetInvocationId: string;
+  /** Nesting depth (1 = direct child, 2 = grandchild, etc.) */
+  depth: number;
+  /** The actual event data - either a StreamEvent or LLMCallInfo */
+  event: StreamEvent | LLMCallInfo;
+}
 
 // Imports for text-only handlers
 import type { ILogObj, Logger } from "tslog";
@@ -232,7 +304,7 @@ import type {
 } from "../core/media-types.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelRegistry } from "../core/model-registry.js";
-import type { LLMGenerationOptions, LLMStream } from "../core/options.js";
+import type { LLMGenerationOptions, LLMStream, TokenUsage } from "../core/options.js";
 import type { TextGenerationOptions } from "../core/quick-methods.js";
 
 // Text-only response handler types
@@ -563,6 +635,41 @@ export interface ExecutionContext {
    * ```
    */
   subagentConfig?: SubagentConfigMap;
+
+  /**
+   * Unique invocation ID for this gadget execution.
+   * Used by `withParentContext()` to identify which parent gadget
+   * nested events belong to.
+   */
+  invocationId?: string;
+
+  /**
+   * Callback for subagent gadgets to report internal events to the parent.
+   *
+   * When provided, subagent gadgets (like BrowseWeb) can use this callback
+   * to report their internal LLM calls and gadget executions in real-time.
+   * This enables the parent agent to display nested progress indicators.
+   *
+   * **Recommended:** Use `builder.withParentContext(ctx)` instead of calling
+   * this directly - it handles all the forwarding automatically.
+   *
+   * @example
+   * ```typescript
+   * // In a subagent gadget like BrowseWeb - just ONE LINE needed:
+   * execute: async (params, ctx) => {
+   *   const agent = new AgentBuilder(client)
+   *     .withModel(model)
+   *     .withGadgets(Navigate, Click)
+   *     .withParentContext(ctx)  // <-- Enables automatic event forwarding!
+   *     .ask(task);
+   *
+   *   for await (const event of agent.run()) {
+   *     // Events automatically forwarded - just process normally
+   *   }
+   * }
+   * ```
+   */
+  onNestedEvent?: (event: NestedAgentEvent) => void;
 }
 
 // =============================================================================

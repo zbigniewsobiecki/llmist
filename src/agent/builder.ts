@@ -26,7 +26,7 @@ import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
+import type { ExecutionContext, LLMCallInfo, NestedAgentEvent, SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
@@ -98,6 +98,12 @@ export class AgentBuilder {
   private signal?: AbortSignal;
   private trailingMessage?: TrailingMessage;
   private subagentConfig?: SubagentConfigMap;
+  private nestedEventCallback?: (event: NestedAgentEvent) => void;
+  private parentContext?: {
+    invocationId: string;
+    onNestedEvent: (event: NestedAgentEvent) => void;
+    depth: number;
+  };
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -633,6 +639,76 @@ export class AgentBuilder {
   }
 
   /**
+   * Set the callback for nested subagent events.
+   *
+   * Subagent gadgets (like BrowseWeb) can use ExecutionContext.onNestedEvent
+   * to report their internal LLM calls and gadget executions in real-time.
+   * This callback receives those events, enabling hierarchical progress display.
+   *
+   * @param callback - Function to handle nested agent events
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withNestedEventCallback((event) => {
+   *   if (event.type === "llm_call_start") {
+   *     console.log(`  Nested LLM #${event.event.iteration} starting...`);
+   *   } else if (event.type === "gadget_call") {
+   *     console.log(`    ⏵ ${event.event.call.gadgetName}...`);
+   *   }
+   * })
+   * ```
+   */
+  withNestedEventCallback(callback: (event: NestedAgentEvent) => void): this {
+    this.nestedEventCallback = callback;
+    return this;
+  }
+
+  /**
+   * Enable automatic nested event forwarding to parent agent.
+   *
+   * When building a subagent inside a gadget, call this method to automatically
+   * forward all LLM calls and gadget events to the parent agent. This enables
+   * hierarchical progress display without any manual event handling.
+   *
+   * The method extracts `invocationId` and `onNestedEvent` from the execution
+   * context and sets up automatic forwarding via hooks and event wrapping.
+   *
+   * @param ctx - ExecutionContext passed to the gadget's execute() method
+   * @param depth - Nesting depth (default: 1 for direct child)
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // In a subagent gadget like BrowseWeb - ONE LINE enables auto-forwarding:
+   * execute: async (params, ctx) => {
+   *   const agent = new AgentBuilder(client)
+   *     .withModel(model)
+   *     .withGadgets(Navigate, Click, Screenshot)
+   *     .withParentContext(ctx)  // <-- This is all you need!
+   *     .ask(params.task);
+   *
+   *   for await (const event of agent.run()) {
+   *     // Events automatically forwarded - just process normally
+   *     if (event.type === "text") {
+   *       result = event.content;
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  withParentContext(ctx: ExecutionContext, depth = 1): this {
+    if (ctx.onNestedEvent && ctx.invocationId) {
+      this.parentContext = {
+        invocationId: ctx.invocationId,
+        onNestedEvent: ctx.onNestedEvent,
+        depth,
+      };
+    }
+    return this;
+  }
+
+  /**
    * Add an ephemeral trailing message that appears at the end of each LLM request.
    *
    * The message is NOT persisted to conversation history - it only appears in the
@@ -709,15 +785,68 @@ export class AgentBuilder {
   }
 
   /**
-   * Compose the final hooks, including trailing message if configured.
+   * Compose the final hooks, including:
+   * - Trailing message injection (if configured)
+   * - Nested event forwarding for LLM calls (if parentContext is set)
    */
   private composeHooks(): AgentHooks | undefined {
+    let hooks = this.hooks;
+
+    // Inject nested event forwarding for LLM calls when parentContext is set
+    if (this.parentContext) {
+      const { invocationId, onNestedEvent, depth } = this.parentContext;
+      const existingOnLLMCallStart = hooks?.observers?.onLLMCallStart;
+      const existingOnLLMCallComplete = hooks?.observers?.onLLMCallComplete;
+
+      hooks = {
+        ...hooks,
+        observers: {
+          ...hooks?.observers,
+          onLLMCallStart: async (context) => {
+            // Forward to parent
+            onNestedEvent({
+              type: "llm_call_start",
+              gadgetInvocationId: invocationId,
+              depth,
+              event: {
+                iteration: context.iteration,
+                model: context.options.model,
+              } as LLMCallInfo,
+            });
+            // Chain to existing hook if present
+            if (existingOnLLMCallStart) {
+              await existingOnLLMCallStart(context);
+            }
+          },
+          onLLMCallComplete: async (context) => {
+            // Forward to parent
+            onNestedEvent({
+              type: "llm_call_end",
+              gadgetInvocationId: invocationId,
+              depth,
+              event: {
+                iteration: context.iteration,
+                model: context.options.model,
+                outputTokens: context.usage?.outputTokens,
+                finishReason: context.finishReason,
+              } as LLMCallInfo,
+            });
+            // Chain to existing hook if present
+            if (existingOnLLMCallComplete) {
+              await existingOnLLMCallComplete(context);
+            }
+          },
+        },
+      };
+    }
+
+    // Handle trailing message injection
     if (!this.trailingMessage) {
-      return this.hooks;
+      return hooks;
     }
 
     const trailingMsg = this.trailingMessage;
-    const existingBeforeLLMCall = this.hooks?.controllers?.beforeLLMCall;
+    const existingBeforeLLMCall = hooks?.controllers?.beforeLLMCall;
 
     const trailingMessageController = async (
       ctx: LLMCallControllerContext,
@@ -751,9 +880,9 @@ export class AgentBuilder {
     };
 
     return {
-      ...this.hooks,
+      ...hooks,
       controllers: {
-        ...this.hooks?.controllers,
+        ...hooks?.controllers,
         beforeLLMCall: trailingMessageController,
       },
     };
@@ -823,6 +952,24 @@ export class AgentBuilder {
 
     const registry = GadgetRegistry.from(this.gadgets);
 
+    // Build onNestedEvent callback - wrap to forward gadget events if parentContext is set
+    let onNestedEvent = this.nestedEventCallback;
+    if (this.parentContext) {
+      const { invocationId, onNestedEvent: parentCallback, depth } = this.parentContext;
+      const existingCallback = this.nestedEventCallback;
+
+      onNestedEvent = (event: NestedAgentEvent) => {
+        // Forward to parent with correct invocationId and accumulated depth
+        parentCallback({
+          ...event,
+          gadgetInvocationId: invocationId,
+          depth: event.depth + depth,
+        });
+        // Also call any explicitly set callback
+        existingCallback?.(event);
+      };
+    }
+
     return {
       client: this.client,
       model: this.model ?? "openai:gpt-5-nano",
@@ -849,6 +996,7 @@ export class AgentBuilder {
       compactionConfig: this.compactionConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
+      onNestedEvent,
     };
   }
 
@@ -1023,6 +1171,24 @@ export class AgentBuilder {
     }
     const registry = GadgetRegistry.from(this.gadgets);
 
+    // Build onNestedEvent callback - wrap to forward gadget events if parentContext is set
+    let onNestedEvent = this.nestedEventCallback;
+    if (this.parentContext) {
+      const { invocationId, onNestedEvent: parentCallback, depth } = this.parentContext;
+      const existingCallback = this.nestedEventCallback;
+
+      onNestedEvent = (event: NestedAgentEvent) => {
+        // Forward to parent with correct invocationId and accumulated depth
+        parentCallback({
+          ...event,
+          gadgetInvocationId: invocationId,
+          depth: event.depth + depth,
+        });
+        // Also call any explicitly set callback
+        existingCallback?.(event);
+      };
+    }
+
     const options: AgentOptions = {
       client: this.client,
       model: this.model ?? "openai:gpt-5-nano",
@@ -1049,6 +1215,7 @@ export class AgentBuilder {
       compactionConfig: this.compactionConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
+      onNestedEvent,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

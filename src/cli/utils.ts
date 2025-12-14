@@ -287,6 +287,7 @@ export class StreamProgress {
   private delayTimeout: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
   private hasRendered = false;
+  private lastRenderLineCount = 0; // Track lines rendered for multi-line clearing
 
   // Current call stats (streaming mode)
   private mode: ProgressMode = "cumulative";
@@ -309,11 +310,151 @@ export class StreamProgress {
   private iterations = 0;
   private currentIteration = 0;
 
+  // In-flight gadget tracking for concurrent status display
+  private inFlightGadgets: Map<
+    string,
+    { name: string; params?: Record<string, unknown>; startTime: number }
+  > = new Map();
+
+  // Nested agent tracking for hierarchical subagent display
+  private nestedAgents: Map<
+    string,
+    {
+      parentInvocationId: string;
+      depth: number;
+      model: string;
+      iteration: number;
+      startTime: number;
+      inputTokens?: number;
+      outputTokens?: number;
+    }
+  > = new Map();
+
+  // Nested gadget tracking for hierarchical subagent display
+  private nestedGadgets: Map<
+    string,
+    {
+      depth: number;
+      parentInvocationId: string;
+      name: string;
+      startTime: number;
+    }
+  > = new Map();
+
   constructor(
     private readonly target: NodeJS.WritableStream,
     private readonly isTTY: boolean,
     private readonly modelRegistry?: ModelRegistry,
   ) {}
+
+  /**
+   * Add a gadget to the in-flight tracking (called when gadget_call event received).
+   * Triggers re-render to show the gadget in the status display.
+   */
+  addGadget(invocationId: string, name: string, params?: Record<string, unknown>): void {
+    this.inFlightGadgets.set(invocationId, { name, params, startTime: Date.now() });
+    // Re-render immediately to show the new gadget
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
+  }
+
+  /**
+   * Remove a gadget from in-flight tracking (called when gadget_result event received).
+   * Triggers re-render to update the status display.
+   */
+  removeGadget(invocationId: string): void {
+    this.inFlightGadgets.delete(invocationId);
+    // Re-render immediately to remove the gadget from display
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
+  }
+
+  /**
+   * Check if there are any gadgets currently in flight.
+   */
+  hasInFlightGadgets(): boolean {
+    return this.inFlightGadgets.size > 0;
+  }
+
+  /**
+   * Add a nested agent LLM call (called when nested llm_call_start event received).
+   * Used to display hierarchical progress for subagent gadgets.
+   */
+  addNestedAgent(
+    id: string,
+    parentInvocationId: string,
+    depth: number,
+    model: string,
+    iteration: number,
+    inputTokens?: number,
+  ): void {
+    this.nestedAgents.set(id, {
+      parentInvocationId,
+      depth,
+      model,
+      iteration,
+      startTime: Date.now(),
+      inputTokens,
+    });
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
+  }
+
+  /**
+   * Update a nested agent with completion info (called when nested llm_call_end event received).
+   */
+  updateNestedAgent(id: string, outputTokens?: number): void {
+    const agent = this.nestedAgents.get(id);
+    if (agent) {
+      agent.outputTokens = outputTokens;
+      if (this.isRunning && this.isTTY) {
+        this.render();
+      }
+    }
+  }
+
+  /**
+   * Remove a nested agent (called when the nested LLM call completes).
+   */
+  removeNestedAgent(id: string): void {
+    this.nestedAgents.delete(id);
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
+  }
+
+  /**
+   * Add a nested gadget call (called when nested gadget_call event received).
+   */
+  addNestedGadget(
+    id: string,
+    depth: number,
+    parentInvocationId: string,
+    name: string,
+  ): void {
+    this.nestedGadgets.set(id, {
+      depth,
+      parentInvocationId,
+      name,
+      startTime: Date.now(),
+    });
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
+  }
+
+  /**
+   * Remove a nested gadget (called when nested gadget_result event received).
+   */
+  removeNestedGadget(id: string): void {
+    this.nestedGadgets.delete(id);
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
+  }
 
   /**
    * Starts a new LLM call. Switches to streaming mode.
@@ -460,17 +601,80 @@ export class StreamProgress {
   }
 
   private render(): void {
-    const spinner = SPINNER_FRAMES[this.frameIndex++ % SPINNER_FRAMES.length];
+    // Clear previous multi-line render before drawing new content
+    this.clearRenderedLines();
 
+    const spinner = SPINNER_FRAMES[this.frameIndex++ % SPINNER_FRAMES.length];
+    const lines: string[] = [];
+
+    // Line 1: Main progress line (streaming or cumulative mode)
     if (this.mode === "streaming") {
-      this.renderStreamingMode(spinner);
+      lines.push(this.formatStreamingLine(spinner));
     } else {
-      this.renderCumulativeMode(spinner);
+      lines.push(this.formatCumulativeLine(spinner));
     }
+
+    // Additional lines: In-flight gadgets (only in TTY mode)
+    if (this.isTTY) {
+      for (const [gadgetId, gadget] of this.inFlightGadgets) {
+        const elapsed = ((Date.now() - gadget.startTime) / 1000).toFixed(1);
+        const gadgetLine = `  ${chalk.blue("⏵")} ${chalk.magenta.bold(gadget.name)}${chalk.dim("(...)")} ${chalk.dim(elapsed + "s")}`;
+        lines.push(gadgetLine);
+
+        // Show nested agents associated with this gadget
+        for (const [_agentId, nested] of this.nestedAgents) {
+          if (nested.parentInvocationId !== gadgetId) continue;
+          const indent = "  ".repeat(nested.depth + 1);
+          const nestedElapsed = ((Date.now() - nested.startTime) / 1000).toFixed(1);
+          const tokens = nested.inputTokens ? ` ${chalk.dim("↑")}${chalk.yellow(formatTokens(nested.inputTokens))}` : "";
+          const outTokens = nested.outputTokens ? ` ${chalk.dim("↓")}${chalk.green(formatTokens(nested.outputTokens))}` : "";
+          const nestedLine = `${indent}${chalk.cyan(`#${nested.iteration}`)} ${chalk.dim(nested.model)}${tokens}${outTokens} ${chalk.dim(nestedElapsed + "s")} ${chalk.cyan(spinner)}`;
+          lines.push(nestedLine);
+        }
+
+        // Show nested gadgets associated with this parent gadget
+        for (const [_nestedId, nestedGadget] of this.nestedGadgets) {
+          if (nestedGadget.parentInvocationId === gadgetId) {
+            const indent = "  ".repeat(nestedGadget.depth + 1);
+            const nestedElapsed = ((Date.now() - nestedGadget.startTime) / 1000).toFixed(1);
+            const nestedGadgetLine = `${indent}${chalk.blue("⏵")} ${chalk.dim(nestedGadget.name + "(...)")} ${chalk.dim(nestedElapsed + "s")}`;
+            lines.push(nestedGadgetLine);
+          }
+        }
+      }
+    }
+
+    // Write all lines and track count for clearing
+    this.lastRenderLineCount = lines.length;
+    // Use \r to return to start of first line, then join with newlines
+    // Each line ends implicitly, cursor stays at end of last line
+    this.target.write("\r" + lines.join("\n"));
     this.hasRendered = true;
   }
 
-  private renderStreamingMode(spinner: string): void {
+  /**
+   * Clears the previously rendered lines (for multi-line status display).
+   */
+  private clearRenderedLines(): void {
+    if (!this.hasRendered || this.lastRenderLineCount === 0) return;
+
+    // First, clear the current line
+    this.target.write("\r\x1b[K");
+
+    // Then move up and clear each additional line
+    for (let i = 1; i < this.lastRenderLineCount; i++) {
+      // Move up one line and clear it
+      this.target.write("\x1b[1A\x1b[K");
+    }
+
+    // Return cursor to start
+    this.target.write("\r");
+  }
+
+  /**
+   * Format the streaming mode progress line (returns string, doesn't write).
+   */
+  private formatStreamingLine(spinner: string): string {
     const elapsed = ((Date.now() - this.callStartTime) / 1000).toFixed(1);
 
     // Output tokens: use actual if available, otherwise estimate from chars
@@ -523,7 +727,7 @@ export class StreamProgress {
       parts.push(chalk.cyan(`$${formatCost(callCost)}`));
     }
 
-    this.target.write(`\r${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`);
+    return `${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`;
   }
 
   /**
@@ -571,7 +775,10 @@ export class StreamProgress {
     return (this.callInputTokens / limits.contextWindow) * 100;
   }
 
-  private renderCumulativeMode(spinner: string): void {
+  /**
+   * Format the cumulative mode progress line (returns string, doesn't write).
+   */
+  private formatCumulativeLine(spinner: string): string {
     const elapsed = ((Date.now() - this.totalStartTime) / 1000).toFixed(1);
 
     // Build status parts: model, total tokens, iterations, cost, total time
@@ -590,11 +797,11 @@ export class StreamProgress {
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
-    this.target.write(`\r${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`);
+    return `${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`;
   }
 
   /**
-   * Pauses the progress indicator and clears the line.
+   * Pauses the progress indicator and clears all rendered lines.
    * Can be resumed with start().
    */
   pause(): void {
@@ -610,15 +817,10 @@ export class StreamProgress {
     }
     this.isRunning = false;
 
-    // Only clear the line if we actually rendered something
-    if (this.hasRendered) {
-      // Clear spinner line and ensure cursor is at column 0
-      // \r = carriage return (go to column 0)
-      // \x1b[K = clear from cursor to end of line
-      // \x1b[0G = move cursor to column 0 (ensures we're at start even after clear)
-      this.target.write("\r\x1b[K\x1b[0G");
-      this.hasRendered = false;
-    }
+    // Clear all rendered lines (multi-line status display)
+    this.clearRenderedLines();
+    this.hasRendered = false;
+    this.lastRenderLineCount = 0;
   }
 
   /**
