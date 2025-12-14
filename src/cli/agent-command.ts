@@ -8,7 +8,7 @@ import { text } from "../core/input-content.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { LLMCallInfo, NestedAgentEvent } from "../gadgets/types.js";
+import type { LLMCallInfo } from "../gadgets/types.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import { type ApprovalConfig, ApprovalManager } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
@@ -650,38 +650,43 @@ export async function executeAgent(
     ].join(" "),
   );
 
-  // Handle nested subagent events for hierarchical progress display
-  // Subagent gadgets (like BrowseWeb) forward their internal events via ExecutionContext.onNestedEvent
+  // Subagent events (from BrowseWeb, etc.) require callback-based handling
+  // for REAL-TIME display. Stream-based events are delayed until the gadget completes
+  // because flushPendingSubagentEvents() only runs after each stream processor yield.
+  //
+  // withSubagentEventCallback() fires IMMEDIATELY when events occur, enabling real-time
+  // progress updates during long-running gadgets like BrowseWeb (45+ seconds).
+  // The stream-based events (subagent_event) are still useful for simpler apps.
   if (!options.quiet) {
-    builder.withNestedEventCallback((event: NestedAgentEvent) => {
-      if (event.type === "llm_call_start") {
-        const info = event.event as LLMCallInfo;
-        const nestedId = `${event.gadgetInvocationId}:${info.iteration}`;
+    builder.withSubagentEventCallback((subagentEvent) => {
+      if (subagentEvent.type === "llm_call_start") {
+        const info = subagentEvent.event as LLMCallInfo;
+        const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
         progress.addNestedAgent(
-          nestedId,
-          event.gadgetInvocationId,
-          event.depth,
+          subagentId,
+          subagentEvent.gadgetInvocationId,
+          subagentEvent.depth,
           info.model,
           info.iteration,
           info.inputTokens,
         );
-      } else if (event.type === "llm_call_end") {
-        const info = event.event as LLMCallInfo;
-        const nestedId = `${event.gadgetInvocationId}:${info.iteration}`;
-        progress.updateNestedAgent(nestedId, info.outputTokens);
-        // Remove after a brief delay to show completion
-        setTimeout(() => progress.removeNestedAgent(nestedId), 100);
-      } else if (event.type === "gadget_call") {
-        const gadgetEvent = event.event as { call: { invocationId: string; gadgetName: string } };
+      } else if (subagentEvent.type === "llm_call_end") {
+        const info = subagentEvent.event as LLMCallInfo;
+        const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
+        progress.updateNestedAgent(subagentId, info.outputTokens);
+        // Remove after brief delay to show completion
+        setTimeout(() => progress.removeNestedAgent(subagentId), 100);
+      } else if (subagentEvent.type === "gadget_call") {
+        const gadgetEvent = subagentEvent.event as { call: { invocationId: string; gadgetName: string } };
         progress.addNestedGadget(
           gadgetEvent.call.invocationId,
-          event.depth,
-          event.gadgetInvocationId,
+          subagentEvent.depth,
+          subagentEvent.gadgetInvocationId,
           gadgetEvent.call.gadgetName,
         );
-      } else if (event.type === "gadget_result") {
-        const resultEvent = event.event as { result: { invocationId: string } };
-        progress.removeNestedGadget(resultEvent.result.invocationId);
+      } else if (subagentEvent.type === "gadget_result") {
+        const resultEvent = subagentEvent.event as { result: { invocationId: string } };
+        progress.completeNestedGadget(resultEvent.result.invocationId);
       }
     });
   }
@@ -780,6 +785,11 @@ export async function executeAgent(
           progress.start();
         }
         // Otherwise, progress resumes on next LLM call (via onLLMCallStart hook)
+      } else if (event.type === "subagent_event") {
+        // Subagent events are handled by withSubagentEventCallback() for real-time updates.
+        // Stream-based events arrive AFTER gadget completes (too late for progress display).
+        // This branch exists for apps that prefer stream-based handling over callbacks.
+        // CLI uses callback for immediate updates; nothing to do here.
       }
       // Note: human_input_required handled by callback (see createHumanInputHandler)
     }

@@ -21,9 +21,9 @@ import type {
   GadgetExecuteResultWithMedia,
   GadgetExecutionResult,
   GadgetMediaOutput,
-  NestedAgentEvent,
   ParsedGadgetCall,
   SubagentConfigMap,
+  SubagentEvent,
 } from "./types.js";
 
 export class GadgetExecutor {
@@ -41,7 +41,7 @@ export class GadgetExecutor {
     private readonly mediaStore?: MediaStore,
     private readonly agentConfig?: AgentContextConfig,
     private readonly subagentConfig?: SubagentConfigMap,
-    private readonly onNestedEvent?: (event: NestedAgentEvent) => void,
+    private readonly onSubagentEvent?: (event: SubagentEvent) => void,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
@@ -236,7 +236,7 @@ export class GadgetExecutor {
         agentConfig: this.agentConfig,
         subagentConfig: this.subagentConfig,
         invocationId: call.invocationId,
-        onNestedEvent: this.onNestedEvent,
+        onSubagentEvent: this.onSubagentEvent,
       };
 
       // Execute gadget (handle both sync and async)
