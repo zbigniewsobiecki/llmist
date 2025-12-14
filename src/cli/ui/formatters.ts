@@ -212,6 +212,146 @@ export function formatCost(cost: number): string {
 }
 
 /**
+ * Display information for formatting an LLM call progress line.
+ *
+ * Used by both main agent display and nested subagent display.
+ * This enables consistent formatting across all LLM call displays.
+ */
+export interface LLMCallDisplayInfo {
+  /** Iteration number (0-indexed for subagents, 1-indexed for main) */
+  iteration: number;
+  /** Model name/ID */
+  model: string;
+  /** Input tokens sent to LLM */
+  inputTokens?: number;
+  /** Cached input tokens (prompt cache hit) */
+  cachedInputTokens?: number;
+  /** Output tokens received from LLM */
+  outputTokens?: number;
+  /** Elapsed time in seconds */
+  elapsedSeconds: number;
+  /** Cost in USD */
+  cost?: number;
+  /** Finish reason (null/undefined while streaming, string when done) */
+  finishReason?: string | null;
+  /** Whether the call is still streaming */
+  isStreaming?: boolean;
+  /** Spinner character for streaming display */
+  spinner?: string;
+  /** Context window usage percentage (optional, main agent only) */
+  contextPercent?: number | null;
+  /** Token estimation flags (when counts are estimated, not exact) */
+  estimated?: { input?: boolean; output?: boolean };
+}
+
+/**
+ * Formats an LLM call progress line for display.
+ *
+ * This is the **shared formatting function** used by both main agent and
+ * nested subagent displays. Using a single function eliminates code
+ * duplication and ensures consistent formatting.
+ *
+ * **Format:** `#N model | %ctx | ↑ input | ⟳ cached | ↓ output | time | $cost | status`
+ *
+ * **Color scheme:**
+ * - Cyan: Iteration number, cost, spinner
+ * - Magenta: Model name
+ * - Yellow: Input tokens
+ * - Blue: Cached tokens
+ * - Green: Output tokens, success checkmark
+ *
+ * @param info - Display information for the LLM call
+ * @returns Formatted progress line string
+ *
+ * @example
+ * ```typescript
+ * // Streaming call
+ * formatLLMCallLine({
+ *   iteration: 1,
+ *   model: "claude-sonnet-4-20250514",
+ *   inputTokens: 10400,
+ *   outputTokens: 49,
+ *   elapsedSeconds: 24.8,
+ *   cost: 0.0032,
+ *   isStreaming: true,
+ *   spinner: "⠧",
+ *   contextPercent: 1,
+ * });
+ * // Output: "#1 claude-sonnet-4-20250514 | 1% | ↑ 10.4k | ↓ 49 | 24.8s | $0.0032 | ⠧"
+ *
+ * // Completed call
+ * formatLLMCallLine({
+ *   iteration: 0,
+ *   model: "gemini-2.5-flash",
+ *   inputTokens: 5200,
+ *   cachedInputTokens: 3000,
+ *   outputTokens: 36,
+ *   elapsedSeconds: 3.7,
+ *   cost: 0.00009,
+ *   finishReason: "stop",
+ * });
+ * // Output: "#0 gemini-2.5-flash | ↑ 5.2k | ⟳ 3.0k | ↓ 36 | 3.7s | $0.00009 | ✓"
+ * ```
+ */
+export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
+  const parts: string[] = [];
+
+  // #N model (iteration number + model name) - combined as one unit
+  parts.push(`${chalk.cyan(`#${info.iteration}`)} ${chalk.magenta(info.model)}`);
+
+  // Context usage percentage (color-coded by usage level, main agent only)
+  if (info.contextPercent !== undefined && info.contextPercent !== null) {
+    const formatted = `${Math.round(info.contextPercent)}%`;
+    if (info.contextPercent >= 80) {
+      parts.push(chalk.red(formatted)); // Danger zone
+    } else if (info.contextPercent >= 50) {
+      parts.push(chalk.yellow(formatted)); // Warning zone
+    } else {
+      parts.push(chalk.green(formatted)); // Safe zone
+    }
+  }
+
+  // ↑ input tokens
+  if (info.inputTokens && info.inputTokens > 0) {
+    const prefix = info.estimated?.input ? "~" : "";
+    parts.push(chalk.dim("↑") + chalk.yellow(` ${prefix}${formatTokens(info.inputTokens)}`));
+  }
+
+  // ⟳ cached tokens
+  if (info.cachedInputTokens && info.cachedInputTokens > 0) {
+    parts.push(chalk.dim("⟳") + chalk.blue(` ${formatTokens(info.cachedInputTokens)}`));
+  }
+
+  // ↓ output tokens
+  if (info.outputTokens !== undefined && info.outputTokens > 0 || info.isStreaming) {
+    const prefix = info.estimated?.output ? "~" : "";
+    parts.push(chalk.dim("↓") + chalk.green(` ${prefix}${formatTokens(info.outputTokens ?? 0)}`));
+  }
+
+  // Time
+  parts.push(chalk.dim(`${info.elapsedSeconds.toFixed(1)}s`));
+
+  // Cost
+  if (info.cost !== undefined && info.cost > 0) {
+    parts.push(chalk.cyan(`$${formatCost(info.cost)}`));
+  }
+
+  // Status: spinner while streaming, finish reason or ✓ when done
+  if (info.isStreaming && info.spinner) {
+    parts.push(chalk.cyan(info.spinner));
+  } else if (info.finishReason !== undefined) {
+    // Show ✓ for normal completion, actual reason for others
+    if (!info.finishReason || info.finishReason === "stop" || info.finishReason === "end_turn") {
+      parts.push(chalk.green("✓"));
+    } else {
+      parts.push(chalk.yellow(info.finishReason));
+    }
+  }
+
+  return parts.join(chalk.dim(" | "));
+}
+
+/**
  * Metadata for generating execution summaries.
  *
  * Contains optional metrics collected during agent/LLM execution.
@@ -593,6 +733,111 @@ export function formatGadgetStarted(
   const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
 
   return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel} ${chalk.dim("...")}`;
+}
+
+/**
+ * Display information for formatting a gadget call progress line.
+ *
+ * Used by both main gadget display and nested subagent gadget display.
+ * This enables consistent formatting across all gadget displays.
+ */
+export interface GadgetDisplayInfo {
+  /** Gadget name */
+  name: string;
+  /** Parameters passed to the gadget */
+  parameters?: Record<string, unknown>;
+  /** Elapsed time in seconds */
+  elapsedSeconds: number;
+  /** Whether the gadget has completed */
+  isComplete: boolean;
+  /** Token count from output (if available) */
+  tokenCount?: number;
+  /** Output size in bytes (fallback if tokenCount unavailable) */
+  outputBytes?: number;
+  /** Error message if gadget failed */
+  error?: string;
+  /** Whether the gadget breaks the loop (uses ⏹ icon) */
+  breaksLoop?: boolean;
+}
+
+/**
+ * Formats a gadget call progress line for display.
+ *
+ * This is the **shared formatting function** used by both main gadget display
+ * and nested subagent gadget display. Using a single function eliminates code
+ * duplication and ensures consistent formatting.
+ *
+ * **Format (in-progress):** `⏵ GadgetName(params) time`
+ * **Format (completed):** `✓ GadgetName(params) → output time`
+ * **Format (error):** `✗ GadgetName(params) error: msg time`
+ *
+ * @param info - Display information for the gadget call
+ * @param maxWidth - Maximum width for parameter truncation (optional)
+ * @returns Formatted progress line string
+ *
+ * @example
+ * ```typescript
+ * // In-progress call
+ * formatGadgetLine({
+ *   name: "Navigate",
+ *   parameters: { url: "https://example.com" },
+ *   elapsedSeconds: 2.5,
+ *   isComplete: false,
+ * });
+ * // Output: "⏵ Navigate(url=https://example.com) 2.5s"
+ *
+ * // Completed call
+ * formatGadgetLine({
+ *   name: "GetPageContent",
+ *   parameters: { selector: "article" },
+ *   elapsedSeconds: 1.2,
+ *   isComplete: true,
+ *   tokenCount: 248,
+ * });
+ * // Output: "✓ GetPageContent(selector=article) → 248 tokens 1.2s"
+ * ```
+ */
+export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): string {
+  // Get terminal width if not specified
+  const terminalWidth = maxWidth ?? process.stdout.columns ?? 80;
+
+  const gadgetLabel = chalk.magenta.bold(info.name);
+  const timeStr = `${info.elapsedSeconds.toFixed(1)}s`;
+  const timeLabel = chalk.dim(timeStr);
+
+  // Calculate fixed parts length for parameter truncation
+  const fixedLength = 2 + info.name.length + 2 + 1 + timeStr.length;
+  const availableForParams = Math.max(40, terminalWidth - fixedLength - 2);
+
+  // Format parameters inline with truncation
+  const paramsStr = formatParametersInline(info.parameters, availableForParams);
+  const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
+
+  // Error case
+  if (info.error) {
+    const errorMsg = info.error.length > 50 ? `${info.error.slice(0, 50)}…` : info.error;
+    return `${chalk.red("✗")} ${gadgetLabel}${paramsLabel} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
+  }
+
+  // In-progress case
+  if (!info.isComplete) {
+    return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel} ${timeLabel}`;
+  }
+
+  // Completed case - format output metrics
+  let outputStr: string;
+  if (info.tokenCount !== undefined && info.tokenCount > 0) {
+    outputStr = `${formatTokens(info.tokenCount)} tokens`;
+  } else if (info.outputBytes !== undefined && info.outputBytes > 0) {
+    outputStr = formatBytes(info.outputBytes);
+  } else {
+    outputStr = ""; // No output to show
+  }
+
+  const icon = info.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
+  const outputLabel = outputStr ? ` ${chalk.dim("→")} ${chalk.green(outputStr)}` : "";
+
+  return `${icon} ${gadgetLabel}${paramsLabel}${outputLabel} ${timeLabel}`;
 }
 
 /**

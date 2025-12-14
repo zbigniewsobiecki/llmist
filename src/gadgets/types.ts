@@ -257,20 +257,43 @@ export interface SubagentStreamEvent {
 /**
  * Information about an LLM call within a subagent.
  * Used by parent agents to display real-time progress of subagent LLM calls.
+ *
+ * This interface provides full context about subagent LLM calls, enabling
+ * first-class display with the same metrics as top-level agents (cached tokens, cost, etc.).
  */
 export interface LLMCallInfo {
   /** Iteration number within the subagent loop */
   iteration: number;
   /** Model identifier (e.g., "sonnet", "gpt-4o") */
   model: string;
-  /** Input tokens sent to the LLM */
+  /** Input tokens sent to the LLM (for backward compat, prefer usage.inputTokens) */
   inputTokens?: number;
-  /** Output tokens received from the LLM */
+  /** Output tokens received from the LLM (for backward compat, prefer usage.outputTokens) */
   outputTokens?: number;
   /** Reason the LLM stopped generating (e.g., "stop", "tool_use") */
   finishReason?: string;
   /** Elapsed time in milliseconds */
   elapsedMs?: number;
+
+  /**
+   * Full token usage including cached token counts.
+   * This provides the same level of detail as top-level agent calls.
+   */
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    /** Number of input tokens served from cache (subset of inputTokens) */
+    cachedInputTokens?: number;
+    /** Number of input tokens written to cache (subset of inputTokens, Anthropic only) */
+    cacheCreationInputTokens?: number;
+  };
+
+  /**
+   * Cost of this LLM call in USD.
+   * Calculated by the subagent if it has access to model registry.
+   */
+  cost?: number;
 }
 
 /**
