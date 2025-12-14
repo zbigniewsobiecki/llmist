@@ -1,3 +1,34 @@
+## 4.0.0 (2025-12-14)
+
+* feat(agent): automatic nested event streaming and width-aware formatting (#175) (#176) ([6f1e4b8](https://github.com/zbigniewsobiecki/llmist/commit/6f1e4b8)), closes [#175](https://github.com/zbigniewsobiecki/llmist/issues/175) [#176](https://github.com/zbigniewsobiecki/llmist/issues/176)
+
+
+### BREAKING CHANGE
+
+* Renamed all "nested" terminology to "subagent" for consistency
+
+- Rename NestedAgentEvent → SubagentEvent
+- Rename NestedAgentStreamEvent → SubagentStreamEvent
+- Rename nested_agent_event → subagent_event
+- Rename onNestedEvent → onSubagentEvent
+- Rename withNestedEventCallback → withSubagentEventCallback
+
+Add SubagentContext to all hook observer contexts:
+- All observer contexts now include optional subagentContext property
+- When present, indicates event is from a subagent (BrowseWeb, etc.)
+- Enables clean filtering: if (ctx.subagentContext) { /* subagent */ }
+
+Fire hooks for subagent events automatically:
+- Subagent events now fire the SAME hooks with subagentContext populated
+- Users can use hooks OR callbacks (or both) for subagent events
+- Consistent event handling across entire codebase
+
+Update documentation:
+- HOOKS.md: Add "Subagent Events" section with examples
+- SUBAGENTS.md: Add "Event Forwarding" section
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
 ## 3.1.0 (2025-12-14)
 
 * chore(release): 3.1.0 [skip ci] ([d4e2c8e](https://github.com/zbigniewsobiecki/llmist/commit/d4e2c8e))
