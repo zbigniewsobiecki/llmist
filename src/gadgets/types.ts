@@ -241,21 +241,21 @@ export type StreamEvent =
   | GadgetSkippedEvent
   | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string }
   | { type: "compaction"; event: CompactionEvent }
-  | NestedAgentStreamEvent
+  | SubagentStreamEvent
   | StreamCompletionEvent;
 
-/** Event for forwarding nested subagent activity through the stream */
-export interface NestedAgentStreamEvent {
-  type: "nested_agent_event";
-  nestedEvent: NestedAgentEvent;
+/** Event for forwarding subagent activity through the stream */
+export interface SubagentStreamEvent {
+  type: "subagent_event";
+  subagentEvent: SubagentEvent;
 }
 
 // =============================================================================
-// Nested Subagent Event Types
+// Subagent Event Types
 // =============================================================================
 
 /**
- * Information about an LLM call within a nested subagent.
+ * Information about an LLM call within a subagent.
  * Used by parent agents to display real-time progress of subagent LLM calls.
  */
 export interface LLMCallInfo {
@@ -275,13 +275,13 @@ export interface LLMCallInfo {
 
 /**
  * Event emitted by subagent gadgets to report internal agent activity.
- * Enables real-time display of nested LLM calls and gadget executions.
+ * Enables real-time display of subagent LLM calls and gadget executions.
  *
  * @example
  * ```typescript
  * // Forwarding events from subagent to parent
  * for await (const event of subagent.run()) {
- *   ctx.onNestedEvent?.({
+ *   ctx.onSubagentEvent?.({
  *     type: event.type === "gadget_call" ? "gadget_call" : "gadget_result",
  *     gadgetInvocationId: parentInvocationId,
  *     depth: 1,
@@ -290,10 +290,10 @@ export interface LLMCallInfo {
  * }
  * ```
  */
-export interface NestedAgentEvent {
-  /** Type of nested event */
+export interface SubagentEvent {
+  /** Type of subagent event */
   type: "llm_call_start" | "llm_call_end" | "gadget_call" | "gadget_result";
-  /** Invocation ID of the parent gadget this nested event belongs to */
+  /** Invocation ID of the parent gadget this subagent event belongs to */
   gadgetInvocationId: string;
   /** Nesting depth (1 = direct child, 2 = grandchild, etc.) */
   depth: number;
@@ -655,7 +655,7 @@ export interface ExecutionContext {
    *
    * When provided, subagent gadgets (like BrowseWeb) can use this callback
    * to report their internal LLM calls and gadget executions in real-time.
-   * This enables the parent agent to display nested progress indicators.
+   * This enables the parent agent to display subagent progress indicators.
    *
    * **Recommended:** Use `builder.withParentContext(ctx)` instead of calling
    * this directly - it handles all the forwarding automatically.
@@ -676,7 +676,7 @@ export interface ExecutionContext {
    * }
    * ```
    */
-  onNestedEvent?: (event: NestedAgentEvent) => void;
+  onSubagentEvent?: (event: SubagentEvent) => void;
 }
 
 // =============================================================================

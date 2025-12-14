@@ -16,11 +16,11 @@ import type {
   AgentContextConfig,
   GadgetExecutionResult,
   GadgetSkippedEvent,
-  NestedAgentEvent,
   ParsedGadgetCall,
   StreamCompletionEvent,
   StreamEvent,
   SubagentConfigMap,
+  SubagentEvent,
 } from "../gadgets/types.js";
 import { createLogger } from "../logging/logger.js";
 import {
@@ -99,8 +99,8 @@ export interface StreamProcessorOptions {
   /** Subagent-specific configuration overrides */
   subagentConfig?: SubagentConfigMap;
 
-  /** Callback for subagent gadgets to report nested events to parent */
-  onNestedEvent?: (event: NestedAgentEvent) => void;
+  /** Callback for subagent gadgets to report subagent events to parent */
+  onSubagentEvent?: (event: SubagentEvent) => void;
 }
 
 /**
@@ -202,7 +202,7 @@ export class StreamProcessor {
       options.mediaStore,
       options.agentConfig,
       options.subagentConfig,
-      options.onNestedEvent,
+      options.onSubagentEvent,
     );
   }
 

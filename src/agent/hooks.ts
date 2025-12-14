@@ -125,6 +125,39 @@ import type { LLMGenerationOptions, TokenUsage } from "../core/options.js";
 import type { CompactionEvent, CompactionStats } from "./compaction/config.js";
 
 // ============================================================================
+// SUBAGENT CONTEXT
+// ============================================================================
+
+/**
+ * Metadata present when an event originates from a subagent.
+ * Undefined for top-level agent events.
+ *
+ * When using subagent gadgets (like BrowseWeb), hook observers receive events
+ * from both the main agent AND subagents. Check this context to distinguish.
+ *
+ * @example
+ * ```typescript
+ * observers: {
+ *   onLLMCallStart: (ctx) => {
+ *     if (ctx.subagentContext) {
+ *       // Event from a subagent
+ *       console.log(`↳ Subagent LLM (depth=${ctx.subagentContext.depth})`);
+ *     } else {
+ *       // Event from the main agent
+ *       console.log('Main agent LLM call');
+ *     }
+ *   }
+ * }
+ * ```
+ */
+export interface SubagentContext {
+  /** Invocation ID of the parent gadget that spawned this subagent */
+  parentGadgetInvocationId: string;
+  /** Nesting depth: 1 = direct child, 2 = grandchild, etc. */
+  depth: number;
+}
+
+// ============================================================================
 // OBSERVERS (Read-Only, Side-Effects Only)
 // ============================================================================
 
@@ -136,6 +169,8 @@ export interface ObserveLLMCallContext {
   iteration: number;
   options: Readonly<LLMGenerationOptions>;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -149,6 +184,8 @@ export interface ObserveLLMCallReadyContext {
   /** Final options after any controller modifications (e.g., trailing messages) */
   options: Readonly<LLMGenerationOptions>;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -166,6 +203,8 @@ export interface ObserveLLMCompleteContext {
   /** The final message that will be added to history (after interceptors) */
   finalMessage: string;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -179,6 +218,8 @@ export interface ObserveLLMErrorContext {
   /** Whether the error was recovered by a controller */
   recovered: boolean;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -192,6 +233,8 @@ export interface ObserveGadgetStartContext {
   /** Parameters after controller modifications */
   parameters: Readonly<Record<string, unknown>>;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -213,6 +256,8 @@ export interface ObserveGadgetCompleteContext {
   /** Cost of gadget execution in USD. 0 if gadget didn't report cost. */
   cost?: number;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -229,6 +274,8 @@ export interface ObserveGadgetSkippedContext {
   /** The error message from the failed dependency */
   failedDependencyError: string;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -244,6 +291,8 @@ export interface ObserveChunkContext {
   /** Token usage if available (providers send usage at stream start/end) */
   usage?: TokenUsage;
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -297,6 +346,8 @@ export interface ObserveCompactionContext {
   stats: CompactionStats;
   /** Logger instance */
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 /**
@@ -310,6 +361,8 @@ export interface ObserveAbortContext {
   reason?: unknown;
   /** Logger instance */
   logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
 }
 
 // ============================================================================

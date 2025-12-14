@@ -171,6 +171,60 @@ https://apple.com
 }
 ```
 
+## Event Forwarding
+
+Subagents can forward their internal events (LLM calls, gadget executions) to the
+parent agent using `withParentContext()`. This enables the parent to observe
+subagent activity through its hooks.
+
+### Enabling Event Forwarding
+
+```typescript
+// Inside your subagent's execute() method:
+const builder = new AgentBuilder(client)
+  .withModel(model)
+  .withMaxIterations(maxIterations)
+  .withGadgets(...this.internalGadgets)
+  .withParentContext(ctx);  // Enable event forwarding
+
+const agent = builder.ask(params.task);
+```
+
+### How It Works
+
+1. Subagent's LLM calls and gadget executions fire hooks normally
+2. `withParentContext()` intercepts these events and forwards them to the parent
+3. Parent's hooks receive these events with `subagentContext` populated
+4. Parent can distinguish subagent events by checking `ctx.subagentContext`
+
+### Parent Hook Example
+
+```typescript
+const result = await LLMist.createAgent()
+  .withGadgets(BrowseWeb)
+  .withHooks({
+    observers: {
+      onLLMCallStart: (ctx) => {
+        if (ctx.subagentContext) {
+          // BrowseWeb's internal LLM call
+          console.log(`↳ BrowseWeb LLM #${ctx.iteration}`);
+        } else {
+          // Main agent's LLM call
+          console.log(`Main LLM #${ctx.iteration}`);
+        }
+      },
+    },
+  })
+  .askAndCollect("Find pricing info");
+```
+
+### Nesting Depth
+
+For deeply nested subagents (subagent within subagent), `depth` increments:
+- Main agent events: `subagentContext` is `undefined`
+- Direct child (BrowseWeb): `depth = 1`
+- Grandchild (gadget inside BrowseWeb's subagent): `depth = 2`
+
 ## Creating a Subagent
 
 Subagents are gadgets that spawn an internal `AgentBuilder`:

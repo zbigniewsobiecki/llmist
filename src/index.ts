@@ -59,6 +59,8 @@ export type {
   StoredOutput,
   StreamProcessingResult,
   StreamProcessorOptions,
+  // Subagent context for hook observers
+  SubagentContext,
 } from "./agent/index.js";
 export {
   // Compaction exports
@@ -191,6 +193,9 @@ export type {
   ParsedGadgetCall,
   StoredMedia,
   StreamEvent,
+  // Subagent event types
+  SubagentEvent,
+  SubagentStreamEvent,
   TextOnlyAction,
   TextOnlyContext,
   TextOnlyCustomHandler,
