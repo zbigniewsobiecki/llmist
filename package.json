@@ -43,7 +43,8 @@
     "test:all": "bun run test && bun run test:e2e",
     "clean": "rimraf dist",
     "prepare": "node scripts/install-hooks.js || true",
-    "release:dry": "bunx semantic-release --dry-run"
+    "release:dry": "bunx semantic-release --dry-run",
+    "release:publish": "test \"$(git branch --show-current)\" = \"main\" && git pull origin main && bun run build && npm publish"
   },
   "bin": {
     "llmist": "dist/cli.js"
