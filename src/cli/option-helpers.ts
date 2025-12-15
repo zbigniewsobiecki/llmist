@@ -53,8 +53,6 @@ export interface CLIAgentOptions {
   dockerRo?: boolean;
   /** Disable Docker (override config) */
   noDocker?: boolean;
-  /** Enable Docker dev mode (mount local source) */
-  dockerDev?: boolean;
   /** Per-profile CWD mount permission override */
   dockerCwdPermission?: "ro" | "rw";
   /** Profile-level subagent configuration overrides */
@@ -145,8 +143,7 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
     .option(OPTION_FLAGS.inputAudio, OPTION_DESCRIPTIONS.inputAudio)
     .option(OPTION_FLAGS.docker, OPTION_DESCRIPTIONS.docker)
     .option(OPTION_FLAGS.dockerRo, OPTION_DESCRIPTIONS.dockerRo)
-    .option(OPTION_FLAGS.noDocker, OPTION_DESCRIPTIONS.noDocker)
-    .option(OPTION_FLAGS.dockerDev, OPTION_DESCRIPTIONS.dockerDev);
+    .option(OPTION_FLAGS.noDocker, OPTION_DESCRIPTIONS.noDocker);
 }
 
 /**

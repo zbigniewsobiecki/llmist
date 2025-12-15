@@ -177,14 +177,6 @@ export function validateDockerConfig(raw: unknown, section: string): DockerConfi
     result["image-name"] = validateString(rawObj["image-name"], "image-name", section);
   }
 
-  if ("dev-mode" in rawObj) {
-    result["dev-mode"] = validateBoolean(rawObj["dev-mode"], "dev-mode", section);
-  }
-
-  if ("dev-source" in rawObj) {
-    result["dev-source"] = validateString(rawObj["dev-source"], "dev-source", section);
-  }
-
   // Note: docker-args is intentionally only configurable in the global ~/.llmist/cli.toml.
   // Since llmist only loads config from the user's home directory (not project-level configs),
   // this is inherently safe from supply-chain attacks where a malicious project could inject

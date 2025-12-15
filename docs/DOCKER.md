@@ -38,7 +38,6 @@ Override config settings with command-line flags:
 |------|-------------|
 | `--docker` | Enable Docker for this command |
 | `--docker-ro` | Enable Docker with read-only CWD mount |
-| `--docker-dev` | Enable dev mode (mount local source) |
 | `--no-docker` | Disable Docker (override config) |
 
 ```bash
@@ -169,35 +168,37 @@ rm ~/.llmist/docker-cache/image-hash.json
 docker rmi llmist-sandbox
 ```
 
-## Dev Mode
+## Development Setup
 
-When developing llmist itself, use dev mode to mount local source code instead of installing from npm:
+When developing llmist itself, use a custom dockerfile and `docker-args` to mount your local source:
 
 ```toml
 [docker]
 enabled = true
-dev-mode = true
-# dev-source = "~/Code/llmist"  # Optional: explicit path
+docker-args = ["-v", "/path/to/llmist:/path/to/llmist:ro"]
+
+dockerfile = """
+FROM oven/bun:1-debian
+
+# Create mount point for source
+RUN mkdir -p /path/to/llmist
+
+# Install tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ripgrep git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Run llmist from mounted source
+ENTRYPOINT ["bun", "run", "/path/to/llmist/src/cli.ts"]
+"""
 ```
 
-Or use the CLI flag:
-
-```bash
-bun src/cli.ts agent --docker-dev "Test something"
-```
-
-Dev mode:
-1. Uses a separate image (`llmist-dev-sandbox`) to avoid cache conflicts
-2. Mounts your source at `/llmist-src` (read-only)
-3. Runs `bun run /llmist-src/src/cli.ts` instead of npm-installed binary
-4. Auto-detects source path when running via `bun src/cli.ts`
-
-### Dev Mode Priority
-
-Source path resolution (first match wins):
-1. Config: `dev-source = "~/Code/llmist"`
-2. Environment: `LLMIST_DEV_SOURCE=/path/to/llmist`
-3. Auto-detect from script path (when running `bun src/cli.ts`)
+This approach:
+1. Mounts your source read-only via `docker-args`
+2. Uses a custom dockerfile with an entrypoint pointing to mounted source
+3. Runs `bun run /path/to/llmist/src/cli.ts` instead of npm-installed binary
 
 ## Environment Variables
 
@@ -277,12 +278,20 @@ Warning: Docker mode requested but already inside a container. Proceeding withou
 
 ## Mounts
 
-The container automatically mounts:
+The container uses selective mounting to avoid cross-platform issues with native modules in gadgets:
 
-| Host Path | Container Path | Permission |
-|-----------|---------------|------------|
-| Current directory | `/workspace` | `cwd-permission` (default: rw) |
-| `~/.llmist` | `/root/.llmist` | `config-permission` (default: ro) |
+| Host Path | Container Path | Permission | Notes |
+|-----------|---------------|------------|-------|
+| Current directory | `/workspace` | `cwd-permission` (default: rw) | Working directory |
+| `~/.llmist/cli.toml` | `/root/.llmist/cli.toml` | `config-permission` (default: ro) | Config file |
+| `~/.llmist/gadgets/` | `/root/.llmist/gadgets/` | `config-permission` (default: ro) | Local gadgets |
+| Named volume | `/root/.llmist/gadget-cache` | rw | Container's own cache |
+
+The **gadget-cache is NOT shared** between host and container. This is intentional—gadgets with native modules (like `sharp`, `tiktoken`, `better-sqlite3`) are compiled for the platform they run on. A macOS host's cache would fail inside a Linux container.
+
+Instead, the container uses a named Docker volume (`llmist-gadget-cache`) that persists across runs but remains isolated from the host's cache.
+
+### Custom Mounts
 
 Add custom mounts:
 

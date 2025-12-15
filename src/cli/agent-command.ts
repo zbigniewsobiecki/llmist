@@ -20,7 +20,6 @@ import {
   type DockerOptions,
   DockerSkipError,
   executeInDocker,
-  resolveDevMode,
   resolveDockerEnabled,
 } from "./docker/index.js";
 import type { CLIEnvironment } from "./environment.js";
@@ -152,7 +151,6 @@ export async function executeAgent(
     docker: options.docker ?? false,
     dockerRo: options.dockerRo ?? false,
     noDocker: options.noDocker ?? false,
-    dockerDev: options.dockerDev ?? false,
   };
 
   const dockerEnabled = resolveDockerEnabled(
@@ -162,9 +160,6 @@ export async function executeAgent(
   );
 
   if (dockerEnabled) {
-    // Resolve dev mode settings (for mounting local source)
-    const devMode = resolveDevMode(env.dockerConfig, dockerOptions.dockerDev);
-
     // Execute inside Docker container
     const ctx = createDockerContext(
       env.dockerConfig,
@@ -175,7 +170,7 @@ export async function executeAgent(
     );
 
     try {
-      await executeInDocker(ctx, devMode);
+      await executeInDocker(ctx);
       // executeInDocker calls process.exit(), so we won't reach here
     } catch (error) {
       // DockerSkipError means we're already inside a container, continue normally
@@ -232,6 +227,15 @@ export async function executeAgent(
       // This allows users to customize built-in behavior
       registry.registerByClass(gadget);
     }
+  }
+
+  // Display all registered gadget names (built-ins + user-provided)
+  if (!options.quiet) {
+    const allNames = registry
+      .getAll()
+      .map((g) => g.name)
+      .join(", ");
+    env.stderr.write(chalk.dim(`Gadgets: ${allNames}\n`));
   }
 
   const printer = new StreamPrinter(env.stdout);
