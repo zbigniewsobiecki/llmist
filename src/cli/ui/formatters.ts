@@ -247,6 +247,39 @@ export interface LLMCallDisplayInfo {
 }
 
 /**
+ * Formats an LLM call opening line for display.
+ *
+ * This is printed once when an LLM call starts, before streaming begins.
+ * The opening line is static and never refreshed.
+ *
+ * **Format:** `→ #N model`
+ *
+ * @param iteration - Iteration/call number
+ * @param model - Model name/ID
+ * @param parentCallNumber - Parent call number for nested calls (e.g., #1.2)
+ * @returns Formatted opening line string with ANSI colors
+ *
+ * @example
+ * ```typescript
+ * formatLLMCallOpening(1, "gemini:gemini-2.5-flash");
+ * // Output: "→ #1 gemini:gemini-2.5-flash"
+ *
+ * formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1);
+ * // Output: "→ #1.2 gemini:gemini-2.5-flash"
+ * ```
+ */
+export function formatLLMCallOpening(
+  iteration: number,
+  model: string,
+  parentCallNumber?: number,
+): string {
+  const callNumber = parentCallNumber
+    ? `#${parentCallNumber}.${iteration}`
+    : `#${iteration}`;
+  return `${chalk.dim("→")} ${chalk.cyan(callNumber)} ${chalk.magenta(model)}`;
+}
+
+/**
  * Formats an LLM call progress line for display.
  *
  * This is the **shared formatting function** used by both main agent and
@@ -342,19 +375,31 @@ export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
     parts.push(chalk.cyan(`$${formatCost(info.cost)}`));
   }
 
-  // Status: spinner while streaming, finish reason or ✓ when done
-  if (info.isStreaming && info.spinner) {
-    parts.push(chalk.cyan(info.spinner));
-  } else if (info.finishReason !== undefined) {
-    // Show ✓ for normal completion, actual reason for others
-    if (!info.finishReason || info.finishReason === "stop" || info.finishReason === "end_turn") {
-      parts.push(chalk.green("✓"));
+  // Finish reason at the END when completed (not streaming)
+  // Always show the actual finish reason (STOP, end_turn, etc.)
+  if (!info.isStreaming && info.finishReason !== undefined) {
+    const reason = info.finishReason || "stop";
+    // Uppercase for visibility, green for normal completion, yellow for others
+    if (reason === "stop" || reason === "end_turn") {
+      parts.push(chalk.green(reason.toUpperCase()));
     } else {
-      parts.push(chalk.yellow(info.finishReason));
+      parts.push(chalk.yellow(reason.toUpperCase()));
     }
   }
 
-  return parts.join(chalk.dim(" | "));
+  const line = parts.join(chalk.dim(" | "));
+
+  // Prepend spinner when streaming, ✓ when completed
+  if (info.isStreaming && info.spinner) {
+    return `${chalk.cyan(info.spinner)} ${line}`;
+  }
+
+  // Completed calls get ✓ prefix like gadgets
+  if (!info.isStreaming) {
+    return `${chalk.green("✓")} ${line}`;
+  }
+
+  return line;
 }
 
 /**
@@ -600,15 +645,14 @@ export interface GadgetResult {
 }
 
 /**
- * Formats a gadget execution result as a compact one-liner for stderr output.
+ * Formats a gadget execution result as a 2-line output for stderr.
  *
- * Provides visual feedback for gadget execution during agent runs. Different
- * icons and colors indicate success, error, or completion states.
+ * Provides visual feedback for gadget execution during agent runs.
  *
- * **Format:**
- * - Success: `✓ GadgetName(param=value, ...) → 248 tokens 123ms`
- * - Error: `✗ GadgetName(param=value) error: message 123ms`
- * - Completion: `⏹ GadgetName(param=value) → 2.5k tokens 123ms`
+ * **Format (2 lines):**
+ * - Line 1 (call): `→ GadgetName(param=value, ...)` - shows "was called"
+ * - Line 2 (result): `  ✓ GadgetName ↓ 248 4ms: preview` - shows execution result
+ * - Error: Line 2 becomes `  ✗ GadgetName error: message 2ms`
  *
  * **Design:**
  * - All parameters shown inline (truncated if too long)
@@ -616,7 +660,7 @@ export interface GadgetResult {
  * - Execution time always shown at the end
  *
  * @param result - Gadget execution result with timing and output info
- * @returns Formatted one-liner string with ANSI colors
+ * @returns Formatted 2-line string with ANSI colors
  *
  * @example
  * ```typescript
@@ -628,7 +672,7 @@ export interface GadgetResult {
  *   result: "Type | Name | Size...",
  *   tokenCount: 248
  * });
- * // Output: "✓ ListDirectory(path=., recursive=true) → 248 tokens 4ms"
+ * // Output: "→ ListDirectory(path=., recursive=true)\n  ✓ ListDirectory ↓ 248 4ms: ..."
  *
  * // Error case
  * formatGadgetSummary({
@@ -637,7 +681,7 @@ export interface GadgetResult {
  *   parameters: { path: "/missing.txt" },
  *   error: "File not found"
  * });
- * // Output: "✗ ReadFile(path=/missing.txt) error: File not found 2ms"
+ * // Output: "→ ReadFile(path=/missing.txt)\n  ✗ ReadFile error: File not found 2ms"
  * ```
  */
 /**
@@ -673,7 +717,7 @@ export function truncateValue(str: string, maxLen: number): string {
  * @param maxWidth - Optional maximum width for the entire parameters string (excluding parentheses)
  * @returns Formatted string with dim keys and cyan values, e.g., "path=., recursive=true"
  */
-function formatParametersInline(
+export function formatParametersInline(
   params: Record<string, unknown> | undefined,
   maxWidth?: number,
 ): string {
@@ -742,18 +786,17 @@ function formatParametersInline(
 }
 
 /**
- * Formats a gadget start indication as a compact one-liner for stderr output.
+ * Formats a gadget opening line (printed once when gadget is called).
  *
- * Shows that a gadget is about to execute, providing immediate feedback
- * before the potentially long-running execution completes.
+ * Shows the call indicator (`→`) for static opening lines.
  *
- * Format: `⏵ GadgetName(param=value, ...) ...`
+ * Format: `→ GadgetName(param=value, ...)`
  *
  * @param gadgetName - Name of the gadget being executed
  * @param parameters - Parameters passed to the gadget
  * @returns Formatted one-liner string with ANSI colors
  */
-export function formatGadgetStarted(
+export function formatGadgetOpening(
   gadgetName: string,
   parameters?: Record<string, unknown>,
 ): string {
@@ -762,9 +805,9 @@ export function formatGadgetStarted(
 
   const gadgetLabel = chalk.magenta.bold(gadgetName);
 
-  // Calculate fixed parts length: "⏵ " + gadgetName + "()" + " ..."
-  // Icon=2, parens=2, suffix=4
-  const fixedLength = 2 + gadgetName.length + 2 + 4;
+  // Calculate fixed parts length: "→ " + gadgetName + "()"
+  // Arrow=2, parens=2
+  const fixedLength = 2 + gadgetName.length + 2;
 
   // Available width for parameters
   const availableForParams = Math.max(40, terminalWidth - fixedLength - 3); // -3 safety margin
@@ -772,7 +815,50 @@ export function formatGadgetStarted(
   const paramsStr = formatParametersInline(parameters, availableForParams);
   const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
 
-  return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel} ${chalk.dim("...")}`;
+  return `${chalk.dim("→")} ${gadgetLabel}${paramsLabel}`;
+}
+
+/**
+ * Formats a single-line gadget result (for nested gadgets).
+ *
+ * Unlike `formatGadgetLine()` which returns 2 lines for completed gadgets,
+ * this returns a single result line. Used for nested gadgets where the
+ * opening line was already printed separately.
+ *
+ * Format: `✓ GadgetName [↑ in | ↓ out | $cost |] time`
+ *
+ * @param info - Result information
+ * @returns Formatted single-line result string with ANSI colors
+ */
+export function formatNestedGadgetResult(info: {
+  name: string;
+  elapsedSeconds: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cost?: number;
+  error?: string;
+}): string {
+  const parts: string[] = [];
+
+  // Add token metrics if present
+  if (info.inputTokens && info.inputTokens > 0) {
+    parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(info.inputTokens)}`));
+  }
+  if (info.outputTokens && info.outputTokens > 0) {
+    parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(info.outputTokens)}`));
+  }
+  if (info.cost && info.cost > 0) {
+    parts.push(chalk.cyan(`$${formatCost(info.cost)}`));
+  }
+
+  const metricsStr = parts.length > 0 ? ` ${parts.join(chalk.dim(" | "))} ${chalk.dim("|")}` : "";
+  const timeStr = chalk.dim(`${info.elapsedSeconds.toFixed(1)}s`);
+  const gadgetLabel = chalk.magenta.bold(info.name);
+
+  // Use error indicator if failed
+  const icon = info.error ? chalk.red("✗") : chalk.green("✓");
+
+  return `${icon} ${gadgetLabel}${metricsStr} ${timeStr}`;
 }
 
 /**
@@ -798,6 +884,16 @@ export interface GadgetDisplayInfo {
   error?: string;
   /** Whether the gadget breaks the loop (uses ⏹ icon) */
   breaksLoop?: boolean;
+
+  // Realtime subagent metrics (for gadgets that run LLM calls internally)
+  /** Aggregated input tokens from nested LLM calls */
+  subagentInputTokens?: number;
+  /** Aggregated output tokens from nested LLM calls */
+  subagentOutputTokens?: number;
+  /** Aggregated cached tokens from nested LLM calls */
+  subagentCachedTokens?: number;
+  /** Aggregated cost from nested LLM calls */
+  subagentCost?: number;
 }
 
 /**
@@ -807,8 +903,10 @@ export interface GadgetDisplayInfo {
  * and nested subagent gadget display. Using a single function eliminates code
  * duplication and ensures consistent formatting.
  *
- * **Format (in-progress):** `⏵ GadgetName(params) time`
- * **Format (completed):** `✓ GadgetName(params) → output time`
+ * **Format (in-progress):** `⏵ GadgetName(params)` (no time - time shown on result)
+ * **Format (completed - 2 lines):**
+ *   Line 1: `→ GadgetName(params)` (call indicator)
+ *   Line 2: `  ✓ GadgetName output time` (result indicator)
  * **Format (error):** `✗ GadgetName(params) error: msg time`
  *
  * @param info - Display information for the gadget call
@@ -817,16 +915,16 @@ export interface GadgetDisplayInfo {
  *
  * @example
  * ```typescript
- * // In-progress call
+ * // In-progress call (no time shown)
  * formatGadgetLine({
  *   name: "Navigate",
  *   parameters: { url: "https://example.com" },
  *   elapsedSeconds: 2.5,
  *   isComplete: false,
  * });
- * // Output: "⏵ Navigate(url=https://example.com) 2.5s"
+ * // Output: "⏵ Navigate(url=https://example.com)"
  *
- * // Completed call
+ * // Completed call (time on result line)
  * formatGadgetLine({
  *   name: "GetPageContent",
  *   parameters: { selector: "article" },
@@ -834,7 +932,7 @@ export interface GadgetDisplayInfo {
  *   isComplete: true,
  *   tokenCount: 248,
  * });
- * // Output: "✓ GetPageContent(selector=article) → 248 tokens 1.2s"
+ * // Output: "→ GetPageContent(selector=article)\n  ✓ GetPageContent ↓ 248 1.2s"
  * ```
  */
 export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): string {
@@ -860,9 +958,28 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
     return `${chalk.red("✗")} ${gadgetLabel}${paramsLabel} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
   }
 
-  // In-progress case
+  // In-progress case - show elapsed time and any accumulated subagent metrics
+  // NO parameters here - they were already shown on the opening line (→ GadgetName(params))
+  // This keeps the refreshing line compact and focused on changing metrics
   if (!info.isComplete) {
-    return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel} ${timeLabel}`;
+    const parts: string[] = [];
+
+    // Add subagent metrics if present (for gadgets that run LLM calls internally)
+    if (info.subagentInputTokens && info.subagentInputTokens > 0) {
+      parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(info.subagentInputTokens)}`));
+    }
+    if (info.subagentOutputTokens && info.subagentOutputTokens > 0) {
+      parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(info.subagentOutputTokens)}`));
+    }
+    if (info.subagentCost && info.subagentCost > 0) {
+      parts.push(chalk.cyan(`$${formatCost(info.subagentCost)}`));
+    }
+
+    // Always show elapsed time
+    parts.push(chalk.dim(`${info.elapsedSeconds.toFixed(1)}s`));
+
+    const metricsStr = parts.length > 0 ? ` ${parts.join(chalk.dim(" | "))}` : "";
+    return `${chalk.blue("⏵")} ${gadgetLabel}${metricsStr}`;
   }
 
   // Completed case - 2-line format for consistency with formatGadgetSummary
@@ -878,14 +995,15 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
     outputLabel = ""; // No output to show
   }
 
-  const icon = info.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
+  // Line 1: → (call indicator), Line 2: ✓/⏹ (result indicator)
+  const resultIcon = info.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
   const nameRef = chalk.magenta(info.name); // Not bold - line 2 is for reference, not emphasis
 
-  const line1 = `${icon} ${gadgetLabel}${paramsLabel}`;
+  const line1 = `${chalk.dim("→")} ${gadgetLabel}${paramsLabel}`;
 
   // Line 2: ensure it fits within terminal width
-  // Fixed parts: "  → " + name + " " + output + " " + time
-  const line2Prefix = `  ${chalk.dim("→")} ${nameRef} ${outputLabel}`;
+  // Fixed parts: "  ✓ " + name + " " + output + " " + time
+  const line2Prefix = `  ${resultIcon} ${nameRef} ${outputLabel}`;
   const line2 = `${line2Prefix}${timeLabel}`;
 
   return `${line1}\n${line2}`;
@@ -975,21 +1093,11 @@ export function formatGadgetSummary(result: GadgetResult): string {
       : `${Math.round(result.executionTimeMs)}ms`;
   const timeLabel = chalk.dim(timeStr);
 
-  // Calculate fixed parts for line 1: "✓ " + gadgetName + "()"
-  // Icon may be 2 columns wide in some terminals (Unicode width varies)
-  const fixedLength = 3 + result.gadgetName.length + 2;
-  const availableForParams = Math.max(40, terminalWidth - fixedLength - 3); // -3 safety margin
+  // Note: Opening line (→ GadgetName(params)) is now printed separately on gadget_call
+  // This function only returns the RESULT line
 
-  // Format parameters inline with available width
-  const paramsStr = formatParametersInline(result.parameters, availableForParams);
-  const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
-
-  // LINE 1: Start info (icon + name + params)
-  const icon = result.breaksLoop ? chalk.yellow("⏹") : result.error ? chalk.red("✗") : chalk.green("✓");
-  const line1 = `${icon} ${gadgetLabel}${paramsLabel}`;
-
-  // LINE 2: End info (name reference + output metrics + time + preview)
-  const nameRef = chalk.magenta(result.gadgetName); // Not bold - line 2 is for reference, not emphasis
+  // Result line: name reference + output metrics + time + preview
+  const nameRef = chalk.magenta(result.gadgetName); // Not bold - result line is for reference, not emphasis
 
   // Calculate output metrics (tokens or bytes)
   // Use same format as LLM calls: "↓ 1.2k" with dim arrow and green number
@@ -1016,18 +1124,20 @@ export function formatGadgetSummary(result: GadgetResult): string {
     outputStrRaw = "";
   }
 
-  // Error case: show error message on line 2
+  // Error case: show error message with ✗ (opening line was already printed on gadget_call)
   if (result.error) {
     const errorMsg = result.error.length > 50 ? `${result.error.slice(0, 50)}…` : result.error;
-    const line2 = `  ${chalk.dim("→")} ${nameRef} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
-    return `${line1}\n${line2}`;
+    return `${chalk.red("✗")} ${nameRef} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
   }
 
-  // Build line 2 with output preview
+  // Result icon: ✓ for success, ⏹ for loop-breaking
+  const resultIcon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
+
+  // Build result line with output preview
   // Calculate available width for preview (~60% of terminal)
   const previewWidth = Math.floor(terminalWidth * 0.6);
-  // Account for prefix: "  → " + name + " " + output + " " + time + ": "
-  const prefixLength = 4 + result.gadgetName.length + 1 + outputStrRaw.length + 1 + timeStr.length + 2;
+  // Account for prefix: "✓ " + name + " " + output + time + ": "
+  const prefixLength = 2 + result.gadgetName.length + 1 + outputStrRaw.length + timeStr.length + 2;
   const availablePreview = Math.max(20, previewWidth - prefixLength);
 
   // Custom previews for specific gadgets
@@ -1092,16 +1202,17 @@ export function formatGadgetSummary(result: GadgetResult): string {
     }
   }
 
-  let line2: string;
+  // Build result line (opening line is now printed separately on gadget_call)
+  let resultLine: string;
   const previewContent = customPreview ?? (result.result?.trim() ? truncateOutputPreview(result.result, availablePreview) : null);
   if (previewContent) {
-    line2 = `  ${chalk.dim("→")} ${nameRef} ${outputLabel}${subagentMetricsStr}${timeLabel}${chalk.dim(":")} ${chalk.dim(previewContent)}`;
+    resultLine = `${resultIcon} ${nameRef} ${outputLabel}${subagentMetricsStr}${timeLabel}${chalk.dim(":")} ${chalk.dim(previewContent)}`;
   } else {
     // No output content
-    line2 = `  ${chalk.dim("→")} ${nameRef} ${outputLabel}${subagentMetricsStr}${timeLabel}`;
+    resultLine = `${resultIcon} ${nameRef} ${outputLabel}${subagentMetricsStr}${timeLabel}`;
   }
 
-  let output = `${line1}\n${line2}`;
+  let output = resultLine;
 
   // Add media lines if present (images, audio, etc.)
   if (result.media && result.media.length > 0) {
