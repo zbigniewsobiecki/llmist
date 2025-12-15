@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
   createDockerContext,
   DockerRunError,
   DockerUnavailableError,
   filterDockerArgs,
-  resolveDevMode,
   resolveDockerEnabled,
 } from "./docker-wrapper.js";
 import type { DockerConfig, DockerOptions } from "./types.js";
@@ -59,14 +58,8 @@ describe("docker-wrapper", () => {
       expect(result).toEqual(["agent", "prompt"]);
     });
 
-    it("should remove --docker-dev flag", () => {
-      const args = ["agent", "--docker-dev", "prompt"];
-      const result = filterDockerArgs(args);
-      expect(result).toEqual(["agent", "prompt"]);
-    });
-
     it("should remove multiple docker flags", () => {
-      const args = ["--docker", "--docker-ro", "agent", "--docker-dev", "prompt"];
+      const args = ["--docker", "--docker-ro", "agent", "--no-docker", "prompt"];
       const result = filterDockerArgs(args);
       expect(result).toEqual(["agent", "prompt"]);
     });
@@ -94,7 +87,6 @@ describe("docker-wrapper", () => {
       docker: false,
       dockerRo: false,
       noDocker: false,
-      dockerDev: false,
     };
 
     it("should return false when no config and no options", () => {
@@ -158,72 +150,11 @@ describe("docker-wrapper", () => {
     });
   });
 
-  describe("resolveDevMode", () => {
-    const originalEnv = { ...process.env };
-
-    beforeEach(() => {
-      // Clean up dev mode env vars
-      delete process.env.LLMIST_DEV_MODE;
-      delete process.env.LLMIST_DEV_SOURCE;
-    });
-
-    afterEach(() => {
-      // Restore original env
-      process.env = { ...originalEnv };
-    });
-
-    it("should return disabled when CLI flag is false and config has no dev-mode", () => {
-      const result = resolveDevMode({}, false);
-      expect(result.enabled).toBe(false);
-      expect(result.sourcePath).toBeUndefined();
-    });
-
-    it("should enable via CLI flag with config source", () => {
-      const config: DockerConfig = { "dev-source": "/path/to/source" };
-      const result = resolveDevMode(config, true);
-      expect(result.enabled).toBe(true);
-      expect(result.sourcePath).toBe("/path/to/source");
-    });
-
-    it("should enable via config dev-mode with config source", () => {
-      const config: DockerConfig = { "dev-mode": true, "dev-source": "/my/source" };
-      const result = resolveDevMode(config, false);
-      expect(result.enabled).toBe(true);
-      expect(result.sourcePath).toBe("/my/source");
-    });
-
-    it("should enable via LLMIST_DEV_MODE env var", () => {
-      process.env.LLMIST_DEV_MODE = "1";
-      process.env.LLMIST_DEV_SOURCE = "/env/source";
-      const result = resolveDevMode({}, false);
-      expect(result.enabled).toBe(true);
-      expect(result.sourcePath).toBe("/env/source");
-    });
-
-    it("should prioritize config source over env var", () => {
-      process.env.LLMIST_DEV_SOURCE = "/env/source";
-      const config: DockerConfig = { "dev-source": "/config/source" };
-      const result = resolveDevMode(config, true);
-      expect(result.sourcePath).toBe("/config/source");
-    });
-
-    it("should throw when dev mode enabled but no source available", () => {
-      expect(() => resolveDevMode({}, true)).toThrow("llmist source path not found");
-    });
-
-    it("should not enable with LLMIST_DEV_MODE=0", () => {
-      process.env.LLMIST_DEV_MODE = "0";
-      const result = resolveDevMode({}, false);
-      expect(result.enabled).toBe(false);
-    });
-  });
-
   describe("createDockerContext", () => {
     const defaultOptions: DockerOptions = {
       docker: true,
       dockerRo: false,
       noDocker: false,
-      dockerDev: false,
     };
 
     it("should create context with provided config", () => {

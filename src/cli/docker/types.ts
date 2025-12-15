@@ -68,12 +68,6 @@ export interface DockerConfig {
   /** Custom Docker image name (default: "llmist-sandbox") */
   "image-name"?: string;
 
-  /** Enable dev mode - mount local source instead of npm install */
-  "dev-mode"?: boolean;
-
-  /** Path to llmist source for dev mode (supports ~ for home directory) */
-  "dev-source"?: string;
-
   /** Extra arguments to pass to docker run (e.g., ["-p", "3000:3000"]) */
   "docker-args"?: string[];
 }
@@ -89,8 +83,6 @@ export const DOCKER_CONFIG_KEYS = new Set([
   "mounts",
   "env-vars",
   "image-name",
-  "dev-mode",
-  "dev-source",
   "docker-args",
 ]);
 
@@ -104,8 +96,6 @@ export interface DockerOptions {
   dockerRo: boolean;
   /** Explicitly disabled via --no-docker flag */
   noDocker: boolean;
-  /** Dev mode - mount local source instead of npm install */
-  dockerDev: boolean;
 }
 
 /**
@@ -136,6 +126,14 @@ export const DEFAULT_CWD_PERMISSION: MountPermission = "rw";
 export const DEFAULT_CONFIG_PERMISSION: MountPermission = "ro";
 
 /**
+ * Named Docker volume for container's gadget-cache.
+ *
+ * This keeps the container's compiled gadgets separate from the host's,
+ * avoiding cross-platform native module issues (e.g., macOS host -> Linux container).
+ */
+export const GADGET_CACHE_VOLUME = "llmist-gadget-cache";
+
+/**
  * API keys that are always forwarded to the container.
  */
 export const FORWARDED_API_KEYS = [
@@ -144,22 +142,3 @@ export const FORWARDED_API_KEYS = [
   "GEMINI_API_KEY",
 ] as const;
 
-/**
- * Dev mode Docker image name (separate from production).
- */
-export const DEV_IMAGE_NAME = "llmist-dev-sandbox";
-
-/**
- * Mount target for llmist source in dev mode.
- */
-export const DEV_SOURCE_MOUNT_TARGET = "/llmist-src";
-
-/**
- * Resolved dev mode settings.
- */
-export interface DevModeSettings {
-  /** Whether dev mode is enabled */
-  enabled: boolean;
-  /** Path to llmist source directory (undefined if not enabled) */
-  sourcePath: string | undefined;
-}

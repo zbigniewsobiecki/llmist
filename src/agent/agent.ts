@@ -355,17 +355,19 @@ export class Agent {
         });
       } else if (event.type === "llm_call_end") {
         const info = event.event as LLMCallInfo;
+        // Use full usage object if available (preserves cached tokens), fallback to basic reconstruction
+        const usage = info.usage ?? (info.outputTokens
+          ? {
+              inputTokens: info.inputTokens ?? 0,
+              outputTokens: info.outputTokens,
+              totalTokens: (info.inputTokens ?? 0) + info.outputTokens,
+            }
+          : undefined);
         void this.hooks?.observers?.onLLMCallComplete?.({
           iteration: info.iteration,
           options: { model: info.model, messages: [] },
           finishReason: info.finishReason ?? null,
-          usage: info.outputTokens
-            ? {
-                inputTokens: info.inputTokens ?? 0,
-                outputTokens: info.outputTokens,
-                totalTokens: (info.inputTokens ?? 0) + info.outputTokens,
-              }
-            : undefined,
+          usage,
           rawResponse: "",
           finalMessage: "",
           logger: this.logger,

@@ -326,13 +326,12 @@ See [Docker Sandboxing](./DOCKER.md) for full documentation.
 | Key | Type | Description |
 |-----|------|-------------|
 | `enabled` | boolean | Enable Docker sandboxing globally |
-| `dev-mode` | boolean | Use local source instead of npm |
-| `dev-source` | string | Path to llmist source (for dev mode) |
 | `cwd-permission` | string | CWD mount permission: `"ro"` or `"rw"` (default) |
 | `config-permission` | string | Config mount permission: `"ro"` (default) or `"rw"` |
 | `env-vars` | string[] | Additional env vars to forward |
 | `image-name` | string | Custom Docker image name |
 | `dockerfile` | string | Custom Dockerfile content |
+| `docker-args` | string[] | Extra arguments for `docker run` |
 
 #### Options for custom command sections
 

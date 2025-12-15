@@ -271,7 +271,7 @@ type ProgressMode = "streaming" | "cumulative";
 
 // Import formatters from centralized formatting module
 // This showcases llmist's clean code organization
-import { formatCost, formatTokens } from "./ui/formatters.js";
+import { formatCost, formatGadgetLine, formatLLMCallLine, formatTokens } from "./ui/formatters.js";
 
 /**
  * Progress indicator shown while waiting for LLM response.
@@ -327,6 +327,13 @@ export class StreamProgress {
       startTime: number;
       inputTokens?: number;
       outputTokens?: number;
+      // First-class subagent metrics (cached tokens, cost, finish reason)
+      cachedInputTokens?: number;
+      cacheCreationInputTokens?: number;
+      finishReason?: string;
+      cost?: number;
+      completed?: boolean;
+      completedTime?: number;
     }
   > = new Map();
 
@@ -337,8 +344,10 @@ export class StreamProgress {
       depth: number;
       parentInvocationId: string;
       name: string;
+      parameters?: Record<string, unknown>;
       startTime: number;
       completed?: boolean;
+      completedTime?: number;
     }
   > = new Map();
 
@@ -406,11 +415,50 @@ export class StreamProgress {
 
   /**
    * Update a nested agent with completion info (called when nested llm_call_end event received).
+   * Records completion time to freeze the elapsed timer.
+   * @param info - Full LLM call info including tokens, cache details, and cost
    */
-  updateNestedAgent(id: string, outputTokens?: number): void {
+  updateNestedAgent(
+    id: string,
+    info: {
+      inputTokens?: number;
+      outputTokens?: number;
+      cachedInputTokens?: number;
+      cacheCreationInputTokens?: number;
+      finishReason?: string;
+      cost?: number;
+    },
+  ): void {
     const agent = this.nestedAgents.get(id);
     if (agent) {
-      agent.outputTokens = outputTokens;
+      agent.inputTokens = info.inputTokens;
+      agent.outputTokens = info.outputTokens;
+      agent.cachedInputTokens = info.cachedInputTokens;
+      agent.cacheCreationInputTokens = info.cacheCreationInputTokens;
+      agent.finishReason = info.finishReason;
+
+      // Calculate cost if not provided and we have model registry
+      if (info.cost !== undefined) {
+        agent.cost = info.cost;
+      } else if (this.modelRegistry && agent.model && info.outputTokens) {
+        // Calculate cost using model registry (first-class subagent metric)
+        try {
+          const modelName = agent.model.includes(":") ? agent.model.split(":")[1] : agent.model;
+          const costResult = this.modelRegistry.estimateCost(
+            modelName,
+            info.inputTokens ?? 0,
+            info.outputTokens,
+            info.cachedInputTokens,
+            info.cacheCreationInputTokens,
+          );
+          agent.cost = costResult?.totalCost;
+        } catch {
+          // Ignore cost calculation errors
+        }
+      }
+
+      agent.completed = true;
+      agent.completedTime = Date.now();
       if (this.isRunning && this.isTTY) {
         this.render();
       }
@@ -435,11 +483,13 @@ export class StreamProgress {
     depth: number,
     parentInvocationId: string,
     name: string,
+    parameters?: Record<string, unknown>,
   ): void {
     this.nestedGadgets.set(id, {
       depth,
       parentInvocationId,
       name,
+      parameters,
       startTime: Date.now(),
     });
     if (this.isRunning && this.isTTY) {
@@ -459,11 +509,13 @@ export class StreamProgress {
 
   /**
    * Mark a nested gadget as completed (keeps it visible with ✓ indicator).
+   * Records completion time to freeze the elapsed timer.
    */
   completeNestedGadget(id: string): void {
     const gadget = this.nestedGadgets.get(id);
     if (gadget) {
       gadget.completed = true;
+      gadget.completedTime = Date.now();
       if (this.isRunning && this.isTTY) {
         this.render();
       }
@@ -631,31 +683,105 @@ export class StreamProgress {
     // Additional lines: In-flight gadgets (only in TTY mode)
     if (this.isTTY) {
       for (const [gadgetId, gadget] of this.inFlightGadgets) {
-        const elapsed = ((Date.now() - gadget.startTime) / 1000).toFixed(1);
-        const gadgetLine = `  ${chalk.blue("⏵")} ${chalk.magenta.bold(gadget.name)}${chalk.dim("(...)")} ${chalk.dim(elapsed + "s")}`;
+        const elapsedSeconds = (Date.now() - gadget.startTime) / 1000;
+        // Use shared formatGadgetLine for consistent formatting with parameters
+        const gadgetLine = `  ${formatGadgetLine({
+          name: gadget.name,
+          parameters: gadget.params,
+          elapsedSeconds,
+          isComplete: false,
+        })}`;
         lines.push(gadgetLine);
 
-        // Show nested agents associated with this gadget
+        // Build unified timeline of nested operations sorted by startTime
+        // This fixes the display ordering bug where agents were grouped above gadgets
+        const nestedOps: Array<{
+          type: "agent" | "gadget";
+          startTime: number;
+          depth: number;
+          // Agent-specific fields
+          iteration?: number;
+          model?: string;
+          inputTokens?: number;
+          cachedInputTokens?: number;
+          outputTokens?: number;
+          cost?: number;
+          finishReason?: string;
+          completed?: boolean;
+          completedTime?: number;
+          // Gadget-specific fields
+          name?: string;
+          parameters?: Record<string, unknown>;
+        }> = [];
+
+        // Collect nested agents for this parent
         for (const [_agentId, nested] of this.nestedAgents) {
-          if (nested.parentInvocationId !== gadgetId) continue;
-          const indent = "  ".repeat(nested.depth + 1);
-          const nestedElapsed = ((Date.now() - nested.startTime) / 1000).toFixed(1);
-          const tokens = nested.inputTokens ? ` ${chalk.dim("↑")}${chalk.yellow(formatTokens(nested.inputTokens))}` : "";
-          const outTokens = nested.outputTokens ? ` ${chalk.dim("↓")}${chalk.green(formatTokens(nested.outputTokens))}` : "";
-          const nestedLine = `${indent}${chalk.cyan(`#${nested.iteration}`)} ${chalk.dim(nested.model)}${tokens}${outTokens} ${chalk.dim(nestedElapsed + "s")} ${chalk.cyan(spinner)}`;
-          lines.push(nestedLine);
+          if (nested.parentInvocationId === gadgetId) {
+            nestedOps.push({
+              type: "agent",
+              startTime: nested.startTime,
+              depth: nested.depth,
+              iteration: nested.iteration,
+              model: nested.model,
+              inputTokens: nested.inputTokens,
+              cachedInputTokens: nested.cachedInputTokens,
+              outputTokens: nested.outputTokens,
+              cost: nested.cost,
+              finishReason: nested.finishReason,
+              completed: nested.completed,
+              completedTime: nested.completedTime,
+            });
+          }
         }
 
-        // Show nested gadgets associated with this parent gadget
-        // console.error(`[DEBUG] Render: gadgetId=${gadgetId}, nestedGadgets.size=${this.nestedGadgets.size}`);
-        for (const [nestedId, nestedGadget] of this.nestedGadgets) {
-          // console.error(`[DEBUG]   nestedGadget: id=${nestedId}, parentId=${nestedGadget.parentInvocationId}, match=${nestedGadget.parentInvocationId === gadgetId}`);
+        // Collect nested gadgets for this parent
+        for (const [_nestedId, nestedGadget] of this.nestedGadgets) {
           if (nestedGadget.parentInvocationId === gadgetId) {
-            const indent = "  ".repeat(nestedGadget.depth + 1);
-            const nestedElapsed = ((Date.now() - nestedGadget.startTime) / 1000).toFixed(1);
-            const icon = nestedGadget.completed ? chalk.green("✓") : chalk.blue("⏵");
-            const nestedGadgetLine = `${indent}${icon} ${chalk.dim(nestedGadget.name + "(...)")} ${chalk.dim(nestedElapsed + "s")}`;
-            lines.push(nestedGadgetLine);
+            nestedOps.push({
+              type: "gadget",
+              startTime: nestedGadget.startTime,
+              depth: nestedGadget.depth,
+              name: nestedGadget.name,
+              parameters: nestedGadget.parameters,
+              completed: nestedGadget.completed,
+              completedTime: nestedGadget.completedTime,
+            });
+          }
+        }
+
+        // Sort by startTime for chronological display
+        nestedOps.sort((a, b) => a.startTime - b.startTime);
+
+        // Render in chronological order using shared formatting functions
+        for (const op of nestedOps) {
+          const indent = "  ".repeat(op.depth + 1);
+          const endTime = op.completedTime ?? Date.now();
+          const elapsedSeconds = (endTime - op.startTime) / 1000;
+
+          if (op.type === "agent") {
+            // Use shared formatLLMCallLine for consistent formatting
+            const line = formatLLMCallLine({
+              iteration: op.iteration ?? 0,
+              model: op.model ?? "",
+              inputTokens: op.inputTokens,
+              cachedInputTokens: op.cachedInputTokens,
+              outputTokens: op.outputTokens,
+              elapsedSeconds,
+              cost: op.cost,
+              finishReason: op.completed ? (op.finishReason ?? "stop") : undefined,
+              isStreaming: !op.completed,
+              spinner,
+            });
+            lines.push(`${indent}${line}`);
+          } else {
+            // Use shared formatGadgetLine for consistent formatting
+            const line = formatGadgetLine({
+              name: op.name ?? "",
+              parameters: op.parameters,
+              elapsedSeconds,
+              isComplete: op.completed ?? false,
+            });
+            lines.push(`${indent}${line}`);
           }
         }
       }
@@ -690,61 +816,32 @@ export class StreamProgress {
 
   /**
    * Format the streaming mode progress line (returns string, doesn't write).
+   * Uses the shared formatLLMCallLine() function for consistent formatting
+   * between main agent and nested subagent displays.
    */
   private formatStreamingLine(spinner: string): string {
-    const elapsed = ((Date.now() - this.callStartTime) / 1000).toFixed(1);
-
     // Output tokens: use actual if available, otherwise estimate from chars
     const outTokens = this.callOutputTokensEstimated
       ? Math.round(this.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
       : this.callOutputTokens;
 
-    // Build status parts: #N model | ↑ in │ ↓ out │ time | cost
-    const parts: string[] = [];
-
-    // #N model (iteration number + model name)
-    const iterPart = chalk.cyan(`#${this.currentIteration}`);
-    if (this.model) {
-      parts.push(`${iterPart} ${chalk.magenta(this.model)}`);
-    } else {
-      parts.push(iterPart);
-    }
-
-    // Context usage percentage (color-coded by usage level)
-    const usagePercent = this.getContextUsagePercent();
-    if (usagePercent !== null) {
-      const formatted = `${Math.round(usagePercent)}%`;
-      if (usagePercent >= 80) {
-        parts.push(chalk.red(formatted)); // Danger zone - compaction threshold
-      } else if (usagePercent >= 50) {
-        parts.push(chalk.yellow(formatted)); // Warning zone
-      } else {
-        parts.push(chalk.green(formatted)); // Safe zone
-      }
-    }
-
-    // ↑ input tokens
-    if (this.callInputTokens > 0) {
-      const prefix = this.callInputTokensEstimated ? "~" : "";
-      parts.push(chalk.dim("↑") + chalk.yellow(` ${prefix}${formatTokens(this.callInputTokens)}`));
-    }
-
-    // ↓ output tokens
-    if (this.isStreaming || outTokens > 0) {
-      const prefix = this.callOutputTokensEstimated ? "~" : "";
-      parts.push(chalk.dim("↓") + chalk.green(` ${prefix}${formatTokens(outTokens)}`));
-    }
-
-    // Time
-    parts.push(chalk.dim(`${elapsed}s`));
-
-    // Live cost estimate for current call (updates as tokens stream in)
-    const callCost = this.calculateCurrentCallCost(outTokens);
-    if (callCost > 0) {
-      parts.push(chalk.cyan(`$${formatCost(callCost)}`));
-    }
-
-    return `${parts.join(chalk.dim(" | "))} ${chalk.cyan(spinner)}`;
+    // Use shared formatting function for consistent display
+    return formatLLMCallLine({
+      iteration: this.currentIteration,
+      model: this.model ?? "",
+      inputTokens: this.callInputTokens,
+      cachedInputTokens: this.callCachedInputTokens,
+      outputTokens: outTokens,
+      elapsedSeconds: (Date.now() - this.callStartTime) / 1000,
+      cost: this.calculateCurrentCallCost(outTokens),
+      isStreaming: true,
+      spinner,
+      contextPercent: this.getContextUsagePercent(),
+      estimated: {
+        input: this.callInputTokensEstimated,
+        output: this.callOutputTokensEstimated,
+      },
+    });
   }
 
   /**

@@ -120,11 +120,15 @@ async function buildImage(imageName: string, dockerfile: string): Promise<void> 
   const dockerfilePath = join(CACHE_DIR, "Dockerfile");
   writeFileSync(dockerfilePath, dockerfile);
 
-  // Build the image
-  const proc = Bun.spawn(["docker", "build", "-t", imageName, "-f", dockerfilePath, CACHE_DIR], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  // Build the image with --no-cache to ensure Dockerfile changes take effect
+  // Docker layer caching can cause issues when Dockerfile content changes
+  const proc = Bun.spawn(
+    ["docker", "build", "--no-cache", "-t", imageName, "-f", dockerfilePath, CACHE_DIR],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
 
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();

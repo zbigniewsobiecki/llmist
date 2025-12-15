@@ -41,7 +41,6 @@ export const OPTION_FLAGS = {
   docker: "--docker",
   dockerRo: "--docker-ro",
   noDocker: "--no-docker",
-  dockerDev: "--docker-dev",
   // Multimodal input options
   inputImage: "--image <path>",
   inputAudio: "--audio <path>",
@@ -80,7 +79,6 @@ export const OPTION_DESCRIPTIONS = {
   docker: "Run agent in a Docker sandbox container for security isolation.",
   dockerRo: "Run in Docker with current directory mounted read-only.",
   noDocker: "Disable Docker sandboxing (override config).",
-  dockerDev: "Run in Docker dev mode (mount local source instead of npm install).",
   // Image generation descriptions
   imageSize: "Image size/aspect ratio, e.g. '1024x1024', '1:1', '16:9'.",
   imageQuality: "Image quality: 'standard', 'hd', 'low', 'medium', 'high'.",
