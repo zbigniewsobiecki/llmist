@@ -122,17 +122,6 @@ export interface AgentOptions {
     resultMapping?: (text: string) => string;
   };
 
-  /** Stop on gadget error */
-  stopOnGadgetError?: boolean;
-
-  /** Custom error recovery logic */
-  canRecoverFromGadgetError?: (context: {
-    error: string;
-    gadgetName: string;
-    errorType: "parse" | "validation" | "execution";
-    parameters?: Record<string, unknown>;
-  }) => boolean | Promise<boolean>;
-
   /** Default gadget timeout */
   defaultGadgetTimeoutMs?: number;
 
@@ -192,13 +181,6 @@ export class Agent {
     parameterMapping: (text: string) => Record<string, unknown>;
     resultMapping?: (text: string) => string;
   };
-  private readonly stopOnGadgetError: boolean;
-  private readonly canRecoverFromGadgetError?: (context: {
-    error: string;
-    gadgetName: string;
-    errorType: "parse" | "validation" | "execution";
-    parameters?: Record<string, unknown>;
-  }) => boolean | Promise<boolean>;
   private readonly defaultGadgetTimeoutMs?: number;
   private readonly defaultMaxTokens?: number;
   private hasUserPrompt: boolean;
@@ -251,8 +233,6 @@ export class Agent {
     this.requestHumanInput = options.requestHumanInput;
     this.textOnlyHandler = options.textOnlyHandler ?? "terminate";
     this.textWithGadgetsHandler = options.textWithGadgetsHandler;
-    this.stopOnGadgetError = options.stopOnGadgetError ?? true;
-    this.canRecoverFromGadgetError = options.canRecoverFromGadgetError;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
@@ -667,8 +647,6 @@ export class Agent {
           hooks: this.hooks,
           logger: this.logger.getSubLogger({ name: "stream-processor" }),
           requestHumanInput: this.requestHumanInput,
-          stopOnGadgetError: this.stopOnGadgetError,
-          canRecoverFromGadgetError: this.canRecoverFromGadgetError,
           defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
           client: this.client,
           mediaStore: this.mediaStore,

@@ -50,8 +50,6 @@ describe("AgentBuilder", () => {
       expect(builder.withGadgetEndPrefix(">>>")).toBe(builder);
       expect(builder.withGadgetArgPrefix("<<<ARG>>>")).toBe(builder);
       expect(builder.withTextOnlyHandler("acknowledge")).toBe(builder);
-      expect(builder.withStopOnGadgetError(false)).toBe(builder);
-      expect(builder.withErrorHandler(() => true)).toBe(builder);
       expect(builder.withDefaultGadgetTimeout(5000)).toBe(builder);
     });
 
@@ -596,67 +594,6 @@ describe("AgentBuilder", () => {
     });
   });
 
-  describe("withStopOnGadgetError", () => {
-    it("sets stop on gadget error to true", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withStopOnGadgetError(true);
-
-      expect(result).toBe(builder);
-    });
-
-    it("sets stop on gadget error to false", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withStopOnGadgetError(false);
-
-      expect(result).toBe(builder);
-    });
-
-    it("chains correctly", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withModel("gpt4").withStopOnGadgetError(false);
-
-      expect(result).toBe(builder);
-    });
-  });
-
-  describe("withErrorHandler", () => {
-    it("sets custom error handler function", () => {
-      const builder = new AgentBuilder();
-      const handler = vi.fn(() => true);
-
-      const result = builder.withErrorHandler(handler);
-
-      expect(result).toBe(builder);
-    });
-
-    it("accepts async error handler", () => {
-      const builder = new AgentBuilder();
-      const handler = vi.fn(async () => false);
-
-      const result = builder.withErrorHandler(handler);
-
-      expect(result).toBe(builder);
-    });
-
-    it("accepts handler with context parameter", () => {
-      const builder = new AgentBuilder();
-      const handler = vi.fn((context) => {
-        return context.errorType !== "parse";
-      });
-
-      const result = builder.withErrorHandler(handler);
-
-      expect(result).toBe(builder);
-    });
-
-    it("chains correctly", () => {
-      const builder = new AgentBuilder();
-      const result = builder.withModel("gpt4").withErrorHandler(() => true);
-
-      expect(result).toBe(builder);
-    });
-  });
-
   describe("withDefaultGadgetTimeout", () => {
     it("sets default gadget timeout", () => {
       const builder = new AgentBuilder();
@@ -709,7 +646,6 @@ describe("AgentBuilder", () => {
         .withHistory([{ user: "Hi" }, { assistant: "Hello! How can I help?" }])
         .onHumanInput(async (q) => `Answer to: ${q}`)
         .withTextOnlyHandler("acknowledge")
-        .withStopOnGadgetError(false)
         .withDefaultGadgetTimeout(10000);
 
       expect(result).toBe(builder);

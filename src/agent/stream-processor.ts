@@ -73,17 +73,6 @@ export interface StreamProcessorOptions {
   /** Callback for requesting human input during execution */
   requestHumanInput?: (question: string) => Promise<string>;
 
-  /** Whether to stop on gadget errors */
-  stopOnGadgetError?: boolean;
-
-  /** Custom error recovery logic */
-  canRecoverFromGadgetError?: (context: {
-    error: string;
-    gadgetName: string;
-    errorType: "parse" | "validation" | "execution";
-    parameters?: Record<string, unknown>;
-  }) => boolean | Promise<boolean>;
-
   /** Default gadget timeout */
   defaultGadgetTimeoutMs?: number;
 
@@ -158,16 +147,8 @@ export class StreamProcessor {
   private readonly logger: Logger<ILogObj>;
   private readonly parser: GadgetCallParser;
   private readonly executor: GadgetExecutor;
-  private readonly stopOnGadgetError: boolean;
-  private readonly canRecoverFromGadgetError?: (context: {
-    error: string;
-    gadgetName: string;
-    errorType: "parse" | "validation" | "execution";
-    parameters?: Record<string, unknown>;
-  }) => boolean | Promise<boolean>;
 
   private responseText = "";
-  private executionHalted = false;
   private observerFailureCount = 0;
 
   // Dependency tracking for gadget execution DAG
@@ -178,15 +159,15 @@ export class StreamProcessor {
   /** Invocation IDs of gadgets that have failed (error or skipped due to dependency) */
   private failedInvocations: Set<string> = new Set();
   /** Promises for independent gadgets currently executing (fire-and-forget) */
-  private inFlightExecutions: Map<string, Promise<StreamEvent[]>> = new Map();
+  private inFlightExecutions: Map<string, Promise<void>> = new Map();
+  /** Queue of completed gadget results ready to be yielded (for real-time streaming) */
+  private completedResultsQueue: StreamEvent[] = [];
 
   constructor(options: StreamProcessorOptions) {
     this.iteration = options.iteration;
     this.registry = options.registry;
     this.hooks = options.hooks ?? {};
     this.logger = options.logger ?? createLogger({ name: "llmist:stream-processor" });
-    this.stopOnGadgetError = options.stopOnGadgetError ?? true;
-    this.canRecoverFromGadgetError = options.canRecoverFromGadgetError;
 
     this.parser = new GadgetCallParser({
       startPrefix: options.gadgetStartPrefix,
@@ -292,53 +273,60 @@ export class StreamProcessor {
         }
       }
 
-      // Break if we should stop execution
-      if (this.executionHalted) {
-        this.logger.info("Breaking from LLM stream due to gadget error");
-        break;
+      // Step 4: Drain completed parallel gadget results (real-time streaming)
+      // This yields results from gadgets that completed during this chunk processing
+      for (const evt of this.drainCompletedResults()) {
+        yield evt;
+
+        if (evt.type === "gadget_result") {
+          didExecuteGadgets = true;
+          if (evt.result.breaksLoop) {
+            shouldBreakLoop = true;
+          }
+        }
       }
     }
 
     // Finalize parsing
-    if (!this.executionHalted) {
-      for (const event of this.parser.finalize()) {
-        for await (const processedEvent of this.processEventGenerator(event)) {
-          yield processedEvent;
+    for (const event of this.parser.finalize()) {
+      for await (const processedEvent of this.processEventGenerator(event)) {
+        yield processedEvent;
 
-          if (processedEvent.type === "gadget_result") {
-            didExecuteGadgets = true;
-            if (processedEvent.result.breaksLoop) {
-              shouldBreakLoop = true;
-            }
-          }
-        }
-      }
-
-      // Collect results from all fire-and-forget (in-flight) independent gadgets
-      // This awaits parallel executions that were started during streaming
-      const inFlightResults = await this.collectInFlightResults();
-      for (const evt of inFlightResults) {
-        yield evt;
-
-        if (evt.type === "gadget_result") {
+        if (processedEvent.type === "gadget_result") {
           didExecuteGadgets = true;
-          if (evt.result.breaksLoop) {
+          if (processedEvent.result.breaksLoop) {
             shouldBreakLoop = true;
           }
         }
       }
+    }
 
-      // Final pass to process any remaining pending gadgets
-      // This handles cases where the last gadgets in the stream have dependencies
-      // (now that in-flight gadgets have completed, their dependents can execute)
-      for await (const evt of this.processPendingGadgetsGenerator()) {
-        yield evt;
+    // Wait for all in-flight parallel gadgets to complete
+    // Results are pushed to completedResultsQueue during execution
+    await this.waitForInFlightExecutions();
 
-        if (evt.type === "gadget_result") {
-          didExecuteGadgets = true;
-          if (evt.result.breaksLoop) {
-            shouldBreakLoop = true;
-          }
+    // Drain any remaining completed results (stragglers that finished after last chunk)
+    for (const evt of this.drainCompletedResults()) {
+      yield evt;
+
+      if (evt.type === "gadget_result") {
+        didExecuteGadgets = true;
+        if (evt.result.breaksLoop) {
+          shouldBreakLoop = true;
+        }
+      }
+    }
+
+    // Final pass to process any remaining pending gadgets
+    // This handles cases where the last gadgets in the stream have dependencies
+    // (now that in-flight gadgets have completed, their dependents can execute)
+    for await (const evt of this.processPendingGadgetsGenerator()) {
+      yield evt;
+
+      if (evt.type === "gadget_result") {
+        didExecuteGadgets = true;
+        if (evt.result.breaksLoop) {
+          shouldBreakLoop = true;
         }
       }
     }
@@ -368,21 +356,7 @@ export class StreamProcessor {
   }
 
   /**
-   * Process a single parsed event (text or gadget call).
-   * @deprecated Use processEventGenerator for real-time streaming
-   */
-  private async processEvent(event: StreamEvent): Promise<StreamEvent[]> {
-    if (event.type === "text") {
-      return this.processTextEvent(event);
-    } else if (event.type === "gadget_call") {
-      return this.processGadgetCall(event.call);
-    }
-    return [event];
-  }
-
-  /**
    * Process a single parsed event, yielding events in real-time.
-   * Generator version of processEvent for streaming support.
    */
   private async *processEventGenerator(event: StreamEvent): AsyncGenerator<StreamEvent> {
     if (event.type === "text") {
@@ -431,14 +405,6 @@ export class StreamProcessor {
    * After each execution, pending gadgets are checked to see if they can now run.
    */
   private async processGadgetCall(call: ParsedGadgetCall): Promise<StreamEvent[]> {
-    // Check if we should skip due to previous error
-    if (this.executionHalted) {
-      this.logger.debug("Skipping gadget execution due to previous error", {
-        gadgetName: call.gadgetName,
-      });
-      return [];
-    }
-
     const events: StreamEvent[] = [];
 
     // Emit gadget call event immediately (even if execution is deferred)
@@ -506,14 +472,6 @@ export class StreamProcessor {
    * when parsed (before execution), enabling real-time UI feedback.
    */
   private async *processGadgetCallGenerator(call: ParsedGadgetCall): AsyncGenerator<StreamEvent> {
-    // Check if we should skip due to previous error
-    if (this.executionHalted) {
-      this.logger.debug("Skipping gadget execution due to previous error", {
-        gadgetName: call.gadgetName,
-      });
-      return;
-    }
-
     // Yield gadget_call IMMEDIATELY (real-time feedback before execution)
     yield { type: "gadget_call", call };
 
@@ -574,25 +532,11 @@ export class StreamProcessor {
       return;
     }
 
-    // NO dependencies - choose execution strategy based on error handling mode
-    if (this.stopOnGadgetError) {
-      // Sequential execution: must wait for each gadget to check for errors
-      // that should stop subsequent execution
-      for await (const evt of this.executeGadgetGenerator(call)) {
-        yield evt;
-      }
-
-      // Check if any pending gadgets can now execute
-      for await (const evt of this.processPendingGadgetsGenerator()) {
-        yield evt;
-      }
-    } else {
-      // Fire and forget for parallel execution!
-      // Results will be collected at stream end via collectInFlightResults()
-      const executionPromise = this.executeGadgetAndCollect(call);
-      this.inFlightExecutions.set(call.invocationId, executionPromise);
-      // DON'T await - continue processing stream immediately
-    }
+    // NO dependencies - start immediately (parallel execution)
+    // Results are pushed to completedResultsQueue and yielded during stream processing
+    const executionPromise = this.executeGadgetAndCollect(call);
+    this.inFlightExecutions.set(call.invocationId, executionPromise);
+    // DON'T await - continue processing stream immediately
   }
 
   /**
@@ -603,24 +547,13 @@ export class StreamProcessor {
   private async executeGadgetWithHooks(call: ParsedGadgetCall): Promise<StreamEvent[]> {
     const events: StreamEvent[] = [];
 
-    // Check for parse errors
+    // Log parse errors if present (execution continues - errors are part of the result)
     if (call.parseError) {
       this.logger.warn("Gadget has parse error", {
         gadgetName: call.gadgetName,
         error: call.parseError,
         rawParameters: call.parametersRaw,
       });
-
-      const shouldContinue = await this.checkCanRecoverFromError(
-        call.parseError,
-        call.gadgetName,
-        "parse",
-        call.parameters,
-      );
-
-      if (!shouldContinue) {
-        this.executionHalted = true;
-      }
     }
 
     // Step 1: Interceptor - Transform parameters
@@ -695,9 +628,12 @@ export class StreamProcessor {
       result = await this.executor.execute(call);
     }
 
+    // Capture the raw result before any hook transformations.
+    // Used in onGadgetExecutionComplete to provide both pre-hook (originalResult)
+    // and post-hook (finalResult) values for observers that need to audit changes.
     const originalResult = result.result;
 
-    // Step 5: Interceptor - Transform result
+    // Step 5: Interceptor - Transform result (modifies result.result)
     if (result.result && this.hooks.interceptors?.interceptGadgetResult) {
       const context: GadgetResultInterceptorContext = {
         iteration: this.iteration,
@@ -710,7 +646,7 @@ export class StreamProcessor {
       result.result = this.hooks.interceptors.interceptGadgetResult(result.result, context);
     }
 
-    // Step 6: Controller - After execution
+    // Step 6: Controller - After execution (can further modify result)
     if (this.hooks.controllers?.afterGadgetExecution) {
       const context: AfterGadgetExecutionControllerContext = {
         iteration: this.iteration,
@@ -772,21 +708,6 @@ export class StreamProcessor {
     // Emit result event
     events.push({ type: "gadget_result", result });
 
-    // Check if we should stop after error
-    if (result.error) {
-      const errorType = this.determineErrorType(call, result);
-      const shouldContinue = await this.checkCanRecoverFromError(
-        result.error,
-        result.gadgetName,
-        errorType,
-        result.parameters,
-      );
-
-      if (!shouldContinue) {
-        this.executionHalted = true;
-      }
-    }
-
     return events;
   }
 
@@ -795,24 +716,13 @@ export class StreamProcessor {
    * Generator version that yields gadget_result immediately when execution completes.
    */
   private async *executeGadgetGenerator(call: ParsedGadgetCall): AsyncGenerator<StreamEvent> {
-    // Check for parse errors
+    // Log parse errors if present (execution continues - errors are part of the result)
     if (call.parseError) {
       this.logger.warn("Gadget has parse error", {
         gadgetName: call.gadgetName,
         error: call.parseError,
         rawParameters: call.parametersRaw,
       });
-
-      const shouldContinue = await this.checkCanRecoverFromError(
-        call.parseError,
-        call.gadgetName,
-        "parse",
-        call.parameters,
-      );
-
-      if (!shouldContinue) {
-        this.executionHalted = true;
-      }
     }
 
     // Step 1: Interceptor - Transform parameters
@@ -887,9 +797,12 @@ export class StreamProcessor {
       result = await this.executor.execute(call);
     }
 
+    // Capture the raw result before any hook transformations.
+    // Used in onGadgetExecutionComplete to provide both pre-hook (originalResult)
+    // and post-hook (finalResult) values for observers that need to audit changes.
     const originalResult = result.result;
 
-    // Step 5: Interceptor - Transform result
+    // Step 5: Interceptor - Transform result (modifies result.result)
     if (result.result && this.hooks.interceptors?.interceptGadgetResult) {
       const context: GadgetResultInterceptorContext = {
         iteration: this.iteration,
@@ -902,7 +815,7 @@ export class StreamProcessor {
       result.result = this.hooks.interceptors.interceptGadgetResult(result.result, context);
     }
 
-    // Step 6: Controller - After execution
+    // Step 6: Controller - After execution (can further modify result)
     if (this.hooks.controllers?.afterGadgetExecution) {
       const context: AfterGadgetExecutionControllerContext = {
         iteration: this.iteration,
@@ -963,62 +876,55 @@ export class StreamProcessor {
 
     // Yield result event immediately
     yield { type: "gadget_result", result };
-
-    // Check if we should stop after error
-    if (result.error) {
-      const errorType = this.determineErrorType(call, result);
-      const shouldContinue = await this.checkCanRecoverFromError(
-        result.error,
-        result.gadgetName,
-        errorType,
-        result.parameters,
-      );
-
-      if (!shouldContinue) {
-        this.executionHalted = true;
-      }
-    }
   }
 
   /**
-   * Execute a gadget and collect all events into an array (non-blocking).
+   * Execute a gadget and push events to the completed results queue (non-blocking).
    * Used for fire-and-forget parallel execution of independent gadgets.
+   * Results are pushed to completedResultsQueue for real-time streaming to the caller.
    */
-  private async executeGadgetAndCollect(call: ParsedGadgetCall): Promise<StreamEvent[]> {
-    const events: StreamEvent[] = [];
+  private async executeGadgetAndCollect(call: ParsedGadgetCall): Promise<void> {
     for await (const evt of this.executeGadgetGenerator(call)) {
-      events.push(evt);
+      // Push each event to the queue as it's produced for real-time streaming
+      this.completedResultsQueue.push(evt);
     }
     // NOTE: Don't delete from inFlightExecutions here - it creates a race condition
-    // where fast-completing gadgets are removed before collectInFlightResults runs.
-    // The map is cleared in collectInFlightResults after all promises are awaited.
-    return events;
+    // where fast-completing gadgets are removed before waitForInFlightExecutions runs.
+    // The map is cleared in waitForInFlightExecutions after all promises are awaited.
   }
 
   /**
-   * Collect results from all fire-and-forget (in-flight) gadget executions.
-   * Called at stream end to await parallel independent gadgets.
-   * Clears the inFlightExecutions map after collection.
-   * @returns Array of all events from completed gadgets
+   * Drain all completed results from the queue.
+   * Used to yield results as they complete during stream processing.
+   * @returns Generator that yields all events currently in the queue
    */
-  private async collectInFlightResults(): Promise<StreamEvent[]> {
+  private *drainCompletedResults(): Generator<StreamEvent> {
+    while (this.completedResultsQueue.length > 0) {
+      yield this.completedResultsQueue.shift()!;
+    }
+  }
+
+  /**
+   * Wait for all in-flight gadget executions to complete.
+   * Called at stream end to ensure all parallel executions finish.
+   * Results are already in completedResultsQueue (pushed during execution).
+   * Clears the inFlightExecutions map after waiting.
+   */
+  private async waitForInFlightExecutions(): Promise<void> {
     if (this.inFlightExecutions.size === 0) {
-      return [];
+      return;
     }
 
-    this.logger.debug("Collecting in-flight gadget results", {
+    this.logger.debug("Waiting for in-flight gadget executions", {
       count: this.inFlightExecutions.size,
       invocationIds: Array.from(this.inFlightExecutions.keys()),
     });
 
     const promises = Array.from(this.inFlightExecutions.values());
-    const results = await Promise.all(promises);
+    await Promise.all(promises);
 
     // Clear the map after awaiting all promises
     this.inFlightExecutions.clear();
-
-    // Flatten all event arrays into a single array
-    return results.flat();
   }
 
   /**
@@ -1379,64 +1285,5 @@ export class StreamProcessor {
 
     // All errors are already logged in safeObserve, no need to handle rejected promises
     // This just ensures we wait for all observers to complete
-  }
-
-  /**
-   * Check if execution can recover from an error.
-   *
-   * Returns true if we should continue processing subsequent gadgets, false if we should stop.
-   *
-   * Logic:
-   * - If custom canRecoverFromGadgetError is provided, use it
-   * - Otherwise, use stopOnGadgetError config:
-   *   - stopOnGadgetError=true → return false (stop execution)
-   *   - stopOnGadgetError=false → return true (continue execution)
-   */
-  private async checkCanRecoverFromError(
-    error: string,
-    gadgetName: string,
-    errorType: "parse" | "validation" | "execution",
-    parameters?: Record<string, unknown>,
-  ): Promise<boolean> {
-    // Custom error recovery logic takes precedence
-    if (this.canRecoverFromGadgetError) {
-      return await this.canRecoverFromGadgetError({
-        error,
-        gadgetName,
-        errorType,
-        parameters,
-      });
-    }
-
-    // Default behavior based on stopOnGadgetError config
-    // If stopOnGadgetError=true, we want to STOP (return false to stop continuing)
-    // If stopOnGadgetError=false, we want to CONTINUE (return true to keep going)
-    const shouldContinue = !this.stopOnGadgetError;
-
-    this.logger.debug("Checking if should continue after error", {
-      error,
-      gadgetName,
-      errorType,
-      stopOnGadgetError: this.stopOnGadgetError,
-      shouldContinue,
-    });
-
-    return shouldContinue;
-  }
-
-  /**
-   * Determine the type of error from a gadget execution.
-   */
-  private determineErrorType(
-    call: ParsedGadgetCall,
-    result: GadgetExecutionResult,
-  ): "parse" | "validation" | "execution" {
-    if (call.parseError) {
-      return "parse";
-    }
-    if (result.error?.includes("Invalid parameters:")) {
-      return "validation";
-    }
-    return "execution";
   }
 }

@@ -131,25 +131,7 @@ describe("StreamProcessor", () => {
       expect(processor).toBeDefined();
     });
 
-    it("creates with stopOnGadgetError=true (default)", async () => {
-      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
-      registry.registerByClass(errorGadget);
-
-      const processor = new StreamProcessor({ iteration: 1, registry });
-      const gadgetCall = createGadgetCallString("ErrorGadget");
-      const stream = createTextStream(gadgetCall);
-
-      const result = await consumeStream(processor, stream);
-
-      // Should have gadget_call and gadget_result with error
-      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults).toHaveLength(1);
-      expect(
-        gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error,
-      ).toBeDefined();
-    });
-
-    it("creates with stopOnGadgetError=false", async () => {
+    it("handles gadget errors without stopping execution", async () => {
       const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
       const okGadget = createMockGadget({ name: "OkGadget", result: "OK" });
       registry.registerByClass(errorGadget);
@@ -158,7 +140,6 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
       });
 
       // Two gadget calls in sequence
@@ -169,32 +150,6 @@ describe("StreamProcessor", () => {
       const result = await consumeStream(processor, stream);
 
       // Both gadgets should have been processed
-      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults).toHaveLength(2);
-    });
-
-    it("creates with custom canRecoverFromGadgetError callback", async () => {
-      const errorGadget = createMockGadget({ name: "RecoverableError", error: "recoverable" });
-      const okGadget = createMockGadget({ name: "AfterError", result: "OK" });
-      registry.registerByClass(errorGadget);
-      registry.registerByClass(okGadget);
-
-      const shouldContinue = mock((ctx: { error: string }) => ctx.error.includes("recoverable"));
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        canRecoverFromGadgetError: shouldContinue,
-      });
-
-      const gadgetCalls =
-        createGadgetCallString("RecoverableError") + "\n" + createGadgetCallString("AfterError");
-      const stream = createTextStream(gadgetCalls);
-
-      const result = await consumeStream(processor, stream);
-
-      expect(shouldContinue).toHaveBeenCalled();
-      // Should continue because error is "recoverable"
       const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
       expect(gadgetResults).toHaveLength(2);
     });
@@ -919,30 +874,6 @@ describe("StreamProcessor", () => {
 
       expect(result.shouldBreakLoop).toBe(true);
     });
-
-    it("stops processing subsequent gadgets when shouldStopExecution", async () => {
-      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Stop!" });
-      const afterGadget = createMockGadget({ name: "AfterGadget", result: "should not run" });
-      registry.registerByClass(errorGadget);
-      registry.registerByClass(afterGadget);
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        stopOnGadgetError: true,
-      });
-
-      const gadgetCalls =
-        createGadgetCallString("ErrorGadget") + "\n" + createGadgetCallString("AfterGadget");
-      const stream = createTextStream(gadgetCalls);
-
-      const result = await consumeStream(processor, stream);
-
-      // Only one gadget result (ErrorGadget)
-      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults).toHaveLength(1);
-      expect(afterGadget.getCallCount()).toBe(0);
-    });
   });
 
   describe("Interceptor: interceptTextChunk", () => {
@@ -1054,7 +985,6 @@ describe("StreamProcessor", () => {
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
       });
 
       const gadgetCalls =
@@ -1227,7 +1157,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false, // Don't stop so we can test skip behavior
       });
 
       const gadgetCalls =
@@ -1266,7 +1195,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
       });
 
       // Chain: A (error) -> B -> C
@@ -1413,7 +1341,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
         hooks: {
           controllers: { onDependencySkipped },
         },
@@ -1451,7 +1378,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
         hooks: {
           controllers: {
             onDependencySkipped: async () => ({ action: "execute_anyway" }),
@@ -1495,7 +1421,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
         hooks: {
           controllers: {
             onDependencySkipped: async () => ({
@@ -1544,7 +1469,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
         hooks: {
           observers: { onGadgetSkipped },
         },
@@ -1572,7 +1496,7 @@ test value
   });
 
   describe("Parallel Execution", () => {
-    it("executes independent gadgets in parallel when stopOnGadgetError=false", async () => {
+    it("executes independent gadgets in parallel", async () => {
       const DELAY_MS = 50;
 
       // Create gadgets that take 50ms each
@@ -1599,7 +1523,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false, // Enable parallel execution
       });
 
       // 3 independent gadgets (no dependencies)
@@ -1623,49 +1546,6 @@ test value
       // If sequential: ~150ms (50ms × 3)
       // Allow some tolerance for test execution overhead
       expect(totalTime).toBeLessThan(100); // Should be much less than 150ms
-    });
-
-    it("executes sequentially when stopOnGadgetError=true", async () => {
-      const DELAY_MS = 30;
-
-      const gadget1 = createMockGadget({
-        name: "SlowGadget1",
-        result: "result1",
-        delayMs: DELAY_MS,
-      });
-      const gadget2 = createMockGadget({
-        name: "SlowGadget2",
-        result: "result2",
-        delayMs: DELAY_MS,
-      });
-
-      registry.registerByClass(gadget1);
-      registry.registerByClass(gadget2);
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        stopOnGadgetError: true, // Sequential execution
-      });
-
-      const gadgetCalls = [
-        createGadgetCallString("SlowGadget1", {}, { invocationId: "g1" }),
-        createGadgetCallString("SlowGadget2", {}, { invocationId: "g2" }),
-      ].join("\n");
-
-      const stream = createTextStream(gadgetCalls);
-
-      const startTime = Date.now();
-      const result = await consumeStream(processor, stream);
-      const totalTime = Date.now() - startTime;
-
-      // Both should have results
-      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults).toHaveLength(2);
-
-      // Sequential: ~60ms (30ms × 2)
-      // Should NOT be significantly less than 2 × DELAY_MS
-      expect(totalTime).toBeGreaterThanOrEqual(DELAY_MS * 2 - 10); // Allow 10ms tolerance
     });
 
     it("runs independent gadgets in parallel while dependent waits", async () => {
@@ -1695,7 +1575,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false,
       });
 
       // A (no deps), B depends on A, C (no deps)
@@ -1745,7 +1624,6 @@ test value
       const processor = new StreamProcessor({
         iteration: 1,
         registry,
-        stopOnGadgetError: false, // Don't stop on error, enable parallel
       });
 
       // Both independent, one will error

@@ -84,13 +84,6 @@ export class AgentBuilder {
     parameterMapping: (text: string) => Record<string, unknown>;
     resultMapping?: (text: string) => string;
   };
-  private stopOnGadgetError?: boolean;
-  private canRecoverFromGadgetError?: (context: {
-    error: string;
-    gadgetName: string;
-    errorType: "parse" | "validation" | "execution";
-    parameters?: Record<string, unknown>;
-  }) => boolean | Promise<boolean>;
   private defaultGadgetTimeoutMs?: number;
   private gadgetOutputLimit?: boolean;
   private gadgetOutputLimitPercent?: number;
@@ -404,71 +397,6 @@ export class AgentBuilder {
     resultMapping?: (text: string) => string;
   }): this {
     this.textWithGadgetsHandler = handler;
-    return this;
-  }
-
-  /**
-   * Set whether to stop gadget execution on first error.
-   *
-   * When true (default), if a gadget fails:
-   * - Subsequent gadgets in the same response are skipped
-   * - LLM stream is cancelled to save costs
-   * - Agent loop continues with error in context
-   *
-   * When false:
-   * - All gadgets in the response still execute
-   * - LLM stream continues to completion
-   *
-   * @param stop - Whether to stop on gadget error
-   * @returns This builder for chaining
-   *
-   * @example
-   * ```typescript
-   * .withStopOnGadgetError(false)
-   * ```
-   */
-  withStopOnGadgetError(stop: boolean): this {
-    this.stopOnGadgetError = stop;
-    return this;
-  }
-
-  /**
-   * Set custom error handling logic.
-   *
-   * Provides fine-grained control over whether to continue after different types of errors.
-   * Overrides `stopOnGadgetError` when provided.
-   *
-   * **Note:** This builder method configures the underlying `canRecoverFromGadgetError` option
-   * in `AgentOptions`. The method is named `withErrorHandler` for better developer experience,
-   * but maps to the `canRecoverFromGadgetError` property internally.
-   *
-   * @param handler - Function that decides whether to continue after an error.
-   *                  Return `true` to continue execution, `false` to stop.
-   * @returns This builder for chaining
-   *
-   * @example
-   * ```typescript
-   * .withErrorHandler((context) => {
-   *   // Stop on parse errors, continue on validation/execution errors
-   *   if (context.errorType === "parse") {
-   *     return false;
-   *   }
-   *   if (context.error.includes("CRITICAL")) {
-   *     return false;
-   *   }
-   *   return true;
-   * })
-   * ```
-   */
-  withErrorHandler(
-    handler: (context: {
-      error: string;
-      gadgetName: string;
-      errorType: "parse" | "validation" | "execution";
-      parameters?: Record<string, unknown>;
-    }) => boolean | Promise<boolean>,
-  ): this {
-    this.canRecoverFromGadgetError = handler;
     return this;
   }
 
@@ -1053,8 +981,6 @@ export class AgentBuilder {
       gadgetArgPrefix: this.gadgetArgPrefix,
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
-      stopOnGadgetError: this.stopOnGadgetError,
-      canRecoverFromGadgetError: this.canRecoverFromGadgetError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
@@ -1272,8 +1198,6 @@ export class AgentBuilder {
       gadgetArgPrefix: this.gadgetArgPrefix,
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
-      stopOnGadgetError: this.stopOnGadgetError,
-      canRecoverFromGadgetError: this.canRecoverFromGadgetError,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
