@@ -34,8 +34,11 @@ import {
 } from "./llm-logging.js";
 import { type CLIAgentOptions, addAgentOptions } from "./option-helpers.js";
 import {
-  formatGadgetStarted,
+  formatGadgetOpening,
   formatGadgetSummary,
+  formatLLMCallLine,
+  formatLLMCallOpening,
+  formatNestedGadgetResult,
   renderMarkdownWithSeparators,
   renderOverallSummary,
 } from "./ui/formatters.js";
@@ -442,6 +445,12 @@ export async function executeAgent(
           isStreaming = true; // Mark that we're actively streaming (for SIGINT handling)
           llmCallCounter++;
 
+          // Print opening line for LLM call (static, never refreshed)
+          if (stderrTTY && !options.quiet) {
+            const openingLine = formatLLMCallOpening(iterations + 1, context.options.model);
+            env.stderr.write(`${openingLine}\n`);
+          }
+
           // Count input tokens accurately using provider-specific methods
           // This ensures we never show ~ for input tokens
           const inputTokens = await countMessagesTokens(
@@ -557,7 +566,8 @@ export async function executeAgent(
               finishReason: context.finishReason,
             });
             if (summary) {
-              env.stderr.write(`${summary}\n`);
+              // Indent 2 spaces to align #N under the opening line (→ #N model)
+              env.stderr.write(`  ${summary}\n`);
             }
             // Add blank line after each LLM call to visually separate iterations
             env.stderr.write("\n");
@@ -710,15 +720,27 @@ export async function executeAgent(
   // The stream-based events (subagent_event) are still useful for simpler apps.
   if (!options.quiet) {
     builder.withSubagentEventCallback((subagentEvent) => {
+      // Calculate indent based on depth (nested under parent gadget which has 2-space indent)
+      const indent = "  ".repeat(subagentEvent.depth + 2);
+
       if (subagentEvent.type === "llm_call_start") {
         const info = subagentEvent.event as LLMCallInfo;
         const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
+        const iteration = info.iteration + 1; // Make 1-indexed like main agent
+
+        // Print opening line (static, never refreshed)
+        if (stderrTTY) {
+          progress.clearAndReset();
+          const openingLine = formatLLMCallOpening(iteration, info.model, llmCallCounter);
+          env.stderr.write(`${indent}${openingLine}\n`);
+        }
+
         progress.addNestedAgent(
           subagentId,
           subagentEvent.gadgetInvocationId,
           subagentEvent.depth,
           info.model,
-          info.iteration + 1, // Make 1-indexed like main agent
+          iteration,
           {
             inputTokens: info.usage?.inputTokens ?? info.inputTokens,
             cachedInputTokens: info.usage?.cachedInputTokens,
@@ -728,6 +750,32 @@ export async function executeAgent(
       } else if (subagentEvent.type === "llm_call_end") {
         const info = subagentEvent.event as LLMCallInfo;
         const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
+        const iteration = info.iteration + 1;
+
+        // Calculate elapsed time from nested agent start
+        const nestedAgent = progress.getNestedAgent(subagentId);
+        const startTime = nestedAgent?.startTime ?? Date.now();
+        const elapsedSeconds = (Date.now() - startTime) / 1000;
+
+        // Print closing line (static, never refreshed)
+        // Add 2 extra spaces so #N.M aligns with #N.M in opening line (after → )
+        if (stderrTTY) {
+          progress.clearAndReset();
+          const closingLine = formatLLMCallLine({
+            iteration,
+            parentCallNumber: llmCallCounter,
+            model: info.model,
+            inputTokens: info.usage?.inputTokens ?? info.inputTokens,
+            outputTokens: info.usage?.outputTokens ?? info.outputTokens,
+            cachedInputTokens: info.usage?.cachedInputTokens,
+            elapsedSeconds,
+            cost: info.cost,
+            finishReason: info.finishReason ?? "stop",
+            isStreaming: false,
+          });
+          env.stderr.write(`${indent}  ${closingLine}\n`);
+        }
+
         // Pass full metrics for first-class subagent display
         progress.updateNestedAgent(subagentId, {
           inputTokens: info.usage?.inputTokens ?? info.inputTokens,
@@ -737,7 +785,7 @@ export async function executeAgent(
           finishReason: info.finishReason,
           cost: info.cost,
         });
-        // Note: No removal - nested agent stays visible with frozen timer and ✓ indicator
+        // Note: No removal - nested agent marked completed, skipped in render
       } else if (subagentEvent.type === "gadget_call") {
         const gadgetEvent = subagentEvent.event as {
           call: {
@@ -746,6 +794,17 @@ export async function executeAgent(
             parameters?: Record<string, unknown>;
           };
         };
+
+        // Print opening line with → indicator (static, never refreshed)
+        if (stderrTTY) {
+          progress.clearAndReset();
+          const openingLine = formatGadgetOpening(
+            gadgetEvent.call.gadgetName,
+            gadgetEvent.call.parameters,
+          );
+          env.stderr.write(`${indent}${openingLine}\n`);
+        }
+
         progress.addNestedGadget(
           gadgetEvent.call.invocationId,
           subagentEvent.depth,
@@ -755,8 +814,35 @@ export async function executeAgent(
         );
       } else if (subagentEvent.type === "gadget_result") {
         const resultEvent = subagentEvent.event as {
-          result: { invocationId: string };
+          result: { invocationId: string; cost?: number };
         };
+
+        // Get gadget info for closing line
+        const nestedGadget = progress.getNestedGadget(resultEvent.result.invocationId);
+        if (nestedGadget && stderrTTY) {
+          const elapsedSeconds = (Date.now() - nestedGadget.startTime) / 1000;
+
+          // Get aggregated metrics if this gadget ran LLM calls
+          const subagentMetrics = progress.getAggregatedSubagentMetrics(
+            resultEvent.result.invocationId,
+          );
+
+          progress.clearAndReset();
+          // Use single-line result format (opening line was already printed)
+          const resultLine = formatNestedGadgetResult({
+            name: nestedGadget.name,
+            elapsedSeconds,
+            inputTokens: subagentMetrics.callCount > 0 ? subagentMetrics.inputTokens : undefined,
+            outputTokens: subagentMetrics.callCount > 0 ? subagentMetrics.outputTokens : undefined,
+            cost:
+              subagentMetrics.callCount > 0
+                ? subagentMetrics.cost
+                : resultEvent.result.cost,
+          });
+          // Same indent as opening line (align → and ✓)
+          env.stderr.write(`${indent}${resultLine}\n`);
+        }
+
         progress.completeNestedGadget(resultEvent.result.invocationId);
       }
     });
@@ -821,6 +907,17 @@ export async function executeAgent(
         flushTextBuffer();
 
         if (!options.quiet) {
+          // Print opening line for gadget (static, never refreshed)
+          if (stderrTTY) {
+            progress.clearAndReset();
+            const openingLine = formatGadgetOpening(
+              event.call.gadgetName,
+              event.call.parameters,
+            );
+            // Indent by 2 spaces to show it belongs to current LLM iteration
+            env.stderr.write(`  ${openingLine}\n`);
+          }
+
           // Add gadget to progress tracking - it will show in multi-line status
           progress.addGadget(
             event.call.invocationId,
@@ -876,10 +973,11 @@ export async function executeAgent(
           if (event.result.gadgetName === "TellUser") {
             env.stderr.write(`${summary}\n`);
           } else {
-            // Add 2-space indent to each line of multi-line output
+            // Add 4-space indent to show result "under" the opening line
+            // Opening line has 2-space indent, result has 4-space (2 more)
             const indentedSummary = summary
               .split("\n")
-              .map((line) => "  " + line)
+              .map((line) => "    " + line)
               .join("\n");
             env.stderr.write(`${indentedSummary}\n`);
           }

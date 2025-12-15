@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   formatGadgetLine,
-  formatGadgetStarted,
+  formatGadgetOpening,
   formatGadgetSummary,
   formatLLMCallLine,
+  formatLLMCallOpening,
+  formatNestedGadgetResult,
   formatTokens,
   renderMarkdown,
   truncateValue,
@@ -196,57 +198,57 @@ describe("formatGadgetSummary", () => {
     });
   });
 
-  describe("parameters formatting", () => {
-    it("shows parameters inline", () => {
+  describe("result line formatting", () => {
+    // Note: formatGadgetSummary now only returns the RESULT line
+    // The opening line with parameters is printed separately on gadget_call
+
+    it("shows gadget name and result preview", () => {
       const result = formatGadgetSummary({
         gadgetName: "ReadFile",
         executionTimeMs: 5,
         parameters: { path: "/test.txt" },
         result: "content",
       });
-      expect(result).toContain("path");
-      expect(result).toContain("/test.txt");
+      expect(result).toContain("ReadFile");
+      expect(result).toContain("content"); // preview
+      expect(result).toContain("5ms"); // timing
     });
 
-    it("shows multiple parameters", () => {
+    it("shows bytes for output without tokenCount", () => {
       const result = formatGadgetSummary({
         gadgetName: "ListDirectory",
         executionTimeMs: 4,
         parameters: { path: ".", recursive: true },
         result: "files",
       });
-      expect(result).toContain("path");
-      expect(result).toContain("recursive");
-      expect(result).toContain("true");
+      expect(result).toContain("ListDirectory");
+      expect(result).toContain("5 bytes");
     });
 
-    it("truncates long string values", () => {
-      // Use a very long path that will exceed terminal width
-      const longPath =
-        "/this/is/a/very/long/path/that/exceeds/the/available/terminal/width/and/needs/truncation/file.txt";
+    it("returns single line for result (no opening line)", () => {
       const result = formatGadgetSummary({
         gadgetName: "ReadFile",
         executionTimeMs: 1,
-        parameters: { path: longPath },
-        result: "",
+        parameters: { path: "/test.txt" },
+        result: "content",
       });
-      // With 2-line format, the path may still get truncated if too long
-      // Just verify the gadget name appears on both lines (line 1 and line 2 reference)
+      // Result is now single line (opening line printed separately)
       const lines = result.split("\n");
-      expect(lines.length).toBeGreaterThanOrEqual(2);
-      expect(lines[0]).toContain("ReadFile");
-      expect(lines[1]).toContain("ReadFile"); // name reference on line 2
+      expect(lines.length).toBe(1);
+      expect(result).toContain("ReadFile");
     });
 
-    it("shows empty parens when no parameters", () => {
+    it("shows timing without parameters on result line", () => {
       const result = formatGadgetSummary({
         gadgetName: "CoinFlip",
         executionTimeMs: 1,
         parameters: {},
         result: "heads",
       });
-      // Should not have parameter content between parens
-      expect(result).not.toContain("path");
+      // Result line: ✓ CoinFlip time: preview
+      expect(result).toContain("CoinFlip");
+      expect(result).toContain("1ms");
+      expect(result).not.toContain("path"); // no parameters in result line
     });
   });
 
@@ -271,18 +273,17 @@ describe("formatGadgetSummary", () => {
       expect(result).toContain("KB");
     });
 
-    it("shows 2-line format without preview for empty results", () => {
+    it("shows single-line format without preview for empty results", () => {
       const result = formatGadgetSummary({
         gadgetName: "Delete",
         executionTimeMs: 1,
         result: "",
       });
-      // 2-line format: line 1 = start info, line 2 = completion info (no preview when no output)
+      // Single-line format: result line only (opening line printed separately)
       const lines = result.split("\n");
-      expect(lines.length).toBe(2);
-      expect(lines[0]).toContain("Delete"); // line 1: gadget name
-      expect(lines[1]).toContain("Delete"); // line 2: name reference
-      expect(lines[1]).toContain("1ms"); // timing on line 2
+      expect(lines.length).toBe(1);
+      expect(result).toContain("Delete"); // gadget name
+      expect(result).toContain("1ms"); // timing
     });
   });
 
@@ -417,15 +418,16 @@ describe("formatGadgetSummary", () => {
       expect(result).toContain("🔄");
     });
 
-    it("shows query and result count for GoogleSearch", () => {
+    it("shows query icon and result count for GoogleSearch", () => {
       const result = formatGadgetSummary({
         gadgetName: "GoogleSearch",
         executionTimeMs: 500,
         parameters: { query: "typescript best practices", maxResults: 5 },
         result: "Found 5 results...",
       });
-      // Should show structured preview with query
-      expect(result).toContain("typescript best practices");
+      // Should show search icon in preview
+      expect(result).toContain("🔍");
+      expect(result).toContain("GoogleSearch");
     });
 
     it("extracts result count from GoogleSearch output", () => {
@@ -452,67 +454,94 @@ describe("width-aware parameter truncation", () => {
     });
   });
 
-  describe("formatGadgetSummary with wide terminal", () => {
-    it("shows more parameter content on wider terminals", () => {
-      // Set wide terminal
+  describe("formatGadgetSummary result line", () => {
+    // Note: formatGadgetSummary now only returns the result line
+    // Parameters are shown separately via formatGadgetOpening on gadget_call
+
+    it("shows token count and timing", () => {
       Object.defineProperty(process.stdout, "columns", {
         value: 200,
         writable: true,
       });
 
-      const longTask = "Extract the core features and key selling points from the README";
-      const longUrl = "https://github.com/vadimdemedes/ink";
-
       const result = formatGadgetSummary({
         gadgetName: "BrowseWeb",
         executionTimeMs: 22900,
-        parameters: { task: longTask, url: longUrl },
+        parameters: { task: "some task", url: "https://example.com" },
         result: "content",
         tokenCount: 883,
       });
 
-      // On a 200-column terminal, should show more content
-      expect(result).toContain("Extract");
-      expect(result).toContain("github.com");
-      // Full URL should be visible on wide terminal
-      expect(result).toContain("vadimdemedes/ink");
+      // Should show token count and timing on result line
+      expect(result).toContain("BrowseWeb");
+      expect(result).toContain("883"); // token count
+      expect(result).toContain("22.9s"); // timing
+      expect(result).toContain("content"); // preview
     });
-  });
 
-  describe("formatGadgetSummary with narrow terminal", () => {
-    it("truncates more aggressively on narrow terminals", () => {
-      // Set narrow terminal
+    it("shows preview on result line", () => {
       Object.defineProperty(process.stdout, "columns", {
         value: 80,
         writable: true,
       });
 
-      const longTask = "Extract the core features and key selling points from the README";
-      const longUrl = "https://github.com/vadimdemedes/ink";
-
       const result = formatGadgetSummary({
         gadgetName: "BrowseWeb",
         executionTimeMs: 22900,
-        parameters: { task: longTask, url: longUrl },
+        parameters: { task: "some task" },
         result: "content",
         tokenCount: 883,
       });
 
-      // Should have ellipsis for truncated content
-      expect(result).toContain("…");
-      // Should NOT show the full URL
-      expect(result).not.toContain("vadimdemedes/ink");
+      // Should show preview content
+      expect(result).toContain("BrowseWeb");
+      expect(result).toContain("content");
     });
   });
 
-  describe("formatGadgetStarted with terminal width", () => {
+  describe("formatGadgetOpening", () => {
+    it("formats gadget name with arrow indicator", () => {
+      const result = formatGadgetOpening("Navigate", { url: "https://example.com" });
+      expect(result).toContain("→");
+      expect(result).toContain("Navigate");
+      expect(result).toContain("url");
+      expect(result).toContain("example.com");
+    });
+
+    it("handles gadget with no parameters", () => {
+      const result = formatGadgetOpening("GetPageContent");
+      expect(result).toContain("→");
+      expect(result).toContain("GetPageContent");
+      // No parentheses when no params
+      expect(result).not.toContain("()");
+    });
+
+    it("handles gadget with empty parameters object", () => {
+      const result = formatGadgetOpening("ReadFile", {});
+      expect(result).toContain("→");
+      expect(result).toContain("ReadFile");
+    });
+
+    it("truncates long parameter values", () => {
+      Object.defineProperty(process.stdout, "columns", {
+        value: 80,
+        writable: true,
+      });
+      const result = formatGadgetOpening("WriteFile", {
+        path: "/very/long/path/that/should/be/truncated/because/it/is/too/long.txt",
+        content: "a".repeat(200),
+      });
+      expect(result).toContain("WriteFile");
+      expect(result).toContain("…"); // Unicode ellipsis
+    });
+
     it("expands parameters on wide terminals", () => {
       Object.defineProperty(process.stdout, "columns", {
         value: 150,
         writable: true,
       });
 
-      const result = formatGadgetStarted("BrowseWeb", {
+      const result = formatGadgetOpening("BrowseWeb", {
         task: "Extract the core features and key selling points",
         url: "https://github.com/vadimdemedes/ink",
       });
@@ -520,6 +549,120 @@ describe("width-aware parameter truncation", () => {
       expect(result).toContain("Extract");
       expect(result).toContain("github.com");
     });
+  });
+
+  describe("formatNestedGadgetResult", () => {
+    it("formats basic success result with time", () => {
+      const result = formatNestedGadgetResult({
+        name: "Navigate",
+        elapsedSeconds: 0.5,
+      });
+      expect(result).toContain("✓");
+      expect(result).toContain("Navigate");
+      expect(result).toContain("0.5s");
+    });
+
+    it("shows input tokens when provided", () => {
+      const result = formatNestedGadgetResult({
+        name: "BrowseWeb",
+        elapsedSeconds: 2.5,
+        inputTokens: 5200,
+      });
+      expect(result).toContain("✓");
+      expect(result).toContain("BrowseWeb");
+      expect(result).toContain("↑");
+      expect(result).toContain("5.2k");
+    });
+
+    it("shows output tokens when provided", () => {
+      const result = formatNestedGadgetResult({
+        name: "ReadFile",
+        elapsedSeconds: 0.1,
+        outputTokens: 1500,
+      });
+      expect(result).toContain("✓");
+      expect(result).toContain("↓");
+      expect(result).toContain("1.5k");
+    });
+
+    it("shows cost when provided", () => {
+      const result = formatNestedGadgetResult({
+        name: "APICall",
+        elapsedSeconds: 1.0,
+        cost: 0.005,
+      });
+      expect(result).toContain("✓");
+      expect(result).toContain("$0.005");
+    });
+
+    it("shows all metrics together", () => {
+      const result = formatNestedGadgetResult({
+        name: "BrowseWeb",
+        elapsedSeconds: 45.2,
+        inputTokens: 50000,
+        outputTokens: 300,
+        cost: 0.01,
+      });
+      expect(result).toContain("✓");
+      expect(result).toContain("BrowseWeb");
+      expect(result).toContain("↑");
+      expect(result).toContain("50.0k");
+      expect(result).toContain("↓");
+      expect(result).toContain("300");
+      expect(result).toContain("$0.01");
+      expect(result).toContain("45.2s");
+    });
+
+    it("shows error indicator for failed gadgets", () => {
+      const result = formatNestedGadgetResult({
+        name: "FailedGadget",
+        elapsedSeconds: 0.1,
+        error: "Connection failed",
+      });
+      expect(result).toContain("✗");
+      expect(result).toContain("FailedGadget");
+    });
+
+    it("does not show metrics when zero", () => {
+      const result = formatNestedGadgetResult({
+        name: "QuickGadget",
+        elapsedSeconds: 0.0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+      });
+      expect(result).toContain("✓");
+      expect(result).not.toContain("↑");
+      expect(result).not.toContain("↓");
+      expect(result).not.toContain("$");
+    });
+  });
+});
+
+describe("formatLLMCallOpening", () => {
+  it("formats basic opening line", () => {
+    const result = formatLLMCallOpening(1, "gemini:gemini-2.5-flash");
+    expect(result).toContain("→");
+    expect(result).toContain("#1");
+    expect(result).toContain("gemini:gemini-2.5-flash");
+  });
+
+  it("formats nested call with parent number", () => {
+    const result = formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1);
+    expect(result).toContain("→");
+    expect(result).toContain("#1.2");
+    expect(result).toContain("gemini:gemini-2.5-flash");
+  });
+
+  it("handles iteration 0", () => {
+    const result = formatLLMCallOpening(0, "openai:gpt-4o");
+    expect(result).toContain("#0");
+    expect(result).toContain("openai:gpt-4o");
+  });
+
+  it("formats deeply nested call", () => {
+    const result = formatLLMCallOpening(3, "anthropic:claude-sonnet", 5);
+    expect(result).toContain("#5.3");
   });
 });
 
@@ -803,7 +946,7 @@ describe("formatLLMCallLine", () => {
 
 describe("formatGadgetLine", () => {
   describe("in-progress state", () => {
-    it("shows running indicator for in-progress gadget", () => {
+    it("shows running indicator for in-progress gadget (no elapsed time)", () => {
       const result = formatGadgetLine({
         name: "BrowseWeb",
         elapsedSeconds: 5.2,
@@ -811,7 +954,8 @@ describe("formatGadgetLine", () => {
       });
       expect(result).toContain("⏵");
       expect(result).toContain("BrowseWeb");
-      expect(result).toContain("5.2s");
+      // In-progress gadgets don't show elapsed time (shown on result line)
+      expect(result).not.toContain("5.2s");
     });
 
     it("shows parameters for in-progress gadget", () => {
