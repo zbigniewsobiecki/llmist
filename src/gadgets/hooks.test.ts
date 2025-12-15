@@ -579,7 +579,6 @@ describe("Observers (Read-Only Hooks)", () => {
         iteration: 0,
         registry,
         logger: testLogger,
-        stopOnGadgetError: false,
         hooks: {
           observers: { onGadgetExecutionComplete },
         },
@@ -1714,7 +1713,6 @@ describe("Controllers (Async Lifecycle Control)", () => {
         iteration: 0,
         registry,
         logger: testLogger,
-        stopOnGadgetError: false,
         hooks: {
           controllers: { afterGadgetExecution },
         },
@@ -2056,7 +2054,6 @@ describe("Hook System Integration", () => {
         iteration: 0,
         registry,
         logger: testLogger,
-        stopOnGadgetError: false,
         hooks: {
           controllers: { afterGadgetExecution },
         },
