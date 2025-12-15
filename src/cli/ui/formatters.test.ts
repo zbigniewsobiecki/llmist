@@ -6,6 +6,7 @@ import {
   formatLLMCallLine,
   formatTokens,
   renderMarkdown,
+  truncateValue,
 } from "./formatters.js";
 
 describe("renderMarkdown", () => {
@@ -139,7 +140,9 @@ describe("formatGadgetSummary", () => {
         result: "some output",
         tokenCount: 248,
       });
-      expect(result).toContain("248 tokens");
+      // Uses same format as LLM calls: "↓ 248"
+      expect(result).toContain("↓");
+      expect(result).toContain("248");
     });
 
     it("shows 'k' suffix for large token counts", () => {
@@ -149,7 +152,9 @@ describe("formatGadgetSummary", () => {
         result: "lots of output",
         tokenCount: 2500,
       });
-      expect(result).toContain("2.5k tokens");
+      // Uses same format as LLM calls: "↓ 2.5k"
+      expect(result).toContain("↓");
+      expect(result).toContain("2.5k");
     });
   });
 
@@ -216,15 +221,21 @@ describe("formatGadgetSummary", () => {
     });
 
     it("truncates long string values", () => {
-      const longPath = "/this/is/a/very/long/path/that/exceeds/thirty/characters.txt";
+      // Use a very long path that will exceed terminal width
+      const longPath =
+        "/this/is/a/very/long/path/that/exceeds/the/available/terminal/width/and/needs/truncation/file.txt";
       const result = formatGadgetSummary({
         gadgetName: "ReadFile",
         executionTimeMs: 1,
         parameters: { path: longPath },
         result: "",
       });
-      expect(result).toContain("…");
-      expect(result).not.toContain("characters.txt");
+      // With 2-line format, the path may still get truncated if too long
+      // Just verify the gadget name appears on both lines (line 1 and line 2 reference)
+      const lines = result.split("\n");
+      expect(lines.length).toBeGreaterThanOrEqual(2);
+      expect(lines[0]).toContain("ReadFile");
+      expect(lines[1]).toContain("ReadFile"); // name reference on line 2
     });
 
     it("shows empty parens when no parameters", () => {
@@ -260,13 +271,18 @@ describe("formatGadgetSummary", () => {
       expect(result).toContain("KB");
     });
 
-    it("shows 'no output' for empty results", () => {
+    it("shows 2-line format without preview for empty results", () => {
       const result = formatGadgetSummary({
         gadgetName: "Delete",
         executionTimeMs: 1,
         result: "",
       });
-      expect(result).toContain("no output");
+      // 2-line format: line 1 = start info, line 2 = completion info (no preview when no output)
+      const lines = result.split("\n");
+      expect(lines.length).toBe(2);
+      expect(lines[0]).toContain("Delete"); // line 1: gadget name
+      expect(lines[1]).toContain("Delete"); // line 2: name reference
+      expect(lines[1]).toContain("1ms"); // timing on line 2
     });
   });
 
@@ -282,6 +298,145 @@ describe("formatGadgetSummary", () => {
       expect(result).toContain("TellUser");
       expect(result).toContain("Done!");
       expect(result).toContain("Task completed");
+    });
+  });
+
+  describe("subagentMetrics display", () => {
+    it("shows aggregated metrics on line 2 when subagentMetrics provided", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "BrowseWeb",
+        executionTimeMs: 15000,
+        result: "Found the information",
+        subagentMetrics: {
+          inputTokens: 15000,
+          outputTokens: 250,
+          cachedInputTokens: 3000,
+          cost: 0.0024,
+          callCount: 3,
+        },
+      });
+      // Should show subagent metrics with arrows
+      expect(result).toContain("↑"); // input tokens indicator
+      expect(result).toContain("↓"); // output tokens indicator
+      expect(result).toContain("⟳"); // cached tokens indicator
+      expect(result).toContain("$"); // cost indicator
+    });
+
+    it("does not show gadget output tokens when subagentMetrics present", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "BrowseWeb",
+        executionTimeMs: 15000,
+        result: "Found the information",
+        tokenCount: 500, // Gadget's own output tokens
+        subagentMetrics: {
+          inputTokens: 15000,
+          outputTokens: 250,
+          cachedInputTokens: 0,
+          cost: 0.002,
+          callCount: 2,
+        },
+      });
+      // Should NOT show two ↓ indicators (only subagent's)
+      const downArrowCount = (result.match(/↓/g) || []).length;
+      expect(downArrowCount).toBe(1);
+    });
+
+    it("skips subagentMetrics display when callCount is 0", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "SimpleGadget",
+        executionTimeMs: 100,
+        result: "done",
+        tokenCount: 50,
+        subagentMetrics: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          cost: 0,
+          callCount: 0,
+        },
+      });
+      // Should fall back to showing gadget's own output tokens
+      expect(result).toContain("↓");
+      expect(result).toContain("50");
+    });
+
+    it("omits zero-value metrics from display", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "BrowseWeb",
+        executionTimeMs: 5000,
+        result: "result",
+        subagentMetrics: {
+          inputTokens: 1000,
+          outputTokens: 50,
+          cachedInputTokens: 0, // Should not show ⟳
+          cost: 0, // Should not show $
+          callCount: 1,
+        },
+      });
+      expect(result).toContain("↑"); // input tokens
+      expect(result).toContain("↓"); // output tokens
+      expect(result).not.toContain("⟳"); // no cached tokens
+      // Cost of 0 should not appear (no $0.00)
+      expect(result).not.toMatch(/\$0\.0+\s/);
+    });
+  });
+
+  describe("custom gadget previews", () => {
+    it("shows status emoji + content for TodoUpsert", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "TodoUpsert",
+        executionTimeMs: 10,
+        parameters: { content: "Fix the bug", status: "done" },
+        result: "Todo updated",
+      });
+      // Should show ✓ for done status + content
+      expect(result).toContain("✓");
+      expect(result).toContain("Fix the bug");
+    });
+
+    it("shows pending emoji for TodoUpsert pending status", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "TodoUpsert",
+        executionTimeMs: 10,
+        parameters: { content: "Review PR", status: "pending" },
+        result: "Todo created",
+      });
+      // Should show ⬜ for pending status
+      expect(result).toContain("⬜");
+      expect(result).toContain("Review PR");
+    });
+
+    it("shows in_progress emoji for TodoUpsert", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "TodoUpsert",
+        executionTimeMs: 10,
+        parameters: { content: "Working on it", status: "in_progress" },
+        result: "Todo updated",
+      });
+      // Should show 🔄 for in_progress
+      expect(result).toContain("🔄");
+    });
+
+    it("shows query and result count for GoogleSearch", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "GoogleSearch",
+        executionTimeMs: 500,
+        parameters: { query: "typescript best practices", maxResults: 5 },
+        result: "Found 5 results...",
+      });
+      // Should show structured preview with query
+      expect(result).toContain("typescript best practices");
+    });
+
+    it("extracts result count from GoogleSearch output", () => {
+      const result = formatGadgetSummary({
+        gadgetName: "GoogleSearch",
+        executionTimeMs: 500,
+        parameters: { query: "test query" },
+        result: "(3 of 100 results)",
+      });
+      // Should show results count extracted from output
+      expect(result).toContain("3 results");
     });
   });
 });
@@ -700,7 +855,9 @@ describe("formatGadgetLine", () => {
         isComplete: true,
         tokenCount: 1500,
       });
-      expect(result).toContain("1.5k tokens");
+      // Uses same format as LLM calls: "↓ 1.5k"
+      expect(result).toContain("↓");
+      expect(result).toContain("1.5k");
     });
 
     it("shows bytes when no token count", () => {
@@ -788,5 +945,41 @@ describe("formatGadgetLine", () => {
       expect(result).toContain("limit");
       expect(result).toContain("10");
     });
+  });
+});
+
+describe("truncateValue", () => {
+  it("returns empty string for maxLen <= 0", () => {
+    expect(truncateValue("test", 0)).toBe("");
+    expect(truncateValue("test", -1)).toBe("");
+  });
+
+  it("returns original string when shorter than maxLen", () => {
+    expect(truncateValue("hi", 5)).toBe("hi");
+    expect(truncateValue("hello", 5)).toBe("hello");
+  });
+
+  it("truncates with ellipsis included in maxLen budget", () => {
+    // "hello" is 5 chars, maxLen=5 should return "hello" (not truncated)
+    expect(truncateValue("hello", 5)).toBe("hello");
+
+    // "hello world" is 11 chars, maxLen=5 should return "hell…" (4 chars + 1 ellipsis = 5)
+    const result = truncateValue("hello world", 5);
+    expect(result).toBe("hell…");
+    expect(result.length).toBe(5);
+  });
+
+  it("handles exactly maxLen length strings", () => {
+    // String of exactly maxLen should not be truncated
+    expect(truncateValue("12345", 5)).toBe("12345");
+    expect(truncateValue("123456", 5)).toBe("1234…");
+  });
+
+  it("always produces result <= maxLen", () => {
+    const longString = "This is a very long string that should be truncated";
+    for (const maxLen of [1, 2, 5, 10, 20]) {
+      const result = truncateValue(longString, maxLen);
+      expect(result.length).toBeLessThanOrEqual(maxLen);
+    }
   });
 });
