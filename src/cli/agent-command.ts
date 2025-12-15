@@ -566,8 +566,9 @@ export async function executeAgent(
               finishReason: context.finishReason,
             });
             if (summary) {
-              // Indent 2 spaces to align #N under the opening line (→ #N model)
-              env.stderr.write(`  ${summary}\n`);
+              // No indent - align with opening line which also has no indent
+              // Add ✓ prefix to match completed gadget and nested LLM call style
+              env.stderr.write(`${chalk.green("✓")} ${summary}\n`);
             }
             // Add blank line after each LLM call to visually separate iterations
             env.stderr.write("\n");
@@ -723,6 +724,10 @@ export async function executeAgent(
       // Calculate indent based on depth (nested under parent gadget which has 2-space indent)
       const indent = "  ".repeat(subagentEvent.depth + 2);
 
+      // Get parent gadget name for prefixing nested operations
+      const parentGadget = progress.getGadget(subagentEvent.gadgetInvocationId);
+      const parentPrefix = parentGadget ? `${chalk.dim(`${parentGadget.name}:`)} ` : "";
+
       if (subagentEvent.type === "llm_call_start") {
         const info = subagentEvent.event as LLMCallInfo;
         const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
@@ -732,7 +737,7 @@ export async function executeAgent(
         if (stderrTTY) {
           progress.clearAndReset();
           const openingLine = formatLLMCallOpening(iteration, info.model, llmCallCounter);
-          env.stderr.write(`${indent}${openingLine}\n`);
+          env.stderr.write(`${indent}${parentPrefix}${openingLine}\n`);
         }
 
         progress.addNestedAgent(
@@ -758,7 +763,7 @@ export async function executeAgent(
         const elapsedSeconds = (Date.now() - startTime) / 1000;
 
         // Print closing line (static, never refreshed)
-        // Add 2 extra spaces so #N.M aligns with #N.M in opening line (after → )
+        // Same indent as opening line - both have prefixes (→ and ✓)
         if (stderrTTY) {
           progress.clearAndReset();
           const closingLine = formatLLMCallLine({
@@ -773,7 +778,7 @@ export async function executeAgent(
             finishReason: info.finishReason ?? "stop",
             isStreaming: false,
           });
-          env.stderr.write(`${indent}  ${closingLine}\n`);
+          env.stderr.write(`${indent}${parentPrefix}${closingLine}\n`);
         }
 
         // Pass full metrics for first-class subagent display
@@ -802,7 +807,7 @@ export async function executeAgent(
             gadgetEvent.call.gadgetName,
             gadgetEvent.call.parameters,
           );
-          env.stderr.write(`${indent}${openingLine}\n`);
+          env.stderr.write(`${indent}${parentPrefix}${openingLine}\n`);
         }
 
         progress.addNestedGadget(
@@ -840,7 +845,7 @@ export async function executeAgent(
                 : resultEvent.result.cost,
           });
           // Same indent as opening line (align → and ✓)
-          env.stderr.write(`${indent}${resultLine}\n`);
+          env.stderr.write(`${indent}${parentPrefix}${resultLine}\n`);
         }
 
         progress.completeNestedGadget(resultEvent.result.invocationId);
@@ -973,11 +978,11 @@ export async function executeAgent(
           if (event.result.gadgetName === "TellUser") {
             env.stderr.write(`${summary}\n`);
           } else {
-            // Add 4-space indent to show result "under" the opening line
-            // Opening line has 2-space indent, result has 4-space (2 more)
+            // Add 2-space indent to align result with opening line
+            // Both opening (→ Gadget) and result (✓ Gadget) have 2-space indent
             const indentedSummary = summary
               .split("\n")
-              .map((line) => "    " + line)
+              .map((line) => "  " + line)
               .join("\n");
             env.stderr.write(`${indentedSummary}\n`);
           }

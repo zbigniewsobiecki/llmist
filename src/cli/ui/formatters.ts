@@ -376,20 +376,27 @@ export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
   }
 
   // Finish reason at the END when completed (not streaming)
+  // Always show the actual finish reason (STOP, end_turn, etc.)
   if (!info.isStreaming && info.finishReason !== undefined) {
-    // Show ✓ for normal completion, actual reason for others
-    if (!info.finishReason || info.finishReason === "stop" || info.finishReason === "end_turn") {
-      parts.push(chalk.green("✓"));
+    const reason = info.finishReason || "stop";
+    // Uppercase for visibility, green for normal completion, yellow for others
+    if (reason === "stop" || reason === "end_turn") {
+      parts.push(chalk.green(reason.toUpperCase()));
     } else {
-      parts.push(chalk.yellow(info.finishReason));
+      parts.push(chalk.yellow(reason.toUpperCase()));
     }
   }
 
   const line = parts.join(chalk.dim(" | "));
 
-  // Prepend spinner with space (no | separator) when streaming
+  // Prepend spinner when streaming, ✓ when completed
   if (info.isStreaming && info.spinner) {
     return `${chalk.cyan(info.spinner)} ${line}`;
+  }
+
+  // Completed calls get ✓ prefix like gadgets
+  if (!info.isStreaming) {
+    return `${chalk.green("✓")} ${line}`;
   }
 
   return line;
@@ -877,6 +884,16 @@ export interface GadgetDisplayInfo {
   error?: string;
   /** Whether the gadget breaks the loop (uses ⏹ icon) */
   breaksLoop?: boolean;
+
+  // Realtime subagent metrics (for gadgets that run LLM calls internally)
+  /** Aggregated input tokens from nested LLM calls */
+  subagentInputTokens?: number;
+  /** Aggregated output tokens from nested LLM calls */
+  subagentOutputTokens?: number;
+  /** Aggregated cached tokens from nested LLM calls */
+  subagentCachedTokens?: number;
+  /** Aggregated cost from nested LLM calls */
+  subagentCost?: number;
 }
 
 /**
@@ -941,9 +958,28 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
     return `${chalk.red("✗")} ${gadgetLabel}${paramsLabel} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
   }
 
-  // In-progress case - no elapsed time (time is shown on result line)
+  // In-progress case - show elapsed time and any accumulated subagent metrics
+  // NO parameters here - they were already shown on the opening line (→ GadgetName(params))
+  // This keeps the refreshing line compact and focused on changing metrics
   if (!info.isComplete) {
-    return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel}`;
+    const parts: string[] = [];
+
+    // Add subagent metrics if present (for gadgets that run LLM calls internally)
+    if (info.subagentInputTokens && info.subagentInputTokens > 0) {
+      parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(info.subagentInputTokens)}`));
+    }
+    if (info.subagentOutputTokens && info.subagentOutputTokens > 0) {
+      parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(info.subagentOutputTokens)}`));
+    }
+    if (info.subagentCost && info.subagentCost > 0) {
+      parts.push(chalk.cyan(`$${formatCost(info.subagentCost)}`));
+    }
+
+    // Always show elapsed time
+    parts.push(chalk.dim(`${info.elapsedSeconds.toFixed(1)}s`));
+
+    const metricsStr = parts.length > 0 ? ` ${parts.join(chalk.dim(" | "))}` : "";
+    return `${chalk.blue("⏵")} ${gadgetLabel}${metricsStr}`;
   }
 
   // Completed case - 2-line format for consistency with formatGadgetSummary

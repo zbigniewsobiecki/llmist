@@ -890,8 +890,10 @@ describe("formatLLMCallLine", () => {
         elapsedSeconds: 1.0,
         finishReason: "max_tokens",
       });
-      expect(result).toContain("max_tokens");
-      expect(result).not.toContain("✓");
+      // Non-standard finish reason shown uppercase at end
+      expect(result).toContain("MAX_TOKENS");
+      // All completed calls get ✓ prefix
+      expect(result).toContain("✓");
     });
   });
 
@@ -946,7 +948,7 @@ describe("formatLLMCallLine", () => {
 
 describe("formatGadgetLine", () => {
   describe("in-progress state", () => {
-    it("shows running indicator for in-progress gadget (no elapsed time)", () => {
+    it("shows running indicator and elapsed time for in-progress gadget", () => {
       const result = formatGadgetLine({
         name: "BrowseWeb",
         elapsedSeconds: 5.2,
@@ -954,19 +956,56 @@ describe("formatGadgetLine", () => {
       });
       expect(result).toContain("⏵");
       expect(result).toContain("BrowseWeb");
-      // In-progress gadgets don't show elapsed time (shown on result line)
-      expect(result).not.toContain("5.2s");
+      // In-progress gadgets now show elapsed time
+      expect(result).toContain("5.2s");
     });
 
-    it("shows parameters for in-progress gadget", () => {
+    it("shows subagent metrics for in-progress gadget that runs LLM calls", () => {
+      const result = formatGadgetLine({
+        name: "BrowseWeb",
+        elapsedSeconds: 12.5,
+        isComplete: false,
+        subagentInputTokens: 5200,
+        subagentOutputTokens: 800,
+        subagentCost: 0.004,
+      });
+      expect(result).toContain("⏵");
+      expect(result).toContain("BrowseWeb");
+      expect(result).toContain("↑"); // Input token indicator
+      expect(result).toContain("5.2k"); // Input tokens
+      expect(result).toContain("↓"); // Output token indicator
+      expect(result).toContain("800"); // Output tokens
+      expect(result).toContain("$0.004"); // Cost
+      expect(result).toContain("12.5s"); // Time
+    });
+
+    it("shows only elapsed time when no subagent metrics present", () => {
+      const result = formatGadgetLine({
+        name: "Navigate",
+        elapsedSeconds: 0.5,
+        isComplete: false,
+        // No subagent metrics - simple gadget
+      });
+      expect(result).toContain("⏵");
+      expect(result).toContain("Navigate");
+      expect(result).toContain("0.5s");
+      expect(result).not.toContain("↑"); // No input tokens
+      expect(result).not.toContain("↓"); // No output tokens
+      expect(result).not.toContain("$"); // No cost
+    });
+
+    it("does NOT show parameters for in-progress gadget (params shown on opening line)", () => {
       const result = formatGadgetLine({
         name: "ReadFile",
         parameters: { path: "/test.txt" },
         elapsedSeconds: 1.0,
         isComplete: false,
       });
-      expect(result).toContain("path");
-      expect(result).toContain("/test.txt");
+      // In-progress line should be compact - no parameters
+      expect(result).toContain("ReadFile");
+      expect(result).toContain("1.0s");
+      expect(result).not.toContain("path");
+      expect(result).not.toContain("/test.txt");
     });
 
     it("handles empty parameters", () => {
@@ -1062,7 +1101,8 @@ describe("formatGadgetLine", () => {
     });
   });
 
-  describe("parameter formatting", () => {
+  describe("parameter formatting (completed state only)", () => {
+    // Parameters are only shown in completed state - in-progress is compact
     it("truncates long parameter values", () => {
       const result = formatGadgetLine({
         name: "BrowseWeb",
@@ -1070,7 +1110,7 @@ describe("formatGadgetLine", () => {
           url: "https://very-long-domain-name.example.com/path/to/resource",
         },
         elapsedSeconds: 1.0,
-        isComplete: false,
+        isComplete: true,
       });
       expect(result).toContain("url");
       // Should be truncated
@@ -1082,7 +1122,7 @@ describe("formatGadgetLine", () => {
         name: "Search",
         parameters: { query: "test", limit: 10 },
         elapsedSeconds: 1.0,
-        isComplete: false,
+        isComplete: true,
       });
       expect(result).toContain("query");
       expect(result).toContain("test");

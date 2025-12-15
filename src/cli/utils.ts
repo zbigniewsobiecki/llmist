@@ -397,6 +397,13 @@ export class StreamProgress {
   }
 
   /**
+   * Get a gadget by ID (for accessing name, params, etc.).
+   */
+  getGadget(invocationId: string) {
+    return this.inFlightGadgets.get(invocationId);
+  }
+
+  /**
    * Mark a gadget as completed (keeps it visible with ✓ indicator).
    * Records completion time to freeze the elapsed timer.
    * The gadget and its nested operations remain visible until clearCompletedGadgets() is called.
@@ -788,6 +795,7 @@ export class StreamProgress {
       outputTokens?: number;
       cost?: number;
       startTime: number;
+      parentGadgetName: string; // For prefixing nested operation lines
     }> = [];
 
     // In-flight gadgets - ONLY show gadgets that are still running
@@ -799,6 +807,10 @@ export class StreamProgress {
           continue;
         }
         const elapsedSeconds = (Date.now() - gadget.startTime) / 1000;
+
+        // Get aggregated subagent metrics for realtime display
+        const subagentMetrics = this.getAggregatedSubagentMetrics(gadgetId);
+
         // Use shared formatGadgetLine for consistent formatting with parameters
         // Pass maxWidth adjusted for 2-space indent
         const termWidth = process.stdout.columns ?? 80;
@@ -809,6 +821,11 @@ export class StreamProgress {
             parameters: gadget.params,
             elapsedSeconds,
             isComplete: false, // We only show running gadgets here
+            // Pass realtime subagent metrics
+            subagentInputTokens: subagentMetrics.inputTokens,
+            subagentOutputTokens: subagentMetrics.outputTokens,
+            subagentCachedTokens: subagentMetrics.cachedInputTokens,
+            subagentCost: subagentMetrics.cost,
           },
           termWidth - gadgetIndent.length,
         );
@@ -837,6 +854,7 @@ export class StreamProgress {
           completed?: boolean;
           completedTime?: number;
           // Gadget-specific fields
+          id?: string; // For metrics aggregation
           name?: string;
           parameters?: Record<string, unknown>;
         }> = [];
@@ -872,16 +890,18 @@ export class StreamProgress {
                 outputTokens: nested.outputTokens,
                 cost: nested.cost,
                 startTime: nested.startTime,
+                parentGadgetName: gadget.name, // Track parent for prefixing
               });
             }
           }
         }
 
         // Collect nested gadgets for this parent
-        for (const [_nestedId, nestedGadget] of this.nestedGadgets) {
+        for (const [nestedId, nestedGadget] of this.nestedGadgets) {
           if (nestedGadget.parentInvocationId === gadgetId) {
             nestedOps.push({
               type: "gadget",
+              id: nestedId, // Preserve ID for metrics aggregation
               startTime: nestedGadget.startTime,
               depth: nestedGadget.depth,
               name: nestedGadget.name,
@@ -914,22 +934,32 @@ export class StreamProgress {
           const indent = "  ".repeat(op.depth + 2);
           const elapsedSeconds = (Date.now() - op.startTime) / 1000;
 
+          // Get aggregated subagent metrics (for nested gadgets that run LLM calls)
+          const nestedMetrics = op.id ? this.getAggregatedSubagentMetrics(op.id) : { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cost: 0, callCount: 0 };
+
           // Use shared formatGadgetLine for consistent formatting
           // Pass maxWidth adjusted for indent to prevent line overflow
           const termWidth = process.stdout.columns ?? 80;
+          // Parent gadget prefix for nested operations
+          const parentPrefix = `${chalk.dim(`${gadget.name}:`)} `;
           const line = formatGadgetLine(
             {
               name: op.name ?? "",
               parameters: op.parameters,
               elapsedSeconds,
               isComplete: false, // Only in-progress gadgets reach here
+              // Pass realtime subagent metrics
+              subagentInputTokens: nestedMetrics.inputTokens,
+              subagentOutputTokens: nestedMetrics.outputTokens,
+              subagentCachedTokens: nestedMetrics.cachedInputTokens,
+              subagentCost: nestedMetrics.cost,
             },
-            termWidth - indent.length,
+            termWidth - indent.length - parentPrefix.length,
           );
-          // Add indent to EACH line of multi-line output
+          // Add indent and parent prefix to EACH line of multi-line output
           const indentedLine = line
             .split("\n")
-            .map((l) => indent + l)
+            .map((l) => indent + parentPrefix + l)
             .join("\n");
           lines.push(indentedLine);
         }
@@ -944,6 +974,8 @@ export class StreamProgress {
     for (const stream of activeNestedStreams) {
       // Use depth-based indent to align with completed nested agents in hierarchy
       const indent = "  ".repeat(stream.depth + 2);
+      // Parent gadget prefix for nested operations
+      const parentPrefix = `${chalk.dim(`${stream.parentGadgetName}:`)} `;
       const elapsedSeconds = (Date.now() - stream.startTime) / 1000;
       const line = formatLLMCallLine({
         iteration: stream.iteration,
@@ -957,7 +989,7 @@ export class StreamProgress {
         isStreaming: true,
         spinner,
       });
-      lines.push(`${indent}${line}`);
+      lines.push(`${indent}${parentPrefix}${line}`);
     }
 
     // Main progress line LAST (it's the outer/root context)
