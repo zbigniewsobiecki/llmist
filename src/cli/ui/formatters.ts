@@ -650,8 +650,9 @@ function getRawValue(value: unknown): string {
 /**
  * Truncates a string to maxLen characters with ellipsis if needed.
  * The ellipsis is included in the maxLen budget (result is always <= maxLen chars).
+ * @internal Exported for testing
  */
-function truncateValue(str: string, maxLen: number): string {
+export function truncateValue(str: string, maxLen: number): string {
   if (maxLen <= 0) return "";
   if (str.length <= maxLen) return str;
   // Account for ellipsis taking 1 char of the budget
