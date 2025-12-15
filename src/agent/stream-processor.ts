@@ -356,21 +356,7 @@ export class StreamProcessor {
   }
 
   /**
-   * Process a single parsed event (text or gadget call).
-   * @deprecated Use processEventGenerator for real-time streaming
-   */
-  private async processEvent(event: StreamEvent): Promise<StreamEvent[]> {
-    if (event.type === "text") {
-      return this.processTextEvent(event);
-    } else if (event.type === "gadget_call") {
-      return this.processGadgetCall(event.call);
-    }
-    return [event];
-  }
-
-  /**
    * Process a single parsed event, yielding events in real-time.
-   * Generator version of processEvent for streaming support.
    */
   private async *processEventGenerator(event: StreamEvent): AsyncGenerator<StreamEvent> {
     if (event.type === "text") {
@@ -642,9 +628,12 @@ export class StreamProcessor {
       result = await this.executor.execute(call);
     }
 
+    // Capture the raw result before any hook transformations.
+    // Used in onGadgetExecutionComplete to provide both pre-hook (originalResult)
+    // and post-hook (finalResult) values for observers that need to audit changes.
     const originalResult = result.result;
 
-    // Step 5: Interceptor - Transform result
+    // Step 5: Interceptor - Transform result (modifies result.result)
     if (result.result && this.hooks.interceptors?.interceptGadgetResult) {
       const context: GadgetResultInterceptorContext = {
         iteration: this.iteration,
@@ -657,7 +646,7 @@ export class StreamProcessor {
       result.result = this.hooks.interceptors.interceptGadgetResult(result.result, context);
     }
 
-    // Step 6: Controller - After execution
+    // Step 6: Controller - After execution (can further modify result)
     if (this.hooks.controllers?.afterGadgetExecution) {
       const context: AfterGadgetExecutionControllerContext = {
         iteration: this.iteration,
@@ -808,9 +797,12 @@ export class StreamProcessor {
       result = await this.executor.execute(call);
     }
 
+    // Capture the raw result before any hook transformations.
+    // Used in onGadgetExecutionComplete to provide both pre-hook (originalResult)
+    // and post-hook (finalResult) values for observers that need to audit changes.
     const originalResult = result.result;
 
-    // Step 5: Interceptor - Transform result
+    // Step 5: Interceptor - Transform result (modifies result.result)
     if (result.result && this.hooks.interceptors?.interceptGadgetResult) {
       const context: GadgetResultInterceptorContext = {
         iteration: this.iteration,
@@ -823,7 +815,7 @@ export class StreamProcessor {
       result.result = this.hooks.interceptors.interceptGadgetResult(result.result, context);
     }
 
-    // Step 6: Controller - After execution
+    // Step 6: Controller - After execution (can further modify result)
     if (this.hooks.controllers?.afterGadgetExecution) {
       const context: AfterGadgetExecutionControllerContext = {
         iteration: this.iteration,
