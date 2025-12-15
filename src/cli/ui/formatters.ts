@@ -541,6 +541,25 @@ export function renderOverallSummary(metadata: OverallSummaryMetadata): string |
 }
 
 /**
+ * Aggregated metrics from subagent LLM calls.
+ *
+ * These metrics are collected from all nested LLM calls that occur during
+ * gadget execution (e.g., BrowseWeb spawns multiple LLM calls internally).
+ */
+export interface SubagentMetrics {
+  /** Total input tokens across all subagent calls */
+  inputTokens: number;
+  /** Total output tokens across all subagent calls */
+  outputTokens: number;
+  /** Total cached input tokens across all subagent calls */
+  cachedInputTokens: number;
+  /** Total cost in USD across all subagent calls */
+  cost: number;
+  /** Number of LLM calls made by the subagent */
+  callCount: number;
+}
+
+/**
  * Gadget execution result for formatting.
  *
  * Contains metadata about a single gadget invocation during agent execution.
@@ -569,6 +588,9 @@ export interface GadgetResult {
 
   /** Media outputs (images, audio, etc.) produced by the gadget */
   media?: StoredMedia[];
+
+  /** Aggregated metrics from subagent LLM calls (if gadget spawned a subagent) */
+  subagentMetrics?: SubagentMetrics;
 }
 
 /**
@@ -627,11 +649,13 @@ function getRawValue(value: unknown): string {
 
 /**
  * Truncates a string to maxLen characters with ellipsis if needed.
+ * The ellipsis is included in the maxLen budget (result is always <= maxLen chars).
  */
 function truncateValue(str: string, maxLen: number): string {
   if (maxLen <= 0) return "";
   if (str.length <= maxLen) return str;
-  return `${str.slice(0, maxLen)}…`;
+  // Account for ellipsis taking 1 char of the budget
+  return `${str.slice(0, maxLen - 1)}…`;
 }
 
 /**
@@ -685,6 +709,15 @@ function formatParametersInline(
           const proportion = v.length / totalRawLength;
           return Math.max(minPerValue, Math.floor(proportion * availableForValues));
         });
+
+        // CRITICAL: Ensure total limits don't exceed budget
+        // The minPerValue floor can cause sum of limits to exceed availableForValues
+        const totalLimits = limits.reduce((sum, l) => sum + l, 0);
+        if (totalLimits > availableForValues) {
+          // Scale down proportionally to fit within budget
+          const scale = availableForValues / totalLimits;
+          limits = limits.map((l) => Math.max(1, Math.floor(l * scale)));
+        }
       }
     }
   } else {
@@ -727,7 +760,7 @@ export function formatGadgetStarted(
   const fixedLength = 2 + gadgetName.length + 2 + 4;
 
   // Available width for parameters
-  const availableForParams = Math.max(40, terminalWidth - fixedLength - 2);
+  const availableForParams = Math.max(40, terminalWidth - fixedLength - 3); // -3 safety margin
 
   const paramsStr = formatParametersInline(parameters, availableForParams);
   const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
@@ -806,8 +839,9 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
   const timeLabel = chalk.dim(timeStr);
 
   // Calculate fixed parts length for parameter truncation
-  const fixedLength = 2 + info.name.length + 2 + 1 + timeStr.length;
-  const availableForParams = Math.max(40, terminalWidth - fixedLength - 2);
+  // Icon may be 2 columns wide in some terminals (Unicode width varies)
+  const fixedLength = 3 + info.name.length + 2 + 1 + timeStr.length;
+  const availableForParams = Math.max(40, terminalWidth - fixedLength - 3); // -3 safety margin
 
   // Format parameters inline with truncation
   const paramsStr = formatParametersInline(info.parameters, availableForParams);
@@ -824,20 +858,30 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
     return `${chalk.blue("⏵")} ${gadgetLabel}${paramsLabel} ${timeLabel}`;
   }
 
-  // Completed case - format output metrics
-  let outputStr: string;
+  // Completed case - 2-line format for consistency with formatGadgetSummary
+  // Line 1: icon + name + params (START info)
+  // Line 2: name reference + output + time (END info)
+  let outputLabel: string;
   if (info.tokenCount !== undefined && info.tokenCount > 0) {
-    outputStr = `${formatTokens(info.tokenCount)} tokens`;
+    // Use same format as LLM calls: "↓ 1.2k" with dim arrow and green number
+    outputLabel = chalk.dim("↓") + chalk.green(` ${formatTokens(info.tokenCount)} `);
   } else if (info.outputBytes !== undefined && info.outputBytes > 0) {
-    outputStr = formatBytes(info.outputBytes);
+    outputLabel = chalk.green(formatBytes(info.outputBytes)) + " ";
   } else {
-    outputStr = ""; // No output to show
+    outputLabel = ""; // No output to show
   }
 
   const icon = info.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
-  const outputLabel = outputStr ? ` ${chalk.dim("→")} ${chalk.green(outputStr)}` : "";
+  const nameRef = chalk.magenta(info.name); // Not bold - line 2 is for reference, not emphasis
 
-  return `${icon} ${gadgetLabel}${paramsLabel}${outputLabel} ${timeLabel}`;
+  const line1 = `${icon} ${gadgetLabel}${paramsLabel}`;
+
+  // Line 2: ensure it fits within terminal width
+  // Fixed parts: "  → " + name + " " + output + " " + time
+  const line2Prefix = `  ${chalk.dim("→")} ${nameRef} ${outputLabel}`;
+  const line2 = `${line2Prefix}${timeLabel}`;
+
+  return `${line1}\n${line2}`;
 }
 
 /**
@@ -854,6 +898,21 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Truncates output text for preview display.
+ * Normalizes whitespace (collapses newlines/tabs to single spaces) and truncates with ellipsis.
+ *
+ * @param output - The output text to truncate
+ * @param maxWidth - Maximum character width for the preview
+ * @returns Truncated string with ellipsis if needed
+ */
+function truncateOutputPreview(output: string, maxWidth: number): string {
+  // Normalize whitespace (collapse newlines/tabs to single spaces)
+  const normalized = output.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxWidth) return normalized;
+  return normalized.slice(0, maxWidth - 1) + "…";
 }
 
 /**
@@ -899,8 +958,9 @@ export function formatGadgetSummary(result: GadgetResult): string {
   // Get terminal width (default to 80 if not available)
   const terminalWidth = process.stdout.columns || 80;
 
-  // Format gadget name and execution time
+  // Format gadget name
   const gadgetLabel = chalk.magenta.bold(result.gadgetName);
+
   // Show seconds for values >= 1000ms, otherwise milliseconds
   const timeStr =
     result.executionTimeMs >= 1000
@@ -908,55 +968,146 @@ export function formatGadgetSummary(result: GadgetResult): string {
       : `${Math.round(result.executionTimeMs)}ms`;
   const timeLabel = chalk.dim(timeStr);
 
-  // Pre-calculate output label to know its length
-  let outputStr: string;
-  if (result.tokenCount !== undefined && result.tokenCount > 0) {
-    outputStr = `${formatTokens(result.tokenCount)} tokens`;
-  } else if (result.result) {
-    const outputBytes = Buffer.byteLength(result.result, "utf-8");
-    outputStr = outputBytes > 0 ? formatBytes(outputBytes) : "no output";
-  } else {
-    outputStr = "no output";
-  }
-
-  // Calculate fixed parts length (without params):
-  // "✓ " + gadgetName + "()" + " → " + output + " " + time
-  // Icon=2, space after name=0 (params attached), parens=2, arrow=3, spaces=2
-  const fixedLength = 2 + result.gadgetName.length + 2 + 3 + outputStr.length + 1 + timeStr.length;
-
-  // Available width for parameters (minimum 40 to avoid over-truncation)
-  const availableForParams = Math.max(40, terminalWidth - fixedLength - 2);
+  // Calculate fixed parts for line 1: "✓ " + gadgetName + "()"
+  // Icon may be 2 columns wide in some terminals (Unicode width varies)
+  const fixedLength = 3 + result.gadgetName.length + 2;
+  const availableForParams = Math.max(40, terminalWidth - fixedLength - 3); // -3 safety margin
 
   // Format parameters inline with available width
   const paramsStr = formatParametersInline(result.parameters, availableForParams);
   const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
 
-  // Error case - show error message in red (one-liner)
-  if (result.error) {
-    const errorMsg = result.error.length > 50 ? `${result.error.slice(0, 50)}…` : result.error;
-    return `${chalk.red("✗")} ${gadgetLabel}${paramsLabel} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
+  // LINE 1: Start info (icon + name + params)
+  const icon = result.breaksLoop ? chalk.yellow("⏹") : result.error ? chalk.red("✗") : chalk.green("✓");
+  const line1 = `${icon} ${gadgetLabel}${paramsLabel}`;
+
+  // LINE 2: End info (name reference + output metrics + time + preview)
+  const nameRef = chalk.magenta(result.gadgetName); // Not bold - line 2 is for reference, not emphasis
+
+  // Calculate output metrics (tokens or bytes)
+  // Use same format as LLM calls: "↓ 1.2k" with dim arrow and green number
+  // Skip if we have subagent metrics - those provide comprehensive token info
+  const hasSubagentMetrics = result.subagentMetrics && result.subagentMetrics.callCount > 0;
+  let outputLabel: string;
+  let outputStrRaw: string; // For preview width calculation (without ANSI codes)
+  if (!hasSubagentMetrics && result.tokenCount !== undefined && result.tokenCount > 0) {
+    const tokenStr = formatTokens(result.tokenCount);
+    outputLabel = chalk.dim("↓") + chalk.green(` ${tokenStr} `);
+    outputStrRaw = `↓ ${tokenStr} `;
+  } else if (!hasSubagentMetrics && result.result) {
+    const outputBytes = Buffer.byteLength(result.result, "utf-8");
+    if (outputBytes > 0) {
+      const bytesStr = formatBytes(outputBytes);
+      outputLabel = chalk.green(bytesStr) + " ";
+      outputStrRaw = bytesStr + " ";
+    } else {
+      outputLabel = "";
+      outputStrRaw = "";
+    }
+  } else {
+    outputLabel = "";
+    outputStrRaw = "";
   }
 
-  // Format output label with colors (outputStr was calculated above for length)
-  const outputLabel =
-    outputStr === "no output" ? chalk.dim(outputStr) : chalk.green(outputStr);
+  // Error case: show error message on line 2
+  if (result.error) {
+    const errorMsg = result.error.length > 50 ? `${result.error.slice(0, 50)}…` : result.error;
+    const line2 = `  ${chalk.dim("→")} ${nameRef} ${chalk.red("error:")} ${errorMsg} ${timeLabel}`;
+    return `${line1}\n${line2}`;
+  }
 
-  // Build the summary line
-  const icon = result.breaksLoop ? chalk.yellow("⏹") : chalk.green("✓");
-  let summaryLine = `${icon} ${gadgetLabel}${paramsLabel} ${chalk.dim("→")} ${outputLabel} ${timeLabel}`;
+  // Build line 2 with output preview
+  // Calculate available width for preview (~60% of terminal)
+  const previewWidth = Math.floor(terminalWidth * 0.6);
+  // Account for prefix: "  → " + name + " " + output + " " + time + ": "
+  const prefixLength = 4 + result.gadgetName.length + 1 + outputStrRaw.length + 1 + timeStr.length + 2;
+  const availablePreview = Math.max(20, previewWidth - prefixLength);
+
+  // Custom previews for specific gadgets
+  let customPreview: string | undefined;
+
+  // TodoUpsert: show status emoji + content instead of generic output
+  if (result.gadgetName === "TodoUpsert" && result.parameters?.content) {
+    const statusEmoji =
+      result.parameters.status === "done"
+        ? "✅"
+        : result.parameters.status === "in_progress"
+          ? "🔄"
+          : "⬜";
+    const content = String(result.parameters.content);
+    customPreview = `${statusEmoji} ${truncateOutputPreview(content, availablePreview - 3)}`; // -3 for emoji+space
+  }
+
+  // GoogleSearch: show query and result count
+  if (result.gadgetName === "GoogleSearch" && result.parameters?.query) {
+    const query = String(result.parameters.query);
+    // Parse result count from output - try multiple patterns
+    const countMatch =
+      result.result?.match(/\((\d+)\s+of\s+[\d,]+\s+results?\)/i) || // "(10 of 36400000 results)"
+      result.result?.match(/(\d+)\s+results?\s+found/i) || // "10 results found"
+      result.result?.match(/found\s+(\d+)\s+results?/i); // "found 10 results"
+    // Fall back to maxResults parameter if no count found in output
+    const count = countMatch?.[1] ?? (result.parameters.maxResults ? String(result.parameters.maxResults) : null);
+    const countStr = count ? ` → ${count} results` : "";
+    const queryPreview = truncateOutputPreview(query, availablePreview - 5 - countStr.length); // 🔍 + space + quotes
+    customPreview = `🔍 "${queryPreview}"${countStr}`;
+  }
+
+  // Build subagent metrics string if this gadget spawned a subagent
+  // Format: "↑ input | ⟳ cached | ↓ output | $cost"
+  let subagentMetricsStr = "";
+  if (result.subagentMetrics && result.subagentMetrics.callCount > 0) {
+    const parts: string[] = [];
+    const m = result.subagentMetrics;
+
+    // ↑ input tokens
+    if (m.inputTokens > 0) {
+      parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(m.inputTokens)}`));
+    }
+
+    // ⟳ cached tokens
+    if (m.cachedInputTokens > 0) {
+      parts.push(chalk.dim("⟳") + chalk.blue(` ${formatTokens(m.cachedInputTokens)}`));
+    }
+
+    // ↓ output tokens
+    if (m.outputTokens > 0) {
+      parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(m.outputTokens)}`));
+    }
+
+    // $cost
+    if (m.cost > 0) {
+      parts.push(chalk.cyan(`$${formatCost(m.cost)}`));
+    }
+
+    if (parts.length > 0) {
+      subagentMetricsStr = parts.join(chalk.dim(" | ")) + chalk.dim(" | ");
+    }
+  }
+
+  let line2: string;
+  const previewContent = customPreview ?? (result.result?.trim() ? truncateOutputPreview(result.result, availablePreview) : null);
+  if (previewContent) {
+    line2 = `  ${chalk.dim("→")} ${nameRef} ${outputLabel}${subagentMetricsStr}${timeLabel}${chalk.dim(":")} ${chalk.dim(previewContent)}`;
+  } else {
+    // No output content
+    line2 = `  ${chalk.dim("→")} ${nameRef} ${outputLabel}${subagentMetricsStr}${timeLabel}`;
+  }
+
+  let output = `${line1}\n${line2}`;
 
   // Add media lines if present (images, audio, etc.)
   if (result.media && result.media.length > 0) {
     const mediaLines = result.media.map(formatMediaLine);
-    summaryLine += "\n" + mediaLines.join("\n");
+    output += "\n" + mediaLines.join("\n");
   }
 
-  // TellUser gadget: display full message content below the summary (with markdown and separators)
+  // TellUser gadget: display full message content below (with markdown and separators)
   if (result.gadgetName === "TellUser" && result.parameters?.message) {
     const message = String(result.parameters.message);
     const rendered = renderMarkdownWithSeparators(message);
-    return `${summaryLine}\n${rendered}`;
+    return `${output}\n${rendered}`;
   }
 
-  return summaryLine;
+  return output;
 }

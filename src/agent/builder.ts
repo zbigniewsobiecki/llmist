@@ -805,6 +805,21 @@ export class AgentBuilder {
         observers: {
           ...hooks?.observers,
           onLLMCallStart: async (context) => {
+            // Count input tokens for accurate subagent metrics
+            // This ensures we have input tokens even if the provider doesn't
+            // include them in the completion event's usage metadata
+            let inputTokens: number | undefined;
+            try {
+              if (this.client) {
+                inputTokens = await this.client.countTokens(
+                  context.options.model,
+                  context.options.messages,
+                );
+              }
+            } catch {
+              // Ignore token counting errors - will fall back to usage from completion
+            }
+
             // Forward to parent
             onSubagentEvent({
               type: "llm_call_start",
@@ -813,6 +828,7 @@ export class AgentBuilder {
               event: {
                 iteration: context.iteration,
                 model: context.options.model,
+                inputTokens,
               } as LLMCallInfo,
             });
             // Chain to existing hook if present

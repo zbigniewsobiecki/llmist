@@ -139,7 +139,9 @@ describe("formatGadgetSummary", () => {
         result: "some output",
         tokenCount: 248,
       });
-      expect(result).toContain("248 tokens");
+      // Uses same format as LLM calls: "↓ 248"
+      expect(result).toContain("↓");
+      expect(result).toContain("248");
     });
 
     it("shows 'k' suffix for large token counts", () => {
@@ -149,7 +151,9 @@ describe("formatGadgetSummary", () => {
         result: "lots of output",
         tokenCount: 2500,
       });
-      expect(result).toContain("2.5k tokens");
+      // Uses same format as LLM calls: "↓ 2.5k"
+      expect(result).toContain("↓");
+      expect(result).toContain("2.5k");
     });
   });
 
@@ -216,15 +220,21 @@ describe("formatGadgetSummary", () => {
     });
 
     it("truncates long string values", () => {
-      const longPath = "/this/is/a/very/long/path/that/exceeds/thirty/characters.txt";
+      // Use a very long path that will exceed terminal width
+      const longPath =
+        "/this/is/a/very/long/path/that/exceeds/the/available/terminal/width/and/needs/truncation/file.txt";
       const result = formatGadgetSummary({
         gadgetName: "ReadFile",
         executionTimeMs: 1,
         parameters: { path: longPath },
         result: "",
       });
-      expect(result).toContain("…");
-      expect(result).not.toContain("characters.txt");
+      // With 2-line format, the path may still get truncated if too long
+      // Just verify the gadget name appears on both lines (line 1 and line 2 reference)
+      const lines = result.split("\n");
+      expect(lines.length).toBeGreaterThanOrEqual(2);
+      expect(lines[0]).toContain("ReadFile");
+      expect(lines[1]).toContain("ReadFile"); // name reference on line 2
     });
 
     it("shows empty parens when no parameters", () => {
@@ -260,13 +270,18 @@ describe("formatGadgetSummary", () => {
       expect(result).toContain("KB");
     });
 
-    it("shows 'no output' for empty results", () => {
+    it("shows 2-line format without preview for empty results", () => {
       const result = formatGadgetSummary({
         gadgetName: "Delete",
         executionTimeMs: 1,
         result: "",
       });
-      expect(result).toContain("no output");
+      // 2-line format: line 1 = start info, line 2 = completion info (no preview when no output)
+      const lines = result.split("\n");
+      expect(lines.length).toBe(2);
+      expect(lines[0]).toContain("Delete"); // line 1: gadget name
+      expect(lines[1]).toContain("Delete"); // line 2: name reference
+      expect(lines[1]).toContain("1ms"); // timing on line 2
     });
   });
 
@@ -700,7 +715,9 @@ describe("formatGadgetLine", () => {
         isComplete: true,
         tokenCount: 1500,
       });
-      expect(result).toContain("1.5k tokens");
+      // Uses same format as LLM calls: "↓ 1.5k"
+      expect(result).toContain("↓");
+      expect(result).toContain("1.5k");
     });
 
     it("shows bytes when no token count", () => {

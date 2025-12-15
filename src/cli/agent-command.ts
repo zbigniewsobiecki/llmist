@@ -559,6 +559,8 @@ export async function executeAgent(
             if (summary) {
               env.stderr.write(`${summary}\n`);
             }
+            // Add blank line after each LLM call to visually separate iterations
+            env.stderr.write("\n");
           }
 
           // Write LLM response to debug log if enabled
@@ -695,8 +697,7 @@ export async function executeAgent(
   builder.withTrailingMessage((ctx) =>
     [
       `[Iteration ${ctx.iteration + 1}/${ctx.maxIterations}]`,
-      "Think carefully: what gadget invocations can you make in parallel right now?",
-      "Maximize efficiency by batching independent operations in a single response.",
+      "Think carefully in two steps: 1. what gadget invocations we should be making next? 2. how do they depend on one another so we can run all of them in the right order? Then respond with all the gadget invocations you are able to do now.",
     ].join(" "),
   );
 
@@ -717,8 +718,11 @@ export async function executeAgent(
           subagentEvent.gadgetInvocationId,
           subagentEvent.depth,
           info.model,
-          info.iteration,
-          info.inputTokens,
+          info.iteration + 1, // Make 1-indexed like main agent
+          {
+            inputTokens: info.usage?.inputTokens ?? info.inputTokens,
+            cachedInputTokens: info.usage?.cachedInputTokens,
+          },
         );
       } else if (subagentEvent.type === "llm_call_end") {
         const info = subagentEvent.event as LLMCallInfo;
@@ -845,10 +849,35 @@ export async function executeAgent(
           }
         } else {
           // Normal mode: show full gadget summary on stderr
+          // Indent to show gadget belongs to current LLM iteration
           const tokenCount = await countGadgetOutputTokens(event.result.result);
-          env.stderr.write(
-            `${formatGadgetSummary({ ...event.result, tokenCount, media: event.result.storedMedia })}\n`,
+
+          // Get aggregated metrics from any subagent LLM calls this gadget made
+          // This provides visibility into the total token usage and cost for
+          // gadgets like BrowseWeb that spawn internal LLM calls
+          const subagentMetrics = progress.getAggregatedSubagentMetrics(
+            event.result.invocationId,
           );
+
+          const summary = formatGadgetSummary({
+            ...event.result,
+            tokenCount,
+            media: event.result.storedMedia,
+            subagentMetrics:
+              subagentMetrics.callCount > 0 ? subagentMetrics : undefined,
+          });
+
+          // TellUser has full-width markdown content - don't indent so it aligns with content
+          if (event.result.gadgetName === "TellUser") {
+            env.stderr.write(`${summary}\n`);
+          } else {
+            // Add 2-space indent to each line of multi-line output
+            const indentedSummary = summary
+              .split("\n")
+              .map((line) => "  " + line)
+              .join("\n");
+            env.stderr.write(`${indentedSummary}\n`);
+          }
         }
 
         // Resume progress if there are more gadgets in flight or LLM is still streaming

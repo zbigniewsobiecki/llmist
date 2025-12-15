@@ -317,7 +317,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini-2.5-flash", 0, 5000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini-2.5-flash", 0, { inputTokens: 5000 });
 
       const nestedAgents = (progress as any).nestedAgents;
       expect(nestedAgents.size).toBe(1);
@@ -337,7 +337,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 1000 });
       progress.updateNestedAgent("agent:0", {
         inputTokens: 1000,
         outputTokens: 500,
@@ -356,7 +356,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 5000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 5000 });
       progress.updateNestedAgent("agent:0", {
         inputTokens: 5000,
         cachedInputTokens: 4000,
@@ -372,7 +372,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 1000 });
       progress.updateNestedAgent("agent:0", {
         inputTokens: 1000,
         outputTokens: 500,
@@ -411,7 +411,7 @@ describe("StreamProgress nested operations", () => {
 
       const progress = new StreamProgress(stream, false, registry as any);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 1000 });
 
       // Should not throw
       expect(() => {
