@@ -324,6 +324,8 @@ export class StreamProgress {
       depth: number;
       model: string;
       iteration: number;
+      /** Parent call number for hierarchical display (e.g., #1.2) */
+      parentCallNumber?: number;
       startTime: number;
       inputTokens?: number;
       outputTokens?: number;
@@ -391,6 +393,7 @@ export class StreamProgress {
   /**
    * Add a nested agent LLM call (called when nested llm_call_start event received).
    * Used to display hierarchical progress for subagent gadgets.
+   * @param parentCallNumber - Top-level call number for hierarchical display (e.g., #1.2)
    */
   addNestedAgent(
     id: string,
@@ -402,12 +405,14 @@ export class StreamProgress {
       inputTokens?: number;
       cachedInputTokens?: number;
     },
+    parentCallNumber?: number,
   ): void {
     this.nestedAgents.set(id, {
       parentInvocationId,
       depth,
       model,
       iteration,
+      parentCallNumber,
       startTime: Date.now(),
       inputTokens: info?.inputTokens,
       cachedInputTokens: info?.cachedInputTokens,
@@ -714,6 +719,7 @@ export class StreamProgress {
     const activeNestedStreams: Array<{
       depth: number;
       iteration: number;
+      parentCallNumber?: number;
       model: string;
       inputTokens?: number;
       cachedInputTokens?: number;
@@ -754,6 +760,7 @@ export class StreamProgress {
           depth: number;
           // Agent-specific fields
           iteration?: number;
+          parentCallNumber?: number;
           model?: string;
           inputTokens?: number;
           cachedInputTokens?: number;
@@ -775,6 +782,7 @@ export class StreamProgress {
               startTime: nested.startTime,
               depth: nested.depth,
               iteration: nested.iteration,
+              parentCallNumber: nested.parentCallNumber,
               model: nested.model,
               inputTokens: nested.inputTokens,
               cachedInputTokens: nested.cachedInputTokens,
@@ -790,6 +798,7 @@ export class StreamProgress {
               activeNestedStreams.push({
                 depth: nested.depth,
                 iteration: nested.iteration,
+                parentCallNumber: nested.parentCallNumber,
                 model: nested.model,
                 inputTokens: nested.inputTokens,
                 cachedInputTokens: nested.cachedInputTokens,
@@ -837,6 +846,7 @@ export class StreamProgress {
             // Use shared formatLLMCallLine for consistent formatting
             const line = formatLLMCallLine({
               iteration: op.iteration ?? 0,
+              parentCallNumber: op.parentCallNumber,
               model: op.model ?? "",
               inputTokens: op.inputTokens,
               cachedInputTokens: op.cachedInputTokens,
@@ -883,6 +893,7 @@ export class StreamProgress {
       const elapsedSeconds = (Date.now() - stream.startTime) / 1000;
       const line = formatLLMCallLine({
         iteration: stream.iteration,
+        parentCallNumber: stream.parentCallNumber,
         model: stream.model,
         inputTokens: stream.inputTokens,
         cachedInputTokens: stream.cachedInputTokens,

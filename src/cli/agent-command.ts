@@ -723,6 +723,7 @@ export async function executeAgent(
             inputTokens: info.usage?.inputTokens ?? info.inputTokens,
             cachedInputTokens: info.usage?.cachedInputTokens,
           },
+          llmCallCounter, // Parent call number for hierarchical display (e.g., #1.2)
         );
       } else if (subagentEvent.type === "llm_call_end") {
         const info = subagentEvent.event as LLMCallInfo;
