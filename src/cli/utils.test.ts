@@ -617,6 +617,138 @@ describe("StreamProgress nested operations", () => {
     });
   });
 
+  describe("completeGadget", () => {
+    test("marks gadget as completed while keeping it in the map", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addGadget("gadget-123", "BrowseWeb", { url: "https://example.com" });
+      progress.completeGadget("gadget-123");
+
+      const inFlightGadgets = (progress as any).inFlightGadgets;
+      expect(inFlightGadgets.size).toBe(1); // Still in map
+
+      const gadget = inFlightGadgets.get("gadget-123");
+      expect(gadget.completed).toBe(true);
+      expect(gadget.completedTime).toBeDefined();
+    });
+
+    test("freezes elapsed time when completed", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addGadget("gadget-123", "BrowseWeb");
+      const gadgetBefore = (progress as any).inFlightGadgets.get("gadget-123");
+      const startTime = gadgetBefore.startTime;
+
+      progress.completeGadget("gadget-123");
+
+      const gadgetAfter = (progress as any).inFlightGadgets.get("gadget-123");
+      expect(gadgetAfter.completedTime).toBeGreaterThanOrEqual(startTime);
+    });
+
+    test("ignores completion of non-existent gadget", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Should not throw
+      expect(() => {
+        progress.completeGadget("non-existent");
+      }).not.toThrow();
+    });
+  });
+
+  describe("clearCompletedGadgets", () => {
+    test("removes completed gadgets from tracking", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addGadget("gadget-123", "BrowseWeb");
+      progress.completeGadget("gadget-123");
+      progress.clearCompletedGadgets();
+
+      const inFlightGadgets = (progress as any).inFlightGadgets;
+      expect(inFlightGadgets.size).toBe(0);
+    });
+
+    test("keeps incomplete gadgets in tracking", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addGadget("gadget-1", "BrowseWeb");
+      progress.addGadget("gadget-2", "ReadFile");
+      progress.completeGadget("gadget-1"); // Complete only one
+      progress.clearCompletedGadgets();
+
+      const inFlightGadgets = (progress as any).inFlightGadgets;
+      expect(inFlightGadgets.size).toBe(1);
+      expect(inFlightGadgets.has("gadget-2")).toBe(true);
+    });
+
+    test("cleans up nested agents when parent gadget is cleared", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add parent gadget
+      progress.addGadget("parent-gadget", "BrowseWeb");
+
+      // Add nested agent under parent
+      progress.addNestedAgent("nested-agent:0", "parent-gadget", 1, "test-model", 0, { inputTokens: 1000 });
+
+      // Complete and clear
+      progress.completeGadget("parent-gadget");
+      progress.clearCompletedGadgets();
+
+      const inFlightGadgets = (progress as any).inFlightGadgets;
+      const nestedAgents = (progress as any).nestedAgents;
+
+      expect(inFlightGadgets.size).toBe(0);
+      expect(nestedAgents.size).toBe(0);
+    });
+
+    test("cleans up nested gadgets when parent gadget is cleared", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add parent gadget
+      progress.addGadget("parent-gadget", "BrowseWeb");
+
+      // Add nested gadget under parent
+      progress.addNestedGadget("nested-gadget", 1, "parent-gadget", "ReadFile");
+
+      // Complete and clear
+      progress.completeGadget("parent-gadget");
+      progress.clearCompletedGadgets();
+
+      const inFlightGadgets = (progress as any).inFlightGadgets;
+      const nestedGadgets = (progress as any).nestedGadgets;
+
+      expect(inFlightGadgets.size).toBe(0);
+      expect(nestedGadgets.size).toBe(0);
+    });
+
+    test("only cleans up nested operations for cleared parents", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add two parent gadgets
+      progress.addGadget("parent-1", "BrowseWeb");
+      progress.addGadget("parent-2", "SearchWeb");
+
+      // Add nested agents under each
+      progress.addNestedAgent("agent-1:0", "parent-1", 1, "test", 0, { inputTokens: 100 });
+      progress.addNestedAgent("agent-2:0", "parent-2", 1, "test", 0, { inputTokens: 200 });
+
+      // Complete only parent-1
+      progress.completeGadget("parent-1");
+      progress.clearCompletedGadgets();
+
+      const nestedAgents = (progress as any).nestedAgents;
+      expect(nestedAgents.size).toBe(1);
+      expect(nestedAgents.has("agent-2:0")).toBe(true); // Still there
+    });
+  });
+
   describe("nested operations chronological sorting", () => {
     test("sorts nested operations by start time", async () => {
       const stream = new MockWritableStream();
