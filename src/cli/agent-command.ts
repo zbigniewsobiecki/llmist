@@ -75,7 +75,11 @@ function createHumanInputHandler(
   keyboard: KeyboardManager,
 ): ((question: string) => Promise<string>) | undefined {
   const stdout = env.stdout as NodeJS.WriteStream;
-  if (!isInteractive(env.stdin) || typeof stdout.isTTY !== "boolean" || !stdout.isTTY) {
+  if (
+    !isInteractive(env.stdin) ||
+    typeof stdout.isTTY !== "boolean" ||
+    !stdout.isTTY
+  ) {
     return undefined;
   }
 
@@ -99,7 +103,9 @@ function createHumanInputHandler(
       // Loop until non-empty input (like a REPL)
       while (true) {
         const statsPrompt = progress.formatPrompt();
-        const prompt = isFirst ? `${questionLine}\n${statsPrompt}` : statsPrompt;
+        const prompt = isFirst
+          ? `${questionLine}\n${statsPrompt}`
+          : statsPrompt;
         isFirst = false;
 
         const answer = await rl.question(prompt);
@@ -240,7 +246,11 @@ export async function executeAgent(
 
   const printer = new StreamPrinter(env.stdout);
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-  const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
+  const progress = new StreamProgress(
+    env.stderr,
+    stderrTTY,
+    client.modelRegistry,
+  );
 
   // Set up cancellation support for ESC key and Ctrl+C (SIGINT) handling
   const abortController = new AbortController();
@@ -254,7 +264,9 @@ export async function executeAgent(
       wasCancelled = true;
       abortController.abort();
       progress.pause();
-      env.stderr.write(chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`));
+      env.stderr.write(
+        chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`),
+      );
     } else {
       // Already cancelled - treat as quit request (like double Ctrl+C)
       // This ensures the user can always exit even if the abort didn't fully propagate
@@ -271,7 +283,11 @@ export async function executeAgent(
       // the executeAgent function is terminating and we don't need the listener.
       // This is called after readline closes to re-enable ESC key detection.
       if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
-        keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel, handleCancel);
+        keyboard.cleanupEsc = createEscKeyListener(
+          stdinStream,
+          handleCancel,
+          handleCancel,
+        );
       }
     },
   };
@@ -305,7 +321,11 @@ export async function executeAgent(
   // Set up ESC key and Ctrl+C listener if in interactive TTY mode
   // Both ESC and Ctrl+C trigger handleCancel during streaming
   if (stdinIsInteractive && stdinStream.isTTY) {
-    keyboard.cleanupEsc = createEscKeyListener(stdinStream, handleCancel, handleCancel);
+    keyboard.cleanupEsc = createEscKeyListener(
+      stdinStream,
+      handleCancel,
+      handleCancel,
+    );
   }
 
   // Set up SIGINT (Ctrl+C) listener - always active for graceful cancellation
@@ -322,7 +342,10 @@ export async function executeAgent(
   const userApprovals = options.gadgetApproval ?? {};
 
   // Apply defaults for dangerous gadgets if not explicitly configured
-  const gadgetApprovals: Record<string, "allowed" | "denied" | "approval-required"> = {
+  const gadgetApprovals: Record<
+    string,
+    "allowed" | "denied" | "approval-required"
+  > = {
     ...userApprovals,
   };
   for (const gadget of DEFAULT_APPROVAL_REQUIRED) {
@@ -339,7 +362,12 @@ export async function executeAgent(
     gadgetApprovals,
     defaultMode: "allowed",
   };
-  const approvalManager = new ApprovalManager(approvalConfig, env, progress, keyboard);
+  const approvalManager = new ApprovalManager(
+    approvalConfig,
+    env,
+    progress,
+    keyboard,
+  );
 
   let usage: TokenUsage | undefined;
   let iterations = 0;
@@ -350,12 +378,18 @@ export async function executeAgent(
   let llmCallCounter = 0;
 
   // Count tokens accurately using provider-specific methods
-  const countMessagesTokens = async (model: string, messages: LLMMessage[]): Promise<number> => {
+  const countMessagesTokens = async (
+    model: string,
+    messages: LLMMessage[],
+  ): Promise<number> => {
     try {
       return await client.countTokens(model, messages);
     } catch {
       // Fallback to character-based estimation if counting fails
-      const totalChars = messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
+      const totalChars = messages.reduce(
+        (sum, m) => sum + (m.content?.length ?? 0),
+        0,
+      );
       return Math.round(totalChars / FALLBACK_CHARS_PER_TOKEN);
     }
   };
@@ -577,7 +611,10 @@ export async function executeAgent(
           }
 
           // Interactive mode: use approval manager
-          const result = await approvalManager.requestApproval(ctx.gadgetName, ctx.parameters);
+          const result = await approvalManager.requestApproval(
+            ctx.gadgetName,
+            ctx.parameters,
+          );
 
           if (!result.approved) {
             return {
@@ -634,11 +671,11 @@ export async function executeAgent(
     "TellUser",
     {
       message:
-        "👋 Hello! I'm ready to help.\n\nHere's what I can do:\n- Analyze your codebase\n- Execute commands\n- Answer questions\n\nWhat would you like me to work on?",
+        "👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
       done: false,
       type: "info",
     },
-    "ℹ️  👋 Hello! I'm ready to help.\n\nHere's what I can do:\n- Analyze your codebase\n- Execute commands\n- Answer questions\n\nWhat would you like me to work on?",
+    "ℹ️  👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
   );
 
   // Continue looping when LLM responds with just text (no gadget calls)
@@ -697,7 +734,13 @@ export async function executeAgent(
         });
         // Note: No removal - nested agent stays visible with frozen timer and ✓ indicator
       } else if (subagentEvent.type === "gadget_call") {
-        const gadgetEvent = subagentEvent.event as { call: { invocationId: string; gadgetName: string; parameters?: Record<string, unknown> } };
+        const gadgetEvent = subagentEvent.event as {
+          call: {
+            invocationId: string;
+            gadgetName: string;
+            parameters?: Record<string, unknown>;
+          };
+        };
         progress.addNestedGadget(
           gadgetEvent.call.invocationId,
           subagentEvent.depth,
@@ -706,7 +749,9 @@ export async function executeAgent(
           gadgetEvent.call.parameters,
         );
       } else if (subagentEvent.type === "gadget_result") {
-        const resultEvent = subagentEvent.event as { result: { invocationId: string } };
+        const resultEvent = subagentEvent.event as {
+          result: { invocationId: string };
+        };
         progress.completeNestedGadget(resultEvent.result.invocationId);
       }
     });
@@ -748,7 +793,9 @@ export async function executeAgent(
   const flushTextBuffer = () => {
     if (textBuffer) {
       // Use separators in normal mode, plain text in quiet mode
-      const output = options.quiet ? textBuffer : renderMarkdownWithSeparators(textBuffer);
+      const output = options.quiet
+        ? textBuffer
+        : renderMarkdownWithSeparators(textBuffer);
       printer.write(output);
       textBuffer = "";
     }
@@ -789,7 +836,10 @@ export async function executeAgent(
 
         if (options.quiet) {
           // In quiet mode, only output TellUser messages (to stdout, plain unrendered text)
-          if (event.result.gadgetName === "TellUser" && event.result.parameters?.message) {
+          if (
+            event.result.gadgetName === "TellUser" &&
+            event.result.parameters?.message
+          ) {
             const message = String(event.result.parameters.message);
             env.stdout.write(`${message}\n`);
           }
@@ -875,7 +925,10 @@ export function registerAgentCommand(
   const cmd = program
     .command(COMMANDS.agent)
     .description("Run the llmist agent loop with optional gadgets.")
-    .argument("[prompt]", "Prompt for the agent loop. Falls back to stdin when available.");
+    .argument(
+      "[prompt]",
+      "Prompt for the agent loop. Falls back to stdin when available.",
+    );
 
   addAgentOptions(cmd, config);
 
