@@ -797,6 +797,10 @@ export async function executeAgent(
   let textBuffer = "";
   const flushTextBuffer = () => {
     if (textBuffer) {
+      // Clear completed gadgets before showing text - they've served their purpose
+      if (!options.quiet) {
+        progress.clearCompletedGadgets();
+      }
       // Use separators in normal mode, plain text in quiet mode
       const output = options.quiet
         ? textBuffer
@@ -832,8 +836,8 @@ export async function executeAgent(
         flushTextBuffer();
 
         if (!options.quiet) {
-          // Remove gadget from in-flight tracking
-          progress.removeGadget(event.result.invocationId);
+          // Mark gadget as completed (keeps it visible with ✓ until next text output)
+          progress.completeGadget(event.result.invocationId);
         }
 
         // Pause progress to write the completion summary

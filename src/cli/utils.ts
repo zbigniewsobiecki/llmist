@@ -313,7 +313,13 @@ export class StreamProgress {
   // In-flight gadget tracking for concurrent status display
   private inFlightGadgets: Map<
     string,
-    { name: string; params?: Record<string, unknown>; startTime: number }
+    {
+      name: string;
+      params?: Record<string, unknown>;
+      startTime: number;
+      completed?: boolean;
+      completedTime?: number;
+    }
   > = new Map();
 
   // Nested agent tracking for hierarchical subagent display
@@ -388,6 +394,48 @@ export class StreamProgress {
    */
   hasInFlightGadgets(): boolean {
     return this.inFlightGadgets.size > 0;
+  }
+
+  /**
+   * Mark a gadget as completed (keeps it visible with ✓ indicator).
+   * Records completion time to freeze the elapsed timer.
+   * The gadget and its nested operations remain visible until clearCompletedGadgets() is called.
+   */
+  completeGadget(invocationId: string): void {
+    const gadget = this.inFlightGadgets.get(invocationId);
+    if (gadget) {
+      gadget.completed = true;
+      gadget.completedTime = Date.now();
+      if (this.isRunning && this.isTTY) {
+        this.render();
+      }
+    }
+  }
+
+  /**
+   * Clear all completed gadgets from the display.
+   * Called when new text output arrives to clean up the finished gadget section.
+   */
+  clearCompletedGadgets(): void {
+    for (const [id, gadget] of this.inFlightGadgets) {
+      if (gadget.completed) {
+        this.inFlightGadgets.delete(id);
+        // Also clean up nested operations for this gadget
+        for (const [nestedId, nested] of this.nestedAgents) {
+          if (nested.parentInvocationId === id) {
+            this.nestedAgents.delete(nestedId);
+          }
+        }
+        for (const [nestedId, nested] of this.nestedGadgets) {
+          if (nested.parentInvocationId === id) {
+            this.nestedGadgets.delete(nestedId);
+          }
+        }
+      }
+    }
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
   }
 
   /**
@@ -731,7 +779,9 @@ export class StreamProgress {
     // In-flight gadgets with COMPLETED nested operations only (active streams go to bottom)
     if (this.isTTY) {
       for (const [gadgetId, gadget] of this.inFlightGadgets) {
-        const elapsedSeconds = (Date.now() - gadget.startTime) / 1000;
+        // Use completedTime for elapsed calculation if gadget is done (freezes timer)
+        const endTime = gadget.completedTime ?? Date.now();
+        const elapsedSeconds = (endTime - gadget.startTime) / 1000;
         // Use shared formatGadgetLine for consistent formatting with parameters
         // Pass maxWidth adjusted for 2-space indent
         const termWidth = process.stdout.columns ?? 80;
@@ -741,7 +791,7 @@ export class StreamProgress {
             name: gadget.name,
             parameters: gadget.params,
             elapsedSeconds,
-            isComplete: false,
+            isComplete: gadget.completed ?? false,
           },
           termWidth - gadgetIndent.length,
         );
