@@ -1,3 +1,8 @@
+## 5.1.0 (2025-12-15)
+
+* Merge pull request #183 from zbigniewsobiecki/dev ([8a5f13f](https://github.com/zbigniewsobiecki/llmist/commit/8a5f13f)), closes [#183](https://github.com/zbigniewsobiecki/llmist/issues/183)
+* feat(cli): enhanced subagent display with aggregated metrics and token counting (#182) ([ebdb9bd](https://github.com/zbigniewsobiecki/llmist/commit/ebdb9bd)), closes [#182](https://github.com/zbigniewsobiecki/llmist/issues/182)
+
 ## 5.0.0 (2025-12-15)
 
 * Merge pull request #181 from zbigniewsobiecki/dev ([b68f936](https://github.com/zbigniewsobiecki/llmist/commit/b68f936)), closes [#181](https://github.com/zbigniewsobiecki/llmist/issues/181)
