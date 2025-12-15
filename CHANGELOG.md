@@ -1,3 +1,74 @@
+## 5.0.0 (2025-12-15)
+
+* Merge pull request #181 from zbigniewsobiecki/dev ([b68f936](https://github.com/zbigniewsobiecki/llmist/commit/b68f936)), closes [#181](https://github.com/zbigniewsobiecki/llmist/issues/181)
+* feat(agent): automatic nested event streaming and width-aware formatting (#175) ([4f1d96d](https://github.com/zbigniewsobiecki/llmist/commit/4f1d96d)), closes [#175](https://github.com/zbigniewsobiecki/llmist/issues/175)
+* feat(cli): first-class subagent display with unified formatting (#177) ([83c8fff](https://github.com/zbigniewsobiecki/llmist/commit/83c8fff)), closes [#177](https://github.com/zbigniewsobiecki/llmist/issues/177)
+* feat(docker): selective config mounts for cross-platform gadget-cache isolation (#178) ([0079124](https://github.com/zbigniewsobiecki/llmist/commit/0079124)), closes [#178](https://github.com/zbigniewsobiecki/llmist/issues/178)
+* feat(release): switch to manual npm publish workflow (#180) ([7d1a541](https://github.com/zbigniewsobiecki/llmist/commit/7d1a541)), closes [#180](https://github.com/zbigniewsobiecki/llmist/issues/180)
+* fix: prompt ack fix (#179) ([660b7a7](https://github.com/zbigniewsobiecki/llmist/commit/660b7a7)), closes [#179](https://github.com/zbigniewsobiecki/llmist/issues/179)
+* fix(cli): keep nested gadgets and agent calls visible after completion ([544a9af](https://github.com/zbigniewsobiecki/llmist/commit/544a9af))
+* fix(cli): prevent duplicate iteration numbers for subagent events ([0fa5a5d](https://github.com/zbigniewsobiecki/llmist/commit/0fa5a5d)), closes [#N](https://github.com/zbigniewsobiecki/llmist/issues/N) [#1](https://github.com/zbigniewsobiecki/llmist/issues/1) [#1](https://github.com/zbigniewsobiecki/llmist/issues/1)
+* fix(cli): stop nested gadget timers from running after completion ([98741aa](https://github.com/zbigniewsobiecki/llmist/commit/98741aa))
+* test(agent): add tests for subagent event system ([0ba6422](https://github.com/zbigniewsobiecki/llmist/commit/0ba6422))
+* chore: sync dev with main after release [skip ci] ([2eb8b67](https://github.com/zbigniewsobiecki/llmist/commit/2eb8b67))
+
+
+### BREAKING CHANGE
+
+* Remove `dev-mode` and `dev-source` Docker options.
+Use `docker-args` with custom dockerfile entrypoint instead.
+
+Changes:
+- Mount only cli.toml and gadgets/ directory instead of entire ~/.llmist
+- Use named Docker volume (llmist-gadget-cache) for container's cache
+- Prevents cross-platform native module issues (macOS host -> Linux container)
+- Gadgets with native deps (sharp, tiktoken, better-sqlite3) now work correctly
+
+The gadget-cache is NOT shared between host and container. The container
+builds its own cached gadgets into a persistent named volume, avoiding
+platform-specific binary incompatibilities.
+
+Migration guide for dev-mode users:
+```toml
+[docker]
+docker-args = ["-v", "/path/to/llmist:/path/to/llmist:ro"]
+dockerfile = """
+FROM oven/bun:1-debian
+RUN mkdir -p /path/to/llmist
+# ... other setup
+ENTRYPOINT ["bun", "run", "/path/to/llmist/src/cli.ts"]
+"""
+```
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com>
+* Renamed all "nested" terminology to "subagent" for consistency
+
+- Rename NestedAgentEvent → SubagentEvent
+- Rename NestedAgentStreamEvent → SubagentStreamEvent
+- Rename nested_agent_event → subagent_event
+- Rename onNestedEvent → onSubagentEvent
+- Rename withNestedEventCallback → withSubagentEventCallback
+
+Add SubagentContext to all hook observer contexts:
+- All observer contexts now include optional subagentContext property
+- When present, indicates event is from a subagent (BrowseWeb, etc.)
+- Enables clean filtering: if (ctx.subagentContext) { /* subagent */ }
+
+Fire hooks for subagent events automatically:
+- Subagent events now fire the SAME hooks with subagentContext populated
+- Users can use hooks OR callbacks (or both) for subagent events
+- Consistent event handling across entire codebase
+
+Update documentation:
+- HOOKS.md: Add "Subagent Events" section with examples
+- SUBAGENTS.md: Add "Event Forwarding" section
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 4.0.0 (2025-12-14)
 
 * feat(agent): automatic nested event streaming and width-aware formatting (#175) (#176) ([6f1e4b8](https://github.com/zbigniewsobiecki/llmist/commit/6f1e4b8)), closes [#175](https://github.com/zbigniewsobiecki/llmist/issues/175) [#176](https://github.com/zbigniewsobiecki/llmist/issues/176)
