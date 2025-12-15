@@ -177,6 +177,8 @@ export class StreamProcessor {
   private completedResults: Map<string, GadgetExecutionResult> = new Map();
   /** Invocation IDs of gadgets that have failed (error or skipped due to dependency) */
   private failedInvocations: Set<string> = new Set();
+  /** Promises for independent gadgets currently executing (fire-and-forget) */
+  private inFlightExecutions: Map<string, Promise<StreamEvent[]>> = new Map();
 
   constructor(options: StreamProcessorOptions) {
     this.iteration = options.iteration;
@@ -312,8 +314,23 @@ export class StreamProcessor {
         }
       }
 
+      // Collect results from all fire-and-forget (in-flight) independent gadgets
+      // This awaits parallel executions that were started during streaming
+      const inFlightResults = await this.collectInFlightResults();
+      for (const evt of inFlightResults) {
+        yield evt;
+
+        if (evt.type === "gadget_result") {
+          didExecuteGadgets = true;
+          if (evt.result.breaksLoop) {
+            shouldBreakLoop = true;
+          }
+        }
+      }
+
       // Final pass to process any remaining pending gadgets
       // This handles cases where the last gadgets in the stream have dependencies
+      // (now that in-flight gadgets have completed, their dependents can execute)
       for await (const evt of this.processPendingGadgetsGenerator()) {
         yield evt;
 
@@ -544,16 +561,37 @@ export class StreamProcessor {
         this.gadgetsAwaitingDependencies.set(call.invocationId, call);
         return; // Execution deferred, gadget_call already yielded
       }
+
+      // All dependencies satisfied - execute synchronously (dependency already complete)
+      for await (const evt of this.executeGadgetGenerator(call)) {
+        yield evt;
+      }
+
+      // Check if any pending gadgets can now execute
+      for await (const evt of this.processPendingGadgetsGenerator()) {
+        yield evt;
+      }
+      return;
     }
 
-    // All dependencies satisfied (or no dependencies) - execute now
-    for await (const evt of this.executeGadgetGenerator(call)) {
-      yield evt;
-    }
+    // NO dependencies - choose execution strategy based on error handling mode
+    if (this.stopOnGadgetError) {
+      // Sequential execution: must wait for each gadget to check for errors
+      // that should stop subsequent execution
+      for await (const evt of this.executeGadgetGenerator(call)) {
+        yield evt;
+      }
 
-    // Check if any pending gadgets can now execute
-    for await (const evt of this.processPendingGadgetsGenerator()) {
-      yield evt;
+      // Check if any pending gadgets can now execute
+      for await (const evt of this.processPendingGadgetsGenerator()) {
+        yield evt;
+      }
+    } else {
+      // Fire and forget for parallel execution!
+      // Results will be collected at stream end via collectInFlightResults()
+      const executionPromise = this.executeGadgetAndCollect(call);
+      this.inFlightExecutions.set(call.invocationId, executionPromise);
+      // DON'T await - continue processing stream immediately
     }
   }
 
@@ -940,6 +978,47 @@ export class StreamProcessor {
         this.executionHalted = true;
       }
     }
+  }
+
+  /**
+   * Execute a gadget and collect all events into an array (non-blocking).
+   * Used for fire-and-forget parallel execution of independent gadgets.
+   */
+  private async executeGadgetAndCollect(call: ParsedGadgetCall): Promise<StreamEvent[]> {
+    const events: StreamEvent[] = [];
+    for await (const evt of this.executeGadgetGenerator(call)) {
+      events.push(evt);
+    }
+    // NOTE: Don't delete from inFlightExecutions here - it creates a race condition
+    // where fast-completing gadgets are removed before collectInFlightResults runs.
+    // The map is cleared in collectInFlightResults after all promises are awaited.
+    return events;
+  }
+
+  /**
+   * Collect results from all fire-and-forget (in-flight) gadget executions.
+   * Called at stream end to await parallel independent gadgets.
+   * Clears the inFlightExecutions map after collection.
+   * @returns Array of all events from completed gadgets
+   */
+  private async collectInFlightResults(): Promise<StreamEvent[]> {
+    if (this.inFlightExecutions.size === 0) {
+      return [];
+    }
+
+    this.logger.debug("Collecting in-flight gadget results", {
+      count: this.inFlightExecutions.size,
+      invocationIds: Array.from(this.inFlightExecutions.keys()),
+    });
+
+    const promises = Array.from(this.inFlightExecutions.values());
+    const results = await Promise.all(promises);
+
+    // Clear the map after awaiting all promises
+    this.inFlightExecutions.clear();
+
+    // Flatten all event arrays into a single array
+    return results.flat();
   }
 
   /**

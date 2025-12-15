@@ -220,6 +220,8 @@ export function formatCost(cost: number): string {
 export interface LLMCallDisplayInfo {
   /** Iteration number (0-indexed for subagents, 1-indexed for main) */
   iteration: number;
+  /** Parent call number for hierarchical display (e.g., parent=1, iteration=2 → #1.2) */
+  parentCallNumber?: number;
   /** Model name/ID */
   model: string;
   /** Input tokens sent to LLM */
@@ -296,8 +298,12 @@ export interface LLMCallDisplayInfo {
 export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
   const parts: string[] = [];
 
-  // #N model (iteration number + model name) - combined as one unit
-  parts.push(`${chalk.cyan(`#${info.iteration}`)} ${chalk.magenta(info.model)}`);
+  // #N or #N.M model (iteration number + model name) - combined as one unit
+  // Hierarchical format: parent.child (e.g., #1.2 for 2nd subagent call of parent #1)
+  const callNumber = info.parentCallNumber
+    ? `#${info.parentCallNumber}.${info.iteration}`
+    : `#${info.iteration}`;
+  parts.push(`${chalk.cyan(callNumber)} ${chalk.magenta(info.model)}`);
 
   // Context usage percentage (color-coded by usage level, main agent only)
   if (info.contextPercent !== undefined && info.contextPercent !== null) {
