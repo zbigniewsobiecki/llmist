@@ -317,7 +317,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini-2.5-flash", 0, 5000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini-2.5-flash", 0, { inputTokens: 5000 });
 
       const nestedAgents = (progress as any).nestedAgents;
       expect(nestedAgents.size).toBe(1);
@@ -337,7 +337,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 1000 });
       progress.updateNestedAgent("agent:0", {
         inputTokens: 1000,
         outputTokens: 500,
@@ -356,7 +356,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 5000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 5000 });
       progress.updateNestedAgent("agent:0", {
         inputTokens: 5000,
         cachedInputTokens: 4000,
@@ -372,7 +372,7 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 1000 });
       progress.updateNestedAgent("agent:0", {
         inputTokens: 1000,
         outputTokens: 500,
@@ -411,7 +411,7 @@ describe("StreamProgress nested operations", () => {
 
       const progress = new StreamProgress(stream, false, registry as any);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, 1000);
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 0, { inputTokens: 1000 });
 
       // Should not throw
       expect(() => {
@@ -438,6 +438,131 @@ describe("StreamProgress nested operations", () => {
           outputTokens: 500,
         });
       }).not.toThrow();
+    });
+
+    test("preserves initial inputTokens when update has undefined", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add with initial inputTokens (simulating llm_call_start)
+      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini:gemini-2.5-flash", 1, {
+        inputTokens: 5000,
+        cachedInputTokens: 3000,
+      });
+
+      // Update without inputTokens (simulating provider that doesn't return them in completion)
+      progress.updateNestedAgent("agent:0", {
+        outputTokens: 100,
+        finishReason: "stop",
+      });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+
+      // Should preserve initial inputTokens, not overwrite with undefined
+      expect(agent.inputTokens).toBe(5000);
+      expect(agent.cachedInputTokens).toBe(3000);
+      expect(agent.outputTokens).toBe(100);
+    });
+
+    test("updates inputTokens when new value is provided", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 1, { inputTokens: 5000 });
+
+      // Update with new inputTokens value (provider returned them in completion)
+      progress.updateNestedAgent("agent:0", {
+        inputTokens: 5500, // Updated value
+        outputTokens: 100,
+      });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent.inputTokens).toBe(5500);
+    });
+  });
+
+  describe("getAggregatedSubagentMetrics", () => {
+    test("returns zero metrics when no nested agents exist", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      const metrics = progress.getAggregatedSubagentMetrics("nonexistent-parent");
+
+      expect(metrics.inputTokens).toBe(0);
+      expect(metrics.outputTokens).toBe(0);
+      expect(metrics.cachedInputTokens).toBe(0);
+      expect(metrics.cost).toBe(0);
+      expect(metrics.callCount).toBe(0);
+    });
+
+    test("aggregates metrics from multiple nested agents", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add multiple nested agents for same parent
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 1, { inputTokens: 1000 });
+      progress.updateNestedAgent("agent:0", {
+        inputTokens: 1000,
+        outputTokens: 50,
+        cachedInputTokens: 500,
+        cost: 0.001,
+      });
+
+      progress.addNestedAgent("agent:1", "parent-123", 1, "test", 2, { inputTokens: 2000 });
+      progress.updateNestedAgent("agent:1", {
+        inputTokens: 2000,
+        outputTokens: 100,
+        cachedInputTokens: 1000,
+        cost: 0.002,
+      });
+
+      const metrics = progress.getAggregatedSubagentMetrics("parent-123");
+
+      expect(metrics.inputTokens).toBe(3000);
+      expect(metrics.outputTokens).toBe(150);
+      expect(metrics.cachedInputTokens).toBe(1500);
+      expect(metrics.cost).toBeCloseTo(0.003, 6);
+      expect(metrics.callCount).toBe(2);
+    });
+
+    test("only includes agents for the specified parent", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Agent for parent-123
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 1, { inputTokens: 1000 });
+      progress.updateNestedAgent("agent:0", { inputTokens: 1000, outputTokens: 50, cost: 0.001 });
+
+      // Agent for different parent
+      progress.addNestedAgent("agent:1", "parent-456", 1, "test", 1, { inputTokens: 5000 });
+      progress.updateNestedAgent("agent:1", { inputTokens: 5000, outputTokens: 200, cost: 0.005 });
+
+      const metrics = progress.getAggregatedSubagentMetrics("parent-123");
+
+      // Should only include agent:0's metrics
+      expect(metrics.inputTokens).toBe(1000);
+      expect(metrics.outputTokens).toBe(50);
+      expect(metrics.cost).toBeCloseTo(0.001, 6);
+      expect(metrics.callCount).toBe(1);
+    });
+
+    test("handles agents with missing optional metrics", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Agent with minimal data
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 1);
+      progress.updateNestedAgent("agent:0", { outputTokens: 50 });
+
+      const metrics = progress.getAggregatedSubagentMetrics("parent-123");
+
+      expect(metrics.inputTokens).toBe(0);
+      expect(metrics.outputTokens).toBe(50);
+      expect(metrics.cachedInputTokens).toBe(0);
+      expect(metrics.cost).toBe(0);
+      expect(metrics.callCount).toBe(1);
     });
   });
 

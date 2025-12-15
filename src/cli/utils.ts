@@ -398,7 +398,10 @@ export class StreamProgress {
     depth: number,
     model: string,
     iteration: number,
-    inputTokens?: number,
+    info?: {
+      inputTokens?: number;
+      cachedInputTokens?: number;
+    },
   ): void {
     this.nestedAgents.set(id, {
       parentInvocationId,
@@ -406,7 +409,8 @@ export class StreamProgress {
       model,
       iteration,
       startTime: Date.now(),
-      inputTokens,
+      inputTokens: info?.inputTokens,
+      cachedInputTokens: info?.cachedInputTokens,
     });
     if (this.isRunning && this.isTTY) {
       this.render();
@@ -431,25 +435,28 @@ export class StreamProgress {
   ): void {
     const agent = this.nestedAgents.get(id);
     if (agent) {
-      agent.inputTokens = info.inputTokens;
-      agent.outputTokens = info.outputTokens;
-      agent.cachedInputTokens = info.cachedInputTokens;
-      agent.cacheCreationInputTokens = info.cacheCreationInputTokens;
-      agent.finishReason = info.finishReason;
+      // Only update if new value is defined - preserve initial values from addNestedAgent()
+      if (info.inputTokens !== undefined) agent.inputTokens = info.inputTokens;
+      if (info.outputTokens !== undefined) agent.outputTokens = info.outputTokens;
+      if (info.cachedInputTokens !== undefined) agent.cachedInputTokens = info.cachedInputTokens;
+      if (info.cacheCreationInputTokens !== undefined)
+        agent.cacheCreationInputTokens = info.cacheCreationInputTokens;
+      if (info.finishReason !== undefined) agent.finishReason = info.finishReason;
 
       // Calculate cost if not provided and we have model registry
       if (info.cost !== undefined) {
         agent.cost = info.cost;
-      } else if (this.modelRegistry && agent.model && info.outputTokens) {
+      } else if (this.modelRegistry && agent.model && agent.outputTokens) {
         // Calculate cost using model registry (first-class subagent metric)
+        // Use agent.* values which include preserved initial values from addNestedAgent()
         try {
           const modelName = agent.model.includes(":") ? agent.model.split(":")[1] : agent.model;
           const costResult = this.modelRegistry.estimateCost(
             modelName,
-            info.inputTokens ?? 0,
-            info.outputTokens,
-            info.cachedInputTokens,
-            info.cacheCreationInputTokens,
+            agent.inputTokens ?? 0,
+            agent.outputTokens,
+            agent.cachedInputTokens,
+            agent.cacheCreationInputTokens,
           );
           agent.cost = costResult?.totalCost;
         } catch {
@@ -473,6 +480,36 @@ export class StreamProgress {
     if (this.isRunning && this.isTTY) {
       this.render();
     }
+  }
+
+  /**
+   * Get aggregated metrics from all nested agents for a parent gadget.
+   * Used to show total token counts and cost for subagent gadgets like BrowseWeb.
+   */
+  getAggregatedSubagentMetrics(parentInvocationId: string): {
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens: number;
+    cost: number;
+    callCount: number;
+  } {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cachedInputTokens = 0;
+    let cost = 0;
+    let callCount = 0;
+
+    for (const [, nested] of this.nestedAgents) {
+      if (nested.parentInvocationId === parentInvocationId) {
+        inputTokens += nested.inputTokens ?? 0;
+        outputTokens += nested.outputTokens ?? 0;
+        cachedInputTokens += nested.cachedInputTokens ?? 0;
+        cost += nested.cost ?? 0;
+        callCount++;
+      }
+    }
+
+    return { inputTokens, outputTokens, cachedInputTokens, cost, callCount };
   }
 
   /**
@@ -673,24 +710,40 @@ export class StreamProgress {
     const spinner = SPINNER_FRAMES[this.frameIndex++ % SPINNER_FRAMES.length];
     const lines: string[] = [];
 
-    // Line 1: Main progress line (streaming or cumulative mode)
-    if (this.mode === "streaming") {
-      lines.push(this.formatStreamingLine(spinner));
-    } else {
-      lines.push(this.formatCumulativeLine(spinner));
-    }
+    // Collect actively streaming nested agents (to show at bottom, not in hierarchy)
+    const activeNestedStreams: Array<{
+      depth: number;
+      iteration: number;
+      model: string;
+      inputTokens?: number;
+      cachedInputTokens?: number;
+      outputTokens?: number;
+      cost?: number;
+      startTime: number;
+    }> = [];
 
-    // Additional lines: In-flight gadgets (only in TTY mode)
+    // In-flight gadgets with COMPLETED nested operations only (active streams go to bottom)
     if (this.isTTY) {
       for (const [gadgetId, gadget] of this.inFlightGadgets) {
         const elapsedSeconds = (Date.now() - gadget.startTime) / 1000;
         // Use shared formatGadgetLine for consistent formatting with parameters
-        const gadgetLine = `  ${formatGadgetLine({
-          name: gadget.name,
-          parameters: gadget.params,
-          elapsedSeconds,
-          isComplete: false,
-        })}`;
+        // Pass maxWidth adjusted for 2-space indent
+        const termWidth = process.stdout.columns ?? 80;
+        const gadgetIndent = "  ";
+        const line = formatGadgetLine(
+          {
+            name: gadget.name,
+            parameters: gadget.params,
+            elapsedSeconds,
+            isComplete: false,
+          },
+          termWidth - gadgetIndent.length,
+        );
+        // Add indent to EACH line of multi-line output
+        const gadgetLine = line
+          .split("\n")
+          .map((l) => gadgetIndent + l)
+          .join("\n");
         lines.push(gadgetLine);
 
         // Build unified timeline of nested operations sorted by startTime
@@ -731,6 +784,20 @@ export class StreamProgress {
               completed: nested.completed,
               completedTime: nested.completedTime,
             });
+
+            // Collect actively streaming agents for bottom section
+            if (!nested.completed) {
+              activeNestedStreams.push({
+                depth: nested.depth,
+                iteration: nested.iteration,
+                model: nested.model,
+                inputTokens: nested.inputTokens,
+                cachedInputTokens: nested.cachedInputTokens,
+                outputTokens: nested.outputTokens,
+                cost: nested.cost,
+                startTime: nested.startTime,
+              });
+            }
           }
         }
 
@@ -753,8 +820,16 @@ export class StreamProgress {
         nestedOps.sort((a, b) => a.startTime - b.startTime);
 
         // Render in chronological order using shared formatting functions
+        // Nested operations are indented under parent gadget (which has 2-space indent)
+        // So base indent is 4 spaces, plus 2 more for each depth level
+        // SKIP actively streaming agents - they'll be shown at the bottom
         for (const op of nestedOps) {
-          const indent = "  ".repeat(op.depth + 1);
+          // Skip actively streaming agents (shown at bottom)
+          if (op.type === "agent" && !op.completed) {
+            continue;
+          }
+
+          const indent = "  ".repeat(op.depth + 2);
           const endTime = op.completedTime ?? Date.now();
           const elapsedSeconds = (endTime - op.startTime) / 1000;
 
@@ -775,23 +850,65 @@ export class StreamProgress {
             lines.push(`${indent}${line}`);
           } else {
             // Use shared formatGadgetLine for consistent formatting
-            const line = formatGadgetLine({
-              name: op.name ?? "",
-              parameters: op.parameters,
-              elapsedSeconds,
-              isComplete: op.completed ?? false,
-            });
-            lines.push(`${indent}${line}`);
+            // Pass maxWidth adjusted for indent to prevent line overflow
+            const termWidth = process.stdout.columns ?? 80;
+            const line = formatGadgetLine(
+              {
+                name: op.name ?? "",
+                parameters: op.parameters,
+                elapsedSeconds,
+                isComplete: op.completed ?? false,
+              },
+              termWidth - indent.length,
+            );
+            // Add indent to EACH line of multi-line output
+            const indentedLine = line
+              .split("\n")
+              .map((l) => indent + l)
+              .join("\n");
+            lines.push(indentedLine);
           }
         }
       }
     }
 
+    // ACTIVE STREAMS SECTION: Show all actively streaming LLM calls at bottom
+    // Ordered from innermost (top) to outermost (bottom) - like a call stack
+    // This shows nested streams first, then the main agent line below them
+
+    // Nested active streams FIRST (they are "inside" the main agent context)
+    for (const stream of activeNestedStreams) {
+      // Use depth-based indent to align with completed nested agents in hierarchy
+      const indent = "  ".repeat(stream.depth + 2);
+      const elapsedSeconds = (Date.now() - stream.startTime) / 1000;
+      const line = formatLLMCallLine({
+        iteration: stream.iteration,
+        model: stream.model,
+        inputTokens: stream.inputTokens,
+        cachedInputTokens: stream.cachedInputTokens,
+        outputTokens: stream.outputTokens,
+        elapsedSeconds,
+        cost: stream.cost,
+        isStreaming: true,
+        spinner,
+      });
+      lines.push(`${indent}${line}`);
+    }
+
+    // Main progress line LAST (it's the outer/root context)
+    if (this.mode === "streaming") {
+      lines.push(this.formatStreamingLine(spinner));
+    } else {
+      lines.push(this.formatCumulativeLine(spinner));
+    }
+
     // Write all lines and track count for clearing
-    this.lastRenderLineCount = lines.length;
+    const output = lines.join("\n");
+    // Count actual terminal lines (some elements may contain \n for multi-line gadgets)
+    this.lastRenderLineCount = (output.match(/\n/g) || []).length + 1;
     // Use \r to return to start of first line, then join with newlines
     // Each line ends implicitly, cursor stays at end of last line
-    this.target.write("\r" + lines.join("\n"));
+    this.target.write("\r" + output);
     this.hasRendered = true;
   }
 

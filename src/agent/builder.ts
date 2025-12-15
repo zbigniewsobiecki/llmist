@@ -805,6 +805,27 @@ export class AgentBuilder {
         observers: {
           ...hooks?.observers,
           onLLMCallStart: async (context) => {
+            // Count input tokens for accurate subagent metrics display.
+            // This ensures input tokens are available in the CLI even when
+            // providers don't include promptTokenCount in completion events.
+            //
+            // PERFORMANCE NOTE: This adds latency to each subagent LLM call start.
+            // The trade-off is accepted because:
+            // 1. CLI UX requires accurate input token display from call start
+            // 2. Main agent already counts tokens upfront (consistency)
+            // 3. Providers like Gemini may not include inputTokens in completion
+            let inputTokens: number | undefined;
+            try {
+              if (this.client) {
+                inputTokens = await this.client.countTokens(
+                  context.options.model,
+                  context.options.messages,
+                );
+              }
+            } catch {
+              // Ignore token counting errors - will fall back to usage from completion
+            }
+
             // Forward to parent
             onSubagentEvent({
               type: "llm_call_start",
@@ -813,6 +834,7 @@ export class AgentBuilder {
               event: {
                 iteration: context.iteration,
                 model: context.options.model,
+                inputTokens,
               } as LLMCallInfo,
             });
             // Chain to existing hook if present
