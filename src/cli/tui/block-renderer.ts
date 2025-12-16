@@ -62,6 +62,9 @@ export class BlockRenderer {
   /** Current LLM call node (for adding gadget children) */
   private currentLLMCallId: string | null = null;
 
+  /** Persisted expanded states (survives rebuildBlocks) */
+  private expandedStates = new Map<string, boolean>();
+
   constructor(container: ScrollableBox, renderCallback: () => void) {
     this.container = container;
     this.renderCallback = renderCallback;
@@ -219,6 +222,7 @@ export class BlockRenderer {
   clear(): void {
     this.nodes.clear();
     this.blocks.clear();
+    this.expandedStates.clear();
     this.rootIds = [];
     this.selectableIds = [];
     this.selectedIndex = -1;
@@ -301,6 +305,8 @@ export class BlockRenderer {
     if (!block) return;
 
     block.expanded = !block.expanded;
+    // Persist expanded state across rebuilds
+    this.expandedStates.set(block.node.id, block.expanded);
     this.updateBlock(block.node.id);
   }
 
@@ -313,6 +319,8 @@ export class BlockRenderer {
 
     if (block.expanded) {
       block.expanded = false;
+      // Persist collapsed state across rebuilds
+      this.expandedStates.set(block.node.id, false);
       this.updateBlock(block.node.id);
     } else {
       this.selectedIndex = -1;
@@ -398,9 +406,8 @@ export class BlockRenderer {
     const isSelected = this.selectableIds.length === this.selectedIndex;
     const selectable = node.type !== "text";
 
-    // Get existing block state (preserve expanded, default to collapsed)
-    const existingBlock = this.blocks.get(node.id);
-    const expanded = existingBlock?.expanded ?? false;
+    // Get persisted expanded state (survives rebuildBlocks), default to collapsed
+    const expanded = this.expandedStates.get(node.id) ?? false;
 
     // Format content
     const content = this.formatBlockContent(node, isSelected, expanded);
