@@ -49,15 +49,15 @@ export class MockConversationManager implements IConversationManager {
     this.addedMessages.push(msg);
   }
 
-  addGadgetCallResult(gadgetName: string, parameters: Record<string, unknown>, result: string): void {
-    // Simplified gadget call format for testing
+  addGadgetCallResult(gadgetName: string, parameters: Record<string, unknown>, result: string, invocationId: string): void {
+    // Simplified gadget call format for testing (including invocation ID)
     const assistantMsg: LLMMessage = {
       role: "assistant",
-      content: `!!!GADGET_START:${gadgetName}\n${JSON.stringify(parameters)}\n!!!GADGET_END`,
+      content: `!!!GADGET_START:${gadgetName}:${invocationId}\n${JSON.stringify(parameters)}\n!!!GADGET_END`,
     };
     const resultMsg: LLMMessage = {
       role: "user",
-      content: `Result: ${result}`,
+      content: `Result (${invocationId}): ${result}`,
     };
 
     this.history.push(assistantMsg);

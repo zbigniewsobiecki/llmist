@@ -689,6 +689,7 @@ export async function executeAgent(
       type: "info",
     },
     "ℹ️  👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
+    "gc_init_1",
   );
 
   // Continue looping when LLM responds with just text (no gadget calls)

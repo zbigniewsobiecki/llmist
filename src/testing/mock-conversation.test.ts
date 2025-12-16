@@ -105,7 +105,7 @@ describe("MockConversationManager", () => {
     it("adds gadget call and result as two messages", () => {
       const manager = new MockConversationManager();
 
-      manager.addGadgetCallResult("Calculator", { a: 1, b: 2 }, "3");
+      manager.addGadgetCallResult("Calculator", { a: 1, b: 2 }, "3", "gc_calc_1");
 
       const messages = manager.getHistoryMessages();
       expect(messages).toHaveLength(2);
@@ -118,7 +118,7 @@ describe("MockConversationManager", () => {
     it("tracks both messages as added", () => {
       const manager = new MockConversationManager();
 
-      manager.addGadgetCallResult("Weather", { city: "NYC" }, "Sunny, 72°F");
+      manager.addGadgetCallResult("Weather", { city: "NYC" }, "Sunny, 72°F", "gc_weather_1");
 
       expect(manager.getAddedMessages()).toHaveLength(2);
     });

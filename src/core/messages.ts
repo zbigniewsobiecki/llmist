@@ -488,9 +488,12 @@ Produces: { "items": ["first", "second"] }`);
    * Record a gadget execution result in the message history.
    * Creates an assistant message with the gadget invocation and a user message with the result.
    *
+   * The invocationId is shown to the LLM so it can reference previous calls when building dependencies.
+   *
    * @param gadget - Name of the gadget that was executed
    * @param parameters - Parameters that were passed to the gadget
    * @param result - Text result from the gadget execution
+   * @param invocationId - Invocation ID (shown to LLM so it can reference for dependencies)
    * @param media - Optional media outputs from the gadget
    * @param mediaIds - Optional IDs for the media outputs
    */
@@ -498,22 +501,23 @@ Produces: { "items": ["first", "second"] }`);
     gadget: string,
     parameters: Record<string, unknown>,
     result: string,
+    invocationId: string,
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
   ) {
     const paramStr = this.formatBlockParameters(parameters, "");
 
-    // Assistant message with simplified gadget markers (no invocation ID)
+    // Assistant message with gadget markers and invocation ID
     this.messages.push({
       role: "assistant",
-      content: `${this.startPrefix}${gadget}\n${paramStr}\n${this.endPrefix}`,
+      content: `${this.startPrefix}${gadget}:${invocationId}\n${paramStr}\n${this.endPrefix}`,
     });
 
-    // User message with result (potentially multimodal if media present)
+    // User message with result, including invocation ID so LLM can reference it
     if (media && media.length > 0 && mediaIds && mediaIds.length > 0) {
       // Build text with ID references (include kind for clarity)
       const idRefs = media.map((m, i) => `[Media: ${mediaIds[i]} (${m.kind})]`).join("\n");
-      const textWithIds = `Result: ${result}\n${idRefs}`;
+      const textWithIds = `Result (${invocationId}): ${result}\n${idRefs}`;
 
       // Build multimodal content: text + media content parts
       const parts: ContentPart[] = [text(textWithIds)];
@@ -529,10 +533,10 @@ Produces: { "items": ["first", "second"] }`);
       }
       this.messages.push({ role: "user", content: parts });
     } else {
-      // Simple text result (existing behavior)
+      // Simple text result
       this.messages.push({
         role: "user",
-        content: `Result: ${result}`,
+        content: `Result (${invocationId}): ${result}`,
       });
     }
 

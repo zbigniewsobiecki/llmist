@@ -457,14 +457,14 @@ describe("AgentBuilder", () => {
   describe("withSyntheticGadgetCall", () => {
     it("returns this for chaining", () => {
       const builder = new AgentBuilder();
-      const result = builder.withSyntheticGadgetCall("TestGadget", { foo: "bar" }, "result");
+      const result = builder.withSyntheticGadgetCall("TestGadget", { foo: "bar" }, "result", "gc_1");
 
       expect(result).toBe(builder);
     });
 
-    it("formats gadget call with default prefixes", () => {
+    it("formats gadget call with default prefixes and invocation ID", () => {
       const builder = new AgentBuilder();
-      builder.withSyntheticGadgetCall("TestGadget", { message: "hello" }, "Success");
+      builder.withSyntheticGadgetCall("TestGadget", { message: "hello" }, "Success", "gc_1");
 
       // Access private initialMessages via type assertion
       const messages = (
@@ -473,16 +473,16 @@ describe("AgentBuilder", () => {
 
       expect(messages).toHaveLength(2);
 
-      // Assistant message with gadget call
+      // Assistant message with gadget call (including invocation ID)
       expect(messages[0].role).toBe("assistant");
-      expect(messages[0].content).toContain("!!!GADGET_START:TestGadget");
+      expect(messages[0].content).toContain("!!!GADGET_START:TestGadget:gc_1");
       expect(messages[0].content).toContain("!!!ARG:message");
       expect(messages[0].content).toContain("hello");
       expect(messages[0].content).toContain("!!!GADGET_END");
 
-      // User message with result
+      // User message with result (including invocation ID)
       expect(messages[1].role).toBe("user");
-      expect(messages[1].content).toBe("Result: Success");
+      expect(messages[1].content).toBe("Result (gc_1): Success");
     });
 
     it("uses custom gadget prefixes when configured", () => {
@@ -491,7 +491,7 @@ describe("AgentBuilder", () => {
         .withGadgetStartPrefix("<<<GADGET>>>")
         .withGadgetEndPrefix("<<<END>>>")
         .withGadgetArgPrefix("<<<ARG>>>")
-        .withSyntheticGadgetCall("Calculator", { a: 1, b: 2 }, "3");
+        .withSyntheticGadgetCall("Calculator", { a: 1, b: 2 }, "3", "gc_2");
 
       const messages = (
         builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
@@ -499,9 +499,9 @@ describe("AgentBuilder", () => {
 
       expect(messages).toHaveLength(2);
 
-      // Verify custom prefixes are used
+      // Verify custom prefixes are used with invocation ID
       const assistantContent = messages[0].content;
-      expect(assistantContent).toContain("<<<GADGET>>>Calculator");
+      expect(assistantContent).toContain("<<<GADGET>>>Calculator:gc_2");
       expect(assistantContent).toContain("<<<ARG>>>a");
       expect(assistantContent).toContain("<<<ARG>>>b");
       expect(assistantContent).toContain("<<<END>>>");
@@ -521,6 +521,7 @@ describe("AgentBuilder", () => {
           metadata: { priority: "high", tags: ["urgent", "bug"] },
         },
         "Task created",
+        "gc_3",
       );
 
       const messages = (
@@ -538,8 +539,8 @@ describe("AgentBuilder", () => {
     it("can be called multiple times to add multiple synthetic calls", () => {
       const builder = new AgentBuilder();
       builder
-        .withSyntheticGadgetCall("First", { x: 1 }, "one")
-        .withSyntheticGadgetCall("Second", { y: 2 }, "two");
+        .withSyntheticGadgetCall("First", { x: 1 }, "one", "gc_a")
+        .withSyntheticGadgetCall("Second", { y: 2 }, "two", "gc_b");
 
       const messages = (
         builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
@@ -547,8 +548,8 @@ describe("AgentBuilder", () => {
 
       // Each call adds 2 messages (assistant + user)
       expect(messages).toHaveLength(4);
-      expect(messages[0].content).toContain("First");
-      expect(messages[2].content).toContain("Second");
+      expect(messages[0].content).toContain("First:gc_a");
+      expect(messages[2].content).toContain("Second:gc_b");
     });
   });
 

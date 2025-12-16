@@ -667,11 +667,13 @@ export class AgentBuilder {
    *
    * This is useful for in-context learning - showing the LLM what "past self"
    * did correctly so it mimics the pattern. The call is formatted with proper
-   * markers and parameter format.
+   * markers and parameter format, including the invocation ID so the LLM can
+   * reference previous calls when building dependencies.
    *
    * @param gadgetName - Name of the gadget
    * @param parameters - Parameters passed to the gadget
    * @param result - Result returned by the gadget
+   * @param invocationId - Invocation ID (shown to LLM so it can reference for dependencies)
    * @returns This builder for chaining
    *
    * @example
@@ -683,7 +685,8 @@ export class AgentBuilder {
    *     done: false,
    *     type: 'info'
    *   },
-   *   'ℹ️  👋 Hello!\n\nHere\'s what I can do:\n- Analyze code\n- Run commands'
+   *   'ℹ️  👋 Hello!\n\nHere\'s what I can do:\n- Analyze code\n- Run commands',
+   *   'gc_1'
    * )
    * ```
    */
@@ -691,22 +694,23 @@ export class AgentBuilder {
     gadgetName: string,
     parameters: Record<string, unknown>,
     result: string,
+    invocationId: string,
   ): this {
     const startPrefix = this.gadgetStartPrefix ?? GADGET_START_PREFIX;
     const endPrefix = this.gadgetEndPrefix ?? GADGET_END_PREFIX;
 
     const paramStr = this.formatBlockParameters(parameters, "");
 
-    // Assistant message with gadget call
+    // Assistant message with gadget call (including invocation ID)
     this.initialMessages.push({
       role: "assistant",
-      content: `${startPrefix}${gadgetName}\n${paramStr}\n${endPrefix}`,
+      content: `${startPrefix}${gadgetName}:${invocationId}\n${paramStr}\n${endPrefix}`,
     });
 
-    // User message with result
+    // User message with result (including invocation ID so LLM can reference it)
     this.initialMessages.push({
       role: "user",
-      content: `Result: ${result}`,
+      content: `Result (${invocationId}): ${result}`,
     });
 
     return this;

@@ -209,6 +209,8 @@ export class Agent {
   private readonly pendingSubagentEvents: SubagentEvent[] = [];
   // Combined callback that queues events AND calls user callback
   private readonly onSubagentEvent: (event: SubagentEvent) => void;
+  // Counter for generating synthetic invocation IDs for wrapped text content
+  private syntheticInvocationCounter = 0;
 
   /**
    * Creates a new Agent instance.
@@ -767,10 +769,13 @@ export class Agent {
 
             if (textContent.trim()) {
               const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
+              // Generate synthetic invocation ID for wrapped text
+              const syntheticId = `gc_text_${++this.syntheticInvocationCounter}`;
               this.conversation.addGadgetCallResult(
                 gadgetName,
                 parameterMapping(textContent),
                 resultMapping ? resultMapping(textContent) : textContent,
+                syntheticId,
               );
             }
           }
@@ -784,6 +789,7 @@ export class Agent {
                 gadgetResult.gadgetName,
                 gadgetResult.parameters,
                 gadgetResult.error ?? gadgetResult.result ?? "",
+                gadgetResult.invocationId,
                 gadgetResult.media,
                 gadgetResult.mediaIds,
               );
@@ -794,10 +800,13 @@ export class Agent {
           // This keeps conversation history consistent (gadget-oriented) and
           // helps LLMs stay in the "gadget invocation" mindset
           if (finalMessage.trim()) {
+            // Generate synthetic invocation ID for TellUser wrapper
+            const syntheticId = `gc_tell_${++this.syntheticInvocationCounter}`;
             this.conversation.addGadgetCallResult(
               "TellUser",
               { message: finalMessage, done: false, type: "info" },
               `ℹ️  ${finalMessage}`,
+              syntheticId,
             );
           }
           // Empty responses: don't add anything, just check if we should continue
