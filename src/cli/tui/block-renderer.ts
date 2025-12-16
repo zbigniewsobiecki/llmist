@@ -128,11 +128,10 @@ export class BlockRenderer {
   }
 
   /**
-   * Add a gadget node as a root-level item.
+   * Add a gadget node as a child of the current LLM call.
    *
-   * Gadgets are siblings to LLM calls (not children), so they're always visible.
-   * The parentId tracks which LLM call spawned the gadget for context,
-   * but doesn't affect visibility.
+   * Gadgets are nested under the LLM call that spawned them.
+   * They appear indented and are visible when the parent is rendered.
    */
   addGadget(
     invocationId: string,
@@ -140,24 +139,39 @@ export class BlockRenderer {
     parameters?: Record<string, unknown>,
   ): string {
     const id = this.generateId("gadget");
-    // Track which LLM call spawned this gadget (for context), but don't nest it
-    const spawningLLMCallId = this.currentLLMCallId;
+    const parentLLMCallId = this.currentLLMCallId;
+
+    // Calculate depth based on parent
+    let depth = 0;
+    if (parentLLMCallId) {
+      const parent = this.getNode(parentLLMCallId);
+      if (parent) {
+        depth = parent.depth + 1;
+      }
+    }
 
     const node: GadgetNode = {
       id,
       type: "gadget",
-      depth: 0, // Always root level
-      parentId: spawningLLMCallId, // Track for context, not for tree structure
+      depth,
+      parentId: parentLLMCallId,
       invocationId,
       name,
       isComplete: false,
       parameters,
-      children: [], // Only used for subagent nested LLM calls
+      children: [], // Used for subagent nested LLM calls
     };
 
     this.nodes.set(id, node);
-    // Always add to root (gadgets are siblings to LLM calls)
-    this.rootIds.push(id);
+
+    if (parentLLMCallId) {
+      // Nest under parent LLM call
+      const parent = this.getNode(parentLLMCallId) as LLMCallNode;
+      parent.children.push(id);
+    } else {
+      // No parent LLM call - add to root
+      this.rootIds.push(id);
+    }
 
     this.rebuildBlocks();
     return id;
@@ -389,8 +403,9 @@ export class BlockRenderer {
     const height = this.getBlockHeight(block);
     top += height;
 
-    // Render children if expanded (and node has children)
-    if (block.expanded && "children" in node && node.children.length > 0) {
+    // Always render children (gadgets are always visible under their LLM call)
+    // The expanded state controls inline details, not child visibility
+    if ("children" in node && node.children.length > 0) {
       for (const childId of node.children) {
         top = this.renderNodeTree(childId, top);
       }
@@ -543,7 +558,8 @@ export class BlockRenderer {
     const height = this.getBlockHeight(block);
     top += height;
 
-    if (block.expanded && "children" in node) {
+    // Always traverse children (they're always visible)
+    if ("children" in node) {
       for (const childId of node.children) {
         top = this.repositionNodeTree(childId, top);
       }
