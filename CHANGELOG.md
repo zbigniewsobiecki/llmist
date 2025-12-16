@@ -1,3 +1,49 @@
+## 6.0.0 (2025-12-16)
+
+* Merge pull request #190 from zbigniewsobiecki/dev ([4b66f94](https://github.com/zbigniewsobiecki/llmist/commit/4b66f94)), closes [#190](https://github.com/zbigniewsobiecki/llmist/issues/190)
+* fix(executor): cancel timeout when gadget completes to prevent process hang (#189) ([19fb5dc](https://github.com/zbigniewsobiecki/llmist/commit/19fb5dc)), closes [#189](https://github.com/zbigniewsobiecki/llmist/issues/189)
+* feat(agent): parallel execution for independent gadgets and hierarchical call display (#184) ([c177bb2](https://github.com/zbigniewsobiecki/llmist/commit/c177bb2)), closes [#184](https://github.com/zbigniewsobiecki/llmist/issues/184)
+* feat(agent): simplify gadget execution by removing stopOnGadgetError (#186) ([01ab467](https://github.com/zbigniewsobiecki/llmist/commit/01ab467)), closes [#186](https://github.com/zbigniewsobiecki/llmist/issues/186)
+* feat(cli): keep subagent gadget calls visible until completion (#185) ([5f2a243](https://github.com/zbigniewsobiecki/llmist/commit/5f2a243)), closes [#185](https://github.com/zbigniewsobiecki/llmist/issues/185) [#182](https://github.com/zbigniewsobiecki/llmist/issues/182)
+* feat(cli): streamlined operation display with static opening/result lines (#187) ([ee13ecf](https://github.com/zbigniewsobiecki/llmist/commit/ee13ecf)), closes [#187](https://github.com/zbigniewsobiecki/llmist/issues/187) [#N](https://github.com/zbigniewsobiecki/llmist/issues/N)
+* feat(examples): add GoogleSearch web search gadget (#188) ([1a62523](https://github.com/zbigniewsobiecki/llmist/commit/1a62523)), closes [#188](https://github.com/zbigniewsobiecki/llmist/issues/188)
+
+
+### BREAKING CHANGE
+
+* Remove the stopOnGadgetError and canRecoverFromGadgetError options.
+
+The execution model is now simpler and always parallel:
+- Independent gadgets (no dependencies) run in parallel immediately
+- Dependent gadgets wait for their dependencies to complete
+- If a dependency fails, dependent gadgets are skipped
+
+This removes the complexity of sequential error handling mode
+while preserving the dependency-based execution model.
+
+Changes:
+- Remove stopOnGadgetError option from StreamProcessor, Agent, and Builder
+- Remove canRecoverFromGadgetError callback
+- Remove executionHalted flag and related checks
+- Remove withStopOnGadgetError() and withErrorHandler() builder methods
+- Update tests to reflect the new always-parallel execution model
+- Add BLOCK_FORMAT.md documentation for gadget wire format
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* refactor(agent): address code review feedback
+
+- Remove deprecated processEvent method (replaced by processEventGenerator)
+- Add documentation clarifying originalResult vs finalResult distinction:
+  * originalResult: raw result before hook transformations
+  * finalResult: result after interceptors and controllers modify it
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 5.1.0 (2025-12-15)
 
 * Merge pull request #183 from zbigniewsobiecki/dev ([8a5f13f](https://github.com/zbigniewsobiecki/llmist/commit/8a5f13f)), closes [#183](https://github.com/zbigniewsobiecki/llmist/issues/183)
