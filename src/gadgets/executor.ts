@@ -51,14 +51,17 @@ export class GadgetExecutor {
   /**
    * Creates a promise that rejects with a TimeoutException after the specified timeout.
    * Aborts the provided AbortController before rejecting, allowing gadgets to clean up.
+   * Returns both the promise and a cancel function to clear the timeout when no longer needed.
    */
   private createTimeoutPromise(
     gadgetName: string,
     timeoutMs: number,
     abortController: AbortController,
-  ): Promise<never> {
-    return new Promise((_, reject) => {
-      setTimeout(() => {
+  ): { promise: Promise<never>; cancel: () => void } {
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const promise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
         const timeoutError = new TimeoutException(gadgetName, timeoutMs);
         // Signal abort FIRST so gadgets can clean up before exception is thrown
         // Pass the timeout message as reason for better debugging context
@@ -66,6 +69,11 @@ export class GadgetExecutor {
         reject(timeoutError);
       }, timeoutMs);
     });
+
+    return {
+      promise,
+      cancel: () => clearTimeout(timeoutId),
+    };
   }
 
   /**
@@ -247,10 +255,16 @@ export class GadgetExecutor {
           gadgetName: call.gadgetName,
           timeoutMs,
         });
-        rawResult = await Promise.race([
-          Promise.resolve(gadget.execute(validatedParameters, ctx)),
-          this.createTimeoutPromise(call.gadgetName, timeoutMs, abortController),
-        ]);
+        const timeout = this.createTimeoutPromise(call.gadgetName, timeoutMs, abortController);
+        try {
+          rawResult = await Promise.race([
+            Promise.resolve(gadget.execute(validatedParameters, ctx)),
+            timeout.promise,
+          ]);
+        } finally {
+          // Always cancel the timeout to prevent it from keeping the event loop alive
+          timeout.cancel();
+        }
       } else {
         // Execute without timeout
         rawResult = await Promise.resolve(gadget.execute(validatedParameters, ctx));
