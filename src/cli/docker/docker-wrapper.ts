@@ -8,6 +8,7 @@
  * - Forwarding environment variables and mounts
  */
 
+import Docker from "dockerode";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolveDockerfile } from "./dockerfile.js";
@@ -23,6 +24,25 @@ import {
   FORWARDED_API_KEYS,
   type MountPermission,
 } from "./types.js";
+
+/**
+ * Singleton Docker client.
+ * Auto-detects socket path:
+ * - Linux/macOS: /var/run/docker.sock
+ * - Windows: npipe:////./pipe/docker_engine
+ */
+let dockerClient: Docker | null = null;
+
+/**
+ * Gets the Docker client singleton.
+ * Creates a new client on first call.
+ */
+export function getDockerClient(): Docker {
+  if (!dockerClient) {
+    dockerClient = new Docker();
+  }
+  return dockerClient;
+}
 
 /**
  * Error thrown when Docker is not available.
@@ -64,21 +84,15 @@ export class DockerSkipError extends Error {
 /**
  * Checks if Docker is available and running.
  *
+ * Uses dockerode's ping() which is simpler and more reliable than
+ * spawning `docker info` and handling streams.
+ *
  * @returns true if Docker is available
  */
 export async function checkDockerAvailable(): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["docker", "info"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    // Consume streams concurrently with awaiting exit to prevent potential deadlock
-    await Promise.all([
-      proc.exited,
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ]);
-    return proc.exitCode === 0;
+    await getDockerClient().ping();
+    return true;
   } catch {
     return false;
   }

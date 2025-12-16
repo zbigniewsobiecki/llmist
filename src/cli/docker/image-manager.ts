@@ -2,7 +2,7 @@
  * Docker image building and caching.
  *
  * Handles:
- * - Building Docker images from Dockerfile content
+ * - Building Docker images from Dockerfile content (via dockerode)
  * - Caching image hashes to avoid unnecessary rebuilds
  * - Checking if an image needs to be rebuilt
  */
@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { computeDockerfileHash } from "./dockerfile.js";
+import { getDockerClient } from "./docker-wrapper.js";
 import { DEFAULT_IMAGE_NAME } from "./types.js";
 
 /**
@@ -108,40 +109,61 @@ export class DockerBuildError extends Error {
 }
 
 /**
- * Builds a Docker image from Dockerfile content.
+ * Builds a Docker image from Dockerfile content using dockerode.
+ *
+ * Uses dockerode's buildImage API with followProgress for cleaner
+ * stream handling compared to manual Bun.spawn + stream consumption.
  *
  * @param imageName - Name/tag for the built image
  * @param dockerfile - Dockerfile content
  * @throws DockerBuildError if build fails
  */
 async function buildImage(imageName: string, dockerfile: string): Promise<void> {
-  // Write Dockerfile to temp location
+  const docker = getDockerClient();
+
+  // Write Dockerfile to cache directory (same location as before)
   ensureCacheDir();
   const dockerfilePath = join(CACHE_DIR, "Dockerfile");
   writeFileSync(dockerfilePath, dockerfile);
 
-  // Build the image with --no-cache to ensure Dockerfile changes take effect
-  // Docker layer caching can cause issues when Dockerfile content changes
-  const proc = Bun.spawn(
-    ["docker", "build", "--no-cache", "-t", imageName, "-f", dockerfilePath, CACHE_DIR],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
+  try {
+    // Build the image with nocache to ensure Dockerfile changes take effect
+    const stream = await docker.buildImage(
+      { context: CACHE_DIR, src: ["Dockerfile"] },
+      { t: imageName, nocache: true },
+    );
 
-  // Consume streams concurrently with awaiting exit to prevent deadlock.
-  // If we await proc.exited first, large Docker build output can fill pipe buffers,
-  // causing Docker to block on write while we block on exit - mutual deadlock.
-  const [exitCode, stdout, stderr] = await Promise.all([
-    proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-
-  if (exitCode !== 0) {
-    const output = [stdout, stderr].filter(Boolean).join("\n");
-    throw new DockerBuildError(`Docker build failed with exit code ${exitCode}`, output);
+    // Collect output for error reporting using dockerode's followProgress helper
+    const output: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      docker.modem.followProgress(
+        stream,
+        // onFinished callback
+        (err: Error | null) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        },
+        // onProgress callback - collect output for error context
+        (event: { stream?: string; error?: string; errorDetail?: { message: string } }) => {
+          if (event.stream) {
+            output.push(event.stream.trim());
+          }
+          if (event.error) {
+            output.push(`ERROR: ${event.error}`);
+            reject(new DockerBuildError(`Docker build failed: ${event.error}`, output.join("\n")));
+          }
+        },
+      );
+    });
+  } catch (error) {
+    if (error instanceof DockerBuildError) {
+      throw error;
+    }
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new DockerBuildError(`Docker build failed: ${msg}`, msg);
   }
 }
 
