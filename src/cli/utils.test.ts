@@ -373,6 +373,82 @@ describe("StreamProgress nested operations", () => {
       expect(agent.iteration).toBe(0);
       expect(agent.inputTokens).toBe(5000);
     });
+
+    test("stores gadgetInvocationId for unique subagent identification", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedAgent(
+        "agent:0",
+        "browse_web_github",
+        1,
+        "gemini-2.5-flash",
+        1,
+        { inputTokens: 5000 },
+        6, // parentCallNumber
+        "browse_web_github", // gadgetInvocationId
+      );
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent).toBeDefined();
+      expect(agent.parentCallNumber).toBe(6);
+      expect(agent.gadgetInvocationId).toBe("browse_web_github");
+    });
+
+    test("distinguishes parallel subagents by gadgetInvocationId", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add two parallel subagents with same parent call number but different gadget IDs
+      progress.addNestedAgent(
+        "agent:0",
+        "browse_web_github",
+        1,
+        "gemini-2.5-flash",
+        1,
+        { inputTokens: 5000 },
+        6,
+        "browse_web_github",
+      );
+
+      progress.addNestedAgent(
+        "agent:1",
+        "browse_web_npm",
+        1,
+        "gemini-2.5-flash",
+        1,
+        { inputTokens: 6000 },
+        6,
+        "browse_web_npm",
+      );
+
+      const nestedAgents = (progress as any).nestedAgents;
+
+      const agent0 = nestedAgents.get("agent:0");
+      const agent1 = nestedAgents.get("agent:1");
+
+      // Both have same parentCallNumber (main iteration 6)
+      expect(agent0.parentCallNumber).toBe(6);
+      expect(agent1.parentCallNumber).toBe(6);
+
+      // But different gadgetInvocationIds for unique identification
+      expect(agent0.gadgetInvocationId).toBe("browse_web_github");
+      expect(agent1.gadgetInvocationId).toBe("browse_web_npm");
+    });
+
+    test("handles missing gadgetInvocationId gracefully", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add without gadgetInvocationId (legacy behavior)
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 1, { inputTokens: 1000 });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent.gadgetInvocationId).toBeUndefined();
+      expect(agent.parentCallNumber).toBeUndefined();
+    });
   });
 
   describe("updateNestedAgent", () => {
