@@ -313,7 +313,13 @@ export class StreamProgress {
   // In-flight gadget tracking for concurrent status display
   private inFlightGadgets: Map<
     string,
-    { name: string; params?: Record<string, unknown>; startTime: number }
+    {
+      name: string;
+      params?: Record<string, unknown>;
+      startTime: number;
+      completed?: boolean;
+      completedTime?: number;
+    }
   > = new Map();
 
   // Nested agent tracking for hierarchical subagent display
@@ -324,6 +330,8 @@ export class StreamProgress {
       depth: number;
       model: string;
       iteration: number;
+      /** Parent call number for hierarchical display (e.g., #1.2) */
+      parentCallNumber?: number;
       startTime: number;
       inputTokens?: number;
       outputTokens?: number;
@@ -389,8 +397,58 @@ export class StreamProgress {
   }
 
   /**
+   * Get a gadget by ID (for accessing name, params, etc.).
+   */
+  getGadget(invocationId: string) {
+    return this.inFlightGadgets.get(invocationId);
+  }
+
+  /**
+   * Mark a gadget as completed (keeps it visible with ✓ indicator).
+   * Records completion time to freeze the elapsed timer.
+   * The gadget and its nested operations remain visible until clearCompletedGadgets() is called.
+   */
+  completeGadget(invocationId: string): void {
+    const gadget = this.inFlightGadgets.get(invocationId);
+    if (gadget) {
+      gadget.completed = true;
+      gadget.completedTime = Date.now();
+      if (this.isRunning && this.isTTY) {
+        this.render();
+      }
+    }
+  }
+
+  /**
+   * Clear all completed gadgets from the display.
+   * Called when new text output arrives to clean up the finished gadget section.
+   */
+  clearCompletedGadgets(): void {
+    for (const [id, gadget] of this.inFlightGadgets) {
+      if (gadget.completed) {
+        this.inFlightGadgets.delete(id);
+        // Also clean up nested operations for this gadget
+        for (const [nestedId, nested] of this.nestedAgents) {
+          if (nested.parentInvocationId === id) {
+            this.nestedAgents.delete(nestedId);
+          }
+        }
+        for (const [nestedId, nested] of this.nestedGadgets) {
+          if (nested.parentInvocationId === id) {
+            this.nestedGadgets.delete(nestedId);
+          }
+        }
+      }
+    }
+    if (this.isRunning && this.isTTY) {
+      this.render();
+    }
+  }
+
+  /**
    * Add a nested agent LLM call (called when nested llm_call_start event received).
    * Used to display hierarchical progress for subagent gadgets.
+   * @param parentCallNumber - Top-level call number for hierarchical display (e.g., #1.2)
    */
   addNestedAgent(
     id: string,
@@ -402,12 +460,14 @@ export class StreamProgress {
       inputTokens?: number;
       cachedInputTokens?: number;
     },
+    parentCallNumber?: number,
   ): void {
     this.nestedAgents.set(id, {
       parentInvocationId,
       depth,
       model,
       iteration,
+      parentCallNumber,
       startTime: Date.now(),
       inputTokens: info?.inputTokens,
       cachedInputTokens: info?.cachedInputTokens,
@@ -483,6 +543,13 @@ export class StreamProgress {
   }
 
   /**
+   * Get a nested agent by ID (for accessing startTime, etc.).
+   */
+  getNestedAgent(id: string) {
+    return this.nestedAgents.get(id);
+  }
+
+  /**
    * Get aggregated metrics from all nested agents for a parent gadget.
    * Used to show total token counts and cost for subagent gadgets like BrowseWeb.
    */
@@ -542,6 +609,13 @@ export class StreamProgress {
     if (this.isRunning && this.isTTY) {
       this.render();
     }
+  }
+
+  /**
+   * Get a nested gadget by ID (for accessing startTime, name, etc.).
+   */
+  getNestedGadget(id: string) {
+    return this.nestedGadgets.get(id);
   }
 
   /**
@@ -714,18 +788,29 @@ export class StreamProgress {
     const activeNestedStreams: Array<{
       depth: number;
       iteration: number;
+      parentCallNumber?: number;
       model: string;
       inputTokens?: number;
       cachedInputTokens?: number;
       outputTokens?: number;
       cost?: number;
       startTime: number;
+      parentGadgetName: string; // For prefixing nested operation lines
     }> = [];
 
-    // In-flight gadgets with COMPLETED nested operations only (active streams go to bottom)
+    // In-flight gadgets - ONLY show gadgets that are still running
+    // Completed gadgets are printed inline when they finish (via completeGadget)
     if (this.isTTY) {
       for (const [gadgetId, gadget] of this.inFlightGadgets) {
+        // Skip completed gadgets - they were already printed inline
+        if (gadget.completed) {
+          continue;
+        }
         const elapsedSeconds = (Date.now() - gadget.startTime) / 1000;
+
+        // Get aggregated subagent metrics for realtime display
+        const subagentMetrics = this.getAggregatedSubagentMetrics(gadgetId);
+
         // Use shared formatGadgetLine for consistent formatting with parameters
         // Pass maxWidth adjusted for 2-space indent
         const termWidth = process.stdout.columns ?? 80;
@@ -735,7 +820,12 @@ export class StreamProgress {
             name: gadget.name,
             parameters: gadget.params,
             elapsedSeconds,
-            isComplete: false,
+            isComplete: false, // We only show running gadgets here
+            // Pass realtime subagent metrics
+            subagentInputTokens: subagentMetrics.inputTokens,
+            subagentOutputTokens: subagentMetrics.outputTokens,
+            subagentCachedTokens: subagentMetrics.cachedInputTokens,
+            subagentCost: subagentMetrics.cost,
           },
           termWidth - gadgetIndent.length,
         );
@@ -754,6 +844,7 @@ export class StreamProgress {
           depth: number;
           // Agent-specific fields
           iteration?: number;
+          parentCallNumber?: number;
           model?: string;
           inputTokens?: number;
           cachedInputTokens?: number;
@@ -763,6 +854,7 @@ export class StreamProgress {
           completed?: boolean;
           completedTime?: number;
           // Gadget-specific fields
+          id?: string; // For metrics aggregation
           name?: string;
           parameters?: Record<string, unknown>;
         }> = [];
@@ -775,6 +867,7 @@ export class StreamProgress {
               startTime: nested.startTime,
               depth: nested.depth,
               iteration: nested.iteration,
+              parentCallNumber: nested.parentCallNumber,
               model: nested.model,
               inputTokens: nested.inputTokens,
               cachedInputTokens: nested.cachedInputTokens,
@@ -790,22 +883,25 @@ export class StreamProgress {
               activeNestedStreams.push({
                 depth: nested.depth,
                 iteration: nested.iteration,
+                parentCallNumber: nested.parentCallNumber,
                 model: nested.model,
                 inputTokens: nested.inputTokens,
                 cachedInputTokens: nested.cachedInputTokens,
                 outputTokens: nested.outputTokens,
                 cost: nested.cost,
                 startTime: nested.startTime,
+                parentGadgetName: gadget.name, // Track parent for prefixing
               });
             }
           }
         }
 
         // Collect nested gadgets for this parent
-        for (const [_nestedId, nestedGadget] of this.nestedGadgets) {
+        for (const [nestedId, nestedGadget] of this.nestedGadgets) {
           if (nestedGadget.parentInvocationId === gadgetId) {
             nestedOps.push({
               type: "gadget",
+              id: nestedId, // Preserve ID for metrics aggregation
               startTime: nestedGadget.startTime,
               depth: nestedGadget.depth,
               name: nestedGadget.name,
@@ -822,52 +918,50 @@ export class StreamProgress {
         // Render in chronological order using shared formatting functions
         // Nested operations are indented under parent gadget (which has 2-space indent)
         // So base indent is 4 spaces, plus 2 more for each depth level
-        // SKIP actively streaming agents - they'll be shown at the bottom
+        // SKIP completed ops (printed inline) and streaming agents (shown at bottom)
         for (const op of nestedOps) {
-          // Skip actively streaming agents (shown at bottom)
-          if (op.type === "agent" && !op.completed) {
+          // Skip ALL completed operations - they were printed inline when they finished
+          if (op.completed) {
             continue;
           }
 
-          const indent = "  ".repeat(op.depth + 2);
-          const endTime = op.completedTime ?? Date.now();
-          const elapsedSeconds = (endTime - op.startTime) / 1000;
-
+          // Skip in-progress agents - they're shown in active streams section at bottom
           if (op.type === "agent") {
-            // Use shared formatLLMCallLine for consistent formatting
-            const line = formatLLMCallLine({
-              iteration: op.iteration ?? 0,
-              model: op.model ?? "",
-              inputTokens: op.inputTokens,
-              cachedInputTokens: op.cachedInputTokens,
-              outputTokens: op.outputTokens,
-              elapsedSeconds,
-              cost: op.cost,
-              finishReason: op.completed ? (op.finishReason ?? "stop") : undefined,
-              isStreaming: !op.completed,
-              spinner,
-            });
-            lines.push(`${indent}${line}`);
-          } else {
-            // Use shared formatGadgetLine for consistent formatting
-            // Pass maxWidth adjusted for indent to prevent line overflow
-            const termWidth = process.stdout.columns ?? 80;
-            const line = formatGadgetLine(
-              {
-                name: op.name ?? "",
-                parameters: op.parameters,
-                elapsedSeconds,
-                isComplete: op.completed ?? false,
-              },
-              termWidth - indent.length,
-            );
-            // Add indent to EACH line of multi-line output
-            const indentedLine = line
-              .split("\n")
-              .map((l) => indent + l)
-              .join("\n");
-            lines.push(indentedLine);
+            continue;
           }
+
+          // Only in-progress GADGETS reach here - render them
+          const indent = "  ".repeat(op.depth + 2);
+          const elapsedSeconds = (Date.now() - op.startTime) / 1000;
+
+          // Get aggregated subagent metrics (for nested gadgets that run LLM calls)
+          const nestedMetrics = op.id ? this.getAggregatedSubagentMetrics(op.id) : { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cost: 0, callCount: 0 };
+
+          // Use shared formatGadgetLine for consistent formatting
+          // Pass maxWidth adjusted for indent to prevent line overflow
+          const termWidth = process.stdout.columns ?? 80;
+          // Parent gadget prefix for nested operations
+          const parentPrefix = `${chalk.dim(`${gadget.name}:`)} `;
+          const line = formatGadgetLine(
+            {
+              name: op.name ?? "",
+              parameters: op.parameters,
+              elapsedSeconds,
+              isComplete: false, // Only in-progress gadgets reach here
+              // Pass realtime subagent metrics
+              subagentInputTokens: nestedMetrics.inputTokens,
+              subagentOutputTokens: nestedMetrics.outputTokens,
+              subagentCachedTokens: nestedMetrics.cachedInputTokens,
+              subagentCost: nestedMetrics.cost,
+            },
+            termWidth - indent.length - parentPrefix.length,
+          );
+          // Add indent and parent prefix to EACH line of multi-line output
+          const indentedLine = line
+            .split("\n")
+            .map((l) => indent + parentPrefix + l)
+            .join("\n");
+          lines.push(indentedLine);
         }
       }
     }
@@ -880,9 +974,12 @@ export class StreamProgress {
     for (const stream of activeNestedStreams) {
       // Use depth-based indent to align with completed nested agents in hierarchy
       const indent = "  ".repeat(stream.depth + 2);
+      // Parent gadget prefix for nested operations
+      const parentPrefix = `${chalk.dim(`${stream.parentGadgetName}:`)} `;
       const elapsedSeconds = (Date.now() - stream.startTime) / 1000;
       const line = formatLLMCallLine({
         iteration: stream.iteration,
+        parentCallNumber: stream.parentCallNumber,
         model: stream.model,
         inputTokens: stream.inputTokens,
         cachedInputTokens: stream.cachedInputTokens,
@@ -892,7 +989,7 @@ export class StreamProgress {
         isStreaming: true,
         spinner,
       });
-      lines.push(`${indent}${line}`);
+      lines.push(`${indent}${parentPrefix}${line}`);
     }
 
     // Main progress line LAST (it's the outer/root context)
@@ -929,6 +1026,19 @@ export class StreamProgress {
 
     // Return cursor to start
     this.target.write("\r");
+  }
+
+  /**
+   * Clear rendered lines and reset counter.
+   * Call this before printing static output that should remain visible
+   * above the render zone (e.g., opening/closing lines for nested operations).
+   */
+  clearAndReset(): void {
+    if (this.isTTY) {
+      this.clearRenderedLines();
+    }
+    this.lastRenderLineCount = 0;
+    this.hasRendered = false;
   }
 
   /**
