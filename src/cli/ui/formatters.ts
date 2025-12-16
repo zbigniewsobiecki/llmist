@@ -222,6 +222,8 @@ export interface LLMCallDisplayInfo {
   iteration: number;
   /** Parent call number for hierarchical display (e.g., parent=1, iteration=2 → #1.2) */
   parentCallNumber?: number;
+  /** Gadget invocation ID for unique subagent identification (e.g., #6.browse_web_1.2) */
+  gadgetInvocationId?: string;
   /** Model name/ID */
   model: string;
   /** Input tokens sent to LLM */
@@ -252,11 +254,12 @@ export interface LLMCallDisplayInfo {
  * This is printed once when an LLM call starts, before streaming begins.
  * The opening line is static and never refreshed.
  *
- * **Format:** `→ #N model`
+ * **Format:** `→ #N model` (main agent) or `→ #N.gadgetId.M model` (subagent)
  *
  * @param iteration - Iteration/call number
  * @param model - Model name/ID
- * @param parentCallNumber - Parent call number for nested calls (e.g., #1.2)
+ * @param parentCallNumber - Parent call number for nested calls
+ * @param gadgetInvocationId - Gadget invocation ID for unique subagent identification
  * @returns Formatted opening line string with ANSI colors
  *
  * @example
@@ -264,18 +267,27 @@ export interface LLMCallDisplayInfo {
  * formatLLMCallOpening(1, "gemini:gemini-2.5-flash");
  * // Output: "→ #1 gemini:gemini-2.5-flash"
  *
- * formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1);
- * // Output: "→ #1.2 gemini:gemini-2.5-flash"
+ * formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1, "browse_web_1");
+ * // Output: "→ #1.browse_web_1.2 gemini:gemini-2.5-flash"
  * ```
  */
 export function formatLLMCallOpening(
   iteration: number,
   model: string,
   parentCallNumber?: number,
+  gadgetInvocationId?: string,
 ): string {
-  const callNumber = parentCallNumber
-    ? `#${parentCallNumber}.${iteration}`
-    : `#${iteration}`;
+  let callNumber: string;
+  if (parentCallNumber !== undefined && gadgetInvocationId) {
+    // Subagent with full context: #parent.gadgetId.iteration
+    callNumber = `#${parentCallNumber}.${gadgetInvocationId}.${iteration}`;
+  } else if (parentCallNumber !== undefined) {
+    // Subagent without gadget ID (legacy): #parent.iteration
+    callNumber = `#${parentCallNumber}.${iteration}`;
+  } else {
+    // Main agent: #iteration
+    callNumber = `#${iteration}`;
+  }
   return `${chalk.dim("→")} ${chalk.cyan(callNumber)} ${chalk.magenta(model)}`;
 }
 
@@ -331,11 +343,19 @@ export function formatLLMCallOpening(
 export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
   const parts: string[] = [];
 
-  // #N or #N.M model (iteration number + model name) - combined as one unit
-  // Hierarchical format: parent.child (e.g., #1.2 for 2nd subagent call of parent #1)
-  const callNumber = info.parentCallNumber
-    ? `#${info.parentCallNumber}.${info.iteration}`
-    : `#${info.iteration}`;
+  // #N or #N.gadgetId.M model (iteration number + model name) - combined as one unit
+  // Hierarchical format: parent.gadgetId.child (e.g., #1.browse_web_1.2 for 2nd call of gadget browse_web_1 in parent #1)
+  let callNumber: string;
+  if (info.parentCallNumber !== undefined && info.gadgetInvocationId) {
+    // Subagent with full context: #parent.gadgetId.iteration
+    callNumber = `#${info.parentCallNumber}.${info.gadgetInvocationId}.${info.iteration}`;
+  } else if (info.parentCallNumber !== undefined) {
+    // Subagent without gadget ID (legacy): #parent.iteration
+    callNumber = `#${info.parentCallNumber}.${info.iteration}`;
+  } else {
+    // Main agent: #iteration
+    callNumber = `#${info.iteration}`;
+  }
   parts.push(`${chalk.cyan(callNumber)} ${chalk.magenta(info.model)}`);
 
   // Context usage percentage (color-coded by usage level, main agent only)

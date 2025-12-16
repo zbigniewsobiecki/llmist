@@ -737,7 +737,12 @@ export async function executeAgent(
         // Print opening line (static, never refreshed)
         if (stderrTTY) {
           progress.clearAndReset();
-          const openingLine = formatLLMCallOpening(iteration, info.model, llmCallCounter);
+          const openingLine = formatLLMCallOpening(
+            iteration,
+            info.model,
+            llmCallCounter,
+            subagentEvent.gadgetInvocationId,
+          );
           env.stderr.write(`${indent}${parentPrefix}${openingLine}\n`);
         }
 
@@ -751,7 +756,8 @@ export async function executeAgent(
             inputTokens: info.usage?.inputTokens ?? info.inputTokens,
             cachedInputTokens: info.usage?.cachedInputTokens,
           },
-          llmCallCounter, // Parent call number for hierarchical display (e.g., #1.2)
+          llmCallCounter, // Parent call number for hierarchical display
+          subagentEvent.gadgetInvocationId, // Gadget invocation ID for unique identification
         );
       } else if (subagentEvent.type === "llm_call_end") {
         const info = subagentEvent.event as LLMCallInfo;
@@ -770,6 +776,7 @@ export async function executeAgent(
           const closingLine = formatLLMCallLine({
             iteration,
             parentCallNumber: llmCallCounter,
+            gadgetInvocationId: subagentEvent.gadgetInvocationId,
             model: info.model,
             inputTokens: info.usage?.inputTokens ?? info.inputTokens,
             outputTokens: info.usage?.outputTokens ?? info.outputTokens,
