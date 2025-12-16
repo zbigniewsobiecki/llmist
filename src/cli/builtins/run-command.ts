@@ -106,17 +106,22 @@ export const runCommand = createGadget({
         }, timeout);
       });
 
-      // Wait for process to complete or timeout
-      const exitCode = await Promise.race([proc.exited, timeoutPromise]);
+      // Wait for process and consume streams concurrently to prevent deadlock.
+      // If we await proc.exited first, large output can fill pipe buffers,
+      // causing the process to block on write while we block on exit.
+      const [exitCode, stdout, stderr] = await Promise.race([
+        Promise.all([
+          proc.exited,
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+        ]),
+        timeoutPromise,
+      ]);
 
       // Clear timeout on normal exit to prevent dangling timer
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-
-      // Collect output
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
 
       // Combine output (stdout first, then stderr if any)
       const output = [stdout, stderr].filter(Boolean).join("\n").trim();
