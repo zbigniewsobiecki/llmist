@@ -693,6 +693,16 @@ export class StreamProgress {
   }
 
   /**
+   * Adds gadget execution cost to the total.
+   * Called when gadgets complete to include their costs (direct + subagent) in the total.
+   */
+  addGadgetCost(cost: number): void {
+    if (cost > 0) {
+      this.totalCost += cost;
+    }
+  }
+
+  /**
    * Sets the input token count for current call (from stream metadata).
    * @param tokens - Token count from provider or client.countTokens()
    * @param estimated - If true, this is a fallback estimate (character-based).

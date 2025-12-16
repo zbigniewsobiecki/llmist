@@ -173,6 +173,49 @@ describe("StreamProgress", () => {
       const totalCost = (progress as any).totalCost;
       expect(totalCost).toBe(0);
     });
+
+    test("addGadgetCost accumulates gadget costs into total", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add gadget costs
+      progress.addGadgetCost(0.037); // BrowseWeb cost
+      progress.addGadgetCost(0.001); // Another gadget
+
+      const totalCost = (progress as any).totalCost;
+      expect(totalCost).toBeCloseTo(0.038, 5);
+    });
+
+    test("addGadgetCost ignores zero and negative costs", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addGadgetCost(0.01);
+      progress.addGadgetCost(0); // Should be ignored
+      progress.addGadgetCost(-0.005); // Should be ignored
+
+      const totalCost = (progress as any).totalCost;
+      expect(totalCost).toBeCloseTo(0.01, 5);
+    });
+
+    test("addGadgetCost combines with LLM call costs", () => {
+      const stream = new MockWritableStream();
+      const registry = new MockModelRegistry();
+      registry.setCost("gpt-4", 30, 60);
+
+      const progress = new StreamProgress(stream, false, registry as any);
+
+      // LLM call cost: (1000/1M * $30) + (500/1M * $60) = $0.03 + $0.03 = $0.06
+      progress.startCall("gpt-4", 1000);
+      progress.endCall({ inputTokens: 1000, outputTokens: 500, totalTokens: 1500 });
+
+      // Add gadget cost
+      progress.addGadgetCost(0.037);
+
+      const totalCost = (progress as any).totalCost;
+      // Total should be $0.06 (LLM) + $0.037 (gadget) = $0.097
+      expect(totalCost).toBeCloseTo(0.097, 5);
+    });
   });
 
   describe("cost display", () => {

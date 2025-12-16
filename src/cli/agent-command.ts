@@ -966,6 +966,11 @@ export async function executeAgent(
             event.result.invocationId,
           );
 
+          // Accumulate gadget costs into total
+          // - event.result.cost: direct gadget cost (e.g., API charges)
+          // - subagentMetrics.cost: subagent LLM costs (e.g., BrowseWeb's internal agent)
+          progress.addGadgetCost((event.result.cost ?? 0) + subagentMetrics.cost);
+
           const summary = formatGadgetSummary({
             ...event.result,
             tokenCount,
