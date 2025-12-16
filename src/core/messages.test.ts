@@ -214,7 +214,7 @@ describe("LLMMessageBuilder", () => {
 
     it("formats gadget call with block format parameters", () => {
       const builder = new LLMMessageBuilder();
-      builder.addGadgetCallResult("MathGadget", { operation: "add", a: 5, b: 3 }, "8");
+      builder.addGadgetCallResult("MathGadget", { operation: "add", a: 5, b: 3 }, "8", "gc_1");
 
       const messages = builder.build();
 
@@ -222,15 +222,16 @@ describe("LLMMessageBuilder", () => {
       const callMessage = messages[0]?.content ?? "";
       const resultMessage = messages[1]?.content ?? "";
 
-      // Check for gadget markers
-      expect(callMessage).toContain(`${GADGET_START_PREFIX}MathGadget`);
+      // Check for gadget markers with invocation ID
+      expect(callMessage).toContain(`${GADGET_START_PREFIX}MathGadget:gc_1`);
       expect(callMessage).toContain(GADGET_END_PREFIX);
       expect(callMessage).toContain(`${GADGET_ARG_PREFIX}operation`);
       expect(callMessage).toContain("add");
       expect(callMessage).toContain(`${GADGET_ARG_PREFIX}a`);
       expect(callMessage).toContain("5");
 
-      expect(resultMessage).toBe("Result: 8");
+      // Result includes invocation ID for LLM reference
+      expect(resultMessage).toBe("Result (gc_1): 8");
     });
 
     it("handles complex parameter objects", () => {
@@ -242,6 +243,7 @@ describe("LLMMessageBuilder", () => {
           items: ["a", "b"],
         },
         "result",
+        "gc_2",
       );
 
       const messages = builder.build();
@@ -256,7 +258,7 @@ describe("LLMMessageBuilder", () => {
 
     it("handles empty parameters", () => {
       const builder = new LLMMessageBuilder();
-      builder.addGadgetCallResult("EmptyGadget", {}, "done");
+      builder.addGadgetCallResult("EmptyGadget", {}, "done", "gc_3");
 
       const messages = builder.build();
       const callMessage = messages[0]?.content ?? "";

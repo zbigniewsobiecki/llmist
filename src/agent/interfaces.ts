@@ -24,12 +24,14 @@ export interface IConversationManager {
 
   /**
    * Adds a gadget call and its result to the conversation.
+   * The invocationId is shown to the LLM so it can reference previous calls when building dependencies.
    * Optionally includes media outputs (images, audio, etc.) for multimodal results.
    */
   addGadgetCallResult(
     gadgetName: string,
     parameters: Record<string, unknown>,
     result: string,
+    invocationId: string,
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
   ): void;
