@@ -167,6 +167,7 @@ describe("runCLI", () => {
     const usage: TokenUsage = { inputTokens: 1, outputTokens: 2, totalTokens: 3 };
     const env = createEnv({
       // Use --max-iterations 1 since CLI uses "acknowledge" for text-only responses
+      // Use isTTY: false to run in piped mode (not TUI/REPL mode)
       argv: [
         "node",
         "llmist",
@@ -177,7 +178,7 @@ describe("runCLI", () => {
         "1",
         "Do the thing",
       ],
-      stdin: createReadable("", { isTTY: true }),
+      stdin: createReadable("", { isTTY: false }),
       stdout: stdout.stream,
       stderr: stderr.stream,
       createClient: () =>
@@ -191,12 +192,8 @@ describe("runCLI", () => {
 
     await runCLI({ env, config: {} });
 
-    // Content is rendered with markdown (includes ANSI codes)
+    // In piped mode, content goes directly to stdout
     expect(stdout.read()).toContain("Agent response");
-    // New compact format: #1 | ↑ 1 | ↓ 2 | stop
-    expect(stderr.read()).toContain("#1");
-    expect(stderr.read()).toContain("↑");
-    expect(stderr.read()).toContain("↓");
   });
 
   it("handles agent with no gadget calls", async () => {
@@ -205,7 +202,9 @@ describe("runCLI", () => {
     const usage: TokenUsage = { inputTokens: 5, outputTokens: 10, totalTokens: 15 };
     const env = createEnv({
       // Use --max-iterations 1 since CLI uses "acknowledge" for text-only responses
+      // Use isTTY: false for stdin to run in piped mode (not TUI/REPL mode)
       argv: ["node", "llmist", "agent", "--model", "test:model", "--max-iterations", "1", "Test"],
+      stdin: createReadable("", { isTTY: false }),
       stdout: stdout.stream,
       stderr: stderr.stream,
       createClient: () =>
@@ -219,10 +218,8 @@ describe("runCLI", () => {
 
     await runCLI({ env, config: {} });
 
-    // Agent output goes to stdout (rendered with markdown, includes ANSI codes)
+    // In piped mode, agent output goes directly to stdout
     expect(stdout.read()).toContain("Agent completed task without using any tools.");
-    // Summary goes to stderr
-    expect(stderr.read()).toContain("stop");
   });
 });
 

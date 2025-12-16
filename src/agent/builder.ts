@@ -732,11 +732,17 @@ export class AgentBuilder {
       const existingOnGadgetExecutionStart = hooks?.observers?.onGadgetExecutionStart;
       const existingOnGadgetExecutionComplete = hooks?.observers?.onGadgetExecutionComplete;
 
+      // Track LLM call start times for elapsed time calculation
+      const llmCallStartTimes = new Map<number, number>();
+
       hooks = {
         ...hooks,
         observers: {
           ...hooks?.observers,
           onLLMCallStart: async (context) => {
+            // Track start time for elapsed time calculation
+            llmCallStartTimes.set(context.iteration, Date.now());
+
             // Count input tokens for accurate subagent metrics display.
             // This ensures input tokens are available in the CLI even when
             // providers don't include promptTokenCount in completion events.
@@ -775,6 +781,11 @@ export class AgentBuilder {
             }
           },
           onLLMCallComplete: async (context) => {
+            // Calculate elapsed time
+            const startTime = llmCallStartTimes.get(context.iteration);
+            const elapsedMs = startTime ? Date.now() - startTime : undefined;
+            llmCallStartTimes.delete(context.iteration);
+
             // Forward to parent with full context (first-class subagent metrics)
             onSubagentEvent({
               type: "llm_call_end",
@@ -787,6 +798,7 @@ export class AgentBuilder {
                 inputTokens: context.usage?.inputTokens,
                 outputTokens: context.usage?.outputTokens,
                 finishReason: context.finishReason ?? undefined,
+                elapsedMs,
                 // Full usage object with cache details (for first-class display)
                 usage: context.usage,
                 // Cost will be calculated by parent if it has model registry
