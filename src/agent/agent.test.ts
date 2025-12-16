@@ -56,7 +56,7 @@ describe("Agent Architecture", () => {
 
       manager.addUserMessage("What is 1+1?");
       manager.addAssistantMessage("Let me calculate that.");
-      manager.addGadgetCallResult("TestCalculator", { a: 1, b: 1 }, "Result: 2");
+      manager.addGadgetCallResult("TestCalculator", { a: 1, b: 1 }, "Result: 2", "gc_test_1");
 
       const messages = manager.getMessages();
 
