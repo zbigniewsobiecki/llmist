@@ -332,6 +332,8 @@ export class StreamProgress {
       iteration: number;
       /** Parent call number for hierarchical display (e.g., #1.2) */
       parentCallNumber?: number;
+      /** Gadget invocation ID for unique subagent identification (e.g., #6.browse_web_1.2) */
+      gadgetInvocationId?: string;
       startTime: number;
       inputTokens?: number;
       outputTokens?: number;
@@ -449,6 +451,7 @@ export class StreamProgress {
    * Add a nested agent LLM call (called when nested llm_call_start event received).
    * Used to display hierarchical progress for subagent gadgets.
    * @param parentCallNumber - Top-level call number for hierarchical display (e.g., #1.2)
+   * @param gadgetInvocationId - Gadget invocation ID for unique subagent identification
    */
   addNestedAgent(
     id: string,
@@ -461,6 +464,7 @@ export class StreamProgress {
       cachedInputTokens?: number;
     },
     parentCallNumber?: number,
+    gadgetInvocationId?: string,
   ): void {
     this.nestedAgents.set(id, {
       parentInvocationId,
@@ -468,6 +472,7 @@ export class StreamProgress {
       model,
       iteration,
       parentCallNumber,
+      gadgetInvocationId,
       startTime: Date.now(),
       inputTokens: info?.inputTokens,
       cachedInputTokens: info?.cachedInputTokens,
@@ -799,6 +804,7 @@ export class StreamProgress {
       depth: number;
       iteration: number;
       parentCallNumber?: number;
+      gadgetInvocationId?: string;
       model: string;
       inputTokens?: number;
       cachedInputTokens?: number;
@@ -855,6 +861,7 @@ export class StreamProgress {
           // Agent-specific fields
           iteration?: number;
           parentCallNumber?: number;
+          gadgetInvocationId?: string;
           model?: string;
           inputTokens?: number;
           cachedInputTokens?: number;
@@ -878,6 +885,7 @@ export class StreamProgress {
               depth: nested.depth,
               iteration: nested.iteration,
               parentCallNumber: nested.parentCallNumber,
+              gadgetInvocationId: nested.gadgetInvocationId,
               model: nested.model,
               inputTokens: nested.inputTokens,
               cachedInputTokens: nested.cachedInputTokens,
@@ -894,6 +902,7 @@ export class StreamProgress {
                 depth: nested.depth,
                 iteration: nested.iteration,
                 parentCallNumber: nested.parentCallNumber,
+                gadgetInvocationId: nested.gadgetInvocationId,
                 model: nested.model,
                 inputTokens: nested.inputTokens,
                 cachedInputTokens: nested.cachedInputTokens,
@@ -990,6 +999,7 @@ export class StreamProgress {
       const line = formatLLMCallLine({
         iteration: stream.iteration,
         parentCallNumber: stream.parentCallNumber,
+        gadgetInvocationId: stream.gadgetInvocationId,
         model: stream.model,
         inputTokens: stream.inputTokens,
         cachedInputTokens: stream.cachedInputTokens,
