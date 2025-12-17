@@ -1,3 +1,8 @@
+## 6.2.0 (2025-12-17)
+
+* Merge pull request #200 from zbigniewsobiecki/dev ([6c78b49](https://github.com/zbigniewsobiecki/llmist/commit/6c78b49)), closes [#200](https://github.com/zbigniewsobiecki/llmist/issues/200)
+* feat(gadgets): add hostExports to ExecutionContext for external gadgets (#199) ([d6ebdcf](https://github.com/zbigniewsobiecki/llmist/commit/d6ebdcf)), closes [#199](https://github.com/zbigniewsobiecki/llmist/issues/199)
+
 ## 6.1.0 (2025-12-17)
 
 * Merge pull request #198 from zbigniewsobiecki/dev ([273fd83](https://github.com/zbigniewsobiecki/llmist/commit/273fd83)), closes [#198](https://github.com/zbigniewsobiecki/llmist/issues/198)
