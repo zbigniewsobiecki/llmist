@@ -595,119 +595,30 @@ export class Agent {
     });
 
     while (currentIteration < this.maxIterations) {
-      // Check abort signal at start of each iteration for immediate termination
-      if (this.signal?.aborted) {
-        this.logger.info("Agent loop terminated by abort signal", {
-          iteration: currentIteration,
-          reason: this.signal.reason,
-        });
-
-        // Observer: Notify abort
-        await this.safeObserve(async () => {
-          if (this.hooks.observers?.onAbort) {
-            const context: ObserveAbortContext = {
-              iteration: currentIteration,
-              reason: this.signal?.reason,
-              logger: this.logger,
-            };
-            await this.hooks.observers.onAbort(context);
-          }
-        });
-
-        return; // Clean exit from generator
+      // Check abort signal at start of each iteration
+      if (await this.checkAbortAndNotify(currentIteration)) {
+        return;
       }
 
       this.logger.debug("Starting iteration", { iteration: currentIteration });
 
       try {
         // Check and perform context compaction if needed
-        if (this.compactionManager) {
-          const compactionEvent = await this.compactionManager.checkAndCompact(
-            this.conversation,
-            currentIteration,
-          );
-          if (compactionEvent) {
-            this.logger.info("Context compacted", {
-              strategy: compactionEvent.strategy,
-              tokensBefore: compactionEvent.tokensBefore,
-              tokensAfter: compactionEvent.tokensAfter,
-            });
-            yield { type: "compaction", event: compactionEvent } as StreamEvent;
-
-            // Observer: Compaction occurred
-            await this.safeObserve(async () => {
-              if (this.hooks.observers?.onCompaction) {
-                await this.hooks.observers.onCompaction({
-                  iteration: currentIteration,
-                  event: compactionEvent,
-                  // biome-ignore lint/style/noNonNullAssertion: compactionManager exists if compactionEvent is truthy
-                  stats: this.compactionManager!.getStats(),
-                  logger: this.logger,
-                });
-              }
-            });
-          }
+        const compactionEvent = await this.checkAndPerformCompaction(currentIteration);
+        if (compactionEvent) {
+          yield compactionEvent;
         }
 
-        // Prepare LLM call options
-        let llmOptions: LLMGenerationOptions = {
-          model: this.model,
-          messages: this.conversation.getMessages(),
-          temperature: this.temperature,
-          maxTokens: this.defaultMaxTokens,
-          signal: this.signal,
-        };
+        // Prepare LLM call with hooks
+        const prepared = await this.prepareLLMCall(currentIteration);
+        const llmOptions = prepared.options;
 
-        // Observer: LLM call start
-        await this.safeObserve(async () => {
-          if (this.hooks.observers?.onLLMCallStart) {
-            const context: ObserveLLMCallContext = {
-              iteration: currentIteration,
-              options: llmOptions,
-              logger: this.logger,
-            };
-            await this.hooks.observers.onLLMCallStart(context);
-          }
-        });
-
-        // Controller: Before LLM call
-        if (this.hooks.controllers?.beforeLLMCall) {
-          const context: LLMCallControllerContext = {
-            iteration: currentIteration,
-            maxIterations: this.maxIterations,
-            options: llmOptions,
-            logger: this.logger,
-          };
-          const action: BeforeLLMCallAction = await this.hooks.controllers.beforeLLMCall(context);
-
-          // Validate the action
-          validateBeforeLLMCallAction(action);
-
-          if (action.action === "skip") {
-            this.logger.info("Controller skipped LLM call, using synthetic response");
-            // Add synthetic response to conversation
-            this.conversation.addAssistantMessage(action.syntheticResponse);
-            // Yield as text event
-            yield { type: "text", content: action.syntheticResponse };
-            break;
-          } else if (action.action === "proceed" && action.modifiedOptions) {
-            llmOptions = { ...llmOptions, ...action.modifiedOptions };
-          }
+        // Handle skip action from beforeLLMCall controller
+        if (prepared.skipWithSynthetic !== undefined) {
+          this.conversation.addAssistantMessage(prepared.skipWithSynthetic);
+          yield { type: "text", content: prepared.skipWithSynthetic };
+          break;
         }
-
-        // Observer: LLM call ready (after controller modifications)
-        // This is the ideal point for logging the exact request being sent to the LLM
-        await this.safeObserve(async () => {
-          if (this.hooks.observers?.onLLMCallReady) {
-            const context: ObserveLLMCallReadyContext = {
-              iteration: currentIteration,
-              maxIterations: this.maxIterations,
-              options: llmOptions,
-              logger: this.logger,
-            };
-            await this.hooks.observers.onLLMCallReady(context);
-          }
-        });
 
         // Call LLM
         this.logger.info("Calling LLM", { model: this.model });
@@ -817,117 +728,26 @@ export class Agent {
           }
         });
 
-        // Calculate cost for this LLM call using ModelRegistry (if available)
-        const llmCost = this.client.modelRegistry?.estimateCost?.(
-          this.model,
-          result.usage?.inputTokens ?? 0,
-          result.usage?.outputTokens ?? 0,
-          result.usage?.cachedInputTokens ?? 0,
-          result.usage?.cacheCreationInputTokens ?? 0,
-        )?.totalCost;
+        // Complete LLM call in execution tree (with cost calculation)
+        this.completeLLMCallInTree(currentLLMNodeId, result);
 
-        // Complete LLM call in execution tree (including cost for automatic aggregation)
-        this.tree.completeLLMCall(currentLLMNodeId, {
-          response: result.rawResponse,
-          usage: result.usage,
-          finishReason: result.finishReason,
-          cost: llmCost,
-        });
+        // Process afterLLMCall controller (may modify finalMessage or append messages)
+        const finalMessage = await this.processAfterLLMCallController(
+          currentIteration,
+          llmOptions,
+          result,
+          gadgetCallCount,
+        );
 
-        // Controller: After LLM call
-        let finalMessage = result.finalMessage;
-        if (this.hooks.controllers?.afterLLMCall) {
-          // gadgetCallCount was tracked during the streaming loop above
-          const context: AfterLLMCallControllerContext = {
-            iteration: currentIteration,
-            maxIterations: this.maxIterations,
-            options: llmOptions,
-            finishReason: result.finishReason,
-            usage: result.usage,
-            finalMessage: result.finalMessage,
-            gadgetCallCount,
-            logger: this.logger,
-          };
-          const action: AfterLLMCallAction = await this.hooks.controllers.afterLLMCall(context);
-
-          // Validate the action
-          validateAfterLLMCallAction(action);
-
-          if (action.action === "modify_and_continue" || action.action === "append_and_modify") {
-            finalMessage = action.modifiedMessage;
-          }
-
-          if (action.action === "append_messages" || action.action === "append_and_modify") {
-            for (const msg of action.messages) {
-              if (msg.role === "user") {
-                this.conversation.addUserMessage(msg.content);
-              } else if (msg.role === "assistant") {
-                // Assistant messages are always text, extract if multimodal
-                this.conversation.addAssistantMessage(extractMessageText(msg.content));
-              } else if (msg.role === "system") {
-                // System messages can't be added mid-conversation, treat as user
-                this.conversation.addUserMessage(`[System] ${extractMessageText(msg.content)}`);
-              }
-            }
-          }
-        }
-
-        // Add gadget results to conversation (if any were executed)
-        if (result.didExecuteGadgets) {
-          // If configured, wrap accompanying text as a synthetic gadget call (before actual gadgets)
-          if (this.textWithGadgetsHandler) {
-            // Use tracked textOutputs from streaming loop (replaces result.outputs filtering)
-            const textContent = textOutputs.join("");
-
-            if (textContent.trim()) {
-              const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
-              // Generate synthetic invocation ID for wrapped text
-              const syntheticId = `gc_text_${++this.syntheticInvocationCounter}`;
-              this.conversation.addGadgetCallResult(
-                gadgetName,
-                parameterMapping(textContent),
-                resultMapping ? resultMapping(textContent) : textContent,
-                syntheticId,
-              );
-            }
-          }
-
-          // Extract and add all gadget results to conversation
-          // Use tracked gadgetResults from streaming loop (replaces result.outputs iteration)
-          for (const output of gadgetResults) {
-            if (output.type === "gadget_result") {
-              const gadgetResult = output.result;
-              this.conversation.addGadgetCallResult(
-                gadgetResult.gadgetName,
-                gadgetResult.parameters,
-                gadgetResult.error ?? gadgetResult.result ?? "",
-                gadgetResult.invocationId,
-                gadgetResult.media,
-                gadgetResult.mediaIds,
-              );
-            }
-          }
-        } else {
-          // No gadgets executed - wrap text as synthetic TellUser result
-          // This keeps conversation history consistent (gadget-oriented) and
-          // helps LLMs stay in the "gadget invocation" mindset
-          if (finalMessage.trim()) {
-            // Generate synthetic invocation ID for TellUser wrapper
-            const syntheticId = `gc_tell_${++this.syntheticInvocationCounter}`;
-            this.conversation.addGadgetCallResult(
-              "TellUser",
-              { message: finalMessage, done: false, type: "info" },
-              `ℹ️  ${finalMessage}`,
-              syntheticId,
-            );
-          }
-          // Empty responses: don't add anything, just check if we should continue
-
-          // Handle text-only responses
-          const shouldBreak = await this.handleTextOnlyResponse(finalMessage);
-          if (shouldBreak) {
-            break;
-          }
+        // Update conversation with results (gadgets or text-only)
+        const shouldBreakFromTextOnly = await this.updateConversationWithResults(
+          result.didExecuteGadgets,
+          textOutputs,
+          gadgetResults,
+          finalMessage,
+        );
+        if (shouldBreakFromTextOnly) {
+          break;
         }
 
         // Check if loop should break
@@ -1120,6 +940,270 @@ export class Agent {
         interceptGadgetResult: chainedInterceptor,
       },
     };
+  }
+
+  // ==========================================================================
+  // Agent Loop Helper Methods (extracted from run() for readability)
+  // ==========================================================================
+
+  /**
+   * Check abort signal and notify observers if aborted.
+   * @returns true if agent should terminate
+   */
+  private async checkAbortAndNotify(iteration: number): Promise<boolean> {
+    if (!this.signal?.aborted) return false;
+
+    this.logger.info("Agent loop terminated by abort signal", {
+      iteration,
+      reason: this.signal.reason,
+    });
+
+    await this.safeObserve(async () => {
+      if (this.hooks.observers?.onAbort) {
+        const context: ObserveAbortContext = {
+          iteration,
+          reason: this.signal?.reason,
+          logger: this.logger,
+        };
+        await this.hooks.observers.onAbort(context);
+      }
+    });
+
+    return true;
+  }
+
+  /**
+   * Check and perform context compaction if needed.
+   * @returns compaction stream event if compaction occurred, null otherwise
+   */
+  private async checkAndPerformCompaction(iteration: number): Promise<StreamEvent | null> {
+    if (!this.compactionManager) return null;
+
+    const compactionEvent = await this.compactionManager.checkAndCompact(
+      this.conversation,
+      iteration,
+    );
+
+    if (!compactionEvent) return null;
+
+    this.logger.info("Context compacted", {
+      strategy: compactionEvent.strategy,
+      tokensBefore: compactionEvent.tokensBefore,
+      tokensAfter: compactionEvent.tokensAfter,
+    });
+
+    // Observer: Compaction occurred
+    await this.safeObserve(async () => {
+      if (this.hooks.observers?.onCompaction) {
+        await this.hooks.observers.onCompaction({
+          iteration,
+          event: compactionEvent,
+          // biome-ignore lint/style/noNonNullAssertion: compactionManager exists if compactionEvent is truthy
+          stats: this.compactionManager!.getStats(),
+          logger: this.logger,
+        });
+      }
+    });
+
+    return { type: "compaction", event: compactionEvent } as StreamEvent;
+  }
+
+  /**
+   * Prepare LLM call options and process beforeLLMCall controller.
+   * @returns options and optional skipWithSynthetic response if controller wants to skip
+   */
+  private async prepareLLMCall(
+    iteration: number,
+  ): Promise<{ options: LLMGenerationOptions; skipWithSynthetic?: string }> {
+    let llmOptions: LLMGenerationOptions = {
+      model: this.model,
+      messages: this.conversation.getMessages(),
+      temperature: this.temperature,
+      maxTokens: this.defaultMaxTokens,
+      signal: this.signal,
+    };
+
+    // Observer: LLM call start
+    await this.safeObserve(async () => {
+      if (this.hooks.observers?.onLLMCallStart) {
+        const context: ObserveLLMCallContext = {
+          iteration,
+          options: llmOptions,
+          logger: this.logger,
+        };
+        await this.hooks.observers.onLLMCallStart(context);
+      }
+    });
+
+    // Controller: Before LLM call
+    if (this.hooks.controllers?.beforeLLMCall) {
+      const context: LLMCallControllerContext = {
+        iteration,
+        maxIterations: this.maxIterations,
+        options: llmOptions,
+        logger: this.logger,
+      };
+      const action: BeforeLLMCallAction = await this.hooks.controllers.beforeLLMCall(context);
+
+      // Validate the action
+      validateBeforeLLMCallAction(action);
+
+      if (action.action === "skip") {
+        this.logger.info("Controller skipped LLM call, using synthetic response");
+        return { options: llmOptions, skipWithSynthetic: action.syntheticResponse };
+      } else if (action.action === "proceed" && action.modifiedOptions) {
+        llmOptions = { ...llmOptions, ...action.modifiedOptions };
+      }
+    }
+
+    // Observer: LLM call ready (after controller modifications)
+    await this.safeObserve(async () => {
+      if (this.hooks.observers?.onLLMCallReady) {
+        const context: ObserveLLMCallReadyContext = {
+          iteration,
+          maxIterations: this.maxIterations,
+          options: llmOptions,
+          logger: this.logger,
+        };
+        await this.hooks.observers.onLLMCallReady(context);
+      }
+    });
+
+    return { options: llmOptions };
+  }
+
+  /**
+   * Calculate cost and complete LLM call in execution tree.
+   */
+  private completeLLMCallInTree(
+    nodeId: NodeId,
+    result: StreamCompletionEvent,
+  ): void {
+    // Calculate cost using ModelRegistry (if available)
+    const llmCost = this.client.modelRegistry?.estimateCost?.(
+      this.model,
+      result.usage?.inputTokens ?? 0,
+      result.usage?.outputTokens ?? 0,
+      result.usage?.cachedInputTokens ?? 0,
+      result.usage?.cacheCreationInputTokens ?? 0,
+    )?.totalCost;
+
+    // Complete LLM call in execution tree (including cost for automatic aggregation)
+    this.tree.completeLLMCall(nodeId, {
+      response: result.rawResponse,
+      usage: result.usage,
+      finishReason: result.finishReason,
+      cost: llmCost,
+    });
+  }
+
+  /**
+   * Process afterLLMCall controller and return modified final message.
+   */
+  private async processAfterLLMCallController(
+    iteration: number,
+    llmOptions: LLMGenerationOptions,
+    result: StreamCompletionEvent,
+    gadgetCallCount: number,
+  ): Promise<string> {
+    let finalMessage = result.finalMessage;
+
+    if (!this.hooks.controllers?.afterLLMCall) {
+      return finalMessage;
+    }
+
+    const context: AfterLLMCallControllerContext = {
+      iteration,
+      maxIterations: this.maxIterations,
+      options: llmOptions,
+      finishReason: result.finishReason,
+      usage: result.usage,
+      finalMessage: result.finalMessage,
+      gadgetCallCount,
+      logger: this.logger,
+    };
+    const action: AfterLLMCallAction = await this.hooks.controllers.afterLLMCall(context);
+
+    // Validate the action
+    validateAfterLLMCallAction(action);
+
+    if (action.action === "modify_and_continue" || action.action === "append_and_modify") {
+      finalMessage = action.modifiedMessage;
+    }
+
+    if (action.action === "append_messages" || action.action === "append_and_modify") {
+      for (const msg of action.messages) {
+        if (msg.role === "user") {
+          this.conversation.addUserMessage(msg.content);
+        } else if (msg.role === "assistant") {
+          this.conversation.addAssistantMessage(extractMessageText(msg.content));
+        } else if (msg.role === "system") {
+          this.conversation.addUserMessage(`[System] ${extractMessageText(msg.content)}`);
+        }
+      }
+    }
+
+    return finalMessage;
+  }
+
+  /**
+   * Update conversation history with gadget results or text-only response.
+   * @returns true if loop should break (text-only handler requested termination)
+   */
+  private async updateConversationWithResults(
+    didExecuteGadgets: boolean,
+    textOutputs: string[],
+    gadgetResults: StreamEvent[],
+    finalMessage: string,
+  ): Promise<boolean> {
+    if (didExecuteGadgets) {
+      // If configured, wrap accompanying text as a synthetic gadget call
+      if (this.textWithGadgetsHandler) {
+        const textContent = textOutputs.join("");
+
+        if (textContent.trim()) {
+          const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
+          const syntheticId = `gc_text_${++this.syntheticInvocationCounter}`;
+          this.conversation.addGadgetCallResult(
+            gadgetName,
+            parameterMapping(textContent),
+            resultMapping ? resultMapping(textContent) : textContent,
+            syntheticId,
+          );
+        }
+      }
+
+      // Add all gadget results to conversation
+      for (const output of gadgetResults) {
+        if (output.type === "gadget_result") {
+          const gadgetResult = output.result;
+          this.conversation.addGadgetCallResult(
+            gadgetResult.gadgetName,
+            gadgetResult.parameters,
+            gadgetResult.error ?? gadgetResult.result ?? "",
+            gadgetResult.invocationId,
+            gadgetResult.media,
+            gadgetResult.mediaIds,
+          );
+        }
+      }
+
+      return false; // Don't break loop
+    }
+
+    // No gadgets executed - wrap text as synthetic TellUser result
+    if (finalMessage.trim()) {
+      const syntheticId = `gc_tell_${++this.syntheticInvocationCounter}`;
+      this.conversation.addGadgetCallResult(
+        "TellUser",
+        { message: finalMessage, done: false, type: "info" },
+        `ℹ️  ${finalMessage}`,
+        syntheticId,
+      );
+    }
+
+    // Handle text-only responses
+    return await this.handleTextOnlyResponse(finalMessage);
   }
 
   /**
