@@ -341,14 +341,13 @@ export class BlockRenderer {
 
   /**
    * Find a gadget node by its invocation ID.
+   * Uses O(1) Map lookup instead of linear search.
    */
   findGadgetByInvocationId(invocationId: string): GadgetNode | undefined {
-    for (const node of this.nodes.values()) {
-      if (node.type === "gadget" && node.invocationId === invocationId) {
-        return node;
-      }
-    }
-    return undefined;
+    const blockId = this.gadgetByInvocationId.get(invocationId);
+    if (!blockId) return undefined;
+    const node = this.nodes.get(blockId);
+    return node?.type === "gadget" ? (node as GadgetNode) : undefined;
   }
 
   /**

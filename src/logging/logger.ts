@@ -71,6 +71,41 @@ function parseEnvBoolean(value?: string): boolean | undefined {
   return undefined;
 }
 
+// Singleton state for file logging - ensures all loggers share one WriteStream
+let sharedLogFilePath: string | undefined;
+let sharedLogFileStream: WriteStream | undefined;
+let logFileInitialized = false;
+let writeErrorCount = 0;
+let writeErrorReported = false;
+const MAX_WRITE_ERRORS_BEFORE_DISABLE = 5;
+
+// Standard log line template for both console and file output
+const LOG_TEMPLATE =
+  "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}}\t{{logLevelName}}\t[{{name}}]\t";
+
+/**
+ * Strips ANSI color codes from a string.
+ */
+export function stripAnsi(str: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes use control characters
+  return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+/**
+ * Resets the shared file logging state. Used for testing.
+ * @internal
+ */
+export function _resetFileLoggingState(): void {
+  if (sharedLogFileStream) {
+    sharedLogFileStream.end();
+    sharedLogFileStream = undefined;
+  }
+  sharedLogFilePath = undefined;
+  logFileInitialized = false;
+  writeErrorCount = 0;
+  writeErrorReported = false;
+}
+
 /**
  * Create a new logger instance for the library.
  *
@@ -100,39 +135,81 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
   // Priority: options > env var > default (false = append)
   const logReset = options.logReset ?? envLogReset ?? false;
 
-  let logFileStream: WriteStream | undefined;
-  let finalType = defaultType;
-
-  if (envLogFile) {
+  // Initialize log file and WriteStream (only once per path)
+  if (envLogFile && (!logFileInitialized || sharedLogFilePath !== envLogFile)) {
     try {
+      // Close previous stream if path changed
+      if (sharedLogFileStream) {
+        sharedLogFileStream.end();
+        sharedLogFileStream = undefined;
+      }
+
       mkdirSync(dirname(envLogFile), { recursive: true });
+
       // Use "w" (write/truncate) when logReset is true, "a" (append) otherwise
       const flags = logReset ? "w" : "a";
-      logFileStream = createWriteStream(envLogFile, { flags });
-      finalType = "hidden";
+      sharedLogFileStream = createWriteStream(envLogFile, { flags });
+      sharedLogFilePath = envLogFile;
+      logFileInitialized = true;
+      writeErrorCount = 0;
+      writeErrorReported = false;
+
+      // Handle stream errors
+      sharedLogFileStream.on("error", (error) => {
+        writeErrorCount++;
+        if (!writeErrorReported) {
+          console.error(`[llmist] Log file write error: ${error.message}`);
+          writeErrorReported = true;
+        }
+        if (writeErrorCount >= MAX_WRITE_ERRORS_BEFORE_DISABLE) {
+          console.error(
+            `[llmist] Too many log file errors (${writeErrorCount}), disabling file logging`,
+          );
+          sharedLogFileStream?.end();
+          sharedLogFileStream = undefined;
+        }
+      });
     } catch (error) {
       console.error("Failed to initialize LLMIST_LOG_FILE output:", error);
     }
   }
 
+  // When file logging is enabled, use "pretty" type with overwrite to redirect to file
+  // This lets tslog handle all formatting via prettyLogTemplate
+  const useFileLogging = Boolean(sharedLogFileStream);
+
   const logger = new Logger<ILogObj>({
     name,
     minLevel,
-    type: finalType,
-    // Optimize for production
-    hideLogPositionForProduction: finalType !== "pretty",
-    // Pretty output settings
-    prettyLogTemplate:
-      finalType === "pretty"
-        ? "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}} [{{name}}] "
-        : undefined,
-  });
+    type: useFileLogging ? "pretty" : defaultType,
+    // Hide log position for file logging and non-pretty types
+    hideLogPositionForProduction: useFileLogging || defaultType !== "pretty",
+    prettyLogTemplate: LOG_TEMPLATE,
+    // Use overwrite to redirect tslog's formatted output to file instead of console
+    overwrite: useFileLogging
+      ? {
+          transportFormatted: (
+            logMetaMarkup: string,
+            logArgs: unknown[],
+            _logErrors: string[],
+          ) => {
+            // Skip if stream was disabled due to errors
+            if (!sharedLogFileStream) return;
 
-  if (logFileStream) {
-    logger.attachTransport((logObj) => {
-      logFileStream?.write(`${JSON.stringify(logObj)}\n`);
-    });
-  }
+            // tslog provides formatted meta (timestamp, level, name) and args separately
+            // Strip ANSI colors for clean file output
+            const meta = stripAnsi(logMetaMarkup);
+            const args = logArgs.map((arg) =>
+              typeof arg === "string" ? stripAnsi(arg) : JSON.stringify(arg),
+            );
+            const line = `${meta}${args.join(" ")}\n`;
+
+            // Use async stream.write() - non-blocking and buffered
+            sharedLogFileStream.write(line);
+          },
+        }
+      : undefined,
+  });
 
   return logger;
 }

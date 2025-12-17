@@ -1,5 +1,8 @@
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { createLogger, type LoggerOptions } from "./logger.js";
+import { _resetFileLoggingState, createLogger, stripAnsi } from "./logger.js";
 
 describe("createLogger", () => {
   const originalEnv = { ...process.env };
@@ -217,6 +220,281 @@ describe("createLogger", () => {
 
       expect(() => logger.info({ key: "value" })).not.toThrow();
       expect(() => logger.info("message", { data: 123 })).not.toThrow();
+    });
+  });
+});
+
+describe("stripAnsi", () => {
+  it("should strip ANSI color codes from strings", () => {
+    const colored = "\x1b[31mred text\x1b[0m";
+    expect(stripAnsi(colored)).toBe("red text");
+  });
+
+  it("should strip multiple ANSI codes", () => {
+    const colored = "\x1b[1m\x1b[32mbold green\x1b[0m normal";
+    expect(stripAnsi(colored)).toBe("bold green normal");
+  });
+
+  it("should handle strings without ANSI codes", () => {
+    const plain = "no colors here";
+    expect(stripAnsi(plain)).toBe("no colors here");
+  });
+
+  it("should handle empty strings", () => {
+    expect(stripAnsi("")).toBe("");
+  });
+
+  it("should strip complex ANSI sequences", () => {
+    const complex = "\x1b[38;5;196mextended color\x1b[0m";
+    expect(stripAnsi(complex)).toBe("extended color");
+  });
+});
+
+describe("file logging", () => {
+  const originalEnv = { ...process.env };
+  let testLogFile: string;
+
+  beforeEach(() => {
+    // Create unique temp file for each test
+    testLogFile = join(tmpdir(), `llmist-test-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);
+    // Reset file logging state before each test
+    _resetFileLoggingState();
+    // Clean up environment variables
+    delete process.env.LLMIST_LOG_LEVEL;
+    delete process.env.LLMIST_LOG_FILE;
+    delete process.env.LLMIST_LOG_RESET;
+  });
+
+  afterEach(async () => {
+    // Reset file logging state to close streams
+    _resetFileLoggingState();
+    // Restore original environment
+    process.env = { ...originalEnv };
+    // Clean up test log file
+    await Bun.sleep(50); // Give time for stream to close
+    if (existsSync(testLogFile)) {
+      try {
+        unlinkSync(testLogFile);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  });
+
+  describe("LLMIST_LOG_FILE activation", () => {
+    it("should create log file when LLMIST_LOG_FILE is set", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0"; // silly - log everything
+      const logger = createLogger({ name: "test" });
+
+      logger.info("test message");
+      await Bun.sleep(50); // Allow async write
+
+      expect(existsSync(testLogFile)).toBe(true);
+    });
+
+    it("should write log messages to file", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const logger = createLogger({ name: "test" });
+
+      logger.info("hello world");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("hello world");
+      expect(content).toContain("[test]");
+      expect(content).toContain("INFO");
+    });
+
+    it("should use pretty type internally for file logging", () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      const logger = createLogger({ name: "test" });
+
+      // When file logging is active, type is set to "pretty" to enable formatting
+      expect(logger.settings.type).toBe("pretty");
+    });
+  });
+
+  describe("logReset behavior", () => {
+    it("should truncate file when LLMIST_LOG_RESET=true", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      process.env.LLMIST_LOG_RESET = "true";
+
+      // Create initial content
+      const logger1 = createLogger({ name: "first" });
+      logger1.info("first message");
+      await Bun.sleep(50);
+
+      // Reset state and create new logger with reset
+      _resetFileLoggingState();
+      process.env.LLMIST_LOG_RESET = "true";
+      const logger2 = createLogger({ name: "second" });
+      logger2.info("second message");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("second message");
+      expect(content).not.toContain("first message");
+    });
+
+    it("should append to file when LLMIST_LOG_RESET=false", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      process.env.LLMIST_LOG_RESET = "false";
+
+      const logger1 = createLogger({ name: "first" });
+      logger1.info("first message");
+      await Bun.sleep(50);
+
+      // Reset state but keep append mode
+      _resetFileLoggingState();
+      process.env.LLMIST_LOG_RESET = "false";
+      const logger2 = createLogger({ name: "second" });
+      logger2.info("second message");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("first message");
+      expect(content).toContain("second message");
+    });
+
+    it("should default to append mode", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      // No LLMIST_LOG_RESET set
+
+      const logger1 = createLogger({ name: "first" });
+      logger1.info("first message");
+      await Bun.sleep(50);
+
+      _resetFileLoggingState();
+      const logger2 = createLogger({ name: "second" });
+      logger2.info("second message");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("first message");
+      expect(content).toContain("second message");
+    });
+  });
+
+  describe("ANSI stripping", () => {
+    it("should strip ANSI codes from file output", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const logger = createLogger({ name: "test" });
+
+      logger.info("clean message");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      // Should not contain ANSI escape codes
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Testing for ANSI codes requires matching escape sequences
+      expect(content).not.toMatch(/\x1b\[/);
+      expect(content).toContain("clean message");
+    });
+  });
+
+  describe("object serialization", () => {
+    it("should serialize objects to JSON in file output", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const logger = createLogger({ name: "test" });
+
+      logger.info("message", { foo: "bar", count: 42 });
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain('"foo":"bar"');
+      expect(content).toContain('"count":42');
+    });
+  });
+
+  describe("singleton behavior", () => {
+    it("should share log file across multiple createLogger calls", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+
+      const logger1 = createLogger({ name: "logger1" });
+      const logger2 = createLogger({ name: "logger2" });
+      const logger3 = createLogger({ name: "logger3" });
+
+      logger1.info("from logger1");
+      logger2.info("from logger2");
+      logger3.info("from logger3");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("[logger1]");
+      expect(content).toContain("[logger2]");
+      expect(content).toContain("[logger3]");
+      expect(content).toContain("from logger1");
+      expect(content).toContain("from logger2");
+      expect(content).toContain("from logger3");
+    });
+
+    it("should reuse same file path without creating new streams", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+
+      // Create multiple loggers rapidly - should all share same stream
+      const loggers = [];
+      for (let i = 0; i < 10; i++) {
+        loggers.push(createLogger({ name: `logger${i}` }));
+      }
+
+      for (let i = 0; i < 10; i++) {
+        loggers[i].info(`message ${i}`);
+      }
+      await Bun.sleep(100);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      for (let i = 0; i < 10; i++) {
+        expect(content).toContain(`message ${i}`);
+      }
+    });
+  });
+
+  describe("log format", () => {
+    it("should include timestamp, level, name, and message", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const logger = createLogger({ name: "format-test" });
+
+      logger.warn("warning message");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      // Check format: timestamp\tLEVEL\t[name]\tmessage
+      expect(content).toMatch(/\d{4}-\d{2}-\d{2}/); // Date
+      expect(content).toMatch(/\d{2}:\d{2}:\d{2}:\d{3}/); // Time with ms
+      expect(content).toContain("WARN");
+      expect(content).toContain("[format-test]");
+      expect(content).toContain("warning message");
+    });
+
+    it("should use tab separators", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const logger = createLogger({ name: "tab-test" });
+
+      logger.info("test");
+      await Bun.sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      // Should have tabs as separators
+      expect(content).toContain("\t");
+    });
+  });
+
+  describe("error handling", () => {
+    it("should not throw when log file directory does not exist", () => {
+      process.env.LLMIST_LOG_FILE = join(tmpdir(), `nonexistent-dir-${Date.now()}`, "test.log");
+
+      // Should not throw - will create directory
+      expect(() => createLogger({ name: "test" })).not.toThrow();
     });
   });
 });
