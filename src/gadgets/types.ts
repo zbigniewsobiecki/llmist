@@ -792,6 +792,58 @@ export interface ExecutionContext {
    * ```
    */
   depth?: number;
+
+  // ==========================================================================
+  // Host Exports (for external gadgets)
+  // ==========================================================================
+
+  /**
+   * Host llmist exports for external gadgets.
+   *
+   * External gadgets MUST use these instead of importing from 'llmist'
+   * to ensure they use the same version as the host CLI, enabling proper
+   * tree sharing and feature compatibility.
+   *
+   * Use the `getHostExports(ctx)` helper function to access these exports
+   * with proper error handling.
+   *
+   * @example
+   * ```typescript
+   * import { getHostExports, Gadget, z } from 'llmist';
+   *
+   * class BrowseWeb extends Gadget({...}) {
+   *   async execute(params, ctx) {
+   *     const { AgentBuilder } = getHostExports(ctx);
+   *     const agent = new AgentBuilder()
+   *       .withParentContext(ctx)
+   *       .ask(params.task);
+   *   }
+   * }
+   * ```
+   */
+  hostExports?: HostExports;
+}
+
+/**
+ * Host llmist exports provided to external gadgets via ExecutionContext.
+ *
+ * This ensures external gadgets use the same class instances as the host CLI,
+ * enabling proper tree sharing and avoiding the "dual-package problem" where
+ * different versions of llmist have incompatible classes.
+ */
+export interface HostExports {
+  /** AgentBuilder for creating subagents with proper tree sharing */
+  AgentBuilder: typeof import("../agent/builder.js").AgentBuilder;
+  /** Gadget factory for defining gadgets */
+  Gadget: typeof import("./typed-gadget.js").Gadget;
+  /** createGadget for functional gadget definitions */
+  createGadget: typeof import("./create-gadget.js").createGadget;
+  /** ExecutionTree for tree operations */
+  ExecutionTree: typeof import("../core/execution-tree.js").ExecutionTree;
+  /** LLMist client */
+  LLMist: typeof import("../core/client.js").LLMist;
+  /** Zod schema builder */
+  z: typeof import("zod").z;
 }
 
 // =============================================================================
