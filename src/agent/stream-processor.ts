@@ -450,78 +450,10 @@ export class StreamProcessor {
   }
 
   /**
-   * Process a gadget call through the full lifecycle, handling dependencies.
-   *
-   * Gadgets without dependencies (or with all dependencies satisfied) execute immediately.
-   * Gadgets with unsatisfied dependencies are queued for later execution.
-   * After each execution, pending gadgets are checked to see if they can now run.
-   */
-  private async processGadgetCall(call: ParsedGadgetCall): Promise<StreamEvent[]> {
-    const events: StreamEvent[] = [];
-
-    // Emit gadget call event immediately (even if execution is deferred)
-    events.push({ type: "gadget_call", call });
-
-    // Check for dependencies
-    if (call.dependencies.length > 0) {
-      // Check for self-referential dependency (circular to self)
-      if (call.dependencies.includes(call.invocationId)) {
-        this.logger.warn("Gadget has self-referential dependency (depends on itself)", {
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-        });
-        this.failedInvocations.add(call.invocationId);
-        const skipEvent: GadgetSkippedEvent = {
-          type: "gadget_skipped",
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-          parameters: call.parameters ?? {},
-          failedDependency: call.invocationId,
-          failedDependencyError: `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`,
-        };
-        events.push(skipEvent);
-        return events;
-      }
-
-      // Check if any dependency has failed
-      const failedDep = call.dependencies.find((dep) => this.failedInvocations.has(dep));
-      if (failedDep) {
-        // Dependency failed - handle skip
-        const skipEvents = await this.handleFailedDependency(call, failedDep);
-        events.push(...skipEvents);
-        return events;
-      }
-
-      // Check if all dependencies are satisfied
-      const unsatisfied = call.dependencies.filter((dep) => !this.completedResults.has(dep));
-      if (unsatisfied.length > 0) {
-        // Queue for later execution
-        this.logger.debug("Queueing gadget for later - waiting on dependencies", {
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-          waitingOn: unsatisfied,
-        });
-        this.gadgetsAwaitingDependencies.set(call.invocationId, call);
-        return events; // Return call event only, execution deferred
-      }
-    }
-
-    // All dependencies satisfied (or no dependencies) - execute now
-    const executeEvents = await this.executeGadgetWithHooks(call);
-    events.push(...executeEvents);
-
-    // Check if any pending gadgets can now execute
-    const triggeredEvents = await this.processPendingGadgets();
-    events.push(...triggeredEvents);
-
-    return events;
-  }
-
-  /**
    * Process a gadget call, yielding events in real-time.
    *
-   * Key difference from processGadgetCall: yields gadget_call event IMMEDIATELY
-   * when parsed (before execution), enabling real-time UI feedback.
+   * Yields gadget_call event IMMEDIATELY when parsed (before execution),
+   * enabling real-time UI feedback.
    */
   private async *processGadgetCallGenerator(call: ParsedGadgetCall): AsyncGenerator<StreamEvent> {
     // Yield gadget_call IMMEDIATELY (real-time feedback before execution)
@@ -603,180 +535,9 @@ export class StreamProcessor {
   }
 
   /**
-   * Execute a gadget through the full hook lifecycle.
-   * This is the core execution logic, extracted from processGadgetCall.
-   * @deprecated Use executeGadgetGenerator for real-time streaming
-   */
-  private async executeGadgetWithHooks(call: ParsedGadgetCall): Promise<StreamEvent[]> {
-    const events: StreamEvent[] = [];
-
-    // Log parse errors if present (execution continues - errors are part of the result)
-    if (call.parseError) {
-      this.logger.warn("Gadget has parse error", {
-        gadgetName: call.gadgetName,
-        error: call.parseError,
-        rawParameters: call.parametersRaw,
-      });
-    }
-
-    // Step 1: Interceptor - Transform parameters
-    let parameters = call.parameters ?? {};
-    if (this.hooks.interceptors?.interceptGadgetParameters) {
-      const context: GadgetParameterInterceptorContext = {
-        iteration: this.iteration,
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        logger: this.logger,
-      };
-      parameters = this.hooks.interceptors.interceptGadgetParameters(parameters, context);
-    }
-
-    // Update call with intercepted parameters
-    call.parameters = parameters;
-
-    // Step 2: Controller - Before execution
-    let shouldSkip = false;
-    let syntheticResult: string | undefined;
-
-    if (this.hooks.controllers?.beforeGadgetExecution) {
-      const context: GadgetExecutionControllerContext = {
-        iteration: this.iteration,
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        parameters,
-        logger: this.logger,
-      };
-      const action: BeforeGadgetExecutionAction =
-        await this.hooks.controllers.beforeGadgetExecution(context);
-
-      // Validate the action
-      validateBeforeGadgetExecutionAction(action);
-
-      if (action.action === "skip") {
-        shouldSkip = true;
-        syntheticResult = action.syntheticResult;
-        this.logger.info("Controller skipped gadget execution", {
-          gadgetName: call.gadgetName,
-        });
-      }
-    }
-
-    // Step 3: Observer - Execution start
-    const startObservers: Array<() => void | Promise<void>> = [];
-    if (this.hooks.observers?.onGadgetExecutionStart) {
-      startObservers.push(async () => {
-        const context: ObserveGadgetStartContext = {
-          iteration: this.iteration,
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-          parameters,
-          logger: this.logger,
-        };
-        await this.hooks.observers?.onGadgetExecutionStart?.(context);
-      });
-    }
-    await this.runObserversInParallel(startObservers);
-
-    // Step 4: Execute or use synthetic result
-    let result: GadgetExecutionResult;
-    if (shouldSkip) {
-      result = {
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        parameters,
-        result: syntheticResult ?? "Execution skipped",
-        executionTimeMs: 0,
-      };
-    } else {
-      result = await this.executor.execute(call);
-    }
-
-    // Capture the raw result before any hook transformations.
-    // Used in onGadgetExecutionComplete to provide both pre-hook (originalResult)
-    // and post-hook (finalResult) values for observers that need to audit changes.
-    const originalResult = result.result;
-
-    // Step 5: Interceptor - Transform result (modifies result.result)
-    if (result.result && this.hooks.interceptors?.interceptGadgetResult) {
-      const context: GadgetResultInterceptorContext = {
-        iteration: this.iteration,
-        gadgetName: result.gadgetName,
-        invocationId: result.invocationId,
-        parameters,
-        executionTimeMs: result.executionTimeMs,
-        logger: this.logger,
-      };
-      result.result = this.hooks.interceptors.interceptGadgetResult(result.result, context);
-    }
-
-    // Step 6: Controller - After execution (can further modify result)
-    if (this.hooks.controllers?.afterGadgetExecution) {
-      const context: AfterGadgetExecutionControllerContext = {
-        iteration: this.iteration,
-        gadgetName: result.gadgetName,
-        invocationId: result.invocationId,
-        parameters,
-        result: result.result,
-        error: result.error,
-        executionTimeMs: result.executionTimeMs,
-        logger: this.logger,
-      };
-      const action: AfterGadgetExecutionAction =
-        await this.hooks.controllers.afterGadgetExecution(context);
-
-      // Validate the action
-      validateAfterGadgetExecutionAction(action);
-
-      if (action.action === "recover" && result.error) {
-        this.logger.info("Controller recovered from gadget error", {
-          gadgetName: result.gadgetName,
-          originalError: result.error,
-        });
-        result = {
-          ...result,
-          error: undefined,
-          result: action.fallbackResult,
-        };
-      }
-    }
-
-    // Step 7: Observer - Execution complete
-    const completeObservers: Array<() => void | Promise<void>> = [];
-    if (this.hooks.observers?.onGadgetExecutionComplete) {
-      completeObservers.push(async () => {
-        const context: ObserveGadgetCompleteContext = {
-          iteration: this.iteration,
-          gadgetName: result.gadgetName,
-          invocationId: result.invocationId,
-          parameters,
-          originalResult,
-          finalResult: result.result,
-          error: result.error,
-          executionTimeMs: result.executionTimeMs,
-          breaksLoop: result.breaksLoop,
-          cost: result.cost,
-          logger: this.logger,
-        };
-        await this.hooks.observers?.onGadgetExecutionComplete?.(context);
-      });
-    }
-    await this.runObserversInParallel(completeObservers);
-
-    // Track completion for dependency resolution
-    this.completedResults.set(result.invocationId, result);
-    if (result.error) {
-      this.failedInvocations.add(result.invocationId);
-    }
-
-    // Emit result event
-    events.push({ type: "gadget_result", result });
-
-    return events;
-  }
-
-  /**
-   * Execute a gadget and yield the result event.
-   * Generator version that yields gadget_result immediately when execution completes.
+   * Execute a gadget through the full hook lifecycle and yield events.
+   * Handles parameter interception, before/after controllers, observers,
+   * execution, result interception, and tree tracking.
    */
   private async *executeGadgetGenerator(call: ParsedGadgetCall): AsyncGenerator<StreamEvent> {
     // Log parse errors if present (execution continues - errors are part of the result)
@@ -1118,8 +879,9 @@ export class StreamProcessor {
         invocationId: call.invocationId,
         failedDependency: failedDep,
       });
-      const executeEvents = await this.executeGadgetWithHooks(call);
-      events.push(...executeEvents);
+      for await (const evt of this.executeGadgetGenerator(call)) {
+        events.push(evt);
+      }
     } else if (action.action === "use_fallback") {
       // Use fallback result without executing
       const fallbackResult: GadgetExecutionResult = {
@@ -1144,121 +906,9 @@ export class StreamProcessor {
 
   /**
    * Process pending gadgets whose dependencies are now satisfied.
-   * Executes ready gadgets in parallel and continues until no more can be triggered.
-   */
-  private async processPendingGadgets(): Promise<StreamEvent[]> {
-    const events: StreamEvent[] = [];
-    let progress = true;
-
-    while (progress && this.gadgetsAwaitingDependencies.size > 0) {
-      progress = false;
-
-      // Find all gadgets that are ready to execute
-      const readyToExecute: ParsedGadgetCall[] = [];
-      const readyToSkip: Array<{ call: ParsedGadgetCall; failedDep: string }> = [];
-
-      for (const [invocationId, call] of this.gadgetsAwaitingDependencies) {
-        // Check for failed dependency
-        const failedDep = call.dependencies.find((dep) => this.failedInvocations.has(dep));
-        if (failedDep) {
-          readyToSkip.push({ call, failedDep });
-          continue;
-        }
-
-        // Check if all dependencies are satisfied
-        const allSatisfied = call.dependencies.every((dep) => this.completedResults.has(dep));
-        if (allSatisfied) {
-          readyToExecute.push(call);
-        }
-      }
-
-      // Handle skipped gadgets
-      for (const { call, failedDep } of readyToSkip) {
-        this.gadgetsAwaitingDependencies.delete(call.invocationId);
-        const skipEvents = await this.handleFailedDependency(call, failedDep);
-        events.push(...skipEvents);
-        progress = true;
-      }
-
-      // Execute ready gadgets in parallel
-      if (readyToExecute.length > 0) {
-        this.logger.debug("Executing ready gadgets in parallel", {
-          count: readyToExecute.length,
-          invocationIds: readyToExecute.map((c) => c.invocationId),
-        });
-
-        // Remove from pending before executing
-        for (const call of readyToExecute) {
-          this.gadgetsAwaitingDependencies.delete(call.invocationId);
-        }
-
-        // Execute all ready gadgets in parallel
-        const executePromises = readyToExecute.map((call) => this.executeGadgetWithHooks(call));
-        const results = await Promise.all(executePromises);
-
-        // Collect all events
-        for (const executeEvents of results) {
-          events.push(...executeEvents);
-        }
-
-        progress = true;
-      }
-    }
-
-    // Warn about any remaining unresolved gadgets (circular or missing dependencies)
-    if (this.gadgetsAwaitingDependencies.size > 0) {
-      // Collect all pending invocation IDs to detect circular dependencies
-      const pendingIds = new Set(this.gadgetsAwaitingDependencies.keys());
-
-      for (const [invocationId, call] of this.gadgetsAwaitingDependencies) {
-        const missingDeps = call.dependencies.filter((dep) => !this.completedResults.has(dep));
-
-        // Categorize the dependency issue
-        const circularDeps = missingDeps.filter((dep) => pendingIds.has(dep));
-        const trulyMissingDeps = missingDeps.filter((dep) => !pendingIds.has(dep));
-
-        let errorMessage: string;
-        let logLevel: "warn" | "error" = "warn";
-
-        if (circularDeps.length > 0 && trulyMissingDeps.length > 0) {
-          errorMessage = `Dependencies unresolvable: circular=[${circularDeps.join(", ")}], missing=[${trulyMissingDeps.join(", ")}]`;
-          logLevel = "error";
-        } else if (circularDeps.length > 0) {
-          errorMessage = `Circular dependency detected: "${invocationId}" depends on "${circularDeps[0]}" which also depends on "${invocationId}" (directly or indirectly)`;
-        } else {
-          errorMessage = `Dependency "${missingDeps[0]}" was never executed - check that the invocation ID exists and is spelled correctly`;
-        }
-
-        this.logger[logLevel]("Gadget has unresolvable dependencies", {
-          gadgetName: call.gadgetName,
-          invocationId,
-          circularDependencies: circularDeps,
-          missingDependencies: trulyMissingDeps,
-        });
-
-        // Mark as failed and emit skip event
-        this.failedInvocations.add(invocationId);
-        const skipEvent: GadgetSkippedEvent = {
-          type: "gadget_skipped",
-          gadgetName: call.gadgetName,
-          invocationId,
-          parameters: call.parameters ?? {},
-          failedDependency: missingDeps[0],
-          failedDependencyError: errorMessage,
-        };
-        events.push(skipEvent);
-      }
-      this.gadgetsAwaitingDependencies.clear();
-    }
-
-    return events;
-  }
-
-  /**
-   * Process pending gadgets, yielding events in real-time.
-   * Generator version that yields events as gadgets complete.
+   * Yields events in real-time as gadgets complete.
    *
-   * Note: Gadgets are still executed in parallel for efficiency,
+   * Gadgets are executed in parallel for efficiency,
    * but results are yielded as they become available.
    */
   private async *processPendingGadgetsGenerator(): AsyncGenerator<StreamEvent> {
@@ -1402,11 +1052,10 @@ export class StreamProcessor {
   ): Promise<void> {
     if (observers.length === 0) return;
 
-    const results = await Promise.allSettled(
+    // Run all observers in parallel, waiting for completion
+    // Errors are logged in safeObserve, no need to handle rejected promises
+    await Promise.allSettled(
       observers.map((observer) => this.safeObserve(observer)),
     );
-
-    // All errors are already logged in safeObserve, no need to handle rejected promises
-    // This just ensures we wait for all observers to complete
   }
 }

@@ -1,3 +1,4 @@
+import equal from "fast-deep-equal";
 import type { ILogObj, Logger } from "tslog";
 import { z } from "zod";
 import { AgentBuilder } from "../agent/builder.js";
@@ -185,7 +186,7 @@ export class GadgetExecutor {
 
           // Check if parameters were modified by an interceptor
           // by comparing current parameters with what initial parse produces
-          const parametersWereModified = !this.deepEquals(rawParameters, initialParse);
+          const parametersWereModified = !equal(rawParameters, initialParse);
 
           if (parametersWereModified) {
             // Parameters were modified by an interceptor - keep the modifications
@@ -484,32 +485,4 @@ export class GadgetExecutor {
     return Promise.all(calls.map((call) => this.execute(call)));
   }
 
-  /**
-   * Deep equality check for objects/arrays.
-   * Used to detect if parameters were modified by an interceptor.
-   */
-  private deepEquals(a: unknown, b: unknown): boolean {
-    if (a === b) return true;
-    if (a === null || b === null) return a === b;
-    if (typeof a !== typeof b) return false;
-
-    if (typeof a !== "object") return a === b;
-
-    if (Array.isArray(a) !== Array.isArray(b)) return false;
-
-    if (Array.isArray(a) && Array.isArray(b)) {
-      if (a.length !== b.length) return false;
-      return a.every((val, i) => this.deepEquals(val, b[i]));
-    }
-
-    const aObj = a as Record<string, unknown>;
-    const bObj = b as Record<string, unknown>;
-
-    const aKeys = Object.keys(aObj);
-    const bKeys = Object.keys(bObj);
-
-    if (aKeys.length !== bKeys.length) return false;
-
-    return aKeys.every((key) => this.deepEquals(aObj[key], bObj[key]));
-  }
 }
