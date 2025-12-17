@@ -27,7 +27,7 @@ import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { ExecutionContext, LLMCallInfo, StreamEvent, SubagentConfigMap, SubagentEvent, TextOnlyHandler } from "../gadgets/types.js";
+import type { ExecutionContext, SubagentConfigMap, SubagentEvent, TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
@@ -93,11 +93,10 @@ export class AgentBuilder {
   private trailingMessage?: TrailingMessage;
   private subagentConfig?: SubagentConfigMap;
   private subagentEventCallback?: (event: SubagentEvent) => void;
+  // Tree context for subagent support - enables shared tree model
+  // When a gadget calls withParentContext(ctx), it shares the parent's tree
   private parentContext?: {
-    invocationId: string;
-    onSubagentEvent: (event: SubagentEvent) => void;
     depth: number;
-    // Execution tree context (for shared tree model)
     tree?: ExecutionTree;
     nodeId?: NodeId;
   };
@@ -644,14 +643,14 @@ export class AgentBuilder {
    * ```
    */
   withParentContext(ctx: ExecutionContext, depth = 1): this {
-    if (ctx.onSubagentEvent && ctx.invocationId) {
+    // Capture tree context for shared tree model
+    // This enables subagent events to flow through the parent's tree,
+    // giving the TUI (and any tree subscribers) visibility into nested activity
+    if (ctx.tree) {
       this.parentContext = {
-        invocationId: ctx.invocationId,
-        onSubagentEvent: ctx.onSubagentEvent,
-        depth,
-        // Capture tree context for shared tree model
         tree: ctx.tree,
         nodeId: ctx.nodeId,
+        depth,
       };
     }
 
@@ -744,168 +743,14 @@ export class AgentBuilder {
   }
 
   /**
-   * Compose the final hooks, including:
-   * - Trailing message injection (if configured)
-   * - Subagent event forwarding for LLM calls (if parentContext is set)
+   * Compose the final hooks, including trailing message injection if configured.
+   *
+   * Note: Subagent event visibility is now handled entirely by the ExecutionTree.
+   * When a subagent uses withParentContext(ctx), it shares the parent's tree,
+   * and all events are automatically visible to tree subscribers (like the TUI).
    */
   private composeHooks(): AgentHooks | undefined {
-    let hooks = this.hooks;
-
-    // Inject subagent event forwarding for LLM and gadget events when parentContext is set
-    if (this.parentContext) {
-      const { invocationId, onSubagentEvent, depth } = this.parentContext;
-      const existingOnLLMCallStart = hooks?.observers?.onLLMCallStart;
-      const existingOnLLMCallComplete = hooks?.observers?.onLLMCallComplete;
-      const existingOnGadgetExecutionStart = hooks?.observers?.onGadgetExecutionStart;
-      const existingOnGadgetExecutionComplete = hooks?.observers?.onGadgetExecutionComplete;
-
-      // Track LLM call start times for elapsed time calculation
-      const llmCallStartTimes = new Map<number, number>();
-      // Track current iteration for gadget parenting
-      let currentSubagentIteration = 0;
-
-      hooks = {
-        ...hooks,
-        observers: {
-          ...hooks?.observers,
-          onLLMCallStart: async (context) => {
-            // Track current iteration for gadget parenting
-            currentSubagentIteration = context.iteration;
-            // Track start time for elapsed time calculation
-            llmCallStartTimes.set(context.iteration, Date.now());
-
-            // Count input tokens for accurate subagent metrics display.
-            // This ensures input tokens are available in the CLI even when
-            // providers don't include promptTokenCount in completion events.
-            //
-            // PERFORMANCE NOTE: This adds latency to each subagent LLM call start.
-            // The trade-off is accepted because:
-            // 1. CLI UX requires accurate input token display from call start
-            // 2. Main agent already counts tokens upfront (consistency)
-            // 3. Providers like Gemini may not include inputTokens in completion
-            let inputTokens: number | undefined;
-            try {
-              if (this.client) {
-                inputTokens = await this.client.countTokens(
-                  context.options.model,
-                  context.options.messages,
-                );
-              }
-            } catch {
-              // Ignore token counting errors - will fall back to usage from completion
-            }
-
-            // Forward to parent
-            onSubagentEvent({
-              type: "llm_call_start",
-              gadgetInvocationId: invocationId,
-              depth,
-              event: {
-                iteration: context.iteration,
-                model: context.options.model,
-                inputTokens,
-              } as LLMCallInfo,
-            });
-            // Chain to existing hook if present
-            if (existingOnLLMCallStart) {
-              await existingOnLLMCallStart(context);
-            }
-          },
-          onLLMCallComplete: async (context) => {
-            // Calculate elapsed time
-            const startTime = llmCallStartTimes.get(context.iteration);
-            const elapsedMs = startTime ? Date.now() - startTime : undefined;
-            llmCallStartTimes.delete(context.iteration);
-
-            // Calculate cost if we have usage and model registry
-            let cost: number | undefined;
-            if (context.usage && this.client?.modelRegistry) {
-              try {
-                const modelName = context.options.model.includes(":")
-                  ? context.options.model.split(":")[1]
-                  : context.options.model;
-                const costResult = this.client.modelRegistry.estimateCost(
-                  modelName,
-                  context.usage.inputTokens,
-                  context.usage.outputTokens,
-                  context.usage.cachedInputTokens ?? 0,
-                  context.usage.cacheCreationInputTokens ?? 0,
-                );
-                if (costResult) cost = costResult.totalCost;
-              } catch {
-                // Ignore cost calculation errors
-              }
-            }
-
-            // Forward to parent with full context (first-class subagent metrics)
-            onSubagentEvent({
-              type: "llm_call_end",
-              gadgetInvocationId: invocationId,
-              depth,
-              event: {
-                iteration: context.iteration,
-                model: context.options.model,
-                // Backward compat fields
-                inputTokens: context.usage?.inputTokens,
-                outputTokens: context.usage?.outputTokens,
-                finishReason: context.finishReason ?? undefined,
-                elapsedMs,
-                // Full usage object with cache details (for first-class display)
-                usage: context.usage,
-                cost,
-              } as LLMCallInfo,
-            });
-            // Chain to existing hook if present
-            if (existingOnLLMCallComplete) {
-              await existingOnLLMCallComplete(context);
-            }
-          },
-          onGadgetExecutionStart: async (context) => {
-            // Forward gadget start to parent
-            onSubagentEvent({
-              type: "gadget_call",
-              gadgetInvocationId: invocationId,
-              depth,
-              iteration: currentSubagentIteration, // Include LLM iteration for parenting
-              event: {
-                call: {
-                  invocationId: context.invocationId,
-                  gadgetName: context.gadgetName,
-                  parameters: context.parameters,
-                },
-              } as unknown as StreamEvent,
-            });
-            // Chain to existing hook if present
-            if (existingOnGadgetExecutionStart) {
-              await existingOnGadgetExecutionStart(context);
-            }
-          },
-          onGadgetExecutionComplete: async (context) => {
-            // Forward gadget completion to parent
-            onSubagentEvent({
-              type: "gadget_result",
-              gadgetInvocationId: invocationId,
-              depth,
-              iteration: currentSubagentIteration, // Include LLM iteration for parenting
-              event: {
-                result: {
-                  invocationId: context.invocationId,
-                  gadgetName: context.gadgetName,
-                  cost: context.cost,
-                  executionTimeMs: context.executionTimeMs,
-                  error: context.error,
-                  result: context.finalResult,
-                },
-              } as unknown as StreamEvent,
-            });
-            // Chain to existing hook if present
-            if (existingOnGadgetExecutionComplete) {
-              await existingOnGadgetExecutionComplete(context);
-            }
-          },
-        },
-      };
-    }
+    const hooks = this.hooks;
 
     // Handle trailing message injection
     if (!this.trailingMessage) {
@@ -1019,24 +864,6 @@ export class AgentBuilder {
 
     const registry = GadgetRegistry.from(this.gadgets);
 
-    // Build onSubagentEvent callback - wrap to forward gadget events if parentContext is set
-    let onSubagentEvent = this.subagentEventCallback;
-    if (this.parentContext) {
-      const { invocationId, onSubagentEvent: parentCallback, depth } = this.parentContext;
-      const existingCallback = this.subagentEventCallback;
-
-      onSubagentEvent = (event: SubagentEvent) => {
-        // Forward to parent with correct invocationId and accumulated depth
-        parentCallback({
-          ...event,
-          gadgetInvocationId: invocationId,
-          depth: event.depth + depth,
-        });
-        // Also call any explicitly set callback
-        existingCallback?.(event);
-      };
-    }
-
     return {
       client: this.client,
       model: this.model ?? "openai:gpt-5-nano",
@@ -1061,7 +888,7 @@ export class AgentBuilder {
       compactionConfig: this.compactionConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
-      onSubagentEvent,
+      onSubagentEvent: this.subagentEventCallback,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,
       parentNodeId: this.parentContext?.nodeId,
@@ -1240,24 +1067,6 @@ export class AgentBuilder {
     }
     const registry = GadgetRegistry.from(this.gadgets);
 
-    // Build onSubagentEvent callback - wrap to forward gadget events if parentContext is set
-    let onSubagentEvent = this.subagentEventCallback;
-    if (this.parentContext) {
-      const { invocationId, onSubagentEvent: parentCallback, depth } = this.parentContext;
-      const existingCallback = this.subagentEventCallback;
-
-      onSubagentEvent = (event: SubagentEvent) => {
-        // Forward to parent with correct invocationId and accumulated depth
-        parentCallback({
-          ...event,
-          gadgetInvocationId: invocationId,
-          depth: event.depth + depth,
-        });
-        // Also call any explicitly set callback
-        existingCallback?.(event);
-      };
-    }
-
     const options: AgentOptions = {
       client: this.client,
       model: this.model ?? "openai:gpt-5-nano",
@@ -1282,7 +1091,7 @@ export class AgentBuilder {
       compactionConfig: this.compactionConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
-      onSubagentEvent,
+      onSubagentEvent: this.subagentEventCallback,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,
       parentNodeId: this.parentContext?.nodeId,
