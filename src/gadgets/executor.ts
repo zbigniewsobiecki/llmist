@@ -1,10 +1,13 @@
 import type { ILogObj, Logger } from "tslog";
-import type { LLMist } from "../core/client.js";
+import { z } from "zod";
+import { AgentBuilder } from "../agent/builder.js";
+import { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX } from "../core/constants.js";
-import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
+import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
 import { createLogger } from "../logging/logger.js";
 import { parseBlockParams } from "./block-params.js";
 import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
+import { createGadget } from "./create-gadget.js";
 import { type ErrorFormatterOptions, GadgetExecutionErrorFormatter } from "./error-formatter.js";
 import {
   AbortException,
@@ -15,6 +18,7 @@ import {
 import type { MediaStore } from "./media-store.js";
 import { stripMarkdownFences } from "./parser.js";
 import type { GadgetRegistry } from "./registry.js";
+import { Gadget } from "./typed-gadget.js";
 import type {
   AgentContextConfig,
   ExecutionContext,
@@ -22,10 +26,30 @@ import type {
   GadgetExecuteResultWithMedia,
   GadgetExecutionResult,
   GadgetMediaOutput,
+  HostExports,
   ParsedGadgetCall,
   SubagentConfigMap,
   SubagentEvent,
 } from "./types.js";
+
+/**
+ * Lazily create host exports to avoid circular dependency issues.
+ * Cached after first call.
+ */
+let cachedHostExports: HostExports | undefined;
+function getHostExportsInternal(): HostExports {
+  if (!cachedHostExports) {
+    cachedHostExports = {
+      AgentBuilder,
+      Gadget,
+      createGadget,
+      ExecutionTree,
+      LLMist,
+      z,
+    };
+  }
+  return cachedHostExports;
+}
 
 export class GadgetExecutor {
   private readonly logger: Logger<ILogObj>;
@@ -260,6 +284,8 @@ export class GadgetExecutor {
         tree: this.tree,
         nodeId: gadgetNodeId,
         depth: gadgetDepth,
+        // Host exports for external gadgets to use host's llmist classes
+        hostExports: getHostExportsInternal(),
       };
 
       // Execute gadget (handle both sync and async)

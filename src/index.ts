@@ -235,6 +235,8 @@ export type {
   GadgetExecutionResult,
   GadgetMediaOutput,
   GadgetSkippedEvent,
+  // Host exports for external gadgets
+  HostExports,
   MediaKind,
   MediaMetadata,
   ParsedGadgetCall,
@@ -259,6 +261,56 @@ export {
   resultWithImages,
   resultWithMedia,
 } from "./gadgets/helpers.js";
+
+// Host exports helper for external gadgets
+import type { ExecutionContext, HostExports } from "./gadgets/types.js";
+
+/**
+ * Get host llmist exports from execution context.
+ *
+ * External gadgets MUST use this instead of importing classes directly from 'llmist'
+ * to ensure they use the same version as the host CLI, enabling proper tree sharing
+ * and avoiding the "dual-package problem".
+ *
+ * @param ctx - The execution context passed to gadget.execute()
+ * @returns The host's llmist exports (AgentBuilder, Gadget, etc.)
+ * @throws Error if ctx or ctx.hostExports is undefined
+ *
+ * @example
+ * ```typescript
+ * import { getHostExports, Gadget, z } from 'llmist';
+ * import type { ExecutionContext } from 'llmist';
+ *
+ * class BrowseWeb extends Gadget({
+ *   name: 'BrowseWeb',
+ *   description: 'Browse a website autonomously',
+ *   schema: z.object({ task: z.string(), url: z.string() }),
+ * }) {
+ *   async execute(params: this['params'], ctx?: ExecutionContext) {
+ *     // Get host's AgentBuilder to ensure tree sharing works correctly
+ *     const { AgentBuilder } = getHostExports(ctx!);
+ *
+ *     const agent = new AgentBuilder()
+ *       .withParentContext(ctx!)
+ *       .withGadgets(Navigate, Click, Screenshot)
+ *       .ask(params.task);
+ *
+ *     for await (const event of agent.run()) {
+ *       // Events flow through host's shared tree
+ *     }
+ *   }
+ * }
+ * ```
+ */
+export function getHostExports(ctx: ExecutionContext): HostExports {
+  if (!ctx?.hostExports) {
+    throw new Error(
+      "hostExports not available. Gadgets that create subagents must be run " +
+        "via llmist agent, not standalone. Ensure you are using llmist >= 6.2.0.",
+    );
+  }
+  return ctx.hostExports;
+}
 // Media storage for gadget outputs
 export { MediaStore } from "./gadgets/media-store.js";
 export type { ValidationIssue, ValidationResult } from "./gadgets/validation.js";

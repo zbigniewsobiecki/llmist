@@ -1086,4 +1086,93 @@ describe("GadgetExecutor", () => {
       expect(gadget.capturedSignal?.aborted).toBe(false);
     });
   });
+
+  describe("hostExports", () => {
+    // Gadget that captures the hostExports from context
+    class HostExportsCapturingGadget extends Gadget({
+      name: "HostExportsCapturing",
+      description: "Captures hostExports for testing",
+      schema: z.object({}),
+    }) {
+      public capturedHostExports: ExecutionContext["hostExports"] | undefined;
+
+      execute(_params: this["params"], ctx?: ExecutionContext): string {
+        this.capturedHostExports = ctx?.hostExports;
+        return "captured";
+      }
+    }
+
+    it("provides hostExports to gadgets", async () => {
+      const gadget = new HostExportsCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "HostExportsCapturing",
+        invocationId: "host-1",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      expect(gadget.capturedHostExports).toBeDefined();
+    });
+
+    it("hostExports contains AgentBuilder", async () => {
+      const gadget = new HostExportsCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "HostExportsCapturing",
+        invocationId: "host-2",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      expect(gadget.capturedHostExports?.AgentBuilder).toBeDefined();
+      expect(typeof gadget.capturedHostExports?.AgentBuilder).toBe("function");
+    });
+
+    it("hostExports contains Gadget factory", async () => {
+      const gadget = new HostExportsCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "HostExportsCapturing",
+        invocationId: "host-3",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      expect(gadget.capturedHostExports?.Gadget).toBeDefined();
+      expect(typeof gadget.capturedHostExports?.Gadget).toBe("function");
+    });
+
+    it("hostExports contains all required exports", async () => {
+      const gadget = new HostExportsCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "HostExportsCapturing",
+        invocationId: "host-4",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      const exports = gadget.capturedHostExports;
+      expect(exports).toBeDefined();
+      expect(exports?.AgentBuilder).toBeDefined();
+      expect(exports?.Gadget).toBeDefined();
+      expect(exports?.createGadget).toBeDefined();
+      expect(exports?.ExecutionTree).toBeDefined();
+      expect(exports?.LLMist).toBeDefined();
+      expect(exports?.z).toBeDefined();
+    });
+  });
 });
