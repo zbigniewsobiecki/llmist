@@ -173,6 +173,49 @@ describe("StreamProgress", () => {
       const totalCost = (progress as any).totalCost;
       expect(totalCost).toBe(0);
     });
+
+    test("addGadgetCost accumulates gadget costs into total", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add gadget costs
+      progress.addGadgetCost(0.037); // BrowseWeb cost
+      progress.addGadgetCost(0.001); // Another gadget
+
+      const totalCost = (progress as any).totalCost;
+      expect(totalCost).toBeCloseTo(0.038, 5);
+    });
+
+    test("addGadgetCost ignores zero and negative costs", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addGadgetCost(0.01);
+      progress.addGadgetCost(0); // Should be ignored
+      progress.addGadgetCost(-0.005); // Should be ignored
+
+      const totalCost = (progress as any).totalCost;
+      expect(totalCost).toBeCloseTo(0.01, 5);
+    });
+
+    test("addGadgetCost combines with LLM call costs", () => {
+      const stream = new MockWritableStream();
+      const registry = new MockModelRegistry();
+      registry.setCost("gpt-4", 30, 60);
+
+      const progress = new StreamProgress(stream, false, registry as any);
+
+      // LLM call cost: (1000/1M * $30) + (500/1M * $60) = $0.03 + $0.03 = $0.06
+      progress.startCall("gpt-4", 1000);
+      progress.endCall({ inputTokens: 1000, outputTokens: 500, totalTokens: 1500 });
+
+      // Add gadget cost
+      progress.addGadgetCost(0.037);
+
+      const totalCost = (progress as any).totalCost;
+      // Total should be $0.06 (LLM) + $0.037 (gadget) = $0.097
+      expect(totalCost).toBeCloseTo(0.097, 5);
+    });
   });
 
   describe("cost display", () => {
@@ -329,6 +372,82 @@ describe("StreamProgress nested operations", () => {
       expect(agent.model).toBe("gemini-2.5-flash");
       expect(agent.iteration).toBe(0);
       expect(agent.inputTokens).toBe(5000);
+    });
+
+    test("stores gadgetInvocationId for unique subagent identification", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      progress.addNestedAgent(
+        "agent:0",
+        "browse_web_github",
+        1,
+        "gemini-2.5-flash",
+        1,
+        { inputTokens: 5000 },
+        6, // parentCallNumber
+        "browse_web_github", // gadgetInvocationId
+      );
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent).toBeDefined();
+      expect(agent.parentCallNumber).toBe(6);
+      expect(agent.gadgetInvocationId).toBe("browse_web_github");
+    });
+
+    test("distinguishes parallel subagents by gadgetInvocationId", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add two parallel subagents with same parent call number but different gadget IDs
+      progress.addNestedAgent(
+        "agent:0",
+        "browse_web_github",
+        1,
+        "gemini-2.5-flash",
+        1,
+        { inputTokens: 5000 },
+        6,
+        "browse_web_github",
+      );
+
+      progress.addNestedAgent(
+        "agent:1",
+        "browse_web_npm",
+        1,
+        "gemini-2.5-flash",
+        1,
+        { inputTokens: 6000 },
+        6,
+        "browse_web_npm",
+      );
+
+      const nestedAgents = (progress as any).nestedAgents;
+
+      const agent0 = nestedAgents.get("agent:0");
+      const agent1 = nestedAgents.get("agent:1");
+
+      // Both have same parentCallNumber (main iteration 6)
+      expect(agent0.parentCallNumber).toBe(6);
+      expect(agent1.parentCallNumber).toBe(6);
+
+      // But different gadgetInvocationIds for unique identification
+      expect(agent0.gadgetInvocationId).toBe("browse_web_github");
+      expect(agent1.gadgetInvocationId).toBe("browse_web_npm");
+    });
+
+    test("handles missing gadgetInvocationId gracefully", () => {
+      const stream = new MockWritableStream();
+      const progress = new StreamProgress(stream, false);
+
+      // Add without gadgetInvocationId (legacy behavior)
+      progress.addNestedAgent("agent:0", "parent-123", 1, "test", 1, { inputTokens: 1000 });
+
+      const nestedAgents = (progress as any).nestedAgents;
+      const agent = nestedAgents.get("agent:0");
+      expect(agent.gadgetInvocationId).toBeUndefined();
+      expect(agent.parentCallNumber).toBeUndefined();
     });
   });
 

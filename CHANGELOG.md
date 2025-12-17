@@ -1,5 +1,25 @@
 ## 6.0.0 (2025-12-16)
 
+### Breaking Changes (PR #193)
+
+* **messages:** `addGadgetCallResult` now requires `invocationId` parameter
+* **builder:** `withSyntheticGadgetCall` now requires `invocationId` parameter
+
+This change adds invocation IDs to conversation history, helping LLMs correctly reference gadget results by their invocation ID (e.g., `gc_1`) rather than confusing them with parameter values.
+
+Migration:
+```typescript
+// Before
+manager.addGadgetCallResult("Calculator", { a: 1, b: 2 }, "3");
+builder.withSyntheticGadgetCall("Init", {}, "done");
+
+// After
+manager.addGadgetCallResult("Calculator", { a: 1, b: 2 }, "3", "gc_calc_1");
+builder.withSyntheticGadgetCall("Init", {}, "done", "gc_init_1");
+```
+
+---
+
 * Merge pull request #190 from zbigniewsobiecki/dev ([4b66f94](https://github.com/zbigniewsobiecki/llmist/commit/4b66f94)), closes [#190](https://github.com/zbigniewsobiecki/llmist/issues/190)
 * fix(executor): cancel timeout when gadget completes to prevent process hang (#189) ([19fb5dc](https://github.com/zbigniewsobiecki/llmist/commit/19fb5dc)), closes [#189](https://github.com/zbigniewsobiecki/llmist/issues/189)
 * feat(agent): parallel execution for independent gadgets and hierarchical call display (#184) ([c177bb2](https://github.com/zbigniewsobiecki/llmist/commit/c177bb2)), closes [#184](https://github.com/zbigniewsobiecki/llmist/issues/184)

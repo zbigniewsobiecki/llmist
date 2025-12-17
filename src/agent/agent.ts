@@ -13,6 +13,7 @@ import {
   DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT,
   FALLBACK_CONTEXT_WINDOW,
 } from "../core/constants.js";
+import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
 import type { ContentPart } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
@@ -145,6 +146,29 @@ export interface AgentOptions {
 
   /** Callback for subagent gadgets to report subagent events to parent */
   onSubagentEvent?: (event: SubagentEvent) => void;
+
+  // ==========================================================================
+  // Execution Tree Context (for shared tree model with subagents)
+  // ==========================================================================
+
+  /**
+   * Shared execution tree for tracking all LLM calls and gadget executions.
+   * If provided (by a parent subagent), nodes are added to this tree.
+   * If not provided, the Agent creates its own tree.
+   */
+  parentTree?: ExecutionTree;
+
+  /**
+   * Parent node ID in the tree (when this agent is a subagent).
+   * Used to set parentId on all nodes created by this agent.
+   */
+  parentNodeId?: NodeId;
+
+  /**
+   * Base depth for nodes created by this agent.
+   * Root agents use 0; subagents use (parentDepth + 1).
+   */
+  baseDepth?: number;
 }
 
 /**
@@ -209,6 +233,13 @@ export class Agent {
   private readonly pendingSubagentEvents: SubagentEvent[] = [];
   // Combined callback that queues events AND calls user callback
   private readonly onSubagentEvent: (event: SubagentEvent) => void;
+  // Counter for generating synthetic invocation IDs for wrapped text content
+  private syntheticInvocationCounter = 0;
+
+  // Execution Tree - first-class model for nested subagent support
+  private readonly tree: ExecutionTree;
+  private readonly parentNodeId: NodeId | null;
+  private readonly baseDepth: number;
 
   /**
    * Creates a new Agent instance.
@@ -309,6 +340,12 @@ export class Agent {
     };
     this.subagentConfig = options.subagentConfig;
 
+    // Initialize Execution Tree
+    // If a parent tree is provided (subagent case), share it; otherwise create a new tree
+    this.tree = options.parentTree ?? new ExecutionTree();
+    this.parentNodeId = options.parentNodeId ?? null;
+    this.baseDepth = options.baseDepth ?? 0;
+
     // Store user callback and create combined callback that:
     // 1. Queues events for yielding in run()
     // 2. Calls user callback if provided
@@ -384,8 +421,10 @@ export class Agent {
    */
   private *flushPendingSubagentEvents(): Generator<StreamEvent> {
     while (this.pendingSubagentEvents.length > 0) {
-      const event = this.pendingSubagentEvents.shift()!;
-      yield { type: "subagent_event", subagentEvent: event };
+      const event = this.pendingSubagentEvents.shift();
+      if (event) {
+        yield { type: "subagent_event", subagentEvent: event };
+      }
     }
   }
 
@@ -440,6 +479,49 @@ export class Agent {
    */
   getMediaStore(): MediaStore {
     return this.mediaStore;
+  }
+
+  /**
+   * Get the execution tree for this agent.
+   *
+   * The execution tree provides a first-class model of all LLM calls and gadget executions,
+   * including nested subagent activity. Use this to:
+   * - Query execution state: `tree.getNode(id)`
+   * - Get total cost: `tree.getTotalCost()`
+   * - Get subtree cost/media/tokens: `tree.getSubtreeCost(nodeId)`
+   * - Subscribe to events: `tree.on("llm_call_complete", handler)`
+   * - Stream all events: `for await (const event of tree.events())`
+   *
+   * For subagents (created with `withParentContext`), the tree is shared with the parent,
+   * enabling unified tracking and real-time visibility across all nesting levels.
+   *
+   * @returns The ExecutionTree instance
+   *
+   * @example
+   * ```typescript
+   * const agent = LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withGadgets(BrowseWeb)
+   *   .ask("Research topic X");
+   *
+   * for await (const event of agent.run()) {
+   *   // Process events...
+   * }
+   *
+   * // After execution, query the tree
+   * const tree = agent.getTree();
+   * console.log(`Total cost: $${tree.getTotalCost().toFixed(4)}`);
+   *
+   * // Inspect all LLM calls
+   * for (const node of tree.getAllNodes()) {
+   *   if (node.type === "llm_call") {
+   *     console.log(`LLM #${node.iteration}: ${node.model}`);
+   *   }
+   * }
+   * ```
+   */
+  getTree(): ExecutionTree {
+    return this.tree;
   }
 
   /**
@@ -558,6 +640,7 @@ export class Agent {
                 await this.hooks.observers.onCompaction({
                   iteration: currentIteration,
                   event: compactionEvent,
+                  // biome-ignore lint/style/noNonNullAssertion: compactionManager exists if compactionEvent is truthy
                   stats: this.compactionManager!.getStats(),
                   logger: this.logger,
                 });
@@ -635,6 +718,16 @@ export class Agent {
           messageCount: llmOptions.messages.length,
           messages: llmOptions.messages,
         });
+
+        // Add LLM call to execution tree
+        const llmNode = this.tree.addLLMCall({
+          iteration: currentIteration,
+          model: llmOptions.model,
+          parentId: this.parentNodeId,
+          request: llmOptions.messages,
+        });
+        const currentLLMNodeId = llmNode.id;
+
         const stream = this.client.stream(llmOptions);
 
         // Process stream - ALL complexity delegated to StreamProcessor
@@ -653,6 +746,10 @@ export class Agent {
           agentConfig: this.agentContextConfig,
           subagentConfig: this.subagentConfig,
           onSubagentEvent: this.onSubagentEvent,
+          // Tree context for execution tracking
+          tree: this.tree,
+          parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
+          baseDepth: this.baseDepth,
         });
 
         // Consume the stream processor generator, yielding events in real-time
@@ -720,6 +817,13 @@ export class Agent {
           }
         });
 
+        // Complete LLM call in execution tree
+        this.tree.completeLLMCall(currentLLMNodeId, {
+          response: result.rawResponse,
+          usage: result.usage,
+          finishReason: result.finishReason,
+        });
+
         // Controller: After LLM call
         let finalMessage = result.finalMessage;
         if (this.hooks.controllers?.afterLLMCall) {
@@ -767,10 +871,13 @@ export class Agent {
 
             if (textContent.trim()) {
               const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
+              // Generate synthetic invocation ID for wrapped text
+              const syntheticId = `gc_text_${++this.syntheticInvocationCounter}`;
               this.conversation.addGadgetCallResult(
                 gadgetName,
                 parameterMapping(textContent),
                 resultMapping ? resultMapping(textContent) : textContent,
+                syntheticId,
               );
             }
           }
@@ -784,6 +891,7 @@ export class Agent {
                 gadgetResult.gadgetName,
                 gadgetResult.parameters,
                 gadgetResult.error ?? gadgetResult.result ?? "",
+                gadgetResult.invocationId,
                 gadgetResult.media,
                 gadgetResult.mediaIds,
               );
@@ -794,10 +902,13 @@ export class Agent {
           // This keeps conversation history consistent (gadget-oriented) and
           // helps LLMs stay in the "gadget invocation" mindset
           if (finalMessage.trim()) {
+            // Generate synthetic invocation ID for TellUser wrapper
+            const syntheticId = `gc_tell_${++this.syntheticInvocationCounter}`;
             this.conversation.addGadgetCallResult(
               "TellUser",
               { message: finalMessage, done: false, type: "info" },
               `ℹ️  ${finalMessage}`,
+              syntheticId,
             );
           }
           // Empty responses: don't add anything, just check if we should continue

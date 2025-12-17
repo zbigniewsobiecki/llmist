@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
+import { createMockClient } from "../testing/mock-client.js";
 import { AgentBuilder, type HistoryMessage } from "./builder.js";
 import { HookPresets } from "./hook-presets.js";
 
@@ -309,6 +310,85 @@ describe("AgentBuilder", () => {
 
       expect(result).toBe(builder);
     });
+
+    it("captures tree context when ctx.tree is provided", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+      const parentTree = new ExecutionTree();
+
+      // Add a parent LLM call (required for proper tree structure)
+      parentTree.addLLMCall({
+        iteration: 0,
+        model: "test-model",
+      });
+
+      // Simulate parent adding a gadget
+      const parentGadget = parentTree.addGadget({
+        invocationId: "parent_gadget_1",
+        name: "BrowseWeb",
+        parameters: { url: "https://example.com" },
+      });
+
+      // Create ExecutionContext like executor.ts does
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        tree: parentTree,
+        nodeId: parentGadget.id,
+        depth: 1,
+      };
+
+      const agent = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withParentContext(ctx as never)
+        .build();
+
+      // Verify the agent uses the SAME tree instance (shared)
+      expect(agent.getTree()).toBe(parentTree);
+    });
+
+    it("captures tree context even without onSubagentEvent", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+      const parentTree = new ExecutionTree();
+
+      // Create minimal ExecutionContext with ONLY tree (no callback)
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        tree: parentTree,
+        // NO onSubagentEvent
+        // NO invocationId
+      };
+
+      const agent = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withParentContext(ctx as never)
+        .build();
+
+      // Tree should still be shared
+      expect(agent.getTree()).toBe(parentTree);
+    });
+
+    it("creates new tree when ctx.tree is not provided", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+
+      // Create ExecutionContext WITHOUT tree
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        // NO tree
+      };
+
+      const agent = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withParentContext(ctx as never)
+        .build();
+
+      // Agent should have created its own tree
+      expect(agent.getTree()).toBeInstanceOf(ExecutionTree);
+    });
   });
 
   describe("onHumanInput", () => {
@@ -457,14 +537,14 @@ describe("AgentBuilder", () => {
   describe("withSyntheticGadgetCall", () => {
     it("returns this for chaining", () => {
       const builder = new AgentBuilder();
-      const result = builder.withSyntheticGadgetCall("TestGadget", { foo: "bar" }, "result");
+      const result = builder.withSyntheticGadgetCall("TestGadget", { foo: "bar" }, "result", "gc_1");
 
       expect(result).toBe(builder);
     });
 
-    it("formats gadget call with default prefixes", () => {
+    it("formats gadget call with default prefixes and invocation ID", () => {
       const builder = new AgentBuilder();
-      builder.withSyntheticGadgetCall("TestGadget", { message: "hello" }, "Success");
+      builder.withSyntheticGadgetCall("TestGadget", { message: "hello" }, "Success", "gc_1");
 
       // Access private initialMessages via type assertion
       const messages = (
@@ -473,16 +553,16 @@ describe("AgentBuilder", () => {
 
       expect(messages).toHaveLength(2);
 
-      // Assistant message with gadget call
+      // Assistant message with gadget call (including invocation ID)
       expect(messages[0].role).toBe("assistant");
-      expect(messages[0].content).toContain("!!!GADGET_START:TestGadget");
+      expect(messages[0].content).toContain("!!!GADGET_START:TestGadget:gc_1");
       expect(messages[0].content).toContain("!!!ARG:message");
       expect(messages[0].content).toContain("hello");
       expect(messages[0].content).toContain("!!!GADGET_END");
 
-      // User message with result
+      // User message with result (including invocation ID)
       expect(messages[1].role).toBe("user");
-      expect(messages[1].content).toBe("Result: Success");
+      expect(messages[1].content).toBe("Result (gc_1): Success");
     });
 
     it("uses custom gadget prefixes when configured", () => {
@@ -491,7 +571,7 @@ describe("AgentBuilder", () => {
         .withGadgetStartPrefix("<<<GADGET>>>")
         .withGadgetEndPrefix("<<<END>>>")
         .withGadgetArgPrefix("<<<ARG>>>")
-        .withSyntheticGadgetCall("Calculator", { a: 1, b: 2 }, "3");
+        .withSyntheticGadgetCall("Calculator", { a: 1, b: 2 }, "3", "gc_2");
 
       const messages = (
         builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
@@ -499,9 +579,9 @@ describe("AgentBuilder", () => {
 
       expect(messages).toHaveLength(2);
 
-      // Verify custom prefixes are used
+      // Verify custom prefixes are used with invocation ID
       const assistantContent = messages[0].content;
-      expect(assistantContent).toContain("<<<GADGET>>>Calculator");
+      expect(assistantContent).toContain("<<<GADGET>>>Calculator:gc_2");
       expect(assistantContent).toContain("<<<ARG>>>a");
       expect(assistantContent).toContain("<<<ARG>>>b");
       expect(assistantContent).toContain("<<<END>>>");
@@ -521,6 +601,7 @@ describe("AgentBuilder", () => {
           metadata: { priority: "high", tags: ["urgent", "bug"] },
         },
         "Task created",
+        "gc_3",
       );
 
       const messages = (
@@ -538,8 +619,8 @@ describe("AgentBuilder", () => {
     it("can be called multiple times to add multiple synthetic calls", () => {
       const builder = new AgentBuilder();
       builder
-        .withSyntheticGadgetCall("First", { x: 1 }, "one")
-        .withSyntheticGadgetCall("Second", { y: 2 }, "two");
+        .withSyntheticGadgetCall("First", { x: 1 }, "one", "gc_a")
+        .withSyntheticGadgetCall("Second", { y: 2 }, "two", "gc_b");
 
       const messages = (
         builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
@@ -547,8 +628,8 @@ describe("AgentBuilder", () => {
 
       // Each call adds 2 messages (assistant + user)
       expect(messages).toHaveLength(4);
-      expect(messages[0].content).toContain("First");
-      expect(messages[2].content).toContain("Second");
+      expect(messages[0].content).toContain("First:gc_a");
+      expect(messages[2].content).toContain("Second:gc_b");
     });
   });
 

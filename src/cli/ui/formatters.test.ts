@@ -664,6 +664,28 @@ describe("formatLLMCallOpening", () => {
     const result = formatLLMCallOpening(3, "anthropic:claude-sonnet", 5);
     expect(result).toContain("#5.3");
   });
+
+  it("formats call with gadget invocation ID for unique subagent identification", () => {
+    const result = formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 6, "browse_web_1");
+    expect(result).toContain("→");
+    expect(result).toContain("#6.browse_web_1.2");
+    expect(result).toContain("gemini:gemini-2.5-flash");
+  });
+
+  it("uses gadget invocation ID to distinguish parallel subagents", () => {
+    const result1 = formatLLMCallOpening(1, "gemini:gemini-2.5-flash", 6, "browse_web_github");
+    const result2 = formatLLMCallOpening(1, "gemini:gemini-2.5-flash", 6, "browse_web_npm");
+    // Both have same parent (6) and iteration (1), but different gadget IDs
+    expect(result1).toContain("#6.browse_web_github.1");
+    expect(result2).toContain("#6.browse_web_npm.1");
+    expect(result1).not.toEqual(result2);
+  });
+
+  it("falls back to legacy format when gadgetInvocationId is not provided", () => {
+    const result = formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1, undefined);
+    expect(result).toContain("#1.2");
+    expect(result).not.toContain("undefined");
+  });
 });
 
 describe("formatLLMCallLine", () => {
@@ -687,6 +709,48 @@ describe("formatLLMCallLine", () => {
       });
       expect(result).toContain("#0");
       expect(result).toContain("claude-sonnet-4-20250514");
+    });
+
+    it("formats subagent call with gadget invocation ID", () => {
+      const result = formatLLMCallLine({
+        iteration: 2,
+        parentCallNumber: 6,
+        gadgetInvocationId: "browse_web_1",
+        model: "gemini-2.5-flash",
+        elapsedSeconds: 1.5,
+      });
+      expect(result).toContain("#6.browse_web_1.2");
+      expect(result).toContain("gemini-2.5-flash");
+    });
+
+    it("distinguishes parallel subagents by gadget invocation ID", () => {
+      const result1 = formatLLMCallLine({
+        iteration: 1,
+        parentCallNumber: 6,
+        gadgetInvocationId: "browse_web_github",
+        model: "gemini-2.5-flash",
+        elapsedSeconds: 1.0,
+      });
+      const result2 = formatLLMCallLine({
+        iteration: 1,
+        parentCallNumber: 6,
+        gadgetInvocationId: "browse_web_npm",
+        model: "gemini-2.5-flash",
+        elapsedSeconds: 1.0,
+      });
+      expect(result1).toContain("#6.browse_web_github.1");
+      expect(result2).toContain("#6.browse_web_npm.1");
+      expect(result1).not.toEqual(result2);
+    });
+
+    it("falls back to legacy format without gadgetInvocationId", () => {
+      const result = formatLLMCallLine({
+        iteration: 2,
+        parentCallNumber: 1,
+        model: "test",
+        elapsedSeconds: 1.0,
+      });
+      expect(result).toContain("#1.2");
     });
   });
 

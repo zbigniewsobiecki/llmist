@@ -1,4 +1,3 @@
-import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { AgentBuilder } from "../agent/builder.js";
@@ -8,9 +7,8 @@ import { text } from "../core/input-content.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { TokenUsage } from "../core/options.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { LLMCallInfo } from "../gadgets/types.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
-import { type ApprovalConfig, ApprovalManager } from "./approval/index.js";
+import type { ApprovalConfig } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
@@ -33,101 +31,8 @@ import {
   writeLogFile,
 } from "./llm-logging.js";
 import { type CLIAgentOptions, addAgentOptions } from "./option-helpers.js";
-import {
-  formatGadgetOpening,
-  formatGadgetSummary,
-  formatLLMCallLine,
-  formatLLMCallOpening,
-  formatNestedGadgetResult,
-  renderMarkdownWithSeparators,
-  renderOverallSummary,
-} from "./ui/formatters.js";
-import {
-  createEscKeyListener,
-  createSigintListener,
-  executeAction,
-  isInteractive,
-  renderSummary,
-  resolvePrompt,
-  StreamPrinter,
-  StreamProgress,
-} from "./utils.js";
-
-/**
- * Keyboard/signal listener management for ESC key and Ctrl+C (SIGINT) handling.
- * Allows pausing and restoring the ESC listener during readline operations.
- */
-interface KeyboardManager {
-  cleanupEsc: (() => void) | null;
-  cleanupSigint: (() => void) | null;
-  restore: () => void;
-}
-
-/**
- * Creates a human input handler for interactive mode.
- * Only returns a handler if stdin is a TTY (terminal), not a pipe.
- *
- * @param env - CLI environment
- * @param progress - Progress indicator to pause during input
- * @param keyboard - Keyboard listener manager for ESC handling
- * @returns Human input handler function or undefined if not interactive
- */
-function createHumanInputHandler(
-  env: CLIEnvironment,
-  progress: StreamProgress,
-  keyboard: KeyboardManager,
-): ((question: string) => Promise<string>) | undefined {
-  const stdout = env.stdout as NodeJS.WriteStream;
-  if (
-    !isInteractive(env.stdin) ||
-    typeof stdout.isTTY !== "boolean" ||
-    !stdout.isTTY
-  ) {
-    return undefined;
-  }
-
-  return async (question: string): Promise<string> => {
-    progress.pause(); // Pause progress indicator during human input
-
-    // Temporarily disable ESC listener for readline (raw mode conflict)
-    if (keyboard.cleanupEsc) {
-      keyboard.cleanupEsc();
-      keyboard.cleanupEsc = null;
-    }
-
-    const rl = createInterface({ input: env.stdin, output: env.stdout });
-    try {
-      // Display question on first prompt only (with markdown rendering and separators)
-      const questionLine = question.trim()
-        ? `\n${renderMarkdownWithSeparators(question.trim())}`
-        : "";
-      let isFirst = true;
-
-      // Loop until non-empty input (like a REPL)
-      while (true) {
-        const statsPrompt = progress.formatPrompt();
-        const prompt = isFirst
-          ? `${questionLine}\n${statsPrompt}`
-          : statsPrompt;
-        isFirst = false;
-
-        const answer = await rl.question(prompt);
-        const trimmed = answer.trim();
-        if (trimmed) {
-          return trimmed;
-        }
-        // Empty input - show prompt again (no question repeat)
-      }
-    } finally {
-      rl.close();
-      // Restore ESC listener after readline closes
-      keyboard.restore();
-    }
-  };
-}
-
-// formatGadgetSummary is now imported from ./ui/formatters.js
-// This demonstrates clean code organization and reusability
+import { TUIApp, StatusBar } from "./tui/index.js";
+import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
 
 /**
  * Executes the agent command.
@@ -191,25 +96,28 @@ export async function executeAgent(
     }
   }
 
-  const prompt = await resolvePrompt(promptArg, env);
   const client = env.createClient();
 
+  // Detect TUI mode early: use TUI when both stdin and stdout are TTY
+  const stdinIsInteractive = isInteractive(env.stdin);
+  const stdoutTTY = (env.stdout as NodeJS.WriteStream).isTTY === true;
+  const useTUI = stdinIsInteractive && stdoutTTY && !options.quiet;
+
+  // Resolve prompt: required for piped mode, optional for TUI mode (REPL will wait)
+  let prompt: string;
+  if (useTUI) {
+    // TUI mode: prompt is optional (REPL will wait for input if not provided)
+    prompt = promptArg ?? "";
+  } else {
+    // Piped mode: prompt is required
+    prompt = await resolvePrompt(promptArg, env);
+  }
+
   // SHOWCASE: llmist's GadgetRegistry for dynamic tool loading
-  // This demonstrates how to build extensible CLIs with plugin-like functionality
   const registry = new GadgetRegistry();
 
   // Register built-in gadgets for basic agent interaction
-  // SHOWCASE: Built-in gadgets enable conversation without any custom tools
-  //
-  // AskUser: Prompts user for input during agent execution
-  // TellUser: Displays formatted messages and optionally ends the loop
-  //
-  // Flags control built-in behavior:
-  // --no-builtins: Exclude all built-in gadgets
-  // --no-builtin-interaction: Exclude only AskUser (keeps TellUser for output)
-  //
-  // AskUser is also auto-excluded when stdin is not interactive (piped input)
-  const stdinIsInteractive = isInteractive(env.stdin);
+  // AskUser is auto-excluded when stdin is not interactive (piped input)
   if (options.builtins !== false) {
     for (const gadget of builtinGadgets) {
       // Skip AskUser if:
@@ -226,118 +134,49 @@ export async function executeAgent(
   }
 
   // Load user-provided gadgets from file paths
-  // SHOWCASE: Dynamic gadget loading enables custom tools without recompiling
-  // Users can provide gadgets via -g/--gadget flag, supporting any TypeScript class
   const gadgetSpecifiers = options.gadget ?? [];
   if (gadgetSpecifiers.length > 0) {
     const gadgets = await loadGadgets(gadgetSpecifiers, process.cwd());
     for (const gadget of gadgets) {
-      // Later registrations can override earlier ones
-      // This allows users to customize built-in behavior
       registry.registerByClass(gadget);
     }
   }
 
-  // Display all registered gadget names (built-ins + user-provided)
-  if (!options.quiet) {
-    const allNames = registry
-      .getAll()
-      .map((g) => g.name)
-      .join(", ");
-    env.stderr.write(chalk.dim(`Gadgets: ${allNames}\n`));
+  // Create TUI app if in TUI mode
+  let tui: TUIApp | null = null;
+  if (useTUI) {
+    tui = await TUIApp.create({
+      model: options.model,
+      stdin: env.stdin as NodeJS.ReadStream,
+      stdout: env.stdout as NodeJS.WriteStream,
+    });
   }
 
-  const printer = new StreamPrinter(env.stdout);
-  const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-  const progress = new StreamProgress(
-    env.stderr,
-    stderrTTY,
-    client.modelRegistry,
-  );
-
-  // Set up cancellation support for ESC key and Ctrl+C (SIGINT) handling
+  // Set up cancellation support
   const abortController = new AbortController();
   let wasCancelled = false;
-  let isStreaming = false; // Track if LLM call is in progress
-  const stdinStream = env.stdin as NodeJS.ReadStream;
 
-  // Shared cancel handler for both ESC and Ctrl+C
-  const handleCancel = () => {
-    if (!abortController.signal.aborted) {
-      wasCancelled = true;
-      abortController.abort();
-      progress.pause();
-      env.stderr.write(
-        chalk.yellow(`\n[Cancelled] ${progress.formatStats()}\n`),
-      );
-    } else {
-      // Already cancelled - treat as quit request (like double Ctrl+C)
-      // This ensures the user can always exit even if the abort didn't fully propagate
-      handleQuit();
-    }
-  };
-
-  // Create keyboard manager for ESC/SIGINT listener coordination with readline
-  const keyboard: KeyboardManager = {
-    cleanupEsc: null,
-    cleanupSigint: null,
-    restore: () => {
-      // Only restore ESC listener if not cancelled - when wasCancelled is true,
-      // the executeAgent function is terminating and we don't need the listener.
-      // This is called after readline closes to re-enable ESC key detection.
-      if (stdinIsInteractive && stdinStream.isTTY && !wasCancelled) {
-        keyboard.cleanupEsc = createEscKeyListener(
-          stdinStream,
-          handleCancel,
-          handleCancel,
-        );
-      }
-    },
-  };
-
-  // Quit handler for double Ctrl+C - shows summary and exits
+  // Quit handler - cleanup and exit
   const handleQuit = () => {
-    // Clean up listeners
-    keyboard.cleanupEsc?.();
-    keyboard.cleanupSigint?.();
-
-    progress.complete();
-    printer.ensureNewline();
-
-    // Show final summary
-    const summary = renderOverallSummary({
-      totalTokens: usage?.totalTokens,
-      iterations,
-      elapsedSeconds: progress.getTotalElapsedSeconds(),
-      cost: progress.getTotalCost(),
-    });
-
-    if (summary) {
-      env.stderr.write(`${chalk.dim("─".repeat(40))}\n`);
-      env.stderr.write(`${summary}\n`);
+    if (tui) {
+      tui.destroy();
     }
-
-    env.stderr.write(chalk.dim("[Quit]\n"));
     process.exit(130); // SIGINT convention: 128 + signal number (2)
   };
 
-  // Set up ESC key and Ctrl+C listener if in interactive TTY mode
-  // Both ESC and Ctrl+C trigger handleCancel during streaming
-  if (stdinIsInteractive && stdinStream.isTTY) {
-    keyboard.cleanupEsc = createEscKeyListener(
-      stdinStream,
-      handleCancel,
-      handleCancel,
-    );
+  // Set up TUI event handlers for ESC and Ctrl+C
+  if (tui) {
+    tui.onQuit(handleQuit);
+    tui.onCancel(() => {
+      wasCancelled = true;
+      abortController.abort();
+    });
   }
 
-  // Set up SIGINT (Ctrl+C) listener - always active for graceful cancellation
-  keyboard.cleanupSigint = createSigintListener(
-    handleCancel,
-    handleQuit,
-    () => isStreaming && !abortController.signal.aborted,
-    env.stderr,
-  );
+  // In piped mode, set up basic SIGINT handler
+  if (!useTUI) {
+    process.once("SIGINT", () => process.exit(130));
+  }
 
   // Set up gadget approval manager
   // Default: RunCommand, WriteFile, EditFile require approval unless overridden by config
@@ -365,12 +204,9 @@ export async function executeAgent(
     gadgetApprovals,
     defaultMode: "allowed",
   };
-  const approvalManager = new ApprovalManager(
-    approvalConfig,
-    env,
-    progress,
-    keyboard,
-  );
+  // Approval is handled:
+  // - TUI mode: TUI's modal dialogs (in beforeGadgetExecution controller)
+  // - Piped mode: auto-deny gadgets requiring approval (can't prompt)
 
   let usage: TokenUsage | undefined;
   let iterations = 0;
@@ -436,35 +272,30 @@ export async function executeAgent(
     .withLogger(env.createLogger("llmist:cli:agent"))
     .withHooks({
       observers: {
-        // onLLMCallStart: Start progress indicator for each LLM call
-        // This showcases how to react to agent lifecycle events
-        // Skip for subagent events (tracked separately via nested display)
+        // onLLMCallStart: Update TUI with LLM call info and estimated input tokens
         onLLMCallStart: async (context) => {
-          if (context.subagentContext) return; // Subagent calls handled via withSubagentEventCallback
-
-          isStreaming = true; // Mark that we're actively streaming (for SIGINT handling)
+          if (context.subagentContext) return;
           llmCallCounter++;
 
-          // Print opening line for LLM call (static, never refreshed)
-          if (stderrTTY && !options.quiet) {
-            const openingLine = formatLLMCallOpening(iterations + 1, context.options.model);
-            env.stderr.write(`${openingLine}\n`);
+          if (tui) {
+            // Estimate input tokens from messages
+            const estimatedInput = await countMessagesTokens(
+              context.options.model,
+              context.options.messages,
+            );
+            tui.showLLMCallStart(iterations + 1, context.options.model, estimatedInput);
           }
-
-          // Count input tokens accurately using provider-specific methods
-          // This ensures we never show ~ for input tokens
-          const inputTokens = await countMessagesTokens(
-            context.options.model,
-            context.options.messages,
-          );
-          progress.startCall(context.options.model, inputTokens);
-          // Mark input tokens as accurate (not estimated)
-          progress.setInputTokens(inputTokens, false);
         },
 
         // onLLMCallReady: Log the exact request being sent to the LLM
-        // This fires AFTER controller modifications (e.g., trailing messages)
         onLLMCallReady: async (context) => {
+          if (context.subagentContext) return;
+
+          // Store raw request in TUI for raw viewer
+          if (tui) {
+            tui.setLLMCallRequest(context.options.messages);
+          }
+
           if (llmLogsBaseDir) {
             if (!llmSessionDir) {
               llmSessionDir = await createSessionDir(llmLogsBaseDir);
@@ -476,58 +307,26 @@ export async function executeAgent(
             }
           }
         },
-        // onStreamChunk: Real-time updates as LLM generates tokens
-        // This enables responsive UIs that show progress during generation
-        // Skip for subagent events (tracked separately via nested display)
+
+        // onStreamChunk: Update status bar with real-time output token estimate
         onStreamChunk: async (context) => {
-          if (context.subagentContext) return; // Subagent chunks handled via withSubagentEventCallback
+          if (context.subagentContext) return;
+          if (!tui) return;
 
-          // Update estimated output tokens from accumulated text length
-          progress.update(context.accumulatedText.length);
-
-          // Use exact token counts when available from streaming response
-          // SHOWCASE: Provider responses include token usage for accurate tracking
-          if (context.usage) {
-            if (context.usage.inputTokens) {
-              progress.setInputTokens(context.usage.inputTokens, false);
-            }
-            if (context.usage.outputTokens) {
-              progress.setOutputTokens(context.usage.outputTokens, false);
-            }
-            // Update cached token counts for live cost estimation
-            progress.setCachedTokens(
-              context.usage.cachedInputTokens ?? 0,
-              context.usage.cacheCreationInputTokens ?? 0,
-            );
-          }
+          // Use accumulated text from context to estimate output tokens
+          const estimatedOutputTokens = StatusBar.estimateTokens(context.accumulatedText);
+          tui.updateStreamingTokens(estimatedOutputTokens);
         },
 
-        // onLLMCallComplete: Finalize metrics after each LLM call
-        // This is where you'd typically log metrics or update dashboards
-        // Skip progress updates for subagent events (tracked separately via nested display)
+        // onLLMCallComplete: Update TUI with completion metrics
         onLLMCallComplete: async (context) => {
-          if (context.subagentContext) return; // Subagent calls handled via withSubagentEventCallback
+          if (context.subagentContext) return;
 
-          isStreaming = false; // Mark that streaming is complete (for SIGINT handling)
-
-          // Capture completion metadata for final summary
+          // Capture completion metadata
           usage = context.usage;
           iterations = Math.max(iterations, context.iteration + 1);
 
-          // Update with final exact token counts from provider
-          // SHOWCASE: llmist normalizes token usage across all providers
-          if (context.usage) {
-            if (context.usage.inputTokens) {
-              progress.setInputTokens(context.usage.inputTokens, false);
-            }
-            if (context.usage.outputTokens) {
-              progress.setOutputTokens(context.usage.outputTokens, false);
-            }
-          }
-
-          // Calculate per-call cost for the summary (accounting for cached tokens)
-          // Use context.options.model (resolved) instead of options.model (raw CLI input)
-          // This ensures aliases like "sonnet" are resolved to "claude-sonnet-4-5"
+          // Calculate per-call cost
           let callCost: number | undefined;
           if (context.usage && client.modelRegistry) {
             try {
@@ -547,31 +346,18 @@ export async function executeAgent(
             }
           }
 
-          // Get per-call elapsed time before endCall resets it
-          const callElapsed = progress.getCallElapsedSeconds();
-
-          // End this call's progress tracking and switch to cumulative mode
-          progress.endCall(context.usage);
-
-          // SHOWCASE: Print per-call summary after each LLM call
-          // This gives users visibility into each iteration's metrics
-          // Skip summaries in quiet mode or for subagent events (tracked separately via nested display)
-          if (!options.quiet && !context.subagentContext) {
-            const summary = renderSummary({
-              iterations: context.iteration + 1,
-              model: options.model,
-              usage: context.usage,
-              elapsedSeconds: callElapsed,
+          if (tui) {
+            tui.showLLMCallComplete({
+              iteration: context.iteration + 1,
+              model: context.options.model,
+              inputTokens: context.usage?.inputTokens,
+              outputTokens: context.usage?.outputTokens,
+              cachedInputTokens: context.usage?.cachedInputTokens,
+              elapsedSeconds: tui.getElapsedSeconds(),
               cost: callCost,
-              finishReason: context.finishReason,
+              finishReason: context.finishReason ?? "stop",
+              rawResponse: context.rawResponse,
             });
-            if (summary) {
-              // No indent - align with opening line which also has no indent
-              // Add ✓ prefix to match completed gadget and nested LLM call style
-              env.stderr.write(`${chalk.green("✓")} ${summary}\n`);
-            }
-            // Add blank line after each LLM call to visually separate iterations
-            env.stderr.write("\n");
           }
 
           // Write LLM response to debug log if enabled
@@ -594,7 +380,12 @@ export async function executeAgent(
       // Default: RunCommand, WriteFile, EditFile require approval unless overridden.
       controllers: {
         beforeGadgetExecution: async (ctx) => {
-          const mode = approvalManager.getApprovalMode(ctx.gadgetName);
+          // Get approval mode from config
+          const normalizedGadgetName = ctx.gadgetName.toLowerCase();
+          const configuredMode = Object.entries(gadgetApprovals).find(
+            ([key]) => key.toLowerCase() === normalizedGadgetName,
+          )?.[1];
+          const mode = configuredMode ?? approvalConfig.defaultMode;
 
           // Fast path: allowed gadgets proceed immediately
           if (mode === "allowed") {
@@ -623,20 +414,28 @@ export async function executeAgent(
             return { action: "proceed" };
           }
 
-          // Interactive mode: use approval manager
-          const result = await approvalManager.requestApproval(
-            ctx.gadgetName,
-            ctx.parameters,
-          );
+          // TUI mode: use TUI's modal approval dialog
+          if (tui) {
+            const response = await tui.showApproval({
+              gadgetName: ctx.gadgetName,
+              parameters: ctx.parameters,
+            });
 
-          if (!result.approved) {
+            if (response === "yes" || response === "always") {
+              // TODO: Handle "always" by updating gadgetApprovals
+              return { action: "proceed" };
+            }
             return {
               action: "skip",
-              syntheticResult: `status=denied\n\nDenied: ${result.reason ?? "by user"}`,
+              syntheticResult: `status=denied\n\nDenied by user`,
             };
           }
 
-          return { action: "proceed" };
+          // Piped mode: can't prompt for approval, deny
+          return {
+            action: "skip",
+            syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Run in a terminal to approve.`,
+          };
         },
       },
     });
@@ -652,9 +451,12 @@ export async function executeAgent(
     builder.withTemperature(options.temperature);
   }
 
-  const humanInputHandler = createHumanInputHandler(env, progress, keyboard);
-  if (humanInputHandler) {
-    builder.onHumanInput(humanInputHandler);
+  // Set up human input handler (TUI mode only)
+  // In piped mode, AskUser gadget is excluded (see gadget registration above)
+  if (tui) {
+    builder.onHumanInput(async (question: string) => {
+      return tui.waitForInput(question, "AskUser");
+    });
   }
 
   // Pass abort signal for ESC key cancellation
@@ -689,6 +491,7 @@ export async function executeAgent(
       type: "info",
     },
     "ℹ️  👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
+    "gc_init_1",
   );
 
   // Continue looping when LLM responds with just text (no gadget calls)
@@ -712,335 +515,103 @@ export async function executeAgent(
     ].join(" "),
   );
 
-  // Subagent events (from BrowseWeb, etc.) require callback-based handling
-  // for REAL-TIME display. Stream-based events are delayed until the gadget completes
-  // because flushPendingSubagentEvents() only runs after each stream processor yield.
-  //
-  // withSubagentEventCallback() fires IMMEDIATELY when events occur, enabling real-time
-  // progress updates during long-running gadgets like BrowseWeb (45+ seconds).
-  // The stream-based events (subagent_event) are still useful for simpler apps.
-  if (!options.quiet) {
-    builder.withSubagentEventCallback((subagentEvent) => {
-      // Calculate indent based on depth (nested under parent gadget which has 2-space indent)
-      const indent = "  ".repeat(subagentEvent.depth + 2);
-
-      // Get parent gadget name for prefixing nested operations
-      const parentGadget = progress.getGadget(subagentEvent.gadgetInvocationId);
-      const parentPrefix = parentGadget ? `${chalk.dim(`${parentGadget.name}:`)} ` : "";
-
-      if (subagentEvent.type === "llm_call_start") {
-        const info = subagentEvent.event as LLMCallInfo;
-        const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
-        const iteration = info.iteration + 1; // Make 1-indexed like main agent
-
-        // Print opening line (static, never refreshed)
-        if (stderrTTY) {
-          progress.clearAndReset();
-          const openingLine = formatLLMCallOpening(iteration, info.model, llmCallCounter);
-          env.stderr.write(`${indent}${parentPrefix}${openingLine}\n`);
-        }
-
-        progress.addNestedAgent(
-          subagentId,
-          subagentEvent.gadgetInvocationId,
-          subagentEvent.depth,
-          info.model,
-          iteration,
-          {
-            inputTokens: info.usage?.inputTokens ?? info.inputTokens,
-            cachedInputTokens: info.usage?.cachedInputTokens,
-          },
-          llmCallCounter, // Parent call number for hierarchical display (e.g., #1.2)
-        );
-      } else if (subagentEvent.type === "llm_call_end") {
-        const info = subagentEvent.event as LLMCallInfo;
-        const subagentId = `${subagentEvent.gadgetInvocationId}:${info.iteration}`;
-        const iteration = info.iteration + 1;
-
-        // Calculate elapsed time from nested agent start
-        const nestedAgent = progress.getNestedAgent(subagentId);
-        const startTime = nestedAgent?.startTime ?? Date.now();
-        const elapsedSeconds = (Date.now() - startTime) / 1000;
-
-        // Print closing line (static, never refreshed)
-        // Same indent as opening line - both have prefixes (→ and ✓)
-        if (stderrTTY) {
-          progress.clearAndReset();
-          const closingLine = formatLLMCallLine({
-            iteration,
-            parentCallNumber: llmCallCounter,
-            model: info.model,
-            inputTokens: info.usage?.inputTokens ?? info.inputTokens,
-            outputTokens: info.usage?.outputTokens ?? info.outputTokens,
-            cachedInputTokens: info.usage?.cachedInputTokens,
-            elapsedSeconds,
-            cost: info.cost,
-            finishReason: info.finishReason ?? "stop",
-            isStreaming: false,
-          });
-          env.stderr.write(`${indent}${parentPrefix}${closingLine}\n`);
-        }
-
-        // Pass full metrics for first-class subagent display
-        progress.updateNestedAgent(subagentId, {
-          inputTokens: info.usage?.inputTokens ?? info.inputTokens,
-          outputTokens: info.usage?.outputTokens ?? info.outputTokens,
-          cachedInputTokens: info.usage?.cachedInputTokens,
-          cacheCreationInputTokens: info.usage?.cacheCreationInputTokens,
-          finishReason: info.finishReason,
-          cost: info.cost,
-        });
-        // Note: No removal - nested agent marked completed, skipped in render
-      } else if (subagentEvent.type === "gadget_call") {
-        const gadgetEvent = subagentEvent.event as {
-          call: {
-            invocationId: string;
-            gadgetName: string;
-            parameters?: Record<string, unknown>;
-          };
-        };
-
-        // Print opening line with → indicator (static, never refreshed)
-        if (stderrTTY) {
-          progress.clearAndReset();
-          const openingLine = formatGadgetOpening(
-            gadgetEvent.call.gadgetName,
-            gadgetEvent.call.parameters,
-          );
-          env.stderr.write(`${indent}${parentPrefix}${openingLine}\n`);
-        }
-
-        progress.addNestedGadget(
-          gadgetEvent.call.invocationId,
-          subagentEvent.depth,
-          subagentEvent.gadgetInvocationId,
-          gadgetEvent.call.gadgetName,
-          gadgetEvent.call.parameters,
-        );
-      } else if (subagentEvent.type === "gadget_result") {
-        const resultEvent = subagentEvent.event as {
-          result: { invocationId: string; cost?: number };
-        };
-
-        // Get gadget info for closing line
-        const nestedGadget = progress.getNestedGadget(resultEvent.result.invocationId);
-        if (nestedGadget && stderrTTY) {
-          const elapsedSeconds = (Date.now() - nestedGadget.startTime) / 1000;
-
-          // Get aggregated metrics if this gadget ran LLM calls
-          const subagentMetrics = progress.getAggregatedSubagentMetrics(
-            resultEvent.result.invocationId,
-          );
-
-          progress.clearAndReset();
-          // Use single-line result format (opening line was already printed)
-          const resultLine = formatNestedGadgetResult({
-            name: nestedGadget.name,
-            elapsedSeconds,
-            inputTokens: subagentMetrics.callCount > 0 ? subagentMetrics.inputTokens : undefined,
-            outputTokens: subagentMetrics.callCount > 0 ? subagentMetrics.outputTokens : undefined,
-            cost:
-              subagentMetrics.callCount > 0
-                ? subagentMetrics.cost
-                : resultEvent.result.cost,
-          });
-          // Same indent as opening line (align → and ✓)
-          env.stderr.write(`${indent}${parentPrefix}${resultLine}\n`);
-        }
-
-        progress.completeNestedGadget(resultEvent.result.invocationId);
-      }
-    });
-  }
-
-  // Build and start the agent
-  // Use multimodal content if --image or --audio flags are present
-  let agent;
-  if (options.image || options.audio) {
-    const parts: ContentPart[] = [text(prompt)];
-
-    if (options.image) {
-      parts.push(await readImageFile(options.image));
-    }
-    if (options.audio) {
-      parts.push(await readAudioFile(options.audio));
+  // Helper to create and run an agent with a given prompt
+  const runAgentWithPrompt = async (userPrompt: string) => {
+    // Reset abort controller for new iteration (TUI mode)
+    if (tui) {
+      tui.resetAbort();
+      builder.withSignal(tui.getAbortSignal());
     }
 
-    agent = builder.askWithContent(parts);
-  } else {
-    agent = builder.ask(prompt);
-  }
-
-  // SHOWCASE: llmist's event-driven agent execution
-  // The agent emits events as it runs, enabling reactive UIs
-  //
-  // Event types:
-  // - "text": LLM-generated text chunks (streaming or complete)
-  // - "gadget_result": Results from gadget/tool executions
-  // - "human_input_required": Agent needs user input (handled via callback)
-  //
-  // This pattern allows building:
-  // - Real-time streaming UIs
-  // - Progress indicators during tool execution
-  // - Separation of business logic (agent) from presentation (UI)
-
-  // Buffer for accumulating text chunks - markdown rendering requires complete content
-  let textBuffer = "";
-  const flushTextBuffer = () => {
-    if (textBuffer) {
-      // Clear completed gadgets before showing text - they've served their purpose
-      if (!options.quiet) {
-        progress.clearCompletedGadgets();
+    // Build the agent
+    let agent;
+    if (options.image || options.audio) {
+      const parts: ContentPart[] = [text(userPrompt)];
+      if (options.image) {
+        parts.push(await readImageFile(options.image));
       }
-      // Use separators in normal mode, plain text in quiet mode
-      const output = options.quiet
-        ? textBuffer
-        : renderMarkdownWithSeparators(textBuffer);
-      printer.write(output);
-      textBuffer = "";
+      if (options.audio) {
+        parts.push(await readAudioFile(options.audio));
+      }
+      agent = builder.askWithContent(parts);
+    } else {
+      agent = builder.ask(userPrompt);
+    }
+
+    // Subscribe TUI to ExecutionTree for automatic block management
+    // This handles nested subagent events automatically via tree events
+    let unsubscribeTree: (() => void) | undefined;
+    if (tui) {
+      unsubscribeTree = tui.subscribeToTree(agent.getTree());
+    }
+
+    // Run the agent and handle events
+    for await (const event of agent.run()) {
+      if (tui) {
+        // TUI mode: pass all events to TUI
+        tui.handleEvent(event);
+
+        // Track gadget costs in TUI status bar
+        if (event.type === "gadget_result" && event.result.cost) {
+          tui.addGadgetCost(event.result.cost);
+        }
+      } else {
+        // Piped mode: output text events and TellUser messages to stdout
+        if (event.type === "text") {
+          env.stdout.write(event.content);
+        } else if (
+          event.type === "gadget_result" &&
+          event.result.gadgetName === "TellUser" &&
+          event.result.result
+        ) {
+          // TellUser gadget returns formatted message in result field
+          env.stdout.write(`${event.result.result}\n`);
+        }
+      }
+    }
+
+    // Flush any buffered text
+    if (tui) {
+      tui.flushText();
+    }
+
+    // Clean up tree subscription
+    if (unsubscribeTree) {
+      unsubscribeTree();
     }
   };
 
-  try {
-    for await (const event of agent.run()) {
-      if (event.type === "text") {
-        // Accumulate text chunks - we'll render markdown when complete
-        // Don't pause progress - it can continue showing while we buffer text
-        textBuffer += event.content;
-      } else if (event.type === "gadget_call") {
-        // Flush any accumulated text before tracking gadget
-        flushTextBuffer();
+  // TUI mode: REPL loop - wait for input, run agent, repeat
+  // Piped mode: Run once and exit
+  if (tui) {
+    // Get initial prompt (from CLI arg or wait for user input)
+    let currentPrompt = prompt;
+    if (!currentPrompt) {
+      currentPrompt = await tui.waitForPrompt();
+    }
 
-        if (!options.quiet) {
-          // Print opening line for gadget (static, never refreshed)
-          if (stderrTTY) {
-            progress.clearAndReset();
-            const openingLine = formatGadgetOpening(
-              event.call.gadgetName,
-              event.call.parameters,
-            );
-            // Indent by 2 spaces to show it belongs to current LLM iteration
-            env.stderr.write(`  ${openingLine}\n`);
-          }
-
-          // Add gadget to progress tracking - it will show in multi-line status
-          progress.addGadget(
-            event.call.invocationId,
-            event.call.gadgetName,
-            event.call.parameters,
-          );
-          // Ensure progress is running to show gadget execution in real-time
-          // (flushTextBuffer may have paused it)
-          progress.start();
+    // REPL loop
+    while (true) {
+      try {
+        await runAgentWithPrompt(currentPrompt);
+      } catch (error) {
+        // Handle abort gracefully - continue to next prompt
+        if (!isAbortError(error)) {
+          throw error;
         }
-      } else if (event.type === "gadget_result") {
-        // Flush any accumulated text before showing gadget result
-        flushTextBuffer();
-
-        if (!options.quiet) {
-          // Mark gadget as completed (keeps it visible with ✓ until next text output)
-          progress.completeGadget(event.result.invocationId);
-        }
-
-        // Pause progress to write the completion summary
-        progress.pause();
-
-        if (options.quiet) {
-          // In quiet mode, only output TellUser messages (to stdout, plain unrendered text)
-          if (
-            event.result.gadgetName === "TellUser" &&
-            event.result.parameters?.message
-          ) {
-            const message = String(event.result.parameters.message);
-            env.stdout.write(`${message}\n`);
-          }
-        } else {
-          // Normal mode: show full gadget summary on stderr
-          // Indent to show gadget belongs to current LLM iteration
-          const tokenCount = await countGadgetOutputTokens(event.result.result);
-
-          // Get aggregated metrics from any subagent LLM calls this gadget made
-          // This provides visibility into the total token usage and cost for
-          // gadgets like BrowseWeb that spawn internal LLM calls
-          const subagentMetrics = progress.getAggregatedSubagentMetrics(
-            event.result.invocationId,
-          );
-
-          const summary = formatGadgetSummary({
-            ...event.result,
-            tokenCount,
-            media: event.result.storedMedia,
-            subagentMetrics:
-              subagentMetrics.callCount > 0 ? subagentMetrics : undefined,
-          });
-
-          // TellUser has full-width markdown content - don't indent so it aligns with content
-          if (event.result.gadgetName === "TellUser") {
-            env.stderr.write(`${summary}\n`);
-          } else {
-            // Add 2-space indent to align result with opening line
-            // Both opening (→ Gadget) and result (✓ Gadget) have 2-space indent
-            const indentedSummary = summary
-              .split("\n")
-              .map((line) => "  " + line)
-              .join("\n");
-            env.stderr.write(`${indentedSummary}\n`);
-          }
-        }
-
-        // Resume progress if there are more gadgets in flight or LLM is still streaming
-        if (progress.hasInFlightGadgets()) {
-          progress.start();
-        }
-        // Otherwise, progress resumes on next LLM call (via onLLMCallStart hook)
-      } else if (event.type === "subagent_event") {
-        // Subagent events are handled by withSubagentEventCallback() for real-time updates.
-        // Stream-based events arrive AFTER gadget completes (too late for progress display).
-        // This branch exists for apps that prefer stream-based handling over callbacks.
-        // CLI uses callback for immediate updates; nothing to do here.
       }
-      // Note: human_input_required handled by callback (see createHumanInputHandler)
+
+      // Wait for next prompt
+      currentPrompt = await tui.waitForPrompt();
     }
-  } catch (error) {
-    // Handle abort gracefully - message already shown in ESC handler
-    if (!isAbortError(error)) {
-      throw error;
-    }
-    // Keep partial response in buffer for flushing below
-  } finally {
-    // Always cleanup keyboard and signal listeners
-    isStreaming = false;
-    keyboard.cleanupEsc?.();
-
-    // Replace the complex SIGINT handler with a simple exit handler
-    // This ensures Ctrl+C always works even if something keeps the event loop alive
-    if (keyboard.cleanupSigint) {
-      keyboard.cleanupSigint();
-      process.once("SIGINT", () => process.exit(130)); // 130 = 128 + SIGINT (2)
-    }
-  }
-
-  // Flush any remaining buffered text with markdown rendering (includes partial on cancel)
-  flushTextBuffer();
-
-  progress.complete();
-  printer.ensureNewline();
-
-  // SHOWCASE: Show overall summary only if there were multiple iterations
-  // Single-iteration runs already showed per-call summary, no need to repeat
-  // Skip summaries in quiet mode
-  if (!options.quiet && iterations > 1) {
-    // Separator line to distinguish from per-call summaries
-    env.stderr.write(`${chalk.dim("─".repeat(40))}\n`);
-
-    const summary = renderOverallSummary({
-      totalTokens: usage?.totalTokens,
-      iterations,
-      elapsedSeconds: progress.getTotalElapsedSeconds(),
-      cost: progress.getTotalCost(),
-    });
-    if (summary) {
-      env.stderr.write(`${summary}\n`);
+  } else {
+    // Piped mode: run once and exit
+    try {
+      await runAgentWithPrompt(prompt);
+    } catch (error) {
+      if (!isAbortError(error)) {
+        throw error;
+      }
     }
   }
 }

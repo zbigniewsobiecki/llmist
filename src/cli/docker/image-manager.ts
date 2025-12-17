@@ -130,9 +130,14 @@ async function buildImage(imageName: string, dockerfile: string): Promise<void> 
     },
   );
 
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
+  // Consume streams concurrently with awaiting exit to prevent deadlock.
+  // If we await proc.exited first, large Docker build output can fill pipe buffers,
+  // causing Docker to block on write while we block on exit - mutual deadlock.
+  const [exitCode, stdout, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
 
   if (exitCode !== 0) {
     const output = [stdout, stderr].filter(Boolean).join("\n");

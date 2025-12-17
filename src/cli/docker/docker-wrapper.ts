@@ -72,7 +72,12 @@ export async function checkDockerAvailable(): Promise<boolean> {
       stdout: "pipe",
       stderr: "pipe",
     });
-    await proc.exited;
+    // Consume streams concurrently with awaiting exit to prevent potential deadlock
+    await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
     return proc.exitCode === 0;
   } catch {
     return false;

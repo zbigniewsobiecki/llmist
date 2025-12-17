@@ -80,20 +80,32 @@ q`,
       proc.stdin.write(`${safeCommands}\n`);
       proc.stdin.end();
 
-      // Create timeout promise (30 seconds)
+      // Create timeout promise (30 seconds) with cleanup capability
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           proc.kill();
           reject(new Error("ed command timed out after 30000ms"));
         }, 30000);
       });
 
-      // Wait for process to complete or timeout
-      const exitCode = await Promise.race([proc.exited, timeoutPromise]);
+      // Wait for process and consume streams concurrently to prevent deadlock.
+      // If we await proc.exited first, large output can fill pipe buffers,
+      // causing the process to block on write while we block on exit.
+      const [exitCode, stdout, stderr] = await Promise.race([
+        Promise.all([
+          proc.exited,
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+        ]),
+        timeoutPromise,
+      ]);
 
-      // Collect output
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
+      // Clear timeout on normal exit to prevent dangling timer
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
       const output = [stdout, stderr].filter(Boolean).join("\n").trim();
 
       if (exitCode !== 0) {

@@ -82,6 +82,53 @@ export {
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
 
+// Execution Tree - first-class model for nested subagent support
+export type {
+  AddGadgetParams,
+  AddLLMCallParams,
+  CompleteGadgetParams,
+  CompleteLLMCallParams,
+  ExecutionNode,
+  ExecutionNodeType,
+  GadgetNode,
+  GadgetState,
+  LLMCallNode,
+  NodeId,
+} from "./core/execution-tree.js";
+export { ExecutionTree } from "./core/execution-tree.js";
+
+// Unified execution events with tree context
+export type {
+  BaseExecutionEvent,
+  CompactionEvent as TreeCompactionEvent,
+  ExecutionEvent,
+  ExecutionEventType,
+  GadgetCallEvent,
+  GadgetCompleteEvent,
+  GadgetErrorEvent,
+  GadgetEvent,
+  GadgetSkippedEvent as TreeGadgetSkippedEvent,
+  GadgetStartEvent,
+  HumanInputRequiredEvent,
+  LLMCallCompleteEvent,
+  LLMCallErrorEvent,
+  LLMCallStartEvent,
+  LLMCallStreamEvent,
+  LLMEvent,
+  StreamCompleteEvent,
+  TextEvent,
+} from "./core/execution-events.js";
+export {
+  filterByDepth,
+  filterByParent,
+  filterRootEvents,
+  groupByParent,
+  isGadgetEvent,
+  isLLMEvent,
+  isRootEvent,
+  isSubagentEvent,
+} from "./core/execution-events.js";
+
 // Input content types for multimodal messages
 export type {
   AudioContentPart,
@@ -218,6 +265,10 @@ export type { ValidationIssue, ValidationResult } from "./gadgets/validation.js"
 export { validateAndApplyDefaults, validateGadgetParams } from "./gadgets/validation.js";
 export type { LoggerOptions } from "./logging/logger.js";
 export { createLogger, defaultLogger } from "./logging/logger.js";
+
+// Utility functions for subagent gadgets
+export type { ResolveValueOptions } from "./utils/config-resolver.js";
+export { resolveConfig, resolveSubagentModel, resolveValue } from "./utils/config-resolver.js";
 export {
   AnthropicMessagesProvider,
   createAnthropicProviderFromEnv,
