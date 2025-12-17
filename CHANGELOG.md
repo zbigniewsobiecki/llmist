@@ -1,3 +1,13 @@
+## 6.1.0 (2025-12-17)
+
+* Merge pull request #198 from zbigniewsobiecki/dev ([273fd83](https://github.com/zbigniewsobiecki/llmist/commit/273fd83)), closes [#198](https://github.com/zbigniewsobiecki/llmist/issues/198)
+* feat(cli): add interactive TUI with selectable/expandable blocks (#196) ([5ec48e4](https://github.com/zbigniewsobiecki/llmist/commit/5ec48e4)), closes [#196](https://github.com/zbigniewsobiecki/llmist/issues/196) [#0](https://github.com/zbigniewsobiecki/llmist/issues/0) [#1](https://github.com/zbigniewsobiecki/llmist/issues/1)
+* feat(conversation): include invocation IDs in conversation history (#193) ([12f0c25](https://github.com/zbigniewsobiecki/llmist/commit/12f0c25)), closes [#193](https://github.com/zbigniewsobiecki/llmist/issues/193)
+* feat(core): add ExecutionTree for nested subagent support (#197) ([a7b2442](https://github.com/zbigniewsobiecki/llmist/commit/a7b2442)), closes [#197](https://github.com/zbigniewsobiecki/llmist/issues/197)
+* fix(cli): include gadget costs in total cost accounting (#191) ([ac69fad](https://github.com/zbigniewsobiecki/llmist/commit/ac69fad)), closes [#191](https://github.com/zbigniewsobiecki/llmist/issues/191)
+* fix(cli): prevent stream deadlock in subprocess handling (#192) ([7a7d488](https://github.com/zbigniewsobiecki/llmist/commit/7a7d488)), closes [#192](https://github.com/zbigniewsobiecki/llmist/issues/192)
+* fix(cli): use unique gadget invocation IDs in subagent display (#195) ([4fe0a1a](https://github.com/zbigniewsobiecki/llmist/commit/4fe0a1a)), closes [#195](https://github.com/zbigniewsobiecki/llmist/issues/195)
+
 ## 6.0.0 (2025-12-16)
 
 ### Breaking Changes (PR #193)
