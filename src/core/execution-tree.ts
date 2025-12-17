@@ -575,12 +575,19 @@ export class ExecutionTree {
     gadgetNode.failedDependency = failedDependency;
     gadgetNode.error = failedDependencyError;
 
+    // Build error message combining reason and dependency error
+    const error =
+      reason === "controller_skip"
+        ? "Skipped by controller"
+        : `Dependency ${failedDependency} failed: ${failedDependencyError}`;
+
     this.emit({
       type: "gadget_skipped",
       ...this.createBaseEventProps(node),
       invocationId: gadgetNode.invocationId,
       name: gadgetNode.name,
       reason,
+      error,
       failedDependency,
       failedDependencyError,
     });

@@ -477,21 +477,11 @@ export class TUIApp {
    * @param model - Model name
    * @param estimatedInputTokens - Estimated input tokens for real-time display
    */
-  showLLMCallStart(iteration: number, model: string, estimatedInputTokens = 0): void {
-    // When tree subscription is active, tree creates the block
-    // We only track IDs and update streaming token estimates
-    if (this.blockRenderer.isTreeSubscribed()) {
-      // Get the block ID created by tree subscription
-      this.currentLLMCallId = this.blockRenderer.getCurrentLLMCallId();
-    } else {
-      // Legacy path: create block directly
-      this.currentLLMCallId = this.blockRenderer.addLLMCall(iteration, model);
-      // Activity tracking only needed without tree subscription
-      this.statusBar.startLLMCall(`#${iteration}`, model);
-    }
+  showLLMCallStart(iteration: number, model: string, _estimatedInputTokens = 0): void {
+    // Tree subscription handles block creation and activity tracking via handleTreeEvent
+    // We only track IDs for raw response attachment in raw viewer
     this.currentIteration = iteration;
-    // Token tracking is always needed for streaming estimates
-    this.statusBar.startCall(model, estimatedInputTokens);
+    this.currentLLMCallId = this.blockRenderer.getCurrentLLMCallId();
   }
 
   /**
@@ -506,38 +496,11 @@ export class TUIApp {
    * Show an LLM call completion.
    */
   showLLMCallComplete(info: LLMCallDisplayInfo & { rawResponse?: string }): void {
-    if (this.currentLLMCallId) {
-      if (this.blockRenderer.isTreeSubscribed()) {
-        // Tree handles completion - only enrich with raw response
-        if (info.rawResponse) {
-          this.blockRenderer.setLLMCallResponse(this.currentLLMCallId, info.rawResponse);
-        }
-      } else {
-        // Legacy path: complete block directly
-        this.blockRenderer.completeLLMCall(
-          this.currentLLMCallId,
-          {
-            inputTokens: info.inputTokens,
-            cachedInputTokens: info.cachedInputTokens,
-            outputTokens: info.outputTokens,
-            elapsedSeconds: info.elapsedSeconds,
-            cost: info.cost,
-            finishReason: info.finishReason ?? undefined,
-            contextPercent: info.contextPercent ?? undefined,
-          },
-          info.rawResponse,
-        );
-        // Activity tracking only needed without tree subscription
-        this.statusBar.endLLMCall(`#${this.currentIteration}`);
-      }
+    // Tree subscription handles completion via handleTreeEvent
+    // We only enrich with raw response for the raw viewer feature
+    if (this.currentLLMCallId && info.rawResponse) {
+      this.blockRenderer.setLLMCallResponse(this.currentLLMCallId, info.rawResponse);
     }
-    // Token tracking is always needed for accumulated totals
-    this.statusBar.endCall(
-      info.inputTokens ?? 0,
-      info.outputTokens ?? 0,
-      info.cachedInputTokens ?? 0,
-      info.cost ?? 0,
-    );
   }
 
   /**

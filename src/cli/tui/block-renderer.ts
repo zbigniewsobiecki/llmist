@@ -348,7 +348,10 @@ export class BlockRenderer {
 
   /**
    * Get the current LLM call ID.
-   * Useful for enriching blocks created by tree subscription.
+   *
+   * In tree mode, this is only used for attaching raw request/response data
+   * to the block for the raw viewer feature. Parent-child relationships are
+   * determined by event.parentId in handleTreeEvent(), not by this method.
    */
   getCurrentLLMCallId(): string | null {
     return this.currentLLMCallId;
