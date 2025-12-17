@@ -65,6 +65,9 @@ export class BlockRenderer {
   /** Persisted expanded states (survives rebuildBlocks) */
   private expandedStates = new Map<string, boolean>();
 
+  /** Track main agent LLM calls by iteration to prevent duplicates */
+  private llmCallByIteration = new Map<number, string>();
+
   constructor(container: ScrollableBox, renderCallback: () => void) {
     this.container = container;
     this.renderCallback = renderCallback;
@@ -76,12 +79,23 @@ export class BlockRenderer {
 
   /**
    * Add an LLM call node (top-level or nested in gadget).
+   * For main agent calls (no parent), deduplicates by iteration number.
    */
   addLLMCall(
     iteration: number,
     model: string,
     parentGadgetId?: string,
   ): string {
+    // Deduplicate main agent LLM calls by iteration
+    if (!parentGadgetId) {
+      const existingId = this.llmCallByIteration.get(iteration);
+      if (existingId) {
+        // Return existing block instead of creating duplicate
+        this.currentLLMCallId = existingId;
+        return existingId;
+      }
+    }
+
     const id = this.generateId("llm");
     const depth = parentGadgetId ? this.getNode(parentGadgetId)!.depth + 1 : 0;
 
@@ -103,8 +117,9 @@ export class BlockRenderer {
       const parent = this.getNode(parentGadgetId) as GadgetNode;
       parent.children.push(id);
     } else {
-      // Top-level LLM call
+      // Top-level LLM call - track by iteration for deduplication
       this.rootIds.push(id);
+      this.llmCallByIteration.set(iteration, id);
     }
 
     this.currentLLMCallId = id;
@@ -237,6 +252,7 @@ export class BlockRenderer {
     this.nodes.clear();
     this.blocks.clear();
     this.expandedStates.clear();
+    this.llmCallByIteration.clear();
     this.rootIds = [];
     this.selectableIds = [];
     this.selectedIndex = -1;
