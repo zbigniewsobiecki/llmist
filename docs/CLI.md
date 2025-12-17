@@ -820,6 +820,77 @@ llmist complete "Hello" > response.txt
 llmist complete "Hello" > response.txt 2>&1
 ```
 
+## Interactive TUI
+
+When running in an interactive terminal (TTY), llmist provides a rich TUI experience with:
+
+- **Interactive blocks** for LLM calls and gadget executions
+- **Keyboard navigation** to browse through execution history
+- **Real-time status bar** showing tokens, cost, and elapsed time
+- **Raw viewer** to inspect actual LLM requests and responses
+
+### When TUI is Active
+
+| Condition | Rendering Mode |
+|-----------|----------------|
+| Interactive terminal (TTY) | Full TUI with keyboard navigation |
+| Piped output (`\| less`) | Plain text output only |
+| Non-TTY environment | Plain text output only |
+
+### Keyboard Shortcuts
+
+**Navigation (Browse Mode)**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Select previous block |
+| `↓` / `j` | Select next block |
+| `Enter` / `Space` | Toggle expand/collapse |
+| `Escape` / `h` | Collapse or deselect |
+| `Home` / `g` | Jump to first block |
+| `End` / `G` | Jump to last block |
+
+**Raw Viewer**
+
+| Key | Action |
+|-----|--------|
+| `r` | View raw request (messages sent to LLM) |
+| `R` (Shift+r) | View raw response (LLM output) |
+
+**Mode Control**
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+B` | Toggle between browse and input mode |
+| `Ctrl+C` (×2) | Quit (double-press within 1 second) |
+| `Escape` | Cancel current operation |
+
+### Focus Modes
+
+The TUI has two focus modes:
+
+1. **Browse Mode** (default) - Navigate through LLM calls and gadgets using keyboard
+2. **Input Mode** - Type responses for AskUser gadgets
+
+Use `Ctrl+B` to toggle between modes. When a gadget requests user input (AskUser), input mode is automatically activated.
+
+### Status Bar
+
+The status bar at the bottom shows real-time metrics:
+
+```
+◀ Browse | 1,234 tok | $0.0012 | 3.2s
+```
+
+| Component | Description |
+|-----------|-------------|
+| Mode indicator | `◀ Browse` or `▷ Input` |
+| Tokens | Input/output token counts |
+| Cost | Cumulative USD cost |
+| Time | Elapsed session time |
+
+During streaming, the status bar shows estimated output tokens as they arrive.
+
 ## Human-in-the-Loop
 
 When running interactively (TTY), the agent can prompt for user input using the built-in `AskUser` gadget:

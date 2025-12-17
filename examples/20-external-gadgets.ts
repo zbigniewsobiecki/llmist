@@ -10,7 +10,6 @@
  * Run: bunx tsx examples/20-external-gadgets.ts
  */
 
-import { LLMist } from "llmist";
 import { loadGadgets } from "../src/cli/gadgets.js";
 
 // =============================================================================
@@ -161,7 +160,68 @@ function showManifestStructure() {
 }
 
 // =============================================================================
-// EXAMPLE 5: Cache structure
+// EXAMPLE 5: getHostExports for external gadget developers
+// =============================================================================
+
+function showHostExportsPattern() {
+  console.log("=== getHostExports() Pattern (for external gadget developers) ===\n");
+
+  console.log(`
+External gadgets MUST use getHostExports() to access llmist classes.
+This ensures they use the same class instances as the host CLI,
+enabling proper ExecutionTree sharing and cost tracking.
+
+// In your external gadget package (e.g., webasto/src/gadgets/browse-web.ts):
+
+import { getHostExports, Gadget, z } from 'llmist';
+import type { ExecutionContext, GadgetMediaOutput } from 'llmist';
+
+export class BrowseWeb extends Gadget({
+  name: 'BrowseWeb',
+  description: 'Browse websites autonomously',
+  schema: z.object({
+    task: z.string().describe('The browsing task'),
+    url: z.string().describe('Starting URL'),
+  }),
+  timeoutMs: 300000,
+}) {
+  async execute(
+    params: this['params'],
+    ctx?: ExecutionContext,
+  ): Promise<{ result: string; media?: GadgetMediaOutput[] }> {
+    // CRITICAL: Use host's AgentBuilder, not your package's import!
+    const { AgentBuilder } = getHostExports(ctx!);
+
+    const agent = new AgentBuilder()
+      .withParentContext(ctx!)  // Shares parent's ExecutionTree
+      .withModel(ctx?.agentConfig?.model ?? 'haiku')
+      .withGadgets(Navigate, Click, Screenshot)
+      .ask(params.task);
+
+    let result = '';
+    for await (const event of agent.run()) {
+      if (event.type === 'text') {
+        result = event.content;
+      }
+    }
+
+    // Tree automatically tracks all costs - no manual aggregation needed!
+    const media = ctx?.tree?.getSubtreeMedia(ctx.nodeId!);
+
+    return { result, media };
+  }
+}
+
+Why this matters:
+- Without getHostExports(), your AgentBuilder is from your node_modules/llmist
+- The CLI's AgentBuilder is from its own node_modules/llmist
+- These are DIFFERENT class instances, so tree sharing breaks
+- getHostExports() gives you the CLI's actual classes
+`);
+}
+
+// =============================================================================
+// EXAMPLE 6: Cache structure
 // =============================================================================
 
 function showCacheStructure() {
@@ -197,6 +257,7 @@ async function main() {
   await programmaticLoading();
   showFactoryPattern();
   showManifestStructure();
+  showHostExportsPattern();
   showCacheStructure();
 
   console.log("=== Done ===\n");

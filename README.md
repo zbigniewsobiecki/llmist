@@ -411,6 +411,8 @@ Uses provider-specific methods (tiktoken for OpenAI, native APIs for Anthropic/G
 - **[Providers](./docs/PROVIDERS.md)** - Multi-provider configuration
 - **[Model Catalog](./docs/MODEL_CATALOG.md)** - Querying models and costs
 - **[Custom Models](./docs/CUSTOM_MODELS.md)** - Register fine-tuned models
+- **[Subagents](./docs/SUBAGENTS.md)** - Nested agents for complex tasks
+- **[Execution Tree](./docs/EXECUTION_TREE.md)** - Tracking LLM calls and costs
 - **[Error Handling](./docs/ERROR_HANDLING.md)** - Recovery strategies
 - **[Testing](./docs/TESTING.md)** - Mocking and test strategies
 
@@ -435,8 +437,11 @@ Comprehensive examples are available in the **[examples/](./examples/)** directo
 | **[05-streaming.ts](./examples/05-streaming.ts)** | Real-time streaming |
 | **[06-model-catalog.ts](./examples/06-model-catalog.ts)** | Model queries and cost estimation |
 | **[07-logging.ts](./examples/07-logging.ts)** | Logging and debugging |
-| **[13-syntactic-sugar.ts](./examples/13-syntactic-sugar.ts)** | Fluent API showcase |
 | **[11-gadget-dependencies.ts](./examples/11-gadget-dependencies.ts)** | Gadget dependencies (DAG execution) |
+| **[13-syntactic-sugar.ts](./examples/13-syntactic-sugar.ts)** | Fluent API showcase |
+| **[14-hints.ts](./examples/14-hints.ts)** | LLM assistance hints |
+| **[16-image-generation.ts](./examples/16-image-generation.ts)** | Image generation with DALL-E |
+| **[17-speech-generation.ts](./examples/17-speech-generation.ts)** | Text-to-speech generation |
 | **[20-external-gadgets.ts](./examples/20-external-gadgets.ts)** | npm/git gadget packages |
 
 **Run any example:**

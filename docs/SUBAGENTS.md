@@ -171,31 +171,55 @@ https://apple.com
 }
 ```
 
-## Event Forwarding
+## ExecutionTree Integration
 
-Subagents can forward their internal events (LLM calls, gadget executions) to the
-parent agent using `withParentContext()`. This enables the parent to observe
-subagent activity through its hooks.
+**New in v6.1.0:** Subagents now use the ExecutionTree as the single source of truth for execution tracking. When you use `withParentContext(ctx)`, the subagent shares the parent's tree, enabling:
 
-### Enabling Event Forwarding
+- **Automatic cost aggregation** - No manual `reportCost()` needed
+- **Unified progress tracking** - Parent's TUI shows nested subagent activity
+- **Media collection** - Screenshots and files from subagents automatically bubble up
+
+### How Tree Sharing Works
 
 ```typescript
 // Inside your subagent's execute() method:
 const builder = new AgentBuilder(client)
   .withModel(model)
-  .withMaxIterations(maxIterations)
   .withGadgets(...this.internalGadgets)
-  .withParentContext(ctx);  // Enable event forwarding
+  .withParentContext(ctx);  // Shares parent's ExecutionTree
 
 const agent = builder.ask(params.task);
 ```
 
-### How It Works
+When `withParentContext(ctx)` is called:
+1. The subagent receives the parent's `ExecutionTree` via `ctx.tree`
+2. All subagent LLM calls and gadgets become children of the parent gadget node
+3. Costs are automatically tracked in the tree
+4. Parent can query `tree.getSubtreeCost(nodeId)` to get total subagent cost
 
-1. Subagent's LLM calls and gadget executions fire hooks normally
-2. `withParentContext()` intercepts these events and forwards them to the parent
-3. Parent's hooks receive these events with `subagentContext` populated
-4. Parent can distinguish subagent events by checking `ctx.subagentContext`
+### Querying Subagent Metrics
+
+After a subagent completes, use tree methods to get aggregated data:
+
+```typescript
+async execute(params: this['params'], ctx?: ExecutionContext) {
+  // Run subagent...
+  for await (const event of agent.run()) {
+    // Process events
+  }
+
+  // Get aggregated metrics from tree
+  const totalCost = ctx?.tree?.getSubtreeCost(ctx.nodeId!);
+  const allMedia = ctx?.tree?.getSubtreeMedia(ctx.nodeId!);
+  const tokenUsage = ctx?.tree?.getSubtreeTokens(ctx.nodeId!);
+
+  return {
+    result: finalResult,
+    media: allMedia,  // Return collected media to parent
+    // Note: cost is already tracked in tree, no need to report manually
+  };
+}
+```
 
 ### Parent Hook Example
 
@@ -205,12 +229,15 @@ const result = await LLMist.createAgent()
   .withHooks({
     observers: {
       onLLMCallStart: (ctx) => {
-        if (ctx.subagentContext) {
-          // BrowseWeb's internal LLM call
-          console.log(`↳ BrowseWeb LLM #${ctx.iteration}`);
-        } else {
-          // Main agent's LLM call
-          console.log(`Main LLM #${ctx.iteration}`);
+        const depth = ctx.tree?.getNode(ctx.nodeId)?.depth ?? 0;
+        const indent = '  '.repeat(depth);
+        console.log(`${indent}LLM #${ctx.iteration} starting...`);
+      },
+      onGadgetExecutionComplete: (ctx) => {
+        const node = ctx.tree?.getNode(ctx.nodeId);
+        if (node?.type === 'gadget' && node.isSubagent) {
+          const subtreeCost = ctx.tree?.getSubtreeCost(ctx.nodeId);
+          console.log(`Subagent ${ctx.gadgetName} cost: $${subtreeCost?.toFixed(4)}`);
         }
       },
     },
@@ -220,10 +247,10 @@ const result = await LLMist.createAgent()
 
 ### Nesting Depth
 
-For deeply nested subagents (subagent within subagent), `depth` increments:
-- Main agent events: `subagentContext` is `undefined`
-- Direct child (BrowseWeb): `depth = 1`
-- Grandchild (gadget inside BrowseWeb's subagent): `depth = 2`
+The `depth` field indicates nesting level:
+- `depth = 0`: Root level (main agent's LLM calls and gadgets)
+- `depth = 1`: Direct child (subagent's LLM calls, gadgets inside subagent)
+- `depth = 2+`: Deeper nesting (subagent within subagent)
 
 ## Creating a Subagent
 
@@ -329,43 +356,136 @@ interface ExecutionContext {
   signal: AbortSignal;
   llmist?: CostReportingLLMist;
 
-  // Subagent-specific (added for subagent support)
+  // Subagent-specific
   agentConfig?: {
     model: string;
     temperature?: number;
   };
   subagentConfig?: Record<string, Record<string, unknown>>;
+
+  // ExecutionTree integration (v6.1.0+)
+  tree?: ExecutionTree;     // Shared execution tree
+  nodeId?: NodeId;          // This gadget's node ID in the tree
+  depth?: number;           // Nesting depth (0 = root)
+
+  // External gadget support (v6.2.0+)
+  hostExports?: HostExports; // Host llmist exports
 }
 ```
 
-## Cost Tracking
+## External Gadget Subagents
 
-Subagents track costs at two levels:
+**New in v6.2.0:** External gadgets (from npm packages or git URLs) must use `getHostExports(ctx)` to access llmist classes. This solves the "dual-package problem" where external packages have their own `node_modules/llmist` that's incompatible with the host CLI's version.
 
-1. **LLM calls** - Each internal completion
-2. **Gadget costs** - Any paid tools used internally
+### Why This Matters
 
-These are aggregated and reported to the parent via `ctx.reportCost()`:
+When an external gadget imports `AgentBuilder` directly from `'llmist'`, it gets a different class instance than the CLI's `AgentBuilder`. This breaks tree sharing because `withParentContext(ctx)` can't properly link the trees.
+
+### The Solution: getHostExports()
 
 ```typescript
-// Inside subagent execution
-.withHooks({
-  observers: {
-    onLLMCallComplete: (context) => {
-      if (context.usage) {
-        const inputCost = (context.usage.inputTokens || 0) * 0.000003;
-        const outputCost = (context.usage.outputTokens || 0) * 0.000015;
-        totalCost += inputCost + outputCost;
+import { getHostExports, Gadget, z } from 'llmist';
+import type { ExecutionContext, GadgetMediaOutput } from 'llmist';
+
+export class BrowseWeb extends Gadget({
+  name: 'BrowseWeb',
+  description: 'Browse websites autonomously',
+  schema: z.object({
+    task: z.string().describe('The browsing task to accomplish'),
+    url: z.string().describe('Starting URL'),
+  }),
+  timeoutMs: 300000,
+}) {
+  async execute(
+    params: this['params'],
+    ctx?: ExecutionContext,
+  ): Promise<{ result: string; media?: GadgetMediaOutput[] }> {
+    // IMPORTANT: Use host's AgentBuilder, not imported one!
+    const { AgentBuilder } = getHostExports(ctx!);
+
+    const agent = new AgentBuilder()
+      .withParentContext(ctx!)  // Tree sharing works correctly
+      .withModel(ctx?.agentConfig?.model ?? 'haiku')
+      .withGadgets(Navigate, Click, Screenshot)
+      .ask(params.task);
+
+    let result = '';
+    for await (const event of agent.run()) {
+      if (event.type === 'text') {
+        result = event.content;
       }
-    },
-    onGadgetExecutionComplete: (context) => {
-      if (context.cost && context.cost > 0) {
-        totalCost += context.cost;
-      }
-    },
-  },
-})
+    }
+
+    // Collect media from subtree (automatic with tree sharing)
+    const media = ctx?.tree?.getSubtreeMedia(ctx.nodeId!);
+
+    return { result, media };
+  }
+}
 ```
+
+### What getHostExports() Returns
+
+```typescript
+interface HostExports {
+  AgentBuilder: typeof AgentBuilder;  // For creating subagents
+  Gadget: typeof Gadget;              // For defining gadgets
+  createGadget: typeof createGadget;  // Functional gadget creation
+  ExecutionTree: typeof ExecutionTree;// For tree operations
+  LLMist: typeof LLMist;              // LLM client
+  z: typeof z;                        // Zod schemas
+}
+```
+
+### When to Use getHostExports()
+
+| Context | Use getHostExports()? |
+|---------|----------------------|
+| External npm package gadget | **Yes** - Required |
+| External git URL gadget | **Yes** - Required |
+| Local file gadget (`-g ./my-gadget.ts`) | No - Uses same llmist instance |
+| Gadget in same project as agent | No - Uses same llmist instance |
+
+## Cost Tracking
+
+**Automatic with ExecutionTree (v6.2.0+):** When using `withParentContext(ctx)`, costs are automatically tracked in the shared ExecutionTree. No manual aggregation needed.
+
+```typescript
+// After subagent completes, get total cost from tree:
+const totalCost = ctx?.tree?.getSubtreeCost(ctx.nodeId!);
+```
+
+The tree automatically tracks:
+- **LLM call costs** - Calculated using model registry pricing
+- **Gadget costs** - From `ctx.reportCost()` or return values
+
+### Legacy: Manual Cost Aggregation
+
+For backwards compatibility, you can still manually aggregate costs:
+
+```typescript
+// Manual approach (no longer necessary with tree sharing)
+let totalCost = 0;
+
+const agent = new AgentBuilder()
+  .withParentContext(ctx)
+  .withHooks({
+    observers: {
+      onLLMCallComplete: (context) => {
+        if (context.cost) totalCost += context.cost;
+      },
+      onGadgetExecutionComplete: (context) => {
+        if (context.cost) totalCost += context.cost;
+      },
+    },
+  })
+  .ask(task);
+
+// Then report to parent
+ctx?.reportCost(totalCost);
+```
+
+**Note:** With ExecutionTree, this manual approach is redundant—the tree already tracks all costs.
 
 ## Best Practices
 
@@ -435,7 +555,8 @@ maxIterations = 5         # Quick iteration during development
 
 ## See Also
 
+- **[Execution Tree](./EXECUTION_TREE.md)** - Tracking costs and execution hierarchy
+- **[Gadgets Guide](./GADGETS.md)** - Creating regular gadgets and ExecutionContext
 - **[CLI Gadgets](./CLI_GADGETS.md)** - Loading gadgets from CLI
-- **[Gadgets Guide](./GADGETS.md)** - Creating regular gadgets
 - **[Configuration](./CONFIGURATION.md)** - CLI configuration reference
-- **[Hooks Guide](./HOOKS.md)** - Tracking subagent costs with hooks
+- **[Hooks Guide](./HOOKS.md)** - Lifecycle hooks for monitoring
