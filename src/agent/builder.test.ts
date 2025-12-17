@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
+import { createMockClient } from "../testing/mock-client.js";
 import { AgentBuilder, type HistoryMessage } from "./builder.js";
 import { HookPresets } from "./hook-presets.js";
 
@@ -308,6 +309,85 @@ describe("AgentBuilder", () => {
         .withMaxIterations(5);
 
       expect(result).toBe(builder);
+    });
+
+    it("captures tree context when ctx.tree is provided", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+      const parentTree = new ExecutionTree();
+
+      // Add a parent LLM call (required for proper tree structure)
+      parentTree.addLLMCall({
+        iteration: 0,
+        model: "test-model",
+      });
+
+      // Simulate parent adding a gadget
+      const parentGadget = parentTree.addGadget({
+        invocationId: "parent_gadget_1",
+        name: "BrowseWeb",
+        parameters: { url: "https://example.com" },
+      });
+
+      // Create ExecutionContext like executor.ts does
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        tree: parentTree,
+        nodeId: parentGadget.id,
+        depth: 1,
+      };
+
+      const agent = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withParentContext(ctx as never)
+        .build();
+
+      // Verify the agent uses the SAME tree instance (shared)
+      expect(agent.getTree()).toBe(parentTree);
+    });
+
+    it("captures tree context even without onSubagentEvent", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+      const parentTree = new ExecutionTree();
+
+      // Create minimal ExecutionContext with ONLY tree (no callback)
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        tree: parentTree,
+        // NO onSubagentEvent
+        // NO invocationId
+      };
+
+      const agent = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withParentContext(ctx as never)
+        .build();
+
+      // Tree should still be shared
+      expect(agent.getTree()).toBe(parentTree);
+    });
+
+    it("creates new tree when ctx.tree is not provided", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+
+      // Create ExecutionContext WITHOUT tree
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        // NO tree
+      };
+
+      const agent = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withParentContext(ctx as never)
+        .build();
+
+      // Agent should have created its own tree
+      expect(agent.getTree()).toBeInstanceOf(ExecutionTree);
     });
   });
 

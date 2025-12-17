@@ -328,6 +328,7 @@ export interface SubagentEvent {
 
 // Imports for text-only handlers
 import type { ILogObj, Logger } from "tslog";
+import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
 import type {
   ImageGenerationOptions,
   ImageGenerationResult,
@@ -702,6 +703,95 @@ export interface ExecutionContext {
    * ```
    */
   onSubagentEvent?: (event: SubagentEvent) => void;
+
+  // ==========================================================================
+  // Execution Tree Access (for subagent support)
+  // ==========================================================================
+
+  /**
+   * The execution tree tracking all LLM calls and gadget executions.
+   *
+   * Subagent gadgets can use the tree to:
+   * - Automatically aggregate costs via `tree.getSubtreeCost(nodeId)`
+   * - Collect media outputs via `tree.getSubtreeMedia(nodeId)`
+   * - Query token usage via `tree.getSubtreeTokens(nodeId)`
+   *
+   * When using `withParentContext(ctx)`, the subagent shares the parent's tree,
+   * enabling unified cost tracking and progress visibility across all nesting levels.
+   *
+   * This is optional - it will be `undefined` for:
+   * - Gadgets executed via CLI `gadget run` command
+   * - Direct gadget testing without agent context
+   * - Legacy code that hasn't adopted the ExecutionTree model
+   *
+   * @example
+   * ```typescript
+   * execute: async (params, ctx) => {
+   *   // Build subagent with parent context (shares tree)
+   *   const agent = new AgentBuilder(client)
+   *     .withParentContext(ctx)
+   *     .withGadgets(Navigate, Click)
+   *     .ask(params.task);
+   *
+   *   for await (const event of agent.run()) {
+   *     // Process events...
+   *   }
+   *
+   *   // After subagent completes, costs are automatically tracked in tree
+   *   // No need for manual cost aggregation!
+   *   const subtreeCost = ctx.tree?.getSubtreeCost(ctx.nodeId!);
+   *
+   *   // Media from all nested gadgets also aggregated
+   *   const allMedia = ctx.tree?.getSubtreeMedia(ctx.nodeId!);
+   *
+   *   return { result: "done", media: allMedia };
+   * }
+   * ```
+   */
+  tree?: ExecutionTree;
+
+  /**
+   * The tree node ID for this gadget execution.
+   *
+   * This identifies the current gadget's node in the execution tree.
+   * Use with tree methods to query/aggregate data for this subtree:
+   * - `tree.getSubtreeCost(nodeId)` - total cost including nested calls
+   * - `tree.getSubtreeMedia(nodeId)` - all media from nested gadgets
+   * - `tree.getSubtreeTokens(nodeId)` - token usage breakdown
+   * - `tree.getDescendants(nodeId)` - all child nodes
+   *
+   * Note: This is distinct from `invocationId` which identifies the gadget call
+   * (used in conversation history). `nodeId` is the tree node identifier.
+   */
+  nodeId?: NodeId;
+
+  /**
+   * Nesting depth of this gadget execution.
+   *
+   * - 0 = Root level (direct gadget call from main agent)
+   * - 1 = First-level subagent (gadget called by a gadget)
+   * - 2+ = Deeper nesting
+   *
+   * Useful for:
+   * - Conditional behavior based on nesting level
+   * - Logging with appropriate indentation
+   * - Limiting recursion depth
+   *
+   * @example
+   * ```typescript
+   * execute: async (params, ctx) => {
+   *   // Prevent infinite recursion
+   *   if ((ctx.depth ?? 0) > 3) {
+   *     return "Maximum nesting depth reached";
+   *   }
+   *
+   *   // Log with depth-aware indentation
+   *   const indent = "  ".repeat(ctx.depth ?? 0);
+   *   console.log(`${indent}Executing at depth ${ctx.depth}`);
+   * }
+   * ```
+   */
+  depth?: number;
 }
 
 // =============================================================================

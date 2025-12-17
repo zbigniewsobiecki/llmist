@@ -1,6 +1,7 @@
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX } from "../core/constants.js";
+import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
 import { createLogger } from "../logging/logger.js";
 import { parseBlockParams } from "./block-params.js";
 import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
@@ -42,6 +43,10 @@ export class GadgetExecutor {
     private readonly agentConfig?: AgentContextConfig,
     private readonly subagentConfig?: SubagentConfigMap,
     private readonly onSubagentEvent?: (event: SubagentEvent) => void,
+    // Execution Tree context for gadget execution
+    private readonly tree?: ExecutionTree,
+    private readonly parentNodeId?: NodeId | null,
+    private readonly baseDepth?: number,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
@@ -236,7 +241,13 @@ export class GadgetExecutor {
         }
       };
 
-      // Build execution context with abort signal and agent config
+      // Build execution context with abort signal, agent config, and tree access
+      // Look up the gadget's own node ID from the tree (not the parent LLM call's ID)
+      const gadgetNodeId = this.tree?.getNodeByInvocationId(call.invocationId)?.id;
+      const gadgetDepth = gadgetNodeId
+        ? this.tree?.getNode(gadgetNodeId)?.depth ?? this.baseDepth
+        : this.baseDepth;
+
       const ctx: ExecutionContext = {
         reportCost,
         llmist: this.client ? new CostReportingLLMistWrapper(this.client, reportCost) : undefined,
@@ -245,6 +256,10 @@ export class GadgetExecutor {
         subagentConfig: this.subagentConfig,
         invocationId: call.invocationId,
         onSubagentEvent: this.onSubagentEvent,
+        // Tree context for subagent support - use gadget's own node ID
+        tree: this.tree,
+        nodeId: gadgetNodeId,
+        depth: gadgetDepth,
       };
 
       // Execute gadget (handle both sync and async)
