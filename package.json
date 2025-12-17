@@ -90,6 +90,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.69.0",
     "@google/genai": "^1.27.0",
+    "@unblessed/node": "^1.0.0-alpha.23",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
     "diff": "^8.0.2",

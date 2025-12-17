@@ -175,6 +175,21 @@ export class StreamProcessor {
       argPrefix: options.gadgetArgPrefix,
     });
 
+    // Wrap onSubagentEvent to also push to completedResultsQueue for real-time streaming
+    // during parallel gadget execution. This ensures subagent events are yielded
+    // while waiting for gadgets to complete, not batched at the end.
+    const wrappedOnSubagentEvent = options.onSubagentEvent
+      ? (event: SubagentEvent) => {
+          // Push to queue for real-time streaming during parallel execution
+          this.completedResultsQueue.push({
+            type: "subagent_event",
+            subagentEvent: event,
+          });
+          // Also call the original callback (for Agent's queue and hooks)
+          options.onSubagentEvent!(event);
+        }
+      : undefined;
+
     this.executor = new GadgetExecutor(
       options.registry,
       options.requestHumanInput,
@@ -185,7 +200,7 @@ export class StreamProcessor {
       options.mediaStore,
       options.agentConfig,
       options.subagentConfig,
-      options.onSubagentEvent,
+      wrappedOnSubagentEvent,
     );
   }
 
@@ -301,11 +316,20 @@ export class StreamProcessor {
       }
     }
 
-    // Wait for all in-flight parallel gadgets to complete
-    // Results are pushed to completedResultsQueue during execution
-    await this.waitForInFlightExecutions();
+    // Wait for all in-flight parallel gadgets to complete, yielding events in real-time
+    // This enables subagent events to be displayed during long-running gadget execution
+    for await (const evt of this.waitForInFlightExecutions()) {
+      yield evt;
 
-    // Drain any remaining completed results (stragglers that finished after last chunk)
+      if (evt.type === "gadget_result") {
+        didExecuteGadgets = true;
+        if (evt.result.breaksLoop) {
+          shouldBreakLoop = true;
+        }
+      }
+    }
+
+    // Drain any remaining completed results (stragglers that finished after final poll)
     for (const evt of this.drainCompletedResults()) {
       yield evt;
 
@@ -905,12 +929,14 @@ export class StreamProcessor {
   }
 
   /**
-   * Wait for all in-flight gadget executions to complete.
+   * Wait for all in-flight gadget executions to complete, yielding events in real-time.
    * Called at stream end to ensure all parallel executions finish.
-   * Results are already in completedResultsQueue (pushed during execution).
-   * Clears the inFlightExecutions map after waiting.
+   * Results and subagent events are pushed to completedResultsQueue during execution.
+   * This generator yields queued events while polling, enabling real-time display
+   * of subagent activity (LLM calls, nested gadgets) during long-running gadgets.
+   * Clears the inFlightExecutions map after all gadgets complete.
    */
-  private async waitForInFlightExecutions(): Promise<void> {
+  private async *waitForInFlightExecutions(): AsyncGenerator<StreamEvent> {
     if (this.inFlightExecutions.size === 0) {
       return;
     }
@@ -920,10 +946,31 @@ export class StreamProcessor {
       invocationIds: Array.from(this.inFlightExecutions.keys()),
     });
 
-    const promises = Array.from(this.inFlightExecutions.values());
-    await Promise.all(promises);
+    // Create a combined promise that resolves when all gadgets complete
+    const allDone = Promise.all(this.inFlightExecutions.values()).then(() => "done" as const);
 
-    // Clear the map after awaiting all promises
+    // Poll interval for draining queue (100ms provides responsive updates)
+    const POLL_INTERVAL_MS = 100;
+
+    // Poll loop: yield queued events while waiting for gadgets to complete
+    while (true) {
+      // Race between: all gadgets completing OR poll timeout
+      const result = await Promise.race([
+        allDone,
+        new Promise<"poll">((resolve) => setTimeout(() => resolve("poll"), POLL_INTERVAL_MS)),
+      ]);
+
+      // Yield any events that accumulated in the queue
+      yield* this.drainCompletedResults();
+
+      if (result === "done") {
+        // All gadgets complete - exit loop
+        break;
+      }
+      // result === "poll" - continue polling
+    }
+
+    // Clear the map after all promises have completed
     this.inFlightExecutions.clear();
   }
 

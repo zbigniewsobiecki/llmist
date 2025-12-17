@@ -320,6 +320,8 @@ export interface SubagentEvent {
   gadgetInvocationId: string;
   /** Nesting depth (1 = direct child, 2 = grandchild, etc.) */
   depth: number;
+  /** LLM iteration number within the subagent (for gadget parenting in TUI) */
+  iteration?: number;
   /** The actual event data - either a StreamEvent or LLMCallInfo */
   event: StreamEvent | LLMCallInfo;
 }
