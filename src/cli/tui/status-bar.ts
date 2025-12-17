@@ -277,7 +277,24 @@ export class StatusBar {
         break;
       }
 
-      case "llm_call_complete":
+      case "llm_call_complete": {
+        const label = this.nodeIdToLabel.get(event.nodeId);
+        if (label) {
+          this.endLLMCall(label);
+          // Accumulate token/cost metrics from tree event (includes nested calls)
+          if (event.usage || event.cost) {
+            this.endCall(
+              event.usage?.inputTokens ?? 0,
+              event.usage?.outputTokens ?? 0,
+              event.usage?.cachedInputTokens ?? 0,
+              event.cost ?? 0,
+            );
+          }
+          this.nodeIdToLabel.delete(event.nodeId);
+        }
+        break;
+      }
+
       case "llm_call_error": {
         const label = this.nodeIdToLabel.get(event.nodeId);
         if (label) {

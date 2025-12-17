@@ -93,21 +93,29 @@ export class BlockRenderer {
   /**
    * Add an LLM call node (top-level or nested in gadget).
    * For main agent calls (no parent), deduplicates by iteration number.
+   *
+   * @param iteration - 1-indexed iteration number
+   * @param model - Model name (e.g., "anthropic:claude-sonnet-4-5")
+   * @param parentGadgetId - Parent gadget block ID for nested LLM calls
+   * @param isNested - Override flag to treat as nested even without parentGadgetId
+   *                   (used when tree event depth > 0 but parent lookup failed)
    */
   addLLMCall(
     iteration: number,
     model: string,
     parentGadgetId?: string,
+    isNested?: boolean,
   ): string {
-    // Deduplicate main agent LLM calls by iteration
-    if (!parentGadgetId) {
+    // Deduplicate main agent LLM calls by iteration (only if NOT a nested call)
+    // isNested flag prevents deduplication even when parentGadgetId lookup failed
+    if (!parentGadgetId && !isNested) {
       const existingId = this.llmCallByIteration.get(iteration);
       if (existingId) {
         // Return existing block instead of creating duplicate
         this.currentLLMCallId = existingId;
         return existingId;
       }
-    } else {
+    } else if (parentGadgetId) {
       // Deduplicate nested subagent LLM calls by parent + iteration
       const nestedKey = `${parentGadgetId}_${iteration}`;
       const existingId = this.nestedLLMCallByKey.get(nestedKey);
@@ -797,7 +805,7 @@ export class BlockRenderer {
   /**
    * Handle an ExecutionTree event.
    */
-  private handleTreeEvent(event: ExecutionEvent, _tree: ExecutionTree): void {
+  private handleTreeEvent(event: ExecutionEvent, tree: ExecutionTree): void {
     switch (event.type) {
       case "llm_call_start": {
         // Find parent block ID if this is a nested LLM call
@@ -809,12 +817,21 @@ export class BlockRenderer {
         // Create the LLM call block
         // Note: event.iteration is 0-indexed, but display uses 1-indexed
         // The hook path already adds +1, so we do the same here for deduplication
+        // Pass isNested=true when depth > 0 to prevent false deduplication
+        // against top-level calls when parentBlockId lookup fails
         const blockId = this.addLLMCall(
           event.iteration + 1,
           event.model,
           parentBlockId,
+          event.depth > 0,
         );
         this.treeNodeToBlockId.set(event.nodeId, blockId);
+
+        // Attach raw request data from tree (needed for nested LLM calls)
+        const startNode = tree.getNode(event.nodeId);
+        if (startNode?.type === "llm_call" && startNode.request) {
+          this.setLLMCallRequest(blockId, startNode.request);
+        }
         break;
       }
 
@@ -828,6 +845,12 @@ export class BlockRenderer {
             cost: event.cost,
             finishReason: event.finishReason ?? undefined,
           });
+
+          // Attach raw response data from tree (needed for nested LLM calls)
+          const completeNode = tree.getNode(event.nodeId);
+          if (completeNode?.type === "llm_call" && completeNode.response) {
+            this.setLLMCallResponse(blockId, completeNode.response);
+          }
         }
         break;
       }

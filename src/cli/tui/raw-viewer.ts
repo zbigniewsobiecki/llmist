@@ -1,9 +1,10 @@
 /**
- * Full-screen raw request/response viewer for LLM calls.
+ * Full-screen raw request/response viewer for LLM calls and gadgets.
  *
  * Features:
  * - Scrollable content with arrow keys, PgUp/PgDn, Home/End
- * - Message formatting with role headers
+ * - Message formatting with role headers (LLM calls)
+ * - JSON formatting for gadget parameters
  * - Escape or "q" to close
  */
 
@@ -15,16 +16,23 @@ export type RawViewerMode = "request" | "response";
 interface RawViewerOptions {
   screen: Screen;
   mode: RawViewerMode;
+  // For LLM calls
   request?: LLMMessage[];
   response?: string;
-  iteration: number;
-  model: string;
+  iteration?: number;
+  model?: string;
+  // For gadgets
+  gadgetName?: string;
+  parameters?: Record<string, unknown>;
+  result?: string;
+  error?: string;
 }
 
 // ANSI color codes
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 const DIM = "\x1b[2m";
+const RED = "\x1b[31m";
 const MAGENTA = "\x1b[35m";
 const GREEN = "\x1b[32m";
 const CYAN = "\x1b[36m";
@@ -41,32 +49,68 @@ export interface RawViewerHandle {
 }
 
 /**
- * Shows a full-screen viewer for raw LLM request or response.
+ * Shows a full-screen viewer for raw LLM request/response or gadget parameters/result.
  * Returns a handle with a promise and a close function.
  */
 export function showRawViewer(options: RawViewerOptions): RawViewerHandle {
   let closeCallback: () => void = () => {};
 
   const closed = new Promise<void>((resolve) => {
-    const { screen, mode, request, response, iteration, model } = options;
+    const {
+      screen,
+      mode,
+      request,
+      response,
+      iteration,
+      model,
+      gadgetName,
+      parameters,
+      result,
+      error,
+    } = options;
 
-    // Format content based on mode
+    // Format content based on mode and node type
     let content: string;
     let title: string;
 
-    if (mode === "request") {
-      title = ` Raw Request - #${iteration} ${model} `;
-      if (!request || request.length === 0) {
-        content = `${DIM}No request data available${RESET}`;
+    // Determine if this is a gadget viewer (gadgetName is provided)
+    const isGadget = gadgetName !== undefined;
+
+    if (isGadget) {
+      // Gadget viewer
+      if (mode === "request") {
+        title = ` Raw Parameters - ${gadgetName} `;
+        if (!parameters || Object.keys(parameters).length === 0) {
+          content = `${DIM}No parameters${RESET}`;
+        } else {
+          content = formatGadgetParameters(parameters);
+        }
       } else {
-        content = formatMessages(request);
+        title = ` Raw Result - ${gadgetName} `;
+        if (error) {
+          content = `${RED}${BOLD}Error:${RESET}\n${error}`;
+        } else if (!result) {
+          content = `${DIM}No result data available${RESET}`;
+        } else {
+          content = formatGadgetResult(result);
+        }
       }
     } else {
-      title = ` Raw Response - #${iteration} ${model} `;
-      if (!response) {
-        content = `${DIM}No response data available${RESET}`;
+      // LLM call viewer
+      if (mode === "request") {
+        title = ` Raw Request - #${iteration} ${model} `;
+        if (!request || request.length === 0) {
+          content = `${DIM}No request data available${RESET}`;
+        } else {
+          content = formatMessages(request);
+        }
       } else {
-        content = response;
+        title = ` Raw Response - #${iteration} ${model} `;
+        if (!response) {
+          content = `${DIM}No response data available${RESET}`;
+        } else {
+          content = response;
+        }
       }
     }
 
@@ -287,4 +331,77 @@ function isToolResultPart(
     part !== null &&
     (part as { type?: string }).type === "tool_result"
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gadget Formatting
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Format gadget parameters as pretty-printed JSON with syntax highlighting.
+ */
+function formatGadgetParameters(params: Record<string, unknown>): string {
+  const lines: string[] = [];
+  const separator = "─".repeat(78);
+
+  lines.push(`${DIM}${separator}${RESET}`);
+  lines.push(`${CYAN}${BOLD}Parameters${RESET}`);
+  lines.push(`${DIM}${separator}${RESET}`);
+  lines.push("");
+
+  // Pretty-print the parameters with syntax highlighting
+  const json = JSON.stringify(params, null, 2);
+  const highlighted = highlightJson(json);
+  lines.push(highlighted);
+
+  return lines.join("\n");
+}
+
+/**
+ * Format gadget result for display.
+ * Attempts JSON parsing for pretty-printing if the result looks like JSON.
+ */
+function formatGadgetResult(result: string): string {
+  const lines: string[] = [];
+  const separator = "─".repeat(78);
+
+  lines.push(`${DIM}${separator}${RESET}`);
+  lines.push(`${GREEN}${BOLD}Result${RESET}`);
+  lines.push(`${DIM}${separator}${RESET}`);
+  lines.push("");
+
+  // Try to parse as JSON for pretty-printing
+  const trimmed = result.trim();
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const json = JSON.stringify(parsed, null, 2);
+      lines.push(highlightJson(json));
+      return lines.join("\n");
+    } catch {
+      // Not valid JSON, display as plain text
+    }
+  }
+
+  // Display as plain text
+  lines.push(result);
+  return lines.join("\n");
+}
+
+/**
+ * Add basic syntax highlighting to JSON string.
+ */
+function highlightJson(json: string): string {
+  // Highlight keys (strings followed by :)
+  let result = json.replace(/"([^"]+)":/g, `${CYAN}"$1"${RESET}:`);
+  // Highlight string values
+  result = result.replace(/: "([^"]*)"/g, `: ${GREEN}"$1"${RESET}`);
+  // Highlight numbers
+  result = result.replace(/: (-?\d+\.?\d*)/g, `: ${YELLOW}$1${RESET}`);
+  // Highlight booleans and null
+  result = result.replace(/: (true|false|null)/g, `: ${MAGENTA}$1${RESET}`);
+  return result;
 }

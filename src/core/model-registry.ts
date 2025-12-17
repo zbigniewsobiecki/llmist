@@ -110,11 +110,15 @@ export class ModelRegistry {
 
   /**
    * Get model specification by model ID
-   * @param modelId - Full model identifier (e.g., 'gpt-5', 'claude-sonnet-4-5-20250929')
+   * @param modelId - Full model identifier, optionally with provider prefix
+   *                  (e.g., 'gpt-5', 'claude-sonnet-4-5-20250929', 'anthropic:claude-sonnet-4-5')
    * @returns ModelSpec if found, undefined otherwise
    */
   getModelSpec(modelId: string): ModelSpec | undefined {
-    return this.modelSpecs.find((model) => model.modelId === modelId);
+    // Support provider-prefixed model IDs (e.g., "anthropic:claude-sonnet-4-5")
+    // Strip the prefix to match against the registry's model IDs
+    const normalizedId = modelId.includes(":") ? modelId.split(":")[1] : modelId;
+    return this.modelSpecs.find((model) => model.modelId === normalizedId);
   }
 
   /**
