@@ -72,6 +72,12 @@ export class BlockRenderer {
   /** Persisted expanded states (survives rebuildBlocks) */
   private expandedStates = new Map<string, boolean>();
 
+  /** Whether to auto-scroll to bottom on new content ("follow mode") */
+  private followMode: boolean = true;
+
+  /** Threshold in pixels for detecting "at bottom" position */
+  private static readonly AT_BOTTOM_THRESHOLD = 5;
+
   /** Track main agent LLM calls by iteration to prevent duplicates */
   private llmCallByIteration = new Map<number, string>();
 
@@ -522,7 +528,7 @@ export class BlockRenderer {
     this.blocks.clear();
     this.selectableIds = [];
 
-    // Track vertical position
+    // Track vertical position (starts at 0, will be offset for bottom-alignment)
     let top = 0;
 
     // Traverse tree in order
@@ -534,6 +540,9 @@ export class BlockRenderer {
     if (this.selectedIndex >= this.selectableIds.length) {
       this.selectedIndex = this.selectableIds.length - 1;
     }
+
+    // Apply bottom alignment and auto-scroll (chat-like behavior)
+    this.applyBottomAlignmentAndScroll();
 
     this.renderCallback();
   }
@@ -703,6 +712,9 @@ export class BlockRenderer {
     for (const rootId of this.rootIds) {
       top = this.repositionNodeTree(rootId, top);
     }
+
+    // Re-apply bottom alignment after repositioning
+    this.applyBottomAlignmentAndScroll();
   }
 
   private repositionNodeTree(nodeId: string, top: number): number {
@@ -742,11 +754,155 @@ export class BlockRenderer {
     // If block is above visible area, scroll up
     if (blockTop < scrollPos) {
       this.container.scrollTo(blockTop);
+      // Disable follow mode when scrolling up
+      this.followMode = false;
     }
     // If block is below visible area, scroll down
     else if (blockTop + blockHeight > scrollPos + containerHeight) {
       this.container.scrollTo(blockTop + blockHeight - containerHeight);
+      // Check if now at bottom, re-enable follow mode
+      if (this.isAtBottom()) {
+        this.followMode = true;
+      }
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Bottom Alignment & Auto-Scroll (Chat-like behavior)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Calculate total height of all rendered blocks.
+   * Used for bottom-alignment offset calculation.
+   */
+  private getTotalContentHeight(): number {
+    let totalHeight = 0;
+    for (const rootId of this.rootIds) {
+      totalHeight = this.sumNodeTreeHeight(rootId, totalHeight);
+    }
+    return totalHeight;
+  }
+
+  private sumNodeTreeHeight(nodeId: string, currentHeight: number): number {
+    const block = this.blocks.get(nodeId);
+    const node = this.getNode(nodeId);
+    if (!block || !node) return currentHeight;
+
+    currentHeight += this.getBlockHeight(block);
+
+    if ("children" in node) {
+      for (const childId of node.children) {
+        currentHeight = this.sumNodeTreeHeight(childId, currentHeight);
+      }
+    }
+    return currentHeight;
+  }
+
+  /**
+   * Calculate vertical offset to push content to bottom when content < viewport.
+   * Returns 0 when content fills or exceeds viewport.
+   */
+  private getBottomAlignmentOffset(): number {
+    const containerHeight = this.container.height as number;
+    const contentHeight = this.getTotalContentHeight();
+
+    if (contentHeight >= containerHeight) {
+      return 0; // Content fills viewport, no offset needed
+    }
+
+    return containerHeight - contentHeight;
+  }
+
+  /**
+   * Check if scroll position is at or near the bottom.
+   */
+  private isAtBottom(): boolean {
+    if (!this.container.getScroll) return true;
+
+    const scrollPos = this.container.getScroll();
+    const containerHeight = this.container.height as number;
+    const contentHeight = this.getTotalContentHeight();
+
+    // At bottom if scrollPos + containerHeight >= contentHeight (with threshold)
+    const maxScroll = Math.max(0, contentHeight - containerHeight);
+    return scrollPos >= maxScroll - BlockRenderer.AT_BOTTOM_THRESHOLD;
+  }
+
+  /**
+   * Scroll to the bottom of content.
+   */
+  private scrollToBottom(): void {
+    if (!this.container.setScrollPerc) return;
+    this.container.setScrollPerc(100);
+  }
+
+  /**
+   * Apply bottom-alignment offset to all blocks and handle auto-scroll.
+   * Called after rebuildBlocks() and repositionBlocks().
+   */
+  private applyBottomAlignmentAndScroll(): void {
+    const offset = this.getBottomAlignmentOffset();
+
+    // Apply offset to all blocks if content is shorter than viewport
+    if (offset > 0) {
+      for (const rootId of this.rootIds) {
+        this.applyOffsetToNodeTree(rootId, offset);
+      }
+    }
+
+    // Auto-scroll to bottom if in follow mode
+    if (this.followMode) {
+      this.scrollToBottom();
+    }
+  }
+
+  /**
+   * Apply vertical offset to a node tree (for bottom alignment).
+   */
+  private applyOffsetToNodeTree(nodeId: string, offset: number): void {
+    const block = this.blocks.get(nodeId);
+    const node = this.getNode(nodeId);
+    if (!block || !node) return;
+
+    block.box.top = (block.box.top as number) + offset;
+
+    if ("children" in node) {
+      for (const childId of node.children) {
+        this.applyOffsetToNodeTree(childId, offset);
+      }
+    }
+  }
+
+  /**
+   * Handle user scroll event.
+   * Disables follow mode if user scrolls away from bottom.
+   */
+  handleUserScroll(): void {
+    if (!this.isAtBottom()) {
+      this.followMode = false;
+    } else {
+      // User scrolled back to bottom, re-enable follow mode
+      this.followMode = true;
+    }
+  }
+
+  /**
+   * Re-enable follow mode and scroll to bottom.
+   * Called when user presses End/G to go to last block.
+   */
+  enableFollowMode(): void {
+    this.followMode = true;
+    this.scrollToBottom();
+    this.renderCallback();
+  }
+
+  /**
+   * Handle terminal resize.
+   * Recalculates bottom alignment with new container dimensions.
+   */
+  handleResize(): void {
+    this.repositionBlocks();
+    this.renderCallback();
   }
 
   // ───────────────────────────────────────────────────────────────────────────
