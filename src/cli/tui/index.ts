@@ -162,12 +162,25 @@ export class TUIApp {
         onToggleExpand: () => blockRenderer.toggleExpand(),
         onCollapse: () => blockRenderer.collapseOrDeselect(),
         onSelectFirst: () => blockRenderer.selectFirst(),
-        onSelectLast: () => blockRenderer.selectLast(),
+        onSelectLast: () => {
+          blockRenderer.selectLast();
+          blockRenderer.enableFollowMode(); // Re-enable follow mode when jumping to end
+        },
         onShowRawRequest: () => app.showRawViewer("request"),
         onShowRawResponse: () => app.showRawViewer("response"),
       },
       () => app.focusMode,
     );
+
+    // Wire scroll event to detect user scrolling (for smart follow mode)
+    layout.body.on("scroll", () => {
+      blockRenderer.handleUserScroll();
+    });
+
+    // Wire resize event to recalculate bottom alignment
+    screen.on("resize", () => {
+      blockRenderer.handleResize();
+    });
 
     // Initialize in browse mode (input bar hidden)
     app.applyFocusMode();
@@ -477,7 +490,7 @@ export class TUIApp {
    * @param model - Model name
    * @param estimatedInputTokens - Estimated input tokens for real-time display
    */
-  showLLMCallStart(iteration: number, model: string, _estimatedInputTokens = 0): void {
+  showLLMCallStart(iteration: number, _model: string, _estimatedInputTokens = 0): void {
     // Tree subscription handles block creation and activity tracking via handleTreeEvent
     // We only track IDs for raw response attachment in raw viewer
     this.currentIteration = iteration;
@@ -496,8 +509,10 @@ export class TUIApp {
    * Show an LLM call completion.
    */
   showLLMCallComplete(info: LLMCallDisplayInfo & { rawResponse?: string }): void {
-    // Tree subscription handles completion via handleTreeEvent
-    // We only enrich with raw response for the raw viewer feature
+    // Skip when tree subscription is active - tree handles raw data correctly
+    // using proper block IDs. Hook-based path uses stale currentLLMCallId.
+    if (this.blockRenderer.isTreeSubscribed()) return;
+
     if (this.currentLLMCallId && info.rawResponse) {
       this.blockRenderer.setLLMCallResponse(this.currentLLMCallId, info.rawResponse);
     }
@@ -508,6 +523,10 @@ export class TUIApp {
    * Called from onLLMCallReady hook after controller modifications.
    */
   setLLMCallRequest(messages: LLMMessage[]): void {
+    // Skip when tree subscription is active - tree handles raw data correctly
+    // using proper block IDs. Hook-based path uses stale currentLLMCallId.
+    if (this.blockRenderer.isTreeSubscribed()) return;
+
     if (this.currentLLMCallId) {
       this.blockRenderer.setLLMCallRequest(this.currentLLMCallId, messages);
     }
