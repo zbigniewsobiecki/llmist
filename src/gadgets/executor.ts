@@ -242,6 +242,12 @@ export class GadgetExecutor {
       };
 
       // Build execution context with abort signal, agent config, and tree access
+      // Look up the gadget's own node ID from the tree (not the parent LLM call's ID)
+      const gadgetNodeId = this.tree?.getNodeByInvocationId(call.invocationId)?.id;
+      const gadgetDepth = gadgetNodeId
+        ? this.tree?.getNode(gadgetNodeId)?.depth ?? this.baseDepth
+        : this.baseDepth;
+
       const ctx: ExecutionContext = {
         reportCost,
         llmist: this.client ? new CostReportingLLMistWrapper(this.client, reportCost) : undefined,
@@ -250,10 +256,10 @@ export class GadgetExecutor {
         subagentConfig: this.subagentConfig,
         invocationId: call.invocationId,
         onSubagentEvent: this.onSubagentEvent,
-        // Tree context for subagent support
+        // Tree context for subagent support - use gadget's own node ID
         tree: this.tree,
-        nodeId: this.parentNodeId ?? undefined,
-        depth: this.baseDepth,
+        nodeId: gadgetNodeId,
+        depth: gadgetDepth,
       };
 
       // Execute gadget (handle both sync and async)
