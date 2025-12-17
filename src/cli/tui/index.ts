@@ -23,6 +23,7 @@
  */
 
 import type { Screen } from "@unblessed/node";
+import type { ExecutionTree } from "../../core/execution-tree.js";
 import type { StreamEvent, SubagentEvent } from "../../gadgets/types.js";
 import type {
   TUIOptions,
@@ -294,16 +295,22 @@ export class TUIApp {
   /**
    * Handle an agent stream event.
    * Converts events to interactive block operations.
+   *
+   * When tree subscription is active, only handles text events.
+   * Gadgets and subagent events are handled automatically by tree.
    */
   handleEvent(event: StreamEvent): void {
     switch (event.type) {
       case "text":
-        // Text flows as non-selectable content
+        // Text flows as non-selectable content (tree doesn't track text)
         this.blockRenderer.addText(event.content);
         break;
 
       case "gadget_call": {
-        // Create gadget block as child of current LLM call
+        // Tree handles gadget creation when subscribed
+        if (this.blockRenderer.isTreeSubscribed()) break;
+
+        // Legacy path: create gadget block as child of current LLM call
         const gadgetId = this.blockRenderer.addGadget(
           event.call.invocationId,
           event.call.gadgetName,
@@ -316,7 +323,10 @@ export class TUIApp {
       }
 
       case "gadget_result":
-        // Complete the gadget block
+        // Tree handles gadget completion when subscribed
+        if (this.blockRenderer.isTreeSubscribed()) break;
+
+        // Legacy path: complete the gadget block
         this.blockRenderer.completeGadget(
           event.result.invocationId,
           event.result.result,
@@ -329,7 +339,10 @@ export class TUIApp {
         break;
 
       case "subagent_event":
-        // Handle nested events within gadgets
+        // Tree handles nested events automatically via parent-child relationships
+        if (this.blockRenderer.isTreeSubscribed()) break;
+
+        // Legacy path: handle nested events within gadgets
         this.handleSubagentEvent(event.subagentEvent);
         break;
 
@@ -465,11 +478,20 @@ export class TUIApp {
    * @param estimatedInputTokens - Estimated input tokens for real-time display
    */
   showLLMCallStart(iteration: number, model: string, estimatedInputTokens = 0): void {
-    this.currentLLMCallId = this.blockRenderer.addLLMCall(iteration, model);
+    // When tree subscription is active, tree creates the block
+    // We only track IDs and update streaming token estimates
+    if (this.blockRenderer.isTreeSubscribed()) {
+      // Get the block ID created by tree subscription
+      this.currentLLMCallId = this.blockRenderer.getCurrentLLMCallId();
+    } else {
+      // Legacy path: create block directly
+      this.currentLLMCallId = this.blockRenderer.addLLMCall(iteration, model);
+      // Activity tracking only needed without tree subscription
+      this.statusBar.startLLMCall(`#${iteration}`, model);
+    }
     this.currentIteration = iteration;
+    // Token tracking is always needed for streaming estimates
     this.statusBar.startCall(model, estimatedInputTokens);
-    // Track active LLM call in status bar
-    this.statusBar.startLLMCall(`#${iteration}`, model);
   }
 
   /**
@@ -485,28 +507,37 @@ export class TUIApp {
    */
   showLLMCallComplete(info: LLMCallDisplayInfo & { rawResponse?: string }): void {
     if (this.currentLLMCallId) {
-      this.blockRenderer.completeLLMCall(
-        this.currentLLMCallId,
-        {
-          inputTokens: info.inputTokens,
-          cachedInputTokens: info.cachedInputTokens,
-          outputTokens: info.outputTokens,
-          elapsedSeconds: info.elapsedSeconds,
-          cost: info.cost,
-          finishReason: info.finishReason ?? undefined,
-          contextPercent: info.contextPercent ?? undefined,
-        },
-        info.rawResponse,
-      );
+      if (this.blockRenderer.isTreeSubscribed()) {
+        // Tree handles completion - only enrich with raw response
+        if (info.rawResponse) {
+          this.blockRenderer.setLLMCallResponse(this.currentLLMCallId, info.rawResponse);
+        }
+      } else {
+        // Legacy path: complete block directly
+        this.blockRenderer.completeLLMCall(
+          this.currentLLMCallId,
+          {
+            inputTokens: info.inputTokens,
+            cachedInputTokens: info.cachedInputTokens,
+            outputTokens: info.outputTokens,
+            elapsedSeconds: info.elapsedSeconds,
+            cost: info.cost,
+            finishReason: info.finishReason ?? undefined,
+            contextPercent: info.contextPercent ?? undefined,
+          },
+          info.rawResponse,
+        );
+        // Activity tracking only needed without tree subscription
+        this.statusBar.endLLMCall(`#${this.currentIteration}`);
+      }
     }
+    // Token tracking is always needed for accumulated totals
     this.statusBar.endCall(
       info.inputTokens ?? 0,
       info.outputTokens ?? 0,
       info.cachedInputTokens ?? 0,
       info.cost ?? 0,
     );
-    // Remove from active LLM calls in status bar
-    this.statusBar.endLLMCall(`#${this.currentIteration}`);
   }
 
   /**
@@ -605,6 +636,61 @@ export class TUIApp {
     this.statusBar.addGadgetCost(cost);
   }
 
+  /** Unsubscribe function for tree subscription */
+  private treeUnsubscribe: (() => void) | null = null;
+
+  /**
+   * Subscribe to an ExecutionTree for automatic block updates.
+   *
+   * When subscribed, blocks for LLM calls and gadgets are automatically
+   * created and updated based on tree events. This eliminates the need
+   * to manually handle subagent events via handleEvent().
+   *
+   * The subscription is automatically cleaned up when destroy() is called.
+   *
+   * @param tree - The ExecutionTree from agent.getTree()
+   * @returns Unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * const agent = builder.ask("Hello");
+   * tui.subscribeToTree(agent.getTree());
+   *
+   * for await (const event of agent.run()) {
+   *   // LLM/gadget blocks are auto-managed via tree subscription
+   *   // Only handle text events manually
+   *   if (event.type === "text") {
+   *     tui.handleEvent(event);
+   *   }
+   * }
+   * ```
+   */
+  subscribeToTree(tree: ExecutionTree): () => void {
+    // Unsubscribe from previous tree
+    if (this.treeUnsubscribe) {
+      this.treeUnsubscribe();
+    }
+
+    // Subscribe block renderer to tree (for block creation)
+    const unsubBlock = this.blockRenderer.subscribeToTree(tree);
+
+    // Subscribe status bar to tree (for activity tracking)
+    const unsubStatus = this.statusBar.subscribeToTree(tree);
+
+    // Combined unsubscribe
+    this.treeUnsubscribe = () => {
+      unsubBlock();
+      unsubStatus();
+    };
+
+    return () => {
+      if (this.treeUnsubscribe) {
+        this.treeUnsubscribe();
+        this.treeUnsubscribe = null;
+      }
+    };
+  }
+
   /**
    * Get the abort signal for cancellation support.
    */
@@ -678,6 +764,12 @@ export class TUIApp {
    * Clean up and restore terminal.
    */
   destroy(): void {
+    // Unsubscribe from tree events
+    if (this.treeUnsubscribe) {
+      this.treeUnsubscribe();
+      this.treeUnsubscribe = null;
+    }
+
     // Cancel any pending input
     this.inputHandler.cancelPending();
 

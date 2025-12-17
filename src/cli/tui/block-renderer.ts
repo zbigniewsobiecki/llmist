@@ -4,10 +4,17 @@
  * Manages a tree of selectable/expandable blocks for LLM calls and gadgets.
  * Handles navigation, selection, and expand/collapse interactions.
  *
+ * Can optionally subscribe to an ExecutionTree for automatic updates,
+ * eliminating the need for manual event handling.
+ *
  * @module
  */
 
-import { Box, ScrollableBox } from "@unblessed/node";
+import { Box, type ScrollableBox } from "@unblessed/node";
+import type {
+  ExecutionTree,
+  ExecutionEvent,
+} from "../../core/execution-tree.js";
 import type {
   BlockNode,
   LLMCallNode,
@@ -68,6 +75,12 @@ export class BlockRenderer {
   /** Track main agent LLM calls by iteration to prevent duplicates */
   private llmCallByIteration = new Map<number, string>();
 
+  /** Track gadgets by invocationId to prevent duplicates */
+  private gadgetByInvocationId = new Map<string, string>();
+
+  /** Track nested LLM calls by parentId_iteration to prevent duplicates */
+  private nestedLLMCallByKey = new Map<string, string>();
+
   constructor(container: ScrollableBox, renderCallback: () => void) {
     this.container = container;
     this.renderCallback = renderCallback;
@@ -94,10 +107,20 @@ export class BlockRenderer {
         this.currentLLMCallId = existingId;
         return existingId;
       }
+    } else {
+      // Deduplicate nested subagent LLM calls by parent + iteration
+      const nestedKey = `${parentGadgetId}_${iteration}`;
+      const existingId = this.nestedLLMCallByKey.get(nestedKey);
+      if (existingId) {
+        // Return existing block instead of creating duplicate
+        this.currentLLMCallId = existingId;
+        return existingId;
+      }
     }
 
     const id = this.generateId("llm");
-    const depth = parentGadgetId ? this.getNode(parentGadgetId)!.depth + 1 : 0;
+    const parentNode = parentGadgetId ? this.getNode(parentGadgetId) : undefined;
+    const depth = parentNode ? parentNode.depth + 1 : 0;
 
     const node: LLMCallNode = {
       id,
@@ -116,6 +139,9 @@ export class BlockRenderer {
       // Nested LLM call - add to parent gadget's children
       const parent = this.getNode(parentGadgetId) as GadgetNode;
       parent.children.push(id);
+      // Track for deduplication
+      const nestedKey = `${parentGadgetId}_${iteration}`;
+      this.nestedLLMCallByKey.set(nestedKey, id);
     } else {
       // Top-level LLM call - track by iteration for deduplication
       this.rootIds.push(id);
@@ -170,6 +196,13 @@ export class BlockRenderer {
     name: string,
     parameters?: Record<string, unknown>,
   ): string {
+    // Deduplicate gadgets by invocationId
+    const existingId = this.gadgetByInvocationId.get(invocationId);
+    if (existingId) {
+      // Return existing block instead of creating duplicate
+      return existingId;
+    }
+
     const id = this.generateId("gadget");
     const parentLLMCallId = this.currentLLMCallId;
 
@@ -204,6 +237,9 @@ export class BlockRenderer {
       // No parent LLM call - add to root
       this.rootIds.push(id);
     }
+
+    // Track for deduplication
+    this.gadgetByInvocationId.set(invocationId, id);
 
     this.rebuildBlocks();
     return id;
@@ -311,6 +347,32 @@ export class BlockRenderer {
   }
 
   /**
+   * Get the current LLM call ID.
+   * Useful for enriching blocks created by tree subscription.
+   */
+  getCurrentLLMCallId(): string | null {
+    return this.currentLLMCallId;
+  }
+
+  /**
+   * Check if tree subscription is active.
+   * When active, external code should skip block creation (tree handles it).
+   */
+  isTreeSubscribed(): boolean {
+    return this.treeUnsubscribe !== null;
+  }
+
+  /**
+   * Store raw response for an LLM call (enrichment only).
+   * Use this when tree handles completion but hooks have raw data.
+   */
+  setLLMCallResponse(id: string, rawResponse: string): void {
+    const node = this.getNode(id) as LLMCallNode | undefined;
+    if (!node || node.type !== "llm_call") return;
+    node.rawResponse = rawResponse;
+  }
+
+  /**
    * Clear all blocks.
    */
   clear(): void {
@@ -318,6 +380,8 @@ export class BlockRenderer {
     this.blocks.clear();
     this.expandedStates.clear();
     this.llmCallByIteration.clear();
+    this.gadgetByInvocationId.clear();
+    this.nestedLLMCallByKey.clear();
     this.rootIds = [];
     this.selectableIds = [];
     this.selectedIndex = -1;
@@ -672,5 +736,166 @@ export class BlockRenderer {
     else if (blockTop + blockHeight > scrollPos + containerHeight) {
       this.container.scrollTo(blockTop + blockHeight - containerHeight);
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ExecutionTree Integration
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Unsubscribe function for tree events */
+  private treeUnsubscribe: (() => void) | null = null;
+
+  /** Map tree node IDs to block node IDs */
+  private treeNodeToBlockId = new Map<string, string>();
+
+  /**
+   * Subscribe to an ExecutionTree for automatic block updates.
+   *
+   * When subscribed, the BlockRenderer will automatically create and update
+   * blocks based on tree events. This eliminates the need to manually call
+   * addLLMCall(), addGadget(), etc.
+   *
+   * @param tree - The ExecutionTree to subscribe to
+   * @returns Unsubscribe function to stop listening
+   *
+   * @example
+   * ```typescript
+   * const agent = builder.ask("Hello");
+   * const unsubscribe = blockRenderer.subscribeToTree(agent.getTree());
+   *
+   * for await (const event of agent.run()) {
+   *   // Blocks are automatically updated via tree subscription
+   * }
+   *
+   * unsubscribe();
+   * ```
+   */
+  subscribeToTree(tree: ExecutionTree): () => void {
+    // Unsubscribe from previous tree if any
+    if (this.treeUnsubscribe) {
+      this.treeUnsubscribe();
+    }
+
+    this.treeNodeToBlockId.clear();
+
+    // Subscribe to all events
+    this.treeUnsubscribe = tree.onAll((event: ExecutionEvent) => {
+      this.handleTreeEvent(event, tree);
+    });
+
+    return () => {
+      if (this.treeUnsubscribe) {
+        this.treeUnsubscribe();
+        this.treeUnsubscribe = null;
+      }
+    };
+  }
+
+  /**
+   * Handle an ExecutionTree event.
+   */
+  private handleTreeEvent(event: ExecutionEvent, _tree: ExecutionTree): void {
+    switch (event.type) {
+      case "llm_call_start": {
+        // Find parent block ID if this is a nested LLM call
+        let parentBlockId: string | undefined;
+        if (event.parentId) {
+          parentBlockId = this.treeNodeToBlockId.get(event.parentId);
+        }
+
+        // Create the LLM call block
+        // Note: event.iteration is 0-indexed, but display uses 1-indexed
+        // The hook path already adds +1, so we do the same here for deduplication
+        const blockId = this.addLLMCall(
+          event.iteration + 1,
+          event.model,
+          parentBlockId,
+        );
+        this.treeNodeToBlockId.set(event.nodeId, blockId);
+        break;
+      }
+
+      case "llm_call_complete": {
+        const blockId = this.treeNodeToBlockId.get(event.nodeId);
+        if (blockId) {
+          this.completeLLMCall(blockId, {
+            inputTokens: event.usage?.inputTokens,
+            cachedInputTokens: event.usage?.cachedInputTokens,
+            outputTokens: event.usage?.outputTokens,
+            cost: event.cost,
+            finishReason: event.finishReason ?? undefined,
+          });
+        }
+        break;
+      }
+
+      case "gadget_call": {
+        // Find parent LLM call block
+        let parentBlockId: string | undefined;
+        if (event.parentId) {
+          parentBlockId = this.treeNodeToBlockId.get(event.parentId);
+        }
+
+        // Temporarily set current LLM call for proper parenting
+        const previousLLMCallId = this.currentLLMCallId;
+        if (parentBlockId) {
+          this.setCurrentLLMCall(parentBlockId);
+        }
+
+        const blockId = this.addGadget(
+          event.invocationId,
+          event.name,
+          event.parameters,
+        );
+        this.treeNodeToBlockId.set(event.nodeId, blockId);
+
+        // Restore previous context
+        this.currentLLMCallId = previousLLMCallId;
+        break;
+      }
+
+      case "gadget_complete": {
+        this.completeGadget(
+          event.invocationId,
+          event.result,
+          undefined,
+          event.executionTimeMs,
+          event.cost,
+        );
+        break;
+      }
+
+      case "gadget_error": {
+        this.completeGadget(
+          event.invocationId,
+          undefined,
+          event.error,
+          event.executionTimeMs,
+        );
+        break;
+      }
+
+      case "gadget_skipped": {
+        // Find the gadget and mark it as skipped
+        const node = this.findGadgetByInvocationId(event.invocationId);
+        if (node) {
+          node.isComplete = true;
+          node.error = `Skipped: ${event.failedDependencyError}`;
+          this.updateBlock(node.id);
+        }
+        break;
+      }
+
+      // text events are handled separately (not part of tree structure)
+      // llm_call_stream and llm_call_error are informational
+    }
+  }
+
+  /**
+   * Get block ID for a tree node ID.
+   * Useful for external code that needs to correlate tree nodes with blocks.
+   */
+  getBlockIdForTreeNode(treeNodeId: string): string | undefined {
+    return this.treeNodeToBlockId.get(treeNodeId);
   }
 }

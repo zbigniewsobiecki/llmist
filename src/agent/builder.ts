@@ -19,6 +19,7 @@
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
 import type { ContentPart, ImageMimeType } from "../core/input-content.js";
 import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
@@ -96,6 +97,9 @@ export class AgentBuilder {
     invocationId: string;
     onSubagentEvent: (event: SubagentEvent) => void;
     depth: number;
+    // Execution tree context (for shared tree model)
+    tree?: ExecutionTree;
+    nodeId?: NodeId;
   };
 
   constructor(client?: LLMist) {
@@ -602,6 +606,15 @@ export class AgentBuilder {
    * The method extracts `invocationId` and `onSubagentEvent` from the execution
    * context and sets up automatic forwarding via hooks and event wrapping.
    *
+   * **NEW: Shared Tree Model** - When the parent provides an ExecutionTree via context,
+   * the subagent shares that tree instead of creating its own. This enables:
+   * - Unified cost tracking across all nesting levels
+   * - Automatic media aggregation via `tree.getSubtreeMedia(nodeId)`
+   * - Real-time visibility of nested execution in the parent
+   *
+   * **Signal Forwarding** - When parent context includes a signal, it's automatically
+   * forwarded to the subagent for proper cancellation propagation.
+   *
    * @param ctx - ExecutionContext passed to the gadget's execute() method
    * @param depth - Nesting depth (default: 1 for direct child)
    * @returns This builder for chaining
@@ -622,6 +635,11 @@ export class AgentBuilder {
    *       result = event.content;
    *     }
    *   }
+   *
+   *   // After subagent completes, costs are automatically aggregated
+   *   // No manual tracking needed - use tree methods:
+   *   const totalCost = ctx.tree?.getSubtreeCost(ctx.nodeId!);
+   *   const allMedia = ctx.tree?.getSubtreeMedia(ctx.nodeId!);
    * }
    * ```
    */
@@ -631,8 +649,17 @@ export class AgentBuilder {
         invocationId: ctx.invocationId,
         onSubagentEvent: ctx.onSubagentEvent,
         depth,
+        // Capture tree context for shared tree model
+        tree: ctx.tree,
+        nodeId: ctx.nodeId,
       };
     }
+
+    // Auto-forward abort signal from parent for proper cancellation propagation
+    if (ctx.signal && !this.signal) {
+      this.signal = ctx.signal;
+    }
+
     return this;
   }
 
@@ -1035,6 +1062,10 @@ export class AgentBuilder {
       signal: this.signal,
       subagentConfig: this.subagentConfig,
       onSubagentEvent,
+      // Tree context for shared tree model (subagents share parent's tree)
+      parentTree: this.parentContext?.tree,
+      parentNodeId: this.parentContext?.nodeId,
+      baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
     };
   }
 
@@ -1252,6 +1283,10 @@ export class AgentBuilder {
       signal: this.signal,
       subagentConfig: this.subagentConfig,
       onSubagentEvent,
+      // Tree context for shared tree model (subagents share parent's tree)
+      parentTree: this.parentContext?.tree,
+      parentNodeId: this.parentContext?.nodeId,
+      baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

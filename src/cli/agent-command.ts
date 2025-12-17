@@ -538,6 +538,13 @@ export async function executeAgent(
       agent = builder.ask(userPrompt);
     }
 
+    // Subscribe TUI to ExecutionTree for automatic block management
+    // This handles nested subagent events automatically via tree events
+    let unsubscribeTree: (() => void) | undefined;
+    if (tui) {
+      unsubscribeTree = tui.subscribeToTree(agent.getTree());
+    }
+
     // Run the agent and handle events
     for await (const event of agent.run()) {
       if (tui) {
@@ -566,6 +573,11 @@ export async function executeAgent(
     // Flush any buffered text
     if (tui) {
       tui.flushText();
+    }
+
+    // Clean up tree subscription
+    if (unsubscribeTree) {
+      unsubscribeTree();
     }
   };
 

@@ -9,6 +9,7 @@
 import type { Box } from "@unblessed/node";
 import type { TUIMetrics, FocusMode } from "./types.js";
 import { formatTokens, formatCost } from "../ui/formatters.js";
+import type { ExecutionTree, ExecutionEvent, NodeId } from "../../core/execution-tree.js";
 
 /** Rough estimate: ~4 characters per token for English text */
 const CHARS_PER_TOKEN = 4;
@@ -49,6 +50,15 @@ export class StatusBar {
 
   /** Current focus mode */
   private focusMode: FocusMode = "browse";
+
+  /** Track tree node IDs to display labels for LLM calls */
+  private nodeIdToLabel = new Map<NodeId, string>();
+
+  /** Track tree node IDs for gadgets */
+  private nodeIdToGadgetName = new Map<NodeId, string>();
+
+  /** Tree subscription unsubscribe function */
+  private treeUnsubscribe: (() => void) | null = null;
 
   constructor(
     statusBox: Box,
@@ -212,8 +222,99 @@ export class StatusBar {
   clearActivity(): void {
     this.activeLLMCalls.clear();
     this.activeGadgets.clear();
+    this.nodeIdToLabel.clear();
+    this.nodeIdToGadgetName.clear();
     this.stopSpinner();
     this.render();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Tree Subscription (for tree-only block creation)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Subscribe to ExecutionTree events for automatic activity tracking.
+   * This enables tree-only block creation where the tree is the single
+   * source of truth for LLM calls and gadgets.
+   *
+   * @param tree - The ExecutionTree to subscribe to
+   * @returns Unsubscribe function
+   */
+  subscribeToTree(tree: ExecutionTree): () => void {
+    // Unsubscribe from any previous tree
+    if (this.treeUnsubscribe) {
+      this.treeUnsubscribe();
+    }
+
+    // Clear previous mappings
+    this.nodeIdToLabel.clear();
+    this.nodeIdToGadgetName.clear();
+
+    this.treeUnsubscribe = tree.onAll((event: ExecutionEvent) => {
+      this.handleTreeEvent(event);
+    });
+
+    return () => {
+      if (this.treeUnsubscribe) {
+        this.treeUnsubscribe();
+        this.treeUnsubscribe = null;
+      }
+    };
+  }
+
+  /**
+   * Handle an ExecutionTree event for activity tracking.
+   */
+  private handleTreeEvent(event: ExecutionEvent): void {
+    switch (event.type) {
+      case "llm_call_start": {
+        // Create label like "#1" for root calls, "#1.1" for nested
+        const label = event.depth === 0
+          ? `#${event.iteration + 1}`
+          : `#${event.iteration + 1}.${event.depth}`;
+        this.nodeIdToLabel.set(event.nodeId, label);
+        this.startLLMCall(label, event.model);
+        break;
+      }
+
+      case "llm_call_complete":
+      case "llm_call_error": {
+        const label = this.nodeIdToLabel.get(event.nodeId);
+        if (label) {
+          this.endLLMCall(label);
+          this.nodeIdToLabel.delete(event.nodeId);
+        }
+        break;
+      }
+
+      case "gadget_call": {
+        this.nodeIdToGadgetName.set(event.nodeId, event.name);
+        this.startGadget(event.name);
+        break;
+      }
+
+      case "gadget_complete": {
+        const name = this.nodeIdToGadgetName.get(event.nodeId);
+        if (name) {
+          this.endGadget(name);
+          if (event.cost) {
+            this.addGadgetCost(event.cost);
+          }
+          this.nodeIdToGadgetName.delete(event.nodeId);
+        }
+        break;
+      }
+
+      case "gadget_error":
+      case "gadget_skipped": {
+        const name = this.nodeIdToGadgetName.get(event.nodeId);
+        if (name) {
+          this.endGadget(name);
+          this.nodeIdToGadgetName.delete(event.nodeId);
+        }
+        break;
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -330,7 +431,7 @@ export class StatusBar {
         for (const [label, model] of this.activeLLMCalls) {
           const shortModel = this.shortenModelName(model);
           if (!byModel.has(shortModel)) byModel.set(shortModel, []);
-          byModel.get(shortModel)!.push(label);
+          byModel.get(shortModel)?.push(label);
         }
 
         const llmParts: string[] = [];

@@ -7,6 +7,7 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
+import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
 import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
 import { GadgetExecutor } from "../gadgets/executor.js";
 import type { MediaStore } from "../gadgets/media-store.js";
@@ -90,6 +91,19 @@ export interface StreamProcessorOptions {
 
   /** Callback for subagent gadgets to report subagent events to parent */
   onSubagentEvent?: (event: SubagentEvent) => void;
+
+  // ==========================================================================
+  // Execution Tree Context (for tree-based tracking)
+  // ==========================================================================
+
+  /** Execution tree for tracking LLM calls and gadget executions */
+  tree?: ExecutionTree;
+
+  /** Parent node ID (for gadget nodes created by this processor) */
+  parentNodeId?: NodeId | null;
+
+  /** Base depth for nodes created by this processor */
+  baseDepth?: number;
 }
 
 /**
@@ -148,6 +162,11 @@ export class StreamProcessor {
   private readonly parser: GadgetCallParser;
   private readonly executor: GadgetExecutor;
 
+  // Execution Tree context
+  private readonly tree?: ExecutionTree;
+  private readonly parentNodeId: NodeId | null;
+  private readonly baseDepth: number;
+
   private responseText = "";
   private observerFailureCount = 0;
 
@@ -169,6 +188,11 @@ export class StreamProcessor {
     this.hooks = options.hooks ?? {};
     this.logger = options.logger ?? createLogger({ name: "llmist:stream-processor" });
 
+    // Initialize tree context
+    this.tree = options.tree;
+    this.parentNodeId = options.parentNodeId ?? null;
+    this.baseDepth = options.baseDepth ?? 0;
+
     this.parser = new GadgetCallParser({
       startPrefix: options.gadgetStartPrefix,
       endPrefix: options.gadgetEndPrefix,
@@ -186,7 +210,7 @@ export class StreamProcessor {
             subagentEvent: event,
           });
           // Also call the original callback (for Agent's queue and hooks)
-          options.onSubagentEvent!(event);
+          options.onSubagentEvent?.(event);
         }
       : undefined;
 
@@ -201,6 +225,10 @@ export class StreamProcessor {
       options.agentConfig,
       options.subagentConfig,
       wrappedOnSubagentEvent,
+      // Tree context for gadget execution
+      options.tree,
+      options.parentNodeId,
+      options.baseDepth,
     );
   }
 
@@ -263,7 +291,7 @@ export class StreamProcessor {
             usage,
             logger: this.logger,
           };
-          await this.hooks.observers!.onStreamChunk!(context);
+          await this.hooks.observers?.onStreamChunk?.(context);
         });
         await this.runObserversInParallel(chunkObservers);
       }
@@ -499,6 +527,17 @@ export class StreamProcessor {
     // Yield gadget_call IMMEDIATELY (real-time feedback before execution)
     yield { type: "gadget_call", call };
 
+    // Add gadget to execution tree
+    if (this.tree) {
+      this.tree.addGadget({
+        invocationId: call.invocationId,
+        name: call.gadgetName,
+        parameters: call.parameters ?? {},
+        dependencies: call.dependencies,
+        parentId: this.parentNodeId,
+      });
+    }
+
     // Check for dependencies
     if (call.dependencies.length > 0) {
       // Check for self-referential dependency (circular to self)
@@ -633,7 +672,7 @@ export class StreamProcessor {
           parameters,
           logger: this.logger,
         };
-        await this.hooks.observers!.onGadgetExecutionStart!(context);
+        await this.hooks.observers?.onGadgetExecutionStart?.(context);
       });
     }
     await this.runObserversInParallel(startObservers);
@@ -718,7 +757,7 @@ export class StreamProcessor {
           cost: result.cost,
           logger: this.logger,
         };
-        await this.hooks.observers!.onGadgetExecutionComplete!(context);
+        await this.hooks.observers?.onGadgetExecutionComplete?.(context);
       });
     }
     await this.runObserversInParallel(completeObservers);
@@ -802,10 +841,18 @@ export class StreamProcessor {
           parameters,
           logger: this.logger,
         };
-        await this.hooks.observers!.onGadgetExecutionStart!(context);
+        await this.hooks.observers?.onGadgetExecutionStart?.(context);
       });
     }
     await this.runObserversInParallel(startObservers);
+
+    // Mark gadget as running in execution tree
+    if (this.tree) {
+      const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
+      if (gadgetNode) {
+        this.tree.startGadget(gadgetNode.id);
+      }
+    }
 
     // Step 4: Execute or use synthetic result
     let result: GadgetExecutionResult;
@@ -887,10 +934,31 @@ export class StreamProcessor {
           cost: result.cost,
           logger: this.logger,
         };
-        await this.hooks.observers!.onGadgetExecutionComplete!(context);
+        await this.hooks.observers?.onGadgetExecutionComplete?.(context);
       });
     }
     await this.runObserversInParallel(completeObservers);
+
+    // Complete gadget in execution tree
+    if (this.tree) {
+      const gadgetNode = this.tree.getNodeByInvocationId(result.invocationId);
+      if (gadgetNode) {
+        if (result.error) {
+          this.tree.completeGadget(gadgetNode.id, {
+            error: result.error,
+            executionTimeMs: result.executionTimeMs,
+            cost: result.cost,
+          });
+        } else {
+          this.tree.completeGadget(gadgetNode.id, {
+            result: result.result,
+            executionTimeMs: result.executionTimeMs,
+            cost: result.cost,
+            media: result.media,
+          });
+        }
+      }
+    }
 
     // Track completion for dependency resolution
     this.completedResults.set(result.invocationId, result);
@@ -1005,6 +1073,14 @@ export class StreamProcessor {
       // Mark as failed so downstream dependents also skip
       this.failedInvocations.add(call.invocationId);
 
+      // Skip gadget in execution tree
+      if (this.tree) {
+        const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
+        if (gadgetNode) {
+          this.tree.skipGadget(gadgetNode.id, failedDep, depError, "dependency_failed");
+        }
+      }
+
       // Emit skip event
       const skipEvent: GadgetSkippedEvent = {
         type: "gadget_skipped",
@@ -1027,7 +1103,7 @@ export class StreamProcessor {
           failedDependencyError: depError,
           logger: this.logger,
         };
-        await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(observeContext));
+        await this.safeObserve(() => this.hooks.observers?.onGadgetSkipped?.(observeContext));
       }
 
       this.logger.info("Gadget skipped due to failed dependency", {
