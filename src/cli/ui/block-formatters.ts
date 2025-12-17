@@ -193,7 +193,7 @@ export function formatLLMCallExpanded(node: LLMCallNode): string[] {
 /**
  * Formats a collapsed gadget line.
  *
- * Format: `▶ Navigate(url=https://...) ✓ 1.2s`
+ * Format: `✓ Navigate(url=https://...) 1.2s | ↑ 5k ⤿ 2k ↓ 1k | $0.01`
  */
 export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): string {
   let indicator: string;
@@ -226,15 +226,6 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
     paramsStr = `${chalk.dim("(")}${formatted.join(chalk.dim(", "))}${chalk.dim(")")}`;
   }
 
-  // Time
-  let timeStr = "";
-  if (node.executionTimeMs !== undefined) {
-    const time = node.executionTimeMs >= 1000
-      ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
-      : `${Math.round(node.executionTimeMs)}ms`;
-    timeStr = ` ${chalk.dim(time)}`;
-  }
-
   // Error preview
   let errorStr = "";
   if (node.error) {
@@ -242,7 +233,41 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
     errorStr = ` ${chalk.red("error:")} ${truncated}`;
   }
 
-  const line = `${indicatorColor(indicator)} ${gadgetLabel}${paramsStr}${errorStr}${timeStr}`;
+  // Build metrics array
+  const metrics: string[] = [];
+
+  // Duration
+  if (node.executionTimeMs !== undefined) {
+    const time = node.executionTimeMs >= 1000
+      ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
+      : `${Math.round(node.executionTimeMs)}ms`;
+    metrics.push(time);
+  }
+
+  // Subagent token stats (if any LLM calls were made)
+  if (node.subagentStats && node.subagentStats.llmCallCount > 0) {
+    const { inputTokens, cachedTokens, outputTokens } = node.subagentStats;
+    const tokenParts: string[] = [];
+    tokenParts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(inputTokens)}`));
+    if (cachedTokens > 0) {
+      tokenParts.push(chalk.dim("⤿") + chalk.blue(` ${formatTokens(cachedTokens)}`));
+    }
+    tokenParts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(outputTokens)}`));
+    metrics.push(tokenParts.join(" "));
+  } else if (node.resultTokens && node.resultTokens > 0) {
+    // Simple gadget - just show output tokens
+    metrics.push(chalk.dim("↓") + chalk.green(` ${formatTokens(node.resultTokens)}`));
+  }
+
+  // Cost
+  if (node.cost && node.cost > 0) {
+    metrics.push(chalk.cyan(`$${formatCost(node.cost)}`));
+  }
+
+  // Join metrics with separator
+  const metricsStr = metrics.length > 0 ? ` ${chalk.dim(metrics.join(" | "))}` : "";
+
+  const line = `${indicatorColor(indicator)} ${gadgetLabel}${paramsStr}${errorStr}${metricsStr}`;
 
   // Highlight selected line
   if (selected) {
@@ -326,6 +351,45 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
     const headerLine = `${BOX.topLeft}${BOX.horizontal} Subagent Activity ${BOX.horizontal.repeat(width - 21)}`;
     lines.push(`${indent}${chalk.dim(headerLine)}`);
     lines.push(`${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(`${node.children.length} nested calls (expand children to see details)`)}`);
+    lines.push(`${indent}${chalk.dim(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
+  }
+
+  // Metrics section - show if any metrics are available
+  if (node.executionTimeMs !== undefined || node.cost || node.resultTokens || node.subagentStats) {
+    const metricsHeaderLine = `${BOX.topLeft}${BOX.horizontal} Metrics ${BOX.horizontal.repeat(width - 11)}`;
+    lines.push(`${indent}${chalk.dim(metricsHeaderLine)}`);
+
+    // Duration
+    if (node.executionTimeMs !== undefined) {
+      const time = node.executionTimeMs >= 1000
+        ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
+        : `${Math.round(node.executionTimeMs)}ms`;
+      lines.push(`${indent}${chalk.dim(BOX.vertical)} Duration: ${chalk.dim(time)}`);
+    }
+
+    // Output tokens (estimated from result)
+    if (node.resultTokens && node.resultTokens > 0) {
+      lines.push(`${indent}${chalk.dim(BOX.vertical)} Output:   ${chalk.green(`~${formatTokens(node.resultTokens)}`)} tokens`);
+    }
+
+    // Cost
+    if (node.cost && node.cost > 0) {
+      lines.push(`${indent}${chalk.dim(BOX.vertical)} Cost:     ${chalk.cyan(`$${formatCost(node.cost)}`)}`);
+    }
+
+    // Subagent stats (aggregated from child LLM calls)
+    if (node.subagentStats && node.subagentStats.llmCallCount > 0) {
+      const s = node.subagentStats;
+      const tokenParts: string[] = [];
+      tokenParts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(s.inputTokens)}`));
+      if (s.cachedTokens > 0) {
+        tokenParts.push(chalk.dim("⤿") + chalk.blue(` ${formatTokens(s.cachedTokens)}`));
+      }
+      tokenParts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(s.outputTokens)}`));
+      const tokenStr = tokenParts.join(" ");
+      lines.push(`${indent}${chalk.dim(BOX.vertical)} LLM calls: ${s.llmCallCount} (${tokenStr})`);
+    }
+
     lines.push(`${indent}${chalk.dim(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
   }
 

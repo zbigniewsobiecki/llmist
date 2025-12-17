@@ -289,6 +289,13 @@ export async function executeAgent(
 
         // onLLMCallReady: Log the exact request being sent to the LLM
         onLLMCallReady: async (context) => {
+          if (context.subagentContext) return;
+
+          // Store raw request in TUI for raw viewer
+          if (tui) {
+            tui.setLLMCallRequest(context.options.messages);
+          }
+
           if (llmLogsBaseDir) {
             if (!llmSessionDir) {
               llmSessionDir = await createSessionDir(llmLogsBaseDir);
@@ -349,6 +356,7 @@ export async function executeAgent(
               elapsedSeconds: tui.getElapsedSeconds(),
               cost: callCost,
               finishReason: context.finishReason ?? "stop",
+              rawResponse: context.rawResponse,
             });
           }
 

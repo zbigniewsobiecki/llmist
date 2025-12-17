@@ -128,18 +128,35 @@ export class BlockRenderer {
   }
 
   /**
-   * Complete an LLM call with details.
+   * Complete an LLM call with details and optional raw response.
    */
   completeLLMCall(
     id: string,
     details: LLMCallNode["details"],
+    rawResponse?: string,
   ): void {
     const node = this.getNode(id) as LLMCallNode | undefined;
     if (!node || node.type !== "llm_call") return;
 
     node.isComplete = true;
     node.details = details;
+    if (rawResponse !== undefined) {
+      node.rawResponse = rawResponse;
+    }
     this.updateBlock(id);
+  }
+
+  /**
+   * Store raw request messages for an LLM call.
+   * Called when the LLM call is ready (after controller modifications).
+   */
+  setLLMCallRequest(
+    id: string,
+    messages: import("../../core/messages.js").LLMMessage[],
+  ): void {
+    const node = this.getNode(id) as LLMCallNode | undefined;
+    if (!node || node.type !== "llm_call") return;
+    node.rawRequest = messages;
   }
 
   /**
@@ -200,6 +217,7 @@ export class BlockRenderer {
     result?: string,
     error?: string,
     executionTimeMs?: number,
+    cost?: number,
   ): void {
     // Find gadget by invocationId
     const node = this.findGadgetByInvocationId(invocationId);
@@ -209,7 +227,45 @@ export class BlockRenderer {
     node.result = result;
     node.error = error;
     node.executionTimeMs = executionTimeMs;
+    node.cost = cost;
+
+    // Estimate result tokens (rough: ~4 chars per token)
+    if (result) {
+      node.resultTokens = Math.ceil(result.length / 4);
+    }
+
+    // Aggregate subagent stats from child LLM call nodes
+    if (node.children.length > 0) {
+      node.subagentStats = this.aggregateSubagentStats(node.children);
+    }
+
     this.updateBlock(node.id);
+  }
+
+  /**
+   * Aggregate token/cost stats from child LLM call nodes.
+   */
+  private aggregateSubagentStats(
+    childIds: string[],
+  ): GadgetNode["subagentStats"] {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cachedTokens = 0;
+    let cost = 0;
+    let llmCallCount = 0;
+
+    for (const childId of childIds) {
+      const child = this.nodes.get(childId);
+      if (child?.type === "llm_call" && child.details) {
+        inputTokens += child.details.inputTokens ?? 0;
+        outputTokens += child.details.outputTokens ?? 0;
+        cachedTokens += child.details.cachedInputTokens ?? 0;
+        cost += child.details.cost ?? 0;
+        llmCallCount++;
+      }
+    }
+
+    return { inputTokens, outputTokens, cachedTokens, cost, llmCallCount };
   }
 
   /**
@@ -243,6 +299,15 @@ export class BlockRenderer {
       }
     }
     return undefined;
+  }
+
+  /**
+   * Set the current LLM call context for gadget parenting.
+   * Used when processing subagent events to ensure gadgets are nested
+   * under the correct subagent LLM call.
+   */
+  setCurrentLLMCall(llmCallId: string | null): void {
+    this.currentLLMCallId = llmCallId;
   }
 
   /**

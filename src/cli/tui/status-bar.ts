@@ -2,15 +2,22 @@
  * TUI status bar for displaying real-time metrics.
  *
  * Shows accumulated token counts, elapsed time, and cost.
+ * Also displays currently active LLM calls and gadgets with a spinner.
  * Updates on LLM call lifecycle events.
  */
 
 import type { Box } from "@unblessed/node";
-import type { TUIMetrics } from "./types.js";
+import type { TUIMetrics, FocusMode } from "./types.js";
 import { formatTokens, formatCost } from "../ui/formatters.js";
 
 /** Rough estimate: ~4 characters per token for English text */
 const CHARS_PER_TOKEN = 4;
+
+/** Braille spinner frames for smooth animation */
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/** Spinner animation interval in ms (~12fps) */
+const SPINNER_INTERVAL_MS = 80;
 
 /**
  * Manages the status bar display and metrics tracking.
@@ -27,6 +34,21 @@ export class StatusBar {
   private streamingOutputTokens = 0;
   /** Whether we're currently streaming */
   private isStreaming = false;
+
+  /** Active LLM calls: Map from label ("#1") to model name */
+  private activeLLMCalls = new Map<string, string>();
+
+  /** Active gadgets (by name) */
+  private activeGadgets = new Set<string>();
+
+  /** Spinner frame index */
+  private spinnerFrame = 0;
+
+  /** Spinner animation interval */
+  private spinnerInterval: ReturnType<typeof setInterval> | null = null;
+
+  /** Current focus mode */
+  private focusMode: FocusMode = "browse";
 
   constructor(
     statusBox: Box,
@@ -108,6 +130,128 @@ export class StatusBar {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Activity Tracking (for real-time display of what's running)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Track an LLM call as active.
+   * @param label - Display label like "#1" or "#1.1"
+   * @param model - Full model name like "gemini:gemini-2.5-flash"
+   */
+  startLLMCall(label: string, model: string): void {
+    this.activeLLMCalls.set(label, model);
+    this.startSpinner();
+    this.render();
+  }
+
+  /**
+   * Mark an LLM call as complete.
+   * @param label - Display label like "#1" or "#1.1"
+   */
+  endLLMCall(label: string): void {
+    this.activeLLMCalls.delete(label);
+    this.maybeStopSpinner();
+    this.render();
+  }
+
+  /**
+   * Track a gadget as active.
+   * @param name - Gadget name like "ReadFile" or "BrowseWeb"
+   */
+  startGadget(name: string): void {
+    this.activeGadgets.add(name);
+    this.startSpinner();
+    this.render();
+  }
+
+  /**
+   * Mark a gadget as complete.
+   * @param name - Gadget name
+   */
+  endGadget(name: string): void {
+    this.activeGadgets.delete(name);
+    this.maybeStopSpinner();
+    this.render();
+  }
+
+  /**
+   * Start the spinner animation if not already running.
+   */
+  private startSpinner(): void {
+    if (this.spinnerInterval) return;
+    this.spinnerInterval = setInterval(() => {
+      this.spinnerFrame = (this.spinnerFrame + 1) % SPINNER_FRAMES.length;
+      this.render(true); // immediate render for smooth animation
+    }, SPINNER_INTERVAL_MS);
+  }
+
+  /**
+   * Stop the spinner if no activity is in progress.
+   */
+  private maybeStopSpinner(): void {
+    if (this.activeLLMCalls.size === 0 && this.activeGadgets.size === 0) {
+      this.stopSpinner();
+    }
+  }
+
+  /**
+   * Force stop the spinner animation.
+   */
+  private stopSpinner(): void {
+    if (this.spinnerInterval) {
+      clearInterval(this.spinnerInterval);
+      this.spinnerInterval = null;
+    }
+  }
+
+  /**
+   * Clear all activity tracking and stop spinner.
+   * Call this when the agent loop completes or between REPL iterations.
+   */
+  clearActivity(): void {
+    this.activeLLMCalls.clear();
+    this.activeGadgets.clear();
+    this.stopSpinner();
+    this.render();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Focus Mode
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Set the current focus mode (called by TUIApp).
+   * Updates the status bar to show the mode indicator.
+   * Uses immediate render to ensure the mode is visible before input focus changes.
+   */
+  setFocusMode(mode: FocusMode): void {
+    this.focusMode = mode;
+    this.render(true); // immediate render for mode changes
+  }
+
+  /**
+   * Get the current focus mode.
+   */
+  getFocusMode(): FocusMode {
+    return this.focusMode;
+  }
+
+  /**
+   * Shorten model name for display.
+   * "gemini:gemini-2.5-flash" → "2.5-flash"
+   */
+  private shortenModelName(model: string): string {
+    // Remove provider prefix
+    const withoutProvider = model.includes(":") ? model.split(":")[1] : model;
+    // Shorten common patterns
+    return withoutProvider
+      .replace("claude-", "")
+      .replace("gemini-", "")
+      .replace("gpt-", "")
+      .replace("-latest", "");
+  }
+
   /**
    * Get current metrics for external use.
    */
@@ -134,16 +278,28 @@ export class StatusBar {
     const GREEN = "\x1b[32m";
     const BLUE = "\x1b[34m";
     const CYAN = "\x1b[36m";
+    const MAGENTA = "\x1b[35m";
     const GRAY = "\x1b[90m";
     const RESET = "\x1b[0m";
+    const BG_BLUE = "\x1b[44m";
+    const BG_GREEN = "\x1b[42m";
+    const WHITE = "\x1b[37m";
+    const BLACK = "\x1b[30m";
 
     // Calculate display values: accumulated + current streaming
     const displayInputTokens = this.metrics.inputTokens + this.streamingInputTokens;
     const displayOutputTokens = this.metrics.outputTokens + this.streamingOutputTokens;
 
     // Build status line using ANSI codes
-    // Format: ↑ 12.5k | ↓ 3.2k | 45.2s | $0.0234
+    // Order: mode indicator, stable metrics (tokens, time, cost), then dynamic activity (LLM calls, gadgets)
     const parts: string[] = [];
+
+    // Focus mode indicator at the start
+    if (this.focusMode === "browse") {
+      parts.push(`${BG_BLUE}${WHITE} BROWSE ${RESET}`);
+    } else {
+      parts.push(`${BG_GREEN}${BLACK} INPUT ${RESET}`);
+    }
 
     // Input tokens (yellow) - show ~ prefix during streaming to indicate estimate
     const inputPrefix = this.isStreaming && this.streamingInputTokens > 0 ? "~" : "";
@@ -164,8 +320,33 @@ export class StatusBar {
     // Cost (cyan)
     parts.push(`${CYAN}$${formatCost(this.metrics.cost)}${RESET}`);
 
-    // Iteration count
-    parts.push(`${CYAN}#${this.metrics.iteration}${RESET}`);
+    // Activity section at the end (if anything is running)
+    if (this.activeLLMCalls.size > 0 || this.activeGadgets.size > 0) {
+      const spinner = SPINNER_FRAMES[this.spinnerFrame];
+
+      // Show active LLM calls with model names, grouped by model
+      if (this.activeLLMCalls.size > 0) {
+        const byModel = new Map<string, string[]>();
+        for (const [label, model] of this.activeLLMCalls) {
+          const shortModel = this.shortenModelName(model);
+          if (!byModel.has(shortModel)) byModel.set(shortModel, []);
+          byModel.get(shortModel)!.push(label);
+        }
+
+        const llmParts: string[] = [];
+        for (const [model, labels] of byModel) {
+          llmParts.push(`${model} ${labels.join(", ")}`);
+        }
+        parts.push(`${spinner} ${MAGENTA}${llmParts.join(" | ")}${RESET}`);
+      }
+
+      // Show active gadgets (limit to 3, show +N for more)
+      if (this.activeGadgets.size > 0) {
+        const gadgetList = [...this.activeGadgets].slice(0, 3).join(", ");
+        const more = this.activeGadgets.size > 3 ? ` +${this.activeGadgets.size - 3}` : "";
+        parts.push(`${CYAN}⏵ ${gadgetList}${more}${RESET}`);
+      }
+    }
 
     this.statusBox.setContent(parts.join(` ${GRAY}|${RESET} `));
 

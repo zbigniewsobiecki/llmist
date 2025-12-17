@@ -25,6 +25,7 @@ export class InputHandler {
   private body: Box;
   private screen: Screen;
   private renderCallback: () => void;
+  private renderNowCallback: () => void;
 
   /** Currently pending input request */
   private pendingInput: PendingInput | null = null;
@@ -35,16 +36,21 @@ export class InputHandler {
   /** Callback when Ctrl+C is pressed */
   private ctrlCCallback: CtrlCCallback | null = null;
 
+  /** Callback when Ctrl+B is pressed (toggle focus mode) */
+  private ctrlBCallback: (() => void) | null = null;
+
   constructor(
     inputBar: Textbox,
     body: Box,
     screen: Screen,
     renderCallback: () => void,
+    renderNowCallback?: () => void,
   ) {
     this.inputBar = inputBar;
     this.body = body;
     this.screen = screen;
     this.renderCallback = renderCallback;
+    this.renderNowCallback = renderNowCallback ?? renderCallback;
 
     // Set up input submission handler
     this.inputBar.on("submit", (value: string) => {
@@ -61,6 +67,14 @@ export class InputHandler {
     this.inputBar.key(["C-c"], () => {
       if (this.ctrlCCallback) {
         this.ctrlCCallback();
+      }
+    });
+
+    // Handle Ctrl+B on the input bar - toggle focus mode
+    // This ensures Ctrl+B works to exit input mode back to browse mode
+    this.inputBar.key(["C-b"], () => {
+      if (this.ctrlBCallback) {
+        this.ctrlBCallback();
       }
     });
 
@@ -81,6 +95,13 @@ export class InputHandler {
    */
   onCtrlC(callback: CtrlCCallback): void {
     this.ctrlCCallback = callback;
+  }
+
+  /**
+   * Set callback for Ctrl+B events (toggle focus mode).
+   */
+  onCtrlB(callback: () => void): void {
+    this.ctrlBCallback = callback;
   }
 
   /**
@@ -156,6 +177,42 @@ export class InputHandler {
       this.pendingInput = null;
       this.setIdle();
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Focus Mode API (controlled by TUIApp)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Activate input mode - show input bar and capture keyboard.
+   * Called by TUIApp when switching to input mode.
+   */
+  activate(): void {
+    this.isPendingREPLPrompt = false;
+    this.inputBar.show();
+    this.inputBar.setValue(ACTIVE_PROMPT);
+    // Render immediately to ensure input bar is visible before focus
+    this.renderNowCallback();
+    // Then focus and start reading input
+    this.inputBar.focus();
+    this.inputBar.readInput();
+  }
+
+  /**
+   * Deactivate input mode - hide input bar completely.
+   * Called by TUIApp when switching to browse mode.
+   */
+  deactivate(): void {
+    this.inputBar.hide();
+    this.isPendingREPLPrompt = false;
+    this.renderNowCallback();
+  }
+
+  /**
+   * Check if input mode is active (input bar visible and focused).
+   */
+  isInputActive(): boolean {
+    return this.inputBar.visible !== false;
   }
 
   /**

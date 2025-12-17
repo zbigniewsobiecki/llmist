@@ -8,7 +8,7 @@
  */
 
 import { Box, ScrollableBox, Textbox, type Screen } from "@unblessed/node";
-import type { TUIBlockLayout } from "./types.js";
+import type { TUIBlockLayout, FocusMode } from "./types.js";
 
 /**
  * Creates the TUI layout with ScrollableBox for interactive blocks.
@@ -94,8 +94,12 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
  * Provides navigation between selectable blocks (LLM calls, gadgets)
  * and expand/collapse functionality for viewing details.
  *
+ * Navigation only works in "browse" focus mode. In "input" mode,
+ * keys are captured by the input field.
+ *
  * @param screen - The blessed Screen instance
  * @param callbacks - Object with navigation callback functions
+ * @param getFocusMode - Function to get current focus mode
  */
 export function setupBlockNavigationKeys(
   screen: Screen,
@@ -106,39 +110,59 @@ export function setupBlockNavigationKeys(
     onCollapse: () => void;
     onSelectFirst: () => void;
     onSelectLast: () => void;
+    onShowRawRequest?: () => void;
+    onShowRawResponse?: () => void;
   },
+  getFocusMode: () => FocusMode,
 ): void {
-  // Navigation: up/down or vim keys
+  // Navigation: up/down or vim keys (browse mode only)
   screen.key(["up", "k"], () => {
+    if (getFocusMode() !== "browse") return;
     callbacks.onSelectPrevious();
     screen.render();
   });
 
   screen.key(["down", "j"], () => {
+    if (getFocusMode() !== "browse") return;
     callbacks.onSelectNext();
     screen.render();
   });
 
-  // Expand/collapse with Enter or Space
+  // Expand/collapse with Enter or Space (browse mode only)
   screen.key(["enter", "space"], () => {
+    if (getFocusMode() !== "browse") return;
     callbacks.onToggleExpand();
     screen.render();
   });
 
-  // Collapse with Escape or h (vim-style left)
+  // Collapse with Escape or h (vim-style left) (browse mode only)
   screen.key(["escape", "h"], () => {
+    if (getFocusMode() !== "browse") return;
     callbacks.onCollapse();
     screen.render();
   });
 
-  // Jump to first/last
+  // Jump to first/last (browse mode only)
   screen.key(["home", "g"], () => {
+    if (getFocusMode() !== "browse") return;
     callbacks.onSelectFirst();
     screen.render();
   });
 
   screen.key(["end", "G"], () => {
+    if (getFocusMode() !== "browse") return;
     callbacks.onSelectLast();
     screen.render();
+  });
+
+  // Raw viewer: r = request, R = response (browse mode only)
+  screen.key(["r"], () => {
+    if (getFocusMode() !== "browse") return;
+    callbacks.onShowRawRequest?.();
+  });
+
+  screen.key(["S-r"], () => {
+    if (getFocusMode() !== "browse") return;
+    callbacks.onShowRawResponse?.();
   });
 }

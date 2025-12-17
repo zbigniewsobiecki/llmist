@@ -30,6 +30,7 @@ import type {
   TUIBlockLayout,
   ApprovalContext,
   ApprovalResponse,
+  FocusMode,
 } from "./types.js";
 import { createScreen } from "./screen.js";
 import { createBlockLayout, setupBlockNavigationKeys } from "./layout.js";
@@ -37,7 +38,9 @@ import { StatusBar } from "./status-bar.js";
 import { InputHandler } from "./input-handler.js";
 import { BlockRenderer } from "./block-renderer.js";
 import { showApprovalDialog } from "./approval-dialog.js";
+import { showRawViewer, type RawViewerMode } from "./raw-viewer.js";
 import type { LLMCallDisplayInfo } from "../ui/formatters.js";
+import type { LLMMessage } from "../../core/messages.js";
 
 /** Window for double Ctrl+C detection (ms) */
 const CTRL_C_WINDOW_MS = 1000;
@@ -70,11 +73,20 @@ export class TUIApp {
   /** Track current LLM call ID for gadget parenting */
   private currentLLMCallId: string | null = null;
 
+  /** Track current iteration number for status bar */
+  private currentIteration = 0;
+
   /** Map gadget invocationId to block renderer's internal ID */
   private gadgetIdMap = new Map<string, string>();
 
   /** Map subagent LLM call key to block renderer's internal ID */
   private subagentLLMCallMap = new Map<string, string>();
+
+  /** Current focus mode (browse = navigate blocks, input = type in input field) */
+  private focusMode: FocusMode = "browse";
+
+  /** Close function for currently open raw viewer (if any) */
+  private closeRawViewer: (() => void) | null = null;
 
   private constructor(
     screenCtx: TUIScreenContext,
@@ -113,13 +125,14 @@ export class TUIApp {
       () => screenCtx.renderNow(),
     );
 
-    // Create input handler
+    // Create input handler with both debounced and immediate render callbacks
     // Cast ScrollableBox to Box for InputHandler compatibility
     const inputHandler = new InputHandler(
       layout.inputBar,
       layout.body as unknown as import("@unblessed/node").Box,
       screen,
       () => screenCtx.requestRender(),
+      () => screenCtx.renderNow(),
     );
 
     // Create block renderer
@@ -136,15 +149,27 @@ export class TUIApp {
     // Wire up Ctrl+C from input handler to same quit logic
     inputHandler.onCtrlC(() => app.handleCtrlC());
 
-    // Set up block navigation keys
-    setupBlockNavigationKeys(screen, {
-      onSelectNext: () => blockRenderer.selectNext(),
-      onSelectPrevious: () => blockRenderer.selectPrevious(),
-      onToggleExpand: () => blockRenderer.toggleExpand(),
-      onCollapse: () => blockRenderer.collapseOrDeselect(),
-      onSelectFirst: () => blockRenderer.selectFirst(),
-      onSelectLast: () => blockRenderer.selectLast(),
-    });
+    // Wire up Ctrl+B from input handler to toggle focus mode
+    inputHandler.onCtrlB(() => app.toggleFocusMode());
+
+    // Set up block navigation keys (pass focus mode getter)
+    setupBlockNavigationKeys(
+      screen,
+      {
+        onSelectNext: () => blockRenderer.selectNext(),
+        onSelectPrevious: () => blockRenderer.selectPrevious(),
+        onToggleExpand: () => blockRenderer.toggleExpand(),
+        onCollapse: () => blockRenderer.collapseOrDeselect(),
+        onSelectFirst: () => blockRenderer.selectFirst(),
+        onSelectLast: () => blockRenderer.selectLast(),
+        onShowRawRequest: () => app.showRawViewer("request"),
+        onShowRawResponse: () => app.showRawViewer("response"),
+      },
+      () => app.focusMode,
+    );
+
+    // Initialize in browse mode (input bar hidden)
+    app.applyFocusMode();
 
     // Initial render
     screenCtx.requestRender();
@@ -185,6 +210,11 @@ export class TUIApp {
     screen.key(["C-c"], () => {
       this.handleCtrlC();
     });
+
+    // Ctrl+B to toggle focus mode (browse <-> input)
+    screen.key(["C-b"], () => {
+      this.toggleFocusMode();
+    });
   }
 
   /**
@@ -208,6 +238,59 @@ export class TUIApp {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Focus Mode Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Toggle between browse and input modes.
+   * Called by Tab key handler.
+   */
+  toggleFocusMode(): void {
+    this.focusMode = this.focusMode === "browse" ? "input" : "browse";
+    this.applyFocusMode();
+  }
+
+  /**
+   * Set focus mode programmatically.
+   * Used by AskUser to force input mode.
+   */
+  setFocusMode(mode: FocusMode): void {
+    if (this.focusMode !== mode) {
+      this.focusMode = mode;
+      this.applyFocusMode();
+    }
+  }
+
+  /**
+   * Apply current focus mode to UI components.
+   * - Browse mode: Hide input bar, body takes full space minus status bar
+   * - Input mode: Show input bar, body shrinks to make room
+   */
+  private applyFocusMode(): void {
+    // Update status bar FIRST (before input gets focus, which may affect event processing)
+    this.statusBar.setFocusMode(this.focusMode);
+
+    // Update layout
+    if (this.focusMode === "input") {
+      // Input mode: show input bar, body height = 100%-2
+      this.layout.body.height = "100%-2";
+    } else {
+      // Browse mode: hide input bar, body height = 100%-1
+      this.layout.body.height = "100%-1";
+    }
+
+    // Render the layout changes
+    this.screenCtx.renderNow();
+
+    // Now activate/deactivate input handler (this changes focus)
+    if (this.focusMode === "input") {
+      this.inputHandler.activate();
+    } else {
+      this.inputHandler.deactivate();
+    }
+  }
+
   /**
    * Handle an agent stream event.
    * Converts events to interactive block operations.
@@ -227,6 +310,8 @@ export class TUIApp {
           event.call.parameters,
         );
         this.gadgetIdMap.set(event.call.invocationId, gadgetId);
+        // Track in status bar
+        this.statusBar.startGadget(event.call.gadgetName);
         break;
       }
 
@@ -237,7 +322,10 @@ export class TUIApp {
           event.result.result,
           event.result.error,
           event.result.executionTimeMs,
+          event.result.cost,
         );
+        // Remove from status bar
+        this.statusBar.endGadget(event.result.gadgetName);
         break;
 
       case "subagent_event":
@@ -271,14 +359,23 @@ export class TUIApp {
       case "llm_call_start": {
         // Create nested LLM call as child of the gadget
         const info = subEvent.event as import("../../gadgets/types.js").LLMCallInfo;
+        // Unique key: gadgetInvocationId + iteration (uses raw iteration for tracking)
+        const key = `${subEvent.gadgetInvocationId}_${info.iteration}`;
+
+        // Deduplicate: skip if we already have this subagent LLM call
+        if (this.subagentLLMCallMap.has(key)) {
+          break;
+        }
+
         const llmCallId = this.blockRenderer.addLLMCall(
-          info.iteration,
+          info.iteration + 1, // Display as 1-indexed (consistent with main agent)
           info.model,
           parentGadgetId, // Parent is the gadget
         );
-        // Track with unique key: gadgetInvocationId + iteration
-        const key = `${subEvent.gadgetInvocationId}_${info.iteration}`;
         this.subagentLLMCallMap.set(key, llmCallId);
+        // Track in status bar with subagent label
+        const subLabel = `#${this.currentIteration}.${info.iteration + 1}`;
+        this.statusBar.startLLMCall(subLabel, info.model);
         break;
       }
 
@@ -295,34 +392,66 @@ export class TUIApp {
             cost: info.cost,
             finishReason: info.finishReason ?? undefined,
           });
+          // Remove from status bar
+          const subLabel = `#${this.currentIteration}.${info.iteration + 1}`;
+          this.statusBar.endLLMCall(subLabel);
+          // Accumulate subagent LLM call cost in status bar
+          if (info.cost && info.cost > 0) {
+            this.statusBar.addGadgetCost(info.cost);
+          }
         }
         break;
       }
 
       case "gadget_call": {
-        // Subagent gadget call - create as root-level block
-        // (just like regular gadgets, but we could track parentage for context)
+        // Subagent gadget call - create as child of the subagent's LLM call
         const gadgetEvent = subEvent.event as { call?: { gadgetName: string; parameters: Record<string, unknown>; invocationId: string } };
         if (gadgetEvent.call) {
+          // Deduplicate: skip if we already have this gadget
+          if (this.gadgetIdMap.has(gadgetEvent.call.invocationId)) {
+            break;
+          }
+
+          // Set correct LLM call context for parenting
+          // Use the iteration from subagent event to find the correct subagent LLM call
+          if (subEvent.iteration !== undefined) {
+            const key = `${subEvent.gadgetInvocationId}_${subEvent.iteration}`;
+            const subagentLLMCallId = this.subagentLLMCallMap.get(key);
+            if (subagentLLMCallId) {
+              this.blockRenderer.setCurrentLLMCall(subagentLLMCallId);
+            }
+          }
+
           const gadgetId = this.blockRenderer.addGadget(
             gadgetEvent.call.invocationId,
             gadgetEvent.call.gadgetName,
             gadgetEvent.call.parameters,
           );
           this.gadgetIdMap.set(gadgetEvent.call.invocationId, gadgetId);
+          // Track in status bar
+          this.statusBar.startGadget(gadgetEvent.call.gadgetName);
         }
         break;
       }
 
       case "gadget_result": {
-        const gadgetEvent = subEvent.event as { result?: { invocationId: string; gadgetName?: string; executionTimeMs?: number; error?: string; result?: string } };
+        const gadgetEvent = subEvent.event as { result?: { invocationId: string; gadgetName?: string; executionTimeMs?: number; error?: string; result?: string; cost?: number } };
         if (gadgetEvent.result) {
           this.blockRenderer.completeGadget(
             gadgetEvent.result.invocationId,
             gadgetEvent.result.result,
             gadgetEvent.result.error,
             gadgetEvent.result.executionTimeMs,
+            gadgetEvent.result.cost,
           );
+          // Remove from status bar
+          if (gadgetEvent.result.gadgetName) {
+            this.statusBar.endGadget(gadgetEvent.result.gadgetName);
+          }
+          // Track subagent gadget cost
+          if (gadgetEvent.result.cost && gadgetEvent.result.cost > 0) {
+            this.statusBar.addGadgetCost(gadgetEvent.result.cost);
+          }
         }
         break;
       }
@@ -337,7 +466,10 @@ export class TUIApp {
    */
   showLLMCallStart(iteration: number, model: string, estimatedInputTokens = 0): void {
     this.currentLLMCallId = this.blockRenderer.addLLMCall(iteration, model);
+    this.currentIteration = iteration;
     this.statusBar.startCall(model, estimatedInputTokens);
+    // Track active LLM call in status bar
+    this.statusBar.startLLMCall(`#${iteration}`, model);
   }
 
   /**
@@ -351,17 +483,21 @@ export class TUIApp {
   /**
    * Show an LLM call completion.
    */
-  showLLMCallComplete(info: LLMCallDisplayInfo): void {
+  showLLMCallComplete(info: LLMCallDisplayInfo & { rawResponse?: string }): void {
     if (this.currentLLMCallId) {
-      this.blockRenderer.completeLLMCall(this.currentLLMCallId, {
-        inputTokens: info.inputTokens,
-        cachedInputTokens: info.cachedInputTokens,
-        outputTokens: info.outputTokens,
-        elapsedSeconds: info.elapsedSeconds,
-        cost: info.cost,
-        finishReason: info.finishReason ?? undefined,
-        contextPercent: info.contextPercent ?? undefined,
-      });
+      this.blockRenderer.completeLLMCall(
+        this.currentLLMCallId,
+        {
+          inputTokens: info.inputTokens,
+          cachedInputTokens: info.cachedInputTokens,
+          outputTokens: info.outputTokens,
+          elapsedSeconds: info.elapsedSeconds,
+          cost: info.cost,
+          finishReason: info.finishReason ?? undefined,
+          contextPercent: info.contextPercent ?? undefined,
+        },
+        info.rawResponse,
+      );
     }
     this.statusBar.endCall(
       info.inputTokens ?? 0,
@@ -369,21 +505,90 @@ export class TUIApp {
       info.cachedInputTokens ?? 0,
       info.cost ?? 0,
     );
+    // Remove from active LLM calls in status bar
+    this.statusBar.endLLMCall(`#${this.currentIteration}`);
+  }
+
+  /**
+   * Store raw request messages for the current LLM call.
+   * Called from onLLMCallReady hook after controller modifications.
+   */
+  setLLMCallRequest(messages: LLMMessage[]): void {
+    if (this.currentLLMCallId) {
+      this.blockRenderer.setLLMCallRequest(this.currentLLMCallId, messages);
+    }
+  }
+
+  /**
+   * Show raw request or response viewer for selected LLM call.
+   * Only works in browse mode when an LLM call is selected.
+   * If a viewer is already open, closes it first (single-instance modal).
+   */
+  async showRawViewer(mode: RawViewerMode): Promise<void> {
+    if (this.focusMode !== "browse") return;
+
+    const selected = this.blockRenderer.getSelectedBlock();
+    if (!selected || selected.node.type !== "llm_call") return;
+
+    const node = selected.node as import("./types.js").LLMCallNode;
+
+    // Close any existing viewer first (single-instance modal pattern)
+    if (this.closeRawViewer) {
+      this.closeRawViewer();
+      this.closeRawViewer = null;
+    }
+
+    const handle = showRawViewer({
+      screen: this.screenCtx.screen,
+      mode,
+      request: node.rawRequest,
+      response: node.rawResponse,
+      iteration: node.iteration,
+      model: node.model,
+    });
+
+    // Store close function for potential replacement
+    this.closeRawViewer = handle.close;
+
+    // Wait for viewer to close and clear the reference
+    await handle.closed;
+    this.closeRawViewer = null;
   }
 
   /**
    * Request user input for AskUser gadget.
+   * Auto-activates input mode and restores browse mode after.
    */
   async waitForInput(question: string, gadgetName: string): Promise<string> {
-    return this.inputHandler.waitForInput(question, gadgetName);
+    // Force input mode for AskUser
+    const previousMode = this.focusMode;
+    this.setFocusMode("input");
+
+    try {
+      const result = await this.inputHandler.waitForInput(question, gadgetName);
+      return result;
+    } finally {
+      // Restore previous mode after input
+      this.setFocusMode(previousMode);
+    }
   }
 
   /**
    * Wait for user to enter a new prompt (REPL mode).
    * Used between agent runs to get the next user prompt.
+   * Auto-activates input mode for typing.
    */
   async waitForPrompt(): Promise<string> {
-    return this.inputHandler.waitForPrompt();
+    // Force input mode for REPL prompt
+    this.setFocusMode("input");
+
+    try {
+      const result = await this.inputHandler.waitForPrompt();
+      return result;
+    } finally {
+      // Return to browse mode after prompt is entered
+      this.setFocusMode("browse");
+    }
   }
 
   /**
@@ -465,6 +670,8 @@ export class TUIApp {
    */
   flushText(): void {
     // Block-based rendering doesn't buffer text
+    // Also clear activity tracking when agent run completes
+    this.statusBar.clearActivity();
   }
 
   /**

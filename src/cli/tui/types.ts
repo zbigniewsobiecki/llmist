@@ -44,6 +44,13 @@ export interface TUIMetrics {
 export type ApprovalResponse = "yes" | "no" | "always" | "deny" | "cancel";
 
 /**
+ * Focus mode for TUI interaction.
+ * - "browse": Navigate blocks with arrow keys, input bar hidden
+ * - "input": Type in input bar, navigation disabled
+ */
+export type FocusMode = "browse" | "input";
+
+/**
  * Context for approval dialog display.
  */
 export interface ApprovalContext {
@@ -168,6 +175,10 @@ export interface LLMCallNode extends BaseBlockNode {
   };
   /** Child gadget node IDs */
   children: string[];
+  /** Full message array sent to LLM (for raw viewer) */
+  rawRequest?: import("../../core/messages.js").LLMMessage[];
+  /** Raw response text from LLM (for raw viewer) */
+  rawResponse?: string;
 }
 
 /**
@@ -190,6 +201,18 @@ export interface GadgetNode extends BaseBlockNode {
   error?: string;
   /** Execution time in ms (when complete) */
   executionTimeMs?: number;
+  /** Cost of gadget execution in USD */
+  cost?: number;
+  /** Estimated tokens in result (for context budget awareness) */
+  resultTokens?: number;
+  /** Aggregated stats from subagent LLM calls (computed when gadget completes) */
+  subagentStats?: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedTokens: number;
+    cost: number;
+    llmCallCount: number;
+  };
   /** Child node IDs (for subagent gadgets: nested LLM calls) */
   children: string[];
 }

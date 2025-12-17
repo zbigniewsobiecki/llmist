@@ -734,12 +734,16 @@ export class AgentBuilder {
 
       // Track LLM call start times for elapsed time calculation
       const llmCallStartTimes = new Map<number, number>();
+      // Track current iteration for gadget parenting
+      let currentSubagentIteration = 0;
 
       hooks = {
         ...hooks,
         observers: {
           ...hooks?.observers,
           onLLMCallStart: async (context) => {
+            // Track current iteration for gadget parenting
+            currentSubagentIteration = context.iteration;
             // Track start time for elapsed time calculation
             llmCallStartTimes.set(context.iteration, Date.now());
 
@@ -786,6 +790,26 @@ export class AgentBuilder {
             const elapsedMs = startTime ? Date.now() - startTime : undefined;
             llmCallStartTimes.delete(context.iteration);
 
+            // Calculate cost if we have usage and model registry
+            let cost: number | undefined;
+            if (context.usage && this.client?.modelRegistry) {
+              try {
+                const modelName = context.options.model.includes(":")
+                  ? context.options.model.split(":")[1]
+                  : context.options.model;
+                const costResult = this.client.modelRegistry.estimateCost(
+                  modelName,
+                  context.usage.inputTokens,
+                  context.usage.outputTokens,
+                  context.usage.cachedInputTokens ?? 0,
+                  context.usage.cacheCreationInputTokens ?? 0,
+                );
+                if (costResult) cost = costResult.totalCost;
+              } catch {
+                // Ignore cost calculation errors
+              }
+            }
+
             // Forward to parent with full context (first-class subagent metrics)
             onSubagentEvent({
               type: "llm_call_end",
@@ -801,7 +825,7 @@ export class AgentBuilder {
                 elapsedMs,
                 // Full usage object with cache details (for first-class display)
                 usage: context.usage,
-                // Cost will be calculated by parent if it has model registry
+                cost,
               } as LLMCallInfo,
             });
             // Chain to existing hook if present
@@ -815,6 +839,7 @@ export class AgentBuilder {
               type: "gadget_call",
               gadgetInvocationId: invocationId,
               depth,
+              iteration: currentSubagentIteration, // Include LLM iteration for parenting
               event: {
                 call: {
                   invocationId: context.invocationId,
@@ -834,9 +859,15 @@ export class AgentBuilder {
               type: "gadget_result",
               gadgetInvocationId: invocationId,
               depth,
+              iteration: currentSubagentIteration, // Include LLM iteration for parenting
               event: {
                 result: {
                   invocationId: context.invocationId,
+                  gadgetName: context.gadgetName,
+                  cost: context.cost,
+                  executionTimeMs: context.executionTimeMs,
+                  error: context.error,
+                  result: context.finalResult,
                 },
               } as unknown as StreamEvent,
             });
