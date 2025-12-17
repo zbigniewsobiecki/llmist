@@ -817,11 +817,21 @@ export class Agent {
           }
         });
 
-        // Complete LLM call in execution tree
+        // Calculate cost for this LLM call using ModelRegistry (if available)
+        const llmCost = this.client.modelRegistry?.estimateCost?.(
+          this.model,
+          result.usage?.inputTokens ?? 0,
+          result.usage?.outputTokens ?? 0,
+          result.usage?.cachedInputTokens ?? 0,
+          result.usage?.cacheCreationInputTokens ?? 0,
+        )?.totalCost;
+
+        // Complete LLM call in execution tree (including cost for automatic aggregation)
         this.tree.completeLLMCall(currentLLMNodeId, {
           response: result.rawResponse,
           usage: result.usage,
           finishReason: result.finishReason,
+          cost: llmCost,
         });
 
         // Controller: After LLM call
