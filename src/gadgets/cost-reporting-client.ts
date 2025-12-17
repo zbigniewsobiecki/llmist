@@ -254,11 +254,9 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
   ): void {
     if (inputTokens === 0 && outputTokens === 0) return;
 
-    // Extract model name from provider:model format
-    const modelName = model.includes(":") ? model.split(":")[1] : model;
-
+    // Model registry now handles provider-prefixed model IDs internally
     const estimate = this.client.modelRegistry.estimateCost(
-      modelName,
+      model,
       inputTokens,
       outputTokens,
       cachedInputTokens,

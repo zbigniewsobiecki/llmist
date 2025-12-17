@@ -514,17 +514,18 @@ export class TUIApp {
   }
 
   /**
-   * Show raw request or response viewer for selected LLM call.
-   * Only works in browse mode when an LLM call is selected.
+   * Show raw request or response viewer for selected LLM call or gadget.
+   * Only works in browse mode when an LLM call or gadget is selected.
    * If a viewer is already open, closes it first (single-instance modal).
+   *
+   * For LLM calls: shows raw request messages / raw response text
+   * For gadgets: shows raw parameters / raw result
    */
   async showRawViewer(mode: RawViewerMode): Promise<void> {
     if (this.focusMode !== "browse") return;
 
     const selected = this.blockRenderer.getSelectedBlock();
-    if (!selected || selected.node.type !== "llm_call") return;
-
-    const node = selected.node as import("./types.js").LLMCallNode;
+    if (!selected) return;
 
     // Close any existing viewer first (single-instance modal pattern)
     if (this.closeRawViewer) {
@@ -532,14 +533,34 @@ export class TUIApp {
       this.closeRawViewer = null;
     }
 
-    const handle = showRawViewer({
-      screen: this.screenCtx.screen,
-      mode,
-      request: node.rawRequest,
-      response: node.rawResponse,
-      iteration: node.iteration,
-      model: node.model,
-    });
+    let handle: import("./raw-viewer.js").RawViewerHandle;
+
+    if (selected.node.type === "llm_call") {
+      // LLM call viewer
+      const node = selected.node as import("./types.js").LLMCallNode;
+      handle = showRawViewer({
+        screen: this.screenCtx.screen,
+        mode,
+        request: node.rawRequest,
+        response: node.rawResponse,
+        iteration: node.iteration,
+        model: node.model,
+      });
+    } else if (selected.node.type === "gadget") {
+      // Gadget viewer
+      const node = selected.node as import("./types.js").GadgetNode;
+      handle = showRawViewer({
+        screen: this.screenCtx.screen,
+        mode,
+        gadgetName: node.name,
+        parameters: node.parameters,
+        result: node.result,
+        error: node.error,
+      });
+    } else {
+      // Unsupported node type
+      return;
+    }
 
     // Store close function for potential replacement
     this.closeRawViewer = handle.close;
@@ -570,19 +591,15 @@ export class TUIApp {
   /**
    * Wait for user to enter a new prompt (REPL mode).
    * Used between agent runs to get the next user prompt.
-   * Auto-activates input mode for typing.
+   * Stays in current mode (browse) - user can Tab to input or Enter to start typing.
    */
   async waitForPrompt(): Promise<string> {
-    // Force input mode for REPL prompt
-    this.setFocusMode("input");
-
-    try {
-      const result = await this.inputHandler.waitForPrompt();
-      return result;
-    } finally {
-      // Return to browse mode after prompt is entered
-      this.setFocusMode("browse");
-    }
+    // Don't force input mode - let user review output in browse mode first
+    // User can press Tab to switch to input mode, or Enter to start typing
+    const result = await this.inputHandler.waitForPrompt();
+    // Return to browse mode after prompt is entered (in case user was in input mode)
+    this.setFocusMode("browse");
+    return result;
   }
 
   /**
