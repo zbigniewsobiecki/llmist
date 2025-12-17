@@ -35,6 +35,13 @@ bunx tsx examples/01-basic-usage.ts
 | [10-text-handling.ts](./10-text-handling.ts) | Text response handling: textOnlyHandler, textWithGadgetsHandler |
 | [11-gadget-dependencies.ts](./11-gadget-dependencies.ts) | Gadget dependencies (DAG execution) |
 | [13-syntactic-sugar.ts](./13-syntactic-sugar.ts) | Fluent API showcase |
+| [14-hints.ts](./14-hints.ts) | LLM assistance hints (iteration progress, parallel gadgets) |
+| [15-trailing-messages.ts](./15-trailing-messages.ts) | Ephemeral trailing messages injected per LLM request |
+| [16-image-generation.ts](./16-image-generation.ts) | Image generation with DALL-E and cost tracking |
+| [17-speech-generation.ts](./17-speech-generation.ts) | Text-to-speech generation with OpenAI TTS |
+| [18-multimodal-gadget.ts](./18-multimodal-gadget.ts) | Gadgets returning media (images, audio) with cost reporting |
+| [19-multimodal-input.ts](./19-multimodal-input.ts) | Vision and multimodal input support |
+| [20-external-gadgets.ts](./20-external-gadgets.ts) | External gadgets from npm packages and git URLs |
 | [cli.example.toml](./cli.example.toml) | CLI configuration file example |
 
 ## Quick Reference
