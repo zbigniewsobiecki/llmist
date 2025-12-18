@@ -52,6 +52,8 @@ describe("AgentBuilder", () => {
       expect(builder.withGadgetArgPrefix("<<<ARG>>>")).toBe(builder);
       expect(builder.withTextOnlyHandler("acknowledge")).toBe(builder);
       expect(builder.withDefaultGadgetTimeout(5000)).toBe(builder);
+      expect(builder.withRetry({ retries: 5 })).toBe(builder);
+      expect(builder.withoutRetry()).toBe(builder);
     });
 
     it("allows fluent chaining of multiple methods", () => {
@@ -983,6 +985,106 @@ describe("AgentBuilder", () => {
       const result = builder.withHistory(messages);
 
       expect(result).toBe(builder);
+    });
+  });
+
+  describe("withRetry", () => {
+    it("returns this for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withRetry({ retries: 5 });
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts full retry configuration", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withRetry({
+        retries: 5,
+        minTimeout: 2000,
+        maxTimeout: 60000,
+        factor: 3,
+        randomize: false,
+        onRetry: () => {},
+        onRetriesExhausted: () => {},
+        shouldRetry: () => true,
+      });
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts partial retry configuration", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withRetry({ retries: 10 });
+
+      expect(result).toBe(builder);
+    });
+
+    it("chains correctly with other builder methods", () => {
+      const builder = new AgentBuilder();
+      const result = builder
+        .withModel("sonnet")
+        .withRetry({ retries: 5 })
+        .withMaxIterations(10);
+
+      expect(result).toBe(builder);
+    });
+
+    it("enables retry by default when config is provided", () => {
+      const builder = new AgentBuilder();
+      builder.withRetry({ retries: 5 });
+
+      // Access private retryConfig via type assertion
+      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
+        .retryConfig;
+
+      expect(retryConfig?.enabled).toBe(true);
+    });
+
+    it("respects explicit enabled: false", () => {
+      const builder = new AgentBuilder();
+      builder.withRetry({ enabled: false, retries: 5 });
+
+      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
+        .retryConfig;
+
+      expect(retryConfig?.enabled).toBe(false);
+    });
+  });
+
+  describe("withoutRetry", () => {
+    it("returns this for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withoutRetry();
+
+      expect(result).toBe(builder);
+    });
+
+    it("disables retry", () => {
+      const builder = new AgentBuilder();
+      builder.withoutRetry();
+
+      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
+        .retryConfig;
+
+      expect(retryConfig?.enabled).toBe(false);
+    });
+
+    it("chains correctly with other builder methods", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withModel("sonnet").withoutRetry().withMaxIterations(10);
+
+      expect(result).toBe(builder);
+    });
+
+    it("overrides previous withRetry call", () => {
+      const builder = new AgentBuilder();
+      builder.withRetry({ retries: 5 });
+      builder.withoutRetry();
+
+      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
+        .retryConfig;
+
+      expect(retryConfig?.enabled).toBe(false);
     });
   });
 
