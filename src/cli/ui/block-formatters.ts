@@ -295,7 +295,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
     const message = String(node.parameters.message);
     const rendered = renderMarkdown(message);
     // Add margin (empty line) above and below for visual separation
-    result += `\n\n${rendered}\n`;
+    result += `\n\n${rendered}\n\n`;
   }
 
   return result;
