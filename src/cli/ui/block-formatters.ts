@@ -9,7 +9,7 @@
 
 import chalk from "chalk";
 import type { LLMCallNode, GadgetNode } from "../tui/types.js";
-import { formatTokens, formatCost } from "./formatters.js";
+import { formatTokens, formatCost, renderMarkdown } from "./formatters.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Box Drawing Characters
@@ -215,15 +215,28 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   // Format parameters inline (use available terminal width)
   let paramsStr = "";
   if (node.parameters && Object.keys(node.parameters).length > 0) {
-    const termWidth = process.stdout.columns || 120;
-    const maxParamLen = Math.max(60, termWidth - 40); // Leave room for indicator, name, time
-    const entries = Object.entries(node.parameters).slice(0, 4);
-    const formatted = entries.map(([key, value]) => {
-      const strValue = typeof value === "string" ? value : JSON.stringify(value);
-      const truncated = strValue.length > maxParamLen ? strValue.slice(0, maxParamLen - 3) + "..." : strValue;
-      return `${chalk.dim(key)}=${chalk.cyan(truncated)}`;
-    });
-    paramsStr = `${chalk.dim("(")}${formatted.join(chalk.dim(", "))}${chalk.dim(")")}`;
+    // TellUser special handling: show type instead of message (message is shown expanded)
+    if (node.name === "TellUser") {
+      const messageType = (node.parameters.type as string) || "info";
+      const typeEmojis = {
+        info: "ℹ️",
+        success: "✅",
+        warning: "⚠️",
+        error: "❌",
+      };
+      const emoji = typeEmojis[messageType as keyof typeof typeEmojis] || typeEmojis.info;
+      paramsStr = ` ${emoji} ${chalk.dim("(expand for message)")}`;
+    } else {
+      const termWidth = process.stdout.columns || 120;
+      const maxParamLen = Math.max(60, termWidth - 40); // Leave room for indicator, name, time
+      const entries = Object.entries(node.parameters).slice(0, 4);
+      const formatted = entries.map(([key, value]) => {
+        const strValue = typeof value === "string" ? value : JSON.stringify(value);
+        const truncated = strValue.length > maxParamLen ? strValue.slice(0, maxParamLen - 3) + "..." : strValue;
+        return `${chalk.dim(key)}=${chalk.cyan(truncated)}`;
+      });
+      paramsStr = `${chalk.dim("(")}${formatted.join(chalk.dim(", "))}${chalk.dim(")")}`;
+    }
   }
 
   // Error preview
@@ -289,11 +302,17 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
   const width = Math.max(60, termWidth - 8); // Use most of terminal width
 
   // Parameters section
-  if (node.parameters && Object.keys(node.parameters).length > 0) {
+  // For TellUser, skip the "message" parameter since we render it beautifully below
+  const isTellUser = node.name === "TellUser";
+  const paramsToShow = node.parameters
+    ? Object.entries(node.parameters).filter(([key]) => !(isTellUser && key === "message"))
+    : [];
+
+  if (paramsToShow.length > 0) {
     const headerLine = `${BOX.topLeft}${BOX.horizontal} Parameters ${BOX.horizontal.repeat(width - 14)}`;
     lines.push(`${indent}${chalk.dim(headerLine)}`);
 
-    for (const [key, value] of Object.entries(node.parameters)) {
+    for (const [key, value] of paramsToShow) {
       const strValue = typeof value === "string" ? value : JSON.stringify(value, null, 2);
       // Handle multi-line values
       const valueLines = strValue.split("\n");
@@ -314,8 +333,37 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
     lines.push(`${indent}${chalk.dim(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
   }
 
-  // Result section
-  if (node.result || node.error) {
+  // TellUser special handling: render message as beautiful markdown
+  if (node.name === "TellUser" && node.parameters?.message) {
+    const message = String(node.parameters.message);
+    const messageType = (node.parameters.type as string) || "info";
+
+    // Type indicator with emoji
+    const typeIndicators = {
+      info: { emoji: "ℹ️", color: chalk.blue },
+      success: { emoji: "✅", color: chalk.green },
+      warning: { emoji: "⚠️", color: chalk.yellow },
+      error: { emoji: "❌", color: chalk.red },
+    };
+    const typeInfo = typeIndicators[messageType as keyof typeof typeIndicators] || typeIndicators.info;
+
+    // Message header
+    const headerLine = `${BOX.topLeft}${BOX.horizontal} ${typeInfo.emoji} Message ${BOX.horizontal.repeat(width - 13)}`;
+    lines.push(`${indent}${typeInfo.color(headerLine)}`);
+
+    // Render markdown content
+    const rendered = renderMarkdown(message);
+    const renderedLines = rendered.split("\n");
+
+    for (const line of renderedLines) {
+      // Add left border to each line
+      lines.push(`${indent}${chalk.dim(BOX.vertical)} ${line}`);
+    }
+
+    lines.push(`${indent}${typeInfo.color(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
+  }
+  // Regular Result section (skip for TellUser since we render the message above)
+  else if (node.result || node.error) {
     const headerText = node.error ? " Error " : " Result ";
     const headerLine = `${BOX.topLeft}${BOX.horizontal}${headerText}${BOX.horizontal.repeat(width - headerText.length - 2)}`;
     lines.push(`${indent}${chalk.dim(headerLine)}`);

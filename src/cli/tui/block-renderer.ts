@@ -30,6 +30,7 @@ import {
   getIndent,
   getContinuationIndent,
 } from "../ui/block-formatters.js";
+import { renderMarkdown } from "../ui/formatters.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BlockRenderer Class
@@ -648,7 +649,8 @@ export class BlockRenderer {
       }
 
       case "text":
-        return node.content;
+        // Render text content as markdown for beautiful formatting
+        return renderMarkdown(node.content);
     }
   }
 
