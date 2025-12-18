@@ -2,8 +2,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { load as parseToml } from "js-toml";
-import { validateDockerConfig } from "./docker/docker-config.js";
-import type { DockerConfig } from "./docker/types.js";
 import type { SubagentConfig, SubagentConfigMap } from "../gadgets/types.js";
 import type { GlobalSubagentConfig } from "./subagent-config.js";
 
@@ -65,10 +63,6 @@ export interface SharedCommandConfig {
   system?: string;
   temperature?: number;
   inherits?: string | string[];
-  /** Enable Docker sandboxing for this profile/command */
-  docker?: boolean;
-  /** Override CWD mount permission for this profile ("ro" or "rw") */
-  "docker-cwd-permission"?: "ro" | "rw";
 }
 
 /**
@@ -155,7 +149,6 @@ export interface CLIConfig {
   image?: ImageConfig;
   speech?: SpeechConfig;
   prompts?: PromptsConfig;
-  docker?: DockerConfig;
   /** Global subagent configuration defaults */
   subagents?: GlobalSubagentConfig;
   [customCommand: string]:
@@ -166,13 +159,9 @@ export interface CLIConfig {
     | SpeechConfig
     | GlobalConfig
     | PromptsConfig
-    | DockerConfig
     | GlobalSubagentConfig
     | undefined;
 }
-
-// Re-export DockerConfig for consumers
-export type { DockerConfig } from "./docker/types.js";
 
 /** Valid keys for global config */
 const GLOBAL_CONFIG_KEYS = new Set(["log-level", "log-file", "log-reset"]);
@@ -193,8 +182,6 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "log-reset",
   "log-llm-requests",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
-  "docker", // Enable Docker sandboxing (only effective for agent type)
-  "docker-cwd-permission", // Override CWD mount permission for this profile
 ]);
 
 /** Valid keys for agent command config */
@@ -221,8 +208,6 @@ const AGENT_CONFIG_KEYS = new Set([
   "log-reset",
   "log-llm-requests",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
-  "docker", // Enable Docker sandboxing for this profile
-  "docker-cwd-permission", // Override CWD mount permission for this profile
 ]);
 
 /** Valid keys for image command config */
@@ -496,16 +481,6 @@ function validateBaseConfig(
   }
   if ("inherits" in raw) {
     result.inherits = validateInherits(raw.inherits, section);
-  }
-  if ("docker" in raw) {
-    result.docker = validateBoolean(raw.docker, "docker", section);
-  }
-  if ("docker-cwd-permission" in raw) {
-    const perm = validateString(raw["docker-cwd-permission"], "docker-cwd-permission", section);
-    if (perm !== "ro" && perm !== "rw") {
-      throw new ConfigError(`[${section}].docker-cwd-permission must be "ro" or "rw"`);
-    }
-    result["docker-cwd-permission"] = perm as "ro" | "rw";
   }
 
   return result;
@@ -934,8 +909,6 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.speech = validateSpeechConfig(value, key);
       } else if (key === "prompts") {
         result.prompts = validatePromptsConfig(value, key);
-      } else if (key === "docker") {
-        result.docker = validateDockerConfig(value, key);
       } else if (key === "subagents") {
         result.subagents = validateGlobalSubagentConfig(value, key);
       } else {
@@ -1002,7 +975,6 @@ export function getCustomCommandNames(config: CLIConfig): string[] {
     "image",
     "speech",
     "prompts",
-    "docker",
     "subagents",
   ]);
   return Object.keys(config).filter((key) => !reserved.has(key));

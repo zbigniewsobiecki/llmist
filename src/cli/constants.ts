@@ -38,9 +38,6 @@ export const OPTION_FLAGS = {
   noBuiltins: "--no-builtins",
   noBuiltinInteraction: "--no-builtin-interaction",
   quiet: "-q, --quiet",
-  docker: "--docker",
-  dockerRo: "--docker-ro",
-  noDocker: "--no-docker",
   // Multimodal input options
   inputImage: "--image <path>",
   inputAudio: "--audio <path>",
@@ -76,9 +73,6 @@ export const OPTION_DESCRIPTIONS = {
   // Multimodal input descriptions
   inputImage: "Image file to include with the prompt (vision models).",
   inputAudio: "Audio file to include with the prompt (Gemini only).",
-  docker: "Run agent in a Docker sandbox container for security isolation.",
-  dockerRo: "Run in Docker with current directory mounted read-only.",
-  noDocker: "Disable Docker sandboxing (override config).",
   // Image generation descriptions
   imageSize: "Image size/aspect ratio, e.g. '1024x1024', '1:1', '16:9'.",
   imageQuality: "Image quality: 'standard', 'hd', 'low', 'medium', 'high'.",

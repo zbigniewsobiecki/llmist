@@ -145,7 +145,24 @@ function getCacheDir(spec: GadgetSpecifier): string {
  */
 function isCached(cacheDir: string): boolean {
   const packageJsonPath = path.join(cacheDir, "package.json");
-  return fs.existsSync(packageJsonPath);
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+
+  // Always check if entry point exists (regardless of build script)
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+    const entryPoint = packageJson.llmist?.gadgets || "./dist/index.js";
+    const entryPointPath = path.join(cacheDir, entryPoint);
+    if (!fs.existsSync(entryPointPath)) {
+      return false; // Entry point missing, needs install/build
+    }
+  } catch {
+    // If we can't parse package.json, assume not cached
+    return false;
+  }
+
+  return true;
 }
 
 /**

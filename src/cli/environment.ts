@@ -4,7 +4,6 @@ import type { ILogObj, Logger } from "tslog";
 import { LLMist } from "../core/client.js";
 import type { LoggerOptions } from "../logging/logger.js";
 import { createLogger } from "../logging/logger.js";
-import type { DockerConfig } from "./docker/types.js";
 
 /**
  * Stream type that may have TTY detection capability.
@@ -37,8 +36,6 @@ export interface CLIEnvironment {
   isTTY: boolean;
   /** Prompt the user for input (only works when isTTY is true) */
   prompt: (question: string) => Promise<string>;
-  /** Docker sandboxing configuration from [docker] section */
-  dockerConfig?: DockerConfig;
 }
 
 const LOG_LEVEL_MAP: Record<string, number> = {

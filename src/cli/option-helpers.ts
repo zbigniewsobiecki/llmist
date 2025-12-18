@@ -47,14 +47,6 @@ export interface CLIAgentOptions {
   image?: string;
   /** Path to audio file to include with the initial prompt */
   audio?: string;
-  /** Enable Docker sandboxing */
-  docker?: boolean;
-  /** Enable Docker with read-only CWD mount */
-  dockerRo?: boolean;
-  /** Disable Docker (override config) */
-  noDocker?: boolean;
-  /** Per-profile CWD mount permission override */
-  dockerCwdPermission?: "ro" | "rw";
   /** Profile-level subagent configuration overrides */
   subagents?: SubagentConfigMap;
   /** Global subagent configuration (from [subagents] section) */
@@ -140,10 +132,7 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
       defaults?.["log-llm-requests"],
     )
     .option(OPTION_FLAGS.inputImage, OPTION_DESCRIPTIONS.inputImage)
-    .option(OPTION_FLAGS.inputAudio, OPTION_DESCRIPTIONS.inputAudio)
-    .option(OPTION_FLAGS.docker, OPTION_DESCRIPTIONS.docker)
-    .option(OPTION_FLAGS.dockerRo, OPTION_DESCRIPTIONS.dockerRo)
-    .option(OPTION_FLAGS.noDocker, OPTION_DESCRIPTIONS.noDocker);
+    .option(OPTION_FLAGS.inputAudio, OPTION_DESCRIPTIONS.inputAudio);
 }
 
 /**
@@ -186,9 +175,6 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
   if (config["gadget-approval"] !== undefined) result.gadgetApproval = config["gadget-approval"];
   if (config.quiet !== undefined) result.quiet = config.quiet;
   if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
-  if (config.docker !== undefined) result.docker = config.docker;
-  if (config["docker-cwd-permission"] !== undefined)
-    result.dockerCwdPermission = config["docker-cwd-permission"];
   if (config.subagents !== undefined) result.subagents = config.subagents;
   return result;
 }
