@@ -650,7 +650,8 @@ export class BlockRenderer {
 
       case "text":
         // Render text content as markdown for beautiful formatting
-        return renderMarkdown(node.content);
+        // Add margin (empty line) above and below for visual separation
+        return `\n${renderMarkdown(node.content)}\n`;
     }
   }
 

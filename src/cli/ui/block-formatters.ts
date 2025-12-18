@@ -215,7 +215,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   // Format parameters inline (use available terminal width)
   let paramsStr = "";
   if (node.parameters && Object.keys(node.parameters).length > 0) {
-    // TellUser special handling: show type instead of message (message is shown expanded)
+    // TellUser special handling: just show type emoji, full message rendered below
     if (node.name === "TellUser") {
       const messageType = (node.parameters.type as string) || "info";
       const typeEmojis = {
@@ -225,7 +225,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
         error: "❌",
       };
       const emoji = typeEmojis[messageType as keyof typeof typeEmojis] || typeEmojis.info;
-      paramsStr = ` ${emoji} ${chalk.dim("(expand for message)")}`;
+      paramsStr = ` ${emoji}`;
     } else {
       const termWidth = process.stdout.columns || 120;
       const maxParamLen = Math.max(60, termWidth - 40); // Leave room for indicator, name, time
@@ -283,11 +283,23 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   const line = `${indicatorColor(indicator)} ${gadgetLabel}${paramsStr}${errorStr}${metricsStr}`;
 
   // Highlight selected line
+  let result: string;
   if (selected) {
-    return chalk.bgBlue.white(line);
+    result = chalk.bgBlue.white(line);
+  } else {
+    result = line;
   }
 
-  return line;
+  // TellUser: append full rendered message below the gadget line (like text blocks)
+  if (node.name === "TellUser" && node.parameters?.message) {
+    const message = String(node.parameters.message);
+    const rendered = renderMarkdown(message);
+    // Single blank line above and below for visual separation
+    // (double blank lines cause excessive spacing with consecutive TellUser calls)
+    result += `\n\n${rendered}\n`;
+  }
+
+  return result;
 }
 
 /**

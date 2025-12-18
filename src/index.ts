@@ -82,6 +82,15 @@ export {
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
 
+// Retry configuration for LLM API calls
+export type { RetryConfig, ResolvedRetryConfig } from "./core/retry.js";
+export {
+  DEFAULT_RETRY_CONFIG,
+  formatLLMError,
+  isRetryableError,
+  resolveRetryConfig,
+} from "./core/retry.js";
+
 // Execution Tree - first-class model for nested subagent support
 export type {
   AddGadgetParams,

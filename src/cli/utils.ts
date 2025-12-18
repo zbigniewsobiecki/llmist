@@ -3,6 +3,7 @@ import { InvalidArgumentError } from "commander";
 
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { TokenUsage } from "../core/options.js";
+import { formatLLMError } from "../core/retry.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "../providers/constants.js";
 import type { CLIEnvironment, TTYAwareStream } from "./environment.js";
 
@@ -1350,7 +1351,11 @@ export async function executeAction(
   try {
     await action();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    // Format error message - formatLLMError handles LLM API errors gracefully
+    // and falls through to original message for other error types
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const message =
+      error instanceof Error ? formatLLMError(error) : rawMessage;
     env.stderr.write(`${chalk.red.bold("Error:")} ${message}\n`);
     env.setExitCode(1);
   }

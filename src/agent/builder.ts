@@ -31,6 +31,7 @@ import type { ExecutionContext, SubagentConfigMap, SubagentEvent, TextOnlyHandle
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
+import type { RetryConfig } from "../core/retry.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
 import type { AgentHooks, BeforeLLMCallAction, LLMCallControllerContext } from "./hooks.js";
 
@@ -89,6 +90,7 @@ export class AgentBuilder {
   private gadgetOutputLimit?: boolean;
   private gadgetOutputLimitPercent?: number;
   private compactionConfig?: CompactionConfig;
+  private retryConfig?: RetryConfig;
   private signal?: AbortSignal;
   private trailingMessage?: TrailingMessage;
   private subagentConfig?: SubagentConfigMap;
@@ -577,6 +579,62 @@ export class AgentBuilder {
   }
 
   /**
+   * Configure retry behavior for LLM API calls.
+   *
+   * Retry is enabled by default with conservative settings (3 retries, exponential backoff).
+   * Use this method to customize retry behavior for rate limits, timeouts, and transient errors.
+   *
+   * @param config - Retry configuration options
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Custom retry configuration
+   * .withRetry({
+   *   retries: 5,
+   *   minTimeout: 2000,
+   *   maxTimeout: 60000,
+   * })
+   *
+   * // With monitoring callbacks
+   * .withRetry({
+   *   onRetry: (error, attempt) => {
+   *     console.log(`Retry ${attempt}: ${error.message}`);
+   *   },
+   *   onRetriesExhausted: (error, attempts) => {
+   *     alerting.warn(`Failed after ${attempts} attempts`);
+   *   }
+   * })
+   *
+   * // Custom retry logic
+   * .withRetry({
+   *   shouldRetry: (error) => error.message.includes('429'),
+   * })
+   * ```
+   */
+  withRetry(config: RetryConfig): this {
+    this.retryConfig = { ...config, enabled: config.enabled ?? true };
+    return this;
+  }
+
+  /**
+   * Disable automatic retry for LLM API calls.
+   *
+   * By default, retry is enabled. Use this method to explicitly disable it.
+   *
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withoutRetry() // Disable automatic retry
+   * ```
+   */
+  withoutRetry(): this {
+    this.retryConfig = { enabled: false };
+    return this;
+  }
+
+  /**
    * Set an abort signal for cancelling requests mid-flight.
    *
    * When the signal is aborted, the current LLM request will be cancelled
@@ -945,6 +1003,7 @@ export class AgentBuilder {
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
+      retryConfig: this.retryConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
       onSubagentEvent: this.subagentEventCallback,
@@ -1148,6 +1207,7 @@ export class AgentBuilder {
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
+      retryConfig: this.retryConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
       onSubagentEvent: this.subagentEventCallback,
