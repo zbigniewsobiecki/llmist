@@ -215,24 +215,8 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   // Format parameters inline (use available terminal width)
   let paramsStr = "";
   if (node.parameters && Object.keys(node.parameters).length > 0) {
-    // TellUser special handling: show message inline with type emoji
-    if (node.name === "TellUser" && node.parameters.message) {
-      const message = String(node.parameters.message);
-      const messageType = (node.parameters.type as string) || "info";
-      const typeEmojis = {
-        info: "ℹ️",
-        success: "✅",
-        warning: "⚠️",
-        error: "❌",
-      };
-      const emoji = typeEmojis[messageType as keyof typeof typeEmojis] || typeEmojis.info;
-      // Show the message directly (truncated if too long)
-      const termWidth = process.stdout.columns || 120;
-      const maxMsgLen = Math.max(40, termWidth - 30); // Leave room for gadget name, emoji, time
-      const truncatedMsg = message.length > maxMsgLen ? message.slice(0, maxMsgLen - 1) + "…" : message;
-      paramsStr = ` ${emoji} ${truncatedMsg}`;
-    } else if (node.name === "TellUser") {
-      // TellUser without message parameter
+    // TellUser special handling: just show type emoji, full message rendered below
+    if (node.name === "TellUser") {
       const messageType = (node.parameters.type as string) || "info";
       const typeEmojis = {
         info: "ℹ️",
@@ -299,11 +283,22 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   const line = `${indicatorColor(indicator)} ${gadgetLabel}${paramsStr}${errorStr}${metricsStr}`;
 
   // Highlight selected line
+  let result: string;
   if (selected) {
-    return chalk.bgBlue.white(line);
+    result = chalk.bgBlue.white(line);
+  } else {
+    result = line;
   }
 
-  return line;
+  // TellUser: append full rendered message below the gadget line (like text blocks)
+  if (node.name === "TellUser" && node.parameters?.message) {
+    const message = String(node.parameters.message);
+    const rendered = renderMarkdown(message);
+    // Add margin (empty line) above and below for visual separation
+    result += `\n\n${rendered}\n`;
+  }
+
+  return result;
 }
 
 /**

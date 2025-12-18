@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   DEFAULT_RETRY_CONFIG,
+  formatLLMError,
   isRetryableError,
   resolveRetryConfig,
   type RetryConfig,
@@ -199,6 +200,111 @@ describe("retry configuration", () => {
     it("should NOT retry unknown errors by default", () => {
       expect(isRetryableError(new Error("Some random error"))).toBe(false);
       expect(isRetryableError(new Error("Unexpected issue"))).toBe(false);
+    });
+  });
+
+  describe("formatLLMError", () => {
+    it("should format rate limit errors (429)", () => {
+      expect(formatLLMError(new Error("429 Too Many Requests"))).toBe(
+        "Rate limit exceeded (429) - retry after a few seconds"
+      );
+      expect(formatLLMError(new Error("RESOURCE_EXHAUSTED: quota exceeded"))).toBe(
+        "Rate limit exceeded (429) - retry after a few seconds"
+      );
+    });
+
+    it("should format rate limit errors by message", () => {
+      expect(formatLLMError(new Error("Rate limit exceeded"))).toBe(
+        "Rate limit exceeded - retry after a few seconds"
+      );
+      expect(formatLLMError(new Error("rate_limit_error"))).toBe(
+        "Rate limit exceeded - retry after a few seconds"
+      );
+    });
+
+    it("should format overloaded/capacity errors", () => {
+      expect(formatLLMError(new Error("API is overloaded, please retry"))).toBe(
+        "API overloaded - retry later"
+      );
+      expect(formatLLMError(new Error("At capacity"))).toBe(
+        "API overloaded - retry later"
+      );
+    });
+
+    it("should format server errors (5xx)", () => {
+      expect(formatLLMError(new Error("500 Internal Server Error"))).toBe(
+        "Internal server error (500) - the API is experiencing issues"
+      );
+      expect(formatLLMError(new Error("502 Bad Gateway"))).toBe(
+        "Bad gateway (502) - the API is temporarily unavailable"
+      );
+      expect(formatLLMError(new Error("503 Service Unavailable"))).toBe(
+        "Service unavailable (503) - the API is temporarily down"
+      );
+      expect(formatLLMError(new Error("504 Gateway Timeout"))).toBe(
+        "Gateway timeout (504) - the request took too long"
+      );
+    });
+
+    it("should format timeout errors", () => {
+      expect(formatLLMError(new Error("Request timeout"))).toBe(
+        "Request timed out - the API took too long to respond"
+      );
+      expect(formatLLMError(new Error("Connection timed out"))).toBe(
+        "Request timed out - the API took too long to respond"
+      );
+    });
+
+    it("should format connection errors", () => {
+      expect(formatLLMError(new Error("ECONNREFUSED"))).toBe(
+        "Connection refused - unable to reach the API"
+      );
+      expect(formatLLMError(new Error("ECONNRESET"))).toBe(
+        "Connection reset - the API closed the connection"
+      );
+      expect(formatLLMError(new Error("ENOTFOUND"))).toBe(
+        "DNS error - unable to resolve API hostname"
+      );
+    });
+
+    it("should format auth errors", () => {
+      expect(formatLLMError(new Error("401 Unauthorized"))).toBe(
+        "Authentication failed - check your API key"
+      );
+      expect(formatLLMError(new Error("403 Forbidden"))).toBe(
+        "Permission denied - your API key lacks required permissions"
+      );
+    });
+
+    it("should format bad request errors", () => {
+      expect(formatLLMError(new Error("400 Bad Request"))).toBe(
+        "Bad request - check your input parameters"
+      );
+      // Try to extract message from JSON-like content
+      const jsonError = new Error('{"status": 400, "message": "Invalid model specified"}');
+      expect(formatLLMError(jsonError)).toBe("Bad request: Invalid model specified");
+    });
+
+    it("should format content policy errors", () => {
+      expect(formatLLMError(new Error("Content policy violation"))).toBe(
+        "Content policy violation - the request was blocked"
+      );
+    });
+
+    it("should extract message from JSON errors", () => {
+      const jsonError = new Error('{"error": {"message": "Something went wrong"}}');
+      expect(formatLLMError(jsonError)).toBe("Something went wrong");
+    });
+
+    it("should truncate very long messages", () => {
+      const longMessage = "A".repeat(300);
+      const result = formatLLMError(new Error(longMessage));
+      expect(result.length).toBeLessThanOrEqual(153); // 150 + "..."
+      expect(result.endsWith("...")).toBe(true);
+    });
+
+    it("should pass through short unknown messages unchanged", () => {
+      expect(formatLLMError(new Error("Unknown error"))).toBe("Unknown error");
     });
   });
 });

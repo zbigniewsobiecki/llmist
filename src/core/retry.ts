@@ -232,3 +232,116 @@ export function isRetryableError(error: Error): boolean {
   // Default: don't retry unknown errors
   return false;
 }
+
+/**
+ * Formats an LLM API error into a clean, user-friendly message.
+ *
+ * Extracts the most relevant information from provider error objects,
+ * hiding verbose JSON/stack traces while preserving actionable details.
+ *
+ * @param error - The error to format
+ * @returns A clean, single-line error message
+ *
+ * @example
+ * ```typescript
+ * // Gemini RESOURCE_EXHAUSTED error
+ * formatLLMError(error);
+ * // Returns: "Rate limit exceeded (429) - retry after a few seconds"
+ *
+ * // Anthropic overloaded error
+ * formatLLMError(error);
+ * // Returns: "API overloaded - retry later"
+ * ```
+ */
+export function formatLLMError(error: Error): string {
+  const message = error.message;
+  const name = error.name;
+
+  // Gemini RESOURCE_EXHAUSTED
+  if (message.includes("RESOURCE_EXHAUSTED") || message.includes("429")) {
+    return "Rate limit exceeded (429) - retry after a few seconds";
+  }
+
+  // Rate limits
+  if (message.toLowerCase().includes("rate limit") || message.toLowerCase().includes("rate_limit")) {
+    return "Rate limit exceeded - retry after a few seconds";
+  }
+
+  // Overloaded/capacity errors
+  if (message.toLowerCase().includes("overloaded") || message.toLowerCase().includes("capacity")) {
+    return "API overloaded - retry later";
+  }
+
+  // Server errors
+  if (message.includes("500") || message.toLowerCase().includes("internal server error")) {
+    return "Internal server error (500) - the API is experiencing issues";
+  }
+  if (message.includes("502") || message.toLowerCase().includes("bad gateway")) {
+    return "Bad gateway (502) - the API is temporarily unavailable";
+  }
+  if (message.includes("503") || message.toLowerCase().includes("service unavailable")) {
+    return "Service unavailable (503) - the API is temporarily down";
+  }
+  if (message.includes("504") || message.toLowerCase().includes("gateway timeout")) {
+    return "Gateway timeout (504) - the request took too long";
+  }
+
+  // Timeout errors
+  if (message.toLowerCase().includes("timeout") || message.toLowerCase().includes("timed out")) {
+    return "Request timed out - the API took too long to respond";
+  }
+
+  // Connection errors
+  if (message.toLowerCase().includes("econnrefused")) {
+    return "Connection refused - unable to reach the API";
+  }
+  if (message.toLowerCase().includes("econnreset")) {
+    return "Connection reset - the API closed the connection";
+  }
+  if (message.toLowerCase().includes("enotfound")) {
+    return "DNS error - unable to resolve API hostname";
+  }
+
+  // Auth errors
+  if (message.includes("401") || message.toLowerCase().includes("unauthorized") || name === "AuthenticationError") {
+    return "Authentication failed - check your API key";
+  }
+  if (message.includes("403") || message.toLowerCase().includes("forbidden") || name === "PermissionDeniedError") {
+    return "Permission denied - your API key lacks required permissions";
+  }
+
+  // Bad request
+  if (message.includes("400") || name === "BadRequestError") {
+    // Try to extract a useful message from the error
+    const match = message.match(/message['":\s]+['"]?([^'"}\]]+)/i);
+    if (match) {
+      return `Bad request: ${match[1].trim()}`;
+    }
+    return "Bad request - check your input parameters";
+  }
+
+  // Content policy
+  if (message.toLowerCase().includes("content policy") || message.toLowerCase().includes("safety")) {
+    return "Content policy violation - the request was blocked";
+  }
+
+  // Try to extract a clean message from JSON errors
+  // Match patterns like: "message": "...", 'message': '...', message: ...
+  const jsonMatch = message.match(/["']?message["']?\s*[:=]\s*["']([^"']+)["']/i);
+  if (jsonMatch) {
+    return jsonMatch[1].trim();
+  }
+
+  // If the message is very long (likely JSON dump), truncate it
+  if (message.length > 200) {
+    // Try to find the first sentence or meaningful part
+    const firstPart = message.split(/[.!?\n]/)[0];
+    if (firstPart && firstPart.length > 10 && firstPart.length < 150) {
+      return firstPart.trim();
+    }
+    return message.slice(0, 150).trim() + "...";
+  }
+
+  // Return the original message if we couldn't simplify it
+  return message;
+}
