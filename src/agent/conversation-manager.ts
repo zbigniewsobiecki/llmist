@@ -101,4 +101,10 @@ export class ConversationManager implements IConversationManager {
       // System messages are not added to history (they're in baseMessages)
     }
   }
+
+  getConversationHistory(): LLMMessage[] {
+    // Returns full conversation history: initial messages (from previous sessions via withHistory())
+    // plus runtime history (from current session). Excludes base messages (system prompt, gadget instructions).
+    return [...this.initialMessages, ...this.historyBuilder.build()];
+  }
 }

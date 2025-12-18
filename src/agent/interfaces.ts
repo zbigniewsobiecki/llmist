@@ -59,4 +59,13 @@ export interface IConversationManager {
    * @param newHistory - The compacted history messages to replace with
    */
   replaceHistory(newHistory: LLMMessage[]): void;
+
+  /**
+   * Gets full conversation history including initial messages and runtime history.
+   * Used for REPL session continuation - returns everything except base (system) messages.
+   * This combines:
+   * - initialMessages: History from previous sessions (set via withHistory())
+   * - historyBuilder: Messages from the current session
+   */
+  getConversationHistory(): LLMMessage[];
 }

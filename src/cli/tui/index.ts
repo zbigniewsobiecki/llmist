@@ -71,6 +71,9 @@ export class TUIApp {
   /** Callback for cancel events */
   private onCancelCallback: (() => void) | null = null;
 
+  /** Callback for mid-session input (REPL mode: inject user message during running session) */
+  private onMidSessionInputCallback: ((message: string) => void) | null = null;
+
   /** Track current LLM call ID for gadget parenting */
   private currentLLMCallId: string | null = null;
 
@@ -727,6 +730,19 @@ export class TUIApp {
    */
   onCancel(callback: () => void): void {
     this.onCancelCallback = callback;
+  }
+
+  /**
+   * Set callback for mid-session input.
+   * Called when user submits input during a running session (not during AskUser prompts).
+   * Used by REPL mode to inject user messages into the agent's conversation.
+   *
+   * @param callback - Function to call with the user's message
+   */
+  onMidSessionInput(callback: (message: string) => void): void {
+    this.onMidSessionInputCallback = callback;
+    // Wire up to input handler
+    this.inputHandler.setMidSessionHandler(callback);
   }
 
   /**

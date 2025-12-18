@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import type { Command } from "commander";
+import type { Agent } from "../agent/agent.js";
 import { AgentBuilder } from "../agent/builder.js";
 import { isAbortError } from "../core/errors.js";
 import type { ContentPart } from "../core/input-content.js";
@@ -472,6 +473,9 @@ export async function executeAgent(
     ].join(" "),
   );
 
+  // Track current agent for REPL session continuity and mid-session injection
+  let currentAgent: Agent | null = null;
+
   // Helper to create and run an agent with a given prompt
   const runAgentWithPrompt = async (userPrompt: string) => {
     // Reset abort controller for new iteration (TUI mode)
@@ -480,8 +484,13 @@ export async function executeAgent(
       builder.withSignal(tui.getAbortSignal());
     }
 
+    // Continue from previous agent's conversation history (REPL session continuity)
+    if (currentAgent) {
+      builder.continueFrom(currentAgent);
+    }
+
     // Build the agent
-    let agent;
+    let agent: Agent;
     if (options.image || options.audio) {
       const parts: ContentPart[] = [text(userPrompt)];
       if (options.image) {
@@ -494,6 +503,9 @@ export async function executeAgent(
     } else {
       agent = builder.ask(userPrompt);
     }
+
+    // Store reference for mid-session injection and next session's history
+    currentAgent = agent;
 
     // Subscribe TUI to ExecutionTree for automatic block management
     // This handles nested subagent events automatically via tree events
@@ -541,6 +553,14 @@ export async function executeAgent(
   // TUI mode: REPL loop - wait for input, run agent, repeat
   // Piped mode: Run once and exit
   if (tui) {
+    // Wire up mid-session input: when user submits input during a running session,
+    // inject it into the current agent's conversation for the next LLM iteration
+    tui.onMidSessionInput((message) => {
+      if (currentAgent) {
+        currentAgent.injectUserMessage(message);
+      }
+    });
+
     // Get initial prompt (from CLI arg or wait for user input)
     let currentPrompt = prompt;
     if (!currentPrompt) {

@@ -320,4 +320,100 @@ describe("ConversationManager", () => {
       expect(history[0].content).toContain("Summary");
     });
   });
+
+  describe("getConversationHistory", () => {
+    it("should return initial messages plus runtime history", () => {
+      const base = createBaseMessages();
+      const initial: LLMMessage[] = [
+        { role: "user", content: "Previous question" },
+        { role: "assistant", content: "Previous answer" },
+      ];
+      const manager = new ConversationManager(base, initial);
+
+      // Add runtime messages
+      manager.addUserMessage("New question");
+      manager.addAssistantMessage("New answer");
+
+      const conversationHistory = manager.getConversationHistory();
+
+      // Should include initial messages + runtime history
+      expect(conversationHistory).toHaveLength(4);
+      expect(conversationHistory[0].content).toBe("Previous question");
+      expect(conversationHistory[1].content).toBe("Previous answer");
+      expect(conversationHistory[2].content).toBe("New question");
+      expect(conversationHistory[3].content).toBe("New answer");
+    });
+
+    it("should return only runtime history when no initial messages", () => {
+      const manager = new ConversationManager(createBaseMessages(), []);
+
+      manager.addUserMessage("Question");
+      manager.addAssistantMessage("Answer");
+
+      const conversationHistory = manager.getConversationHistory();
+
+      expect(conversationHistory).toHaveLength(2);
+      expect(conversationHistory[0].content).toBe("Question");
+      expect(conversationHistory[1].content).toBe("Answer");
+    });
+
+    it("should return only initial messages when no runtime history", () => {
+      const initial: LLMMessage[] = [
+        { role: "user", content: "Initial question" },
+        { role: "assistant", content: "Initial answer" },
+      ];
+      const manager = new ConversationManager(createBaseMessages(), initial);
+
+      const conversationHistory = manager.getConversationHistory();
+
+      expect(conversationHistory).toHaveLength(2);
+      expect(conversationHistory[0].content).toBe("Initial question");
+      expect(conversationHistory[1].content).toBe("Initial answer");
+    });
+
+    it("should return empty array when no initial or runtime messages", () => {
+      const manager = new ConversationManager(createBaseMessages(), []);
+
+      const conversationHistory = manager.getConversationHistory();
+
+      expect(conversationHistory).toHaveLength(0);
+    });
+
+    it("should not include base messages (system prompt)", () => {
+      const base: LLMMessage[] = [{ role: "system", content: "System prompt" }];
+      const initial: LLMMessage[] = [{ role: "user", content: "User message" }];
+      const manager = new ConversationManager(base, initial);
+
+      const conversationHistory = manager.getConversationHistory();
+
+      // Should only have the user message, not the system prompt
+      expect(conversationHistory).toHaveLength(1);
+      expect(conversationHistory[0].role).toBe("user");
+      expect(conversationHistory[0].content).toBe("User message");
+    });
+
+    it("should support REPL session continuation use case", () => {
+      // Session 1: Start with no history
+      const session1Manager = new ConversationManager(createBaseMessages(), []);
+      session1Manager.addUserMessage("Hello");
+      session1Manager.addAssistantMessage("Hi there!");
+
+      // Extract history for session 2
+      const session1History = session1Manager.getConversationHistory();
+      expect(session1History).toHaveLength(2);
+
+      // Session 2: Use session 1's history as initial
+      const session2Manager = new ConversationManager(createBaseMessages(), session1History);
+      session2Manager.addUserMessage("What's the weather?");
+      session2Manager.addAssistantMessage("It's sunny!");
+
+      // Extract cumulative history
+      const cumulativeHistory = session2Manager.getConversationHistory();
+      expect(cumulativeHistory).toHaveLength(4);
+      expect(cumulativeHistory[0].content).toBe("Hello");
+      expect(cumulativeHistory[1].content).toBe("Hi there!");
+      expect(cumulativeHistory[2].content).toBe("What's the weather?");
+      expect(cumulativeHistory[3].content).toBe("It's sunny!");
+    });
+  });
 });

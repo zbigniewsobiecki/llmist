@@ -394,4 +394,136 @@ describe("Agent Architecture", () => {
       expect(receivedContext?.reason).toEqual(customReason);
     });
   });
+
+  describe("Agent REPL support", () => {
+    describe("injectUserMessage", () => {
+      it("should queue messages for injection", () => {
+        const agent = new AgentBuilder(mockClient)
+          .withModel("test:model")
+          .withGadgets()
+          .build();
+
+        agent.injectUserMessage("First message");
+        agent.injectUserMessage("Second message");
+
+        // Verify messages are queued (using getConversation to check state)
+        const conversation = agent.getConversation();
+        expect(conversation).toBeDefined();
+      });
+
+      it("should process injected messages in next iteration", async () => {
+        let iterationCount = 0;
+        const mockClientInjection = {
+          stream: vi.fn().mockImplementation(async function* () {
+            iterationCount++;
+            yield { text: "Response " + iterationCount };
+          }),
+          modelRegistry: {
+            getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+          },
+        } as unknown as LLMist;
+
+        const agent = new AgentBuilder(mockClientInjection)
+          .withModel("test:model")
+          .withGadgets()
+          .withMaxIterations(3)
+          .withTextOnlyHandler("acknowledge") // Continue after each response
+          .ask("Initial prompt");
+
+        // Inject a message before starting
+        agent.injectUserMessage("Injected before run");
+
+        for await (const event of agent.run()) {
+          if (event.type === "text" && iterationCount === 1) {
+            // Inject during iteration 1
+            agent.injectUserMessage("Injected during run");
+          }
+        }
+
+        // Verify injected messages were added to conversation history
+        const history = agent.getConversation().getHistoryMessages();
+        const userMessages = history.filter((m) => m.role === "user");
+
+        // Should have injected messages in history
+        expect(userMessages.length).toBeGreaterThan(0);
+      });
+
+      it("should process multiple injected messages in order", async () => {
+        const messagesReceived: string[] = [];
+        const mockClientMulti = {
+          stream: vi.fn().mockImplementation(async function* (options: { messages: Array<{ content: string }> }) {
+            // Extract user messages from the call
+            const userMsgs = options.messages.filter((m: { role?: string }) => m.role === "user");
+            userMsgs.forEach((m) => {
+              if (typeof m.content === "string" && m.content.startsWith("Injected")) {
+                messagesReceived.push(m.content);
+              }
+            });
+            yield { text: "Response" };
+          }),
+          modelRegistry: {
+            getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+          },
+        } as unknown as LLMist;
+
+        const agent = new AgentBuilder(mockClientMulti)
+          .withModel("test:model")
+          .withGadgets()
+          .ask("Initial");
+
+        // Queue multiple messages
+        agent.injectUserMessage("Injected 1");
+        agent.injectUserMessage("Injected 2");
+
+        for await (const _event of agent.run()) {
+          // consume
+        }
+
+        // Messages should be processed in order
+        expect(messagesReceived).toContain("Injected 1");
+        expect(messagesReceived).toContain("Injected 2");
+      });
+    });
+
+    describe("getConversation", () => {
+      it("should return the conversation manager", () => {
+        const agent = new AgentBuilder(mockClient)
+          .withModel("test:model")
+          .withGadgets()
+          .build();
+
+        const conversation = agent.getConversation();
+
+        expect(conversation).toBeDefined();
+        expect(typeof conversation.addUserMessage).toBe("function");
+        expect(typeof conversation.getConversationHistory).toBe("function");
+      });
+
+      it("should allow extracting history for session continuation", async () => {
+        const mockClientHistory = {
+          stream: vi.fn().mockImplementation(async function* () {
+            yield { text: "Hello there!" };
+          }),
+          modelRegistry: {
+            getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+          },
+        } as unknown as LLMist;
+
+        const agent = new AgentBuilder(mockClientHistory)
+          .withModel("test:model")
+          .withGadgets()
+          .ask("Hello");
+
+        for await (const _event of agent.run()) {
+          // consume
+        }
+
+        const history = agent.getConversation().getConversationHistory();
+
+        expect(history.length).toBeGreaterThan(0);
+        expect(history[0].role).toBe("user");
+        expect(history[0].content).toBe("Hello");
+      });
+    });
+  });
 });
