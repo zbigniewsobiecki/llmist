@@ -249,9 +249,95 @@ function recordError() {
 })
 ```
 
-## Retry Pattern
+## Built-in Retry with Exponential Backoff
 
-Implement retries with a controller:
+LLMist includes built-in retry logic for transient LLM API failures (rate limits, timeouts, server errors). **Retry is enabled by default** with conservative settings.
+
+### Default Behavior
+
+By default, all agents automatically retry failed LLM calls:
+- **3 retries** with exponential backoff
+- **1-30 second delays** between retries
+- **Jitter** to prevent thundering herd
+- Only retries on retryable errors (429, 5xx, timeouts, connection errors)
+
+### Customize Retry Behavior
+
+```typescript
+import { LLMist } from 'llmist';
+
+// Custom retry configuration
+LLMist.createAgent()
+  .withRetry({
+    retries: 5,              // Max retry attempts
+    minTimeout: 2000,        // Initial delay (2s)
+    maxTimeout: 60000,       // Max delay (60s)
+    factor: 2,               // Exponential multiplier
+    randomize: true,         // Add jitter
+  })
+  .ask("Hello");
+```
+
+### Monitoring Retries
+
+Add callbacks to monitor retry behavior:
+
+```typescript
+.withRetry({
+  retries: 5,
+  onRetry: (error, attempt) => {
+    console.log(`Retry ${attempt}: ${error.message}`);
+    metrics.increment('llm.retry', { attempt });
+  },
+  onRetriesExhausted: (error, attempts) => {
+    console.error(`Failed after ${attempts} attempts`);
+    alerting.warn(`LLM failed: ${error.message}`);
+  },
+})
+```
+
+### Custom Retry Logic
+
+Override which errors are retryable:
+
+```typescript
+.withRetry({
+  shouldRetry: (error) => {
+    // Only retry rate limits
+    return error.message.includes('429');
+  },
+})
+```
+
+### Disable Retry
+
+```typescript
+// Disable retry entirely
+.withoutRetry()
+```
+
+### What's Retryable?
+
+The built-in `isRetryableError()` function classifies errors:
+
+| Retryable | Error Types |
+|-----------|-------------|
+| ✅ Yes | 429 rate limits, 5xx server errors, timeouts, connection errors, "overloaded" |
+| ❌ No | 400 bad request, 401 auth, 403 forbidden, 404 not found, content policy |
+
+You can import and use this helper:
+
+```typescript
+import { isRetryableError } from 'llmist';
+
+if (isRetryableError(error)) {
+  console.log('This error is safe to retry');
+}
+```
+
+## Advanced: Hook-Based Retry (Custom)
+
+For advanced scenarios requiring different retry behavior per error type, use controllers:
 
 ```typescript
 .withHooks({

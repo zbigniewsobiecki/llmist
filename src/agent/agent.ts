@@ -35,6 +35,9 @@ import type {
 import { createLogger } from "../logging/logger.js";
 import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.js";
 import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
+import type { RetryConfig, ResolvedRetryConfig } from "../core/retry.js";
+import { resolveRetryConfig, isRetryableError } from "../core/retry.js";
+import pRetry from "p-retry";
 import { CompactionManager } from "./compaction/manager.js";
 import { ConversationManager } from "./conversation-manager.js";
 import type { IConversationManager } from "./interfaces.js";
@@ -139,6 +142,9 @@ export interface AgentOptions {
   /** Context compaction configuration (enabled by default) */
   compactionConfig?: CompactionConfig;
 
+  /** Retry configuration for LLM API calls (enabled by default) */
+  retryConfig?: RetryConfig;
+
   /** Optional abort signal for cancelling requests mid-flight */
   signal?: AbortSignal;
 
@@ -223,6 +229,9 @@ export class Agent {
 
   // Cancellation
   private readonly signal?: AbortSignal;
+
+  // Retry configuration
+  private readonly retryConfig: ResolvedRetryConfig;
 
   // Subagent configuration
   private readonly agentContextConfig: AgentContextConfig;
@@ -340,6 +349,9 @@ export class Agent {
 
     // Store abort signal for cancellation
     this.signal = options.signal;
+
+    // Initialize retry configuration (enabled by default)
+    this.retryConfig = resolveRetryConfig(options.retryConfig);
 
     // Build agent context config for subagents to inherit
     this.agentContextConfig = {
@@ -697,7 +709,8 @@ export class Agent {
         });
         const currentLLMNodeId = llmNode.id;
 
-        const stream = this.client.stream(llmOptions);
+        // Create LLM stream with retry logic (if enabled)
+        const stream = await this.createStreamWithRetry(llmOptions, currentIteration);
 
         // Process stream - ALL complexity delegated to StreamProcessor
         const processor = new StreamProcessor({
@@ -859,6 +872,63 @@ export class Agent {
       totalIterations: currentIteration,
       reason: currentIteration >= this.maxIterations ? "max_iterations" : "natural_completion",
     });
+  }
+
+  /**
+   * Create LLM stream with retry logic.
+   * Wraps the stream creation with exponential backoff for transient failures.
+   */
+  private async createStreamWithRetry(
+    llmOptions: LLMGenerationOptions,
+    iteration: number,
+  ): Promise<ReturnType<LLMist["stream"]>> {
+    // If retry is disabled, return stream directly
+    if (!this.retryConfig.enabled) {
+      return this.client.stream(llmOptions);
+    }
+
+    const { retries, minTimeout, maxTimeout, factor, randomize, onRetry, onRetriesExhausted, shouldRetry } =
+      this.retryConfig;
+
+    try {
+      return await pRetry(
+        async (attemptNumber) => {
+          this.logger.debug("Creating LLM stream", { attempt: attemptNumber, maxAttempts: retries + 1 });
+          return this.client.stream(llmOptions);
+        },
+        {
+          retries,
+          minTimeout,
+          maxTimeout,
+          factor,
+          randomize,
+          signal: this.signal,
+          onFailedAttempt: (context) => {
+            const { error, attemptNumber, retriesLeft } = context;
+            this.logger.warn(
+              `LLM call failed (attempt ${attemptNumber}/${attemptNumber + retriesLeft}), retrying...`,
+              { error: error.message, retriesLeft },
+            );
+            onRetry?.(error, attemptNumber);
+          },
+          shouldRetry: (context) => {
+            // Use custom shouldRetry if provided, otherwise use default classification
+            if (shouldRetry) {
+              return shouldRetry(context.error);
+            }
+            return isRetryableError(context.error);
+          },
+        },
+      );
+    } catch (error) {
+      // All retries exhausted - call observer hook before re-throwing
+      this.logger.error(`LLM call failed after ${retries + 1} attempts`, {
+        error: (error as Error).message,
+        iteration,
+      });
+      onRetriesExhausted?.(error as Error, retries + 1);
+      throw error;
+    }
   }
 
   /**

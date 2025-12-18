@@ -215,8 +215,9 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   // Format parameters inline (use available terminal width)
   let paramsStr = "";
   if (node.parameters && Object.keys(node.parameters).length > 0) {
-    // TellUser special handling: show type instead of message (message is shown expanded)
-    if (node.name === "TellUser") {
+    // TellUser special handling: show message inline with type emoji
+    if (node.name === "TellUser" && node.parameters.message) {
+      const message = String(node.parameters.message);
       const messageType = (node.parameters.type as string) || "info";
       const typeEmojis = {
         info: "ℹ️",
@@ -225,7 +226,22 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
         error: "❌",
       };
       const emoji = typeEmojis[messageType as keyof typeof typeEmojis] || typeEmojis.info;
-      paramsStr = ` ${emoji} ${chalk.dim("(expand for message)")}`;
+      // Show the message directly (truncated if too long)
+      const termWidth = process.stdout.columns || 120;
+      const maxMsgLen = Math.max(40, termWidth - 30); // Leave room for gadget name, emoji, time
+      const truncatedMsg = message.length > maxMsgLen ? message.slice(0, maxMsgLen - 1) + "…" : message;
+      paramsStr = ` ${emoji} ${truncatedMsg}`;
+    } else if (node.name === "TellUser") {
+      // TellUser without message parameter
+      const messageType = (node.parameters.type as string) || "info";
+      const typeEmojis = {
+        info: "ℹ️",
+        success: "✅",
+        warning: "⚠️",
+        error: "❌",
+      };
+      const emoji = typeEmojis[messageType as keyof typeof typeEmojis] || typeEmojis.info;
+      paramsStr = ` ${emoji}`;
     } else {
       const termWidth = process.stdout.columns || 120;
       const maxParamLen = Math.max(60, termWidth - 40); // Leave room for indicator, name, time

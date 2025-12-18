@@ -101,6 +101,7 @@
     "marked": "^15.0.12",
     "marked-terminal": "^7.3.0",
     "openai": "^6.0.0",
+    "p-retry": "^7.1.1",
     "tiktoken": "^1.0.22",
     "tslog": "^4.10.2",
     "zod": "^4.1.12"
