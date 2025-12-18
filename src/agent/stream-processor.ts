@@ -104,6 +104,22 @@ export interface StreamProcessorOptions {
 
   /** Base depth for nodes created by this processor */
   baseDepth?: number;
+
+  // ==========================================================================
+  // Cross-Iteration Dependency Resolution
+  // ==========================================================================
+
+  /**
+   * Set of invocation IDs that completed in previous iterations.
+   * Used to resolve dependencies on gadgets from prior LLM responses.
+   */
+  priorCompletedInvocations?: Set<string>;
+
+  /**
+   * Set of invocation IDs that failed in previous iterations.
+   * Used to skip gadgets that depend on previously-failed gadgets.
+   */
+  priorFailedInvocations?: Set<string>;
 }
 
 /**
@@ -182,6 +198,12 @@ export class StreamProcessor {
   /** Queue of completed gadget results ready to be yielded (for real-time streaming) */
   private completedResultsQueue: StreamEvent[] = [];
 
+  // Cross-iteration dependency tracking
+  /** Invocation IDs completed in previous iterations (read-only reference from Agent) */
+  private readonly priorCompletedInvocations: Set<string>;
+  /** Invocation IDs that failed in previous iterations (read-only reference from Agent) */
+  private readonly priorFailedInvocations: Set<string>;
+
   constructor(options: StreamProcessorOptions) {
     this.iteration = options.iteration;
     this.registry = options.registry;
@@ -192,6 +214,10 @@ export class StreamProcessor {
     this.tree = options.tree;
     this.parentNodeId = options.parentNodeId ?? null;
     this.baseDepth = options.baseDepth ?? 0;
+
+    // Initialize cross-iteration dependency tracking (use empty sets if not provided)
+    this.priorCompletedInvocations = options.priorCompletedInvocations ?? new Set();
+    this.priorFailedInvocations = options.priorFailedInvocations ?? new Set();
 
     this.parser = new GadgetCallParser({
       startPrefix: options.gadgetStartPrefix,
@@ -491,8 +517,10 @@ export class StreamProcessor {
         return;
       }
 
-      // Check if any dependency has failed
-      const failedDep = call.dependencies.find((dep) => this.failedInvocations.has(dep));
+      // Check if any dependency has failed (including from prior iterations)
+      const failedDep = call.dependencies.find(
+        (dep) => this.failedInvocations.has(dep) || this.priorFailedInvocations.has(dep),
+      );
       if (failedDep) {
         // Dependency failed - handle skip
         const skipEvents = await this.handleFailedDependency(call, failedDep);
@@ -502,8 +530,10 @@ export class StreamProcessor {
         return;
       }
 
-      // Check if all dependencies are satisfied
-      const unsatisfied = call.dependencies.filter((dep) => !this.completedResults.has(dep));
+      // Check if all dependencies are satisfied (including from prior iterations)
+      const unsatisfied = call.dependencies.filter(
+        (dep) => !this.completedResults.has(dep) && !this.priorCompletedInvocations.has(dep),
+      );
       if (unsatisfied.length > 0) {
         // Queue for later execution - gadget_call already yielded above
         this.logger.debug("Queueing gadget for later - waiting on dependencies", {
@@ -922,15 +952,19 @@ export class StreamProcessor {
       const readyToSkip: Array<{ call: ParsedGadgetCall; failedDep: string }> = [];
 
       for (const [_invocationId, call] of this.gadgetsAwaitingDependencies) {
-        // Check for failed dependency
-        const failedDep = call.dependencies.find((dep) => this.failedInvocations.has(dep));
+        // Check for failed dependency (including from prior iterations)
+        const failedDep = call.dependencies.find(
+          (dep) => this.failedInvocations.has(dep) || this.priorFailedInvocations.has(dep),
+        );
         if (failedDep) {
           readyToSkip.push({ call, failedDep });
           continue;
         }
 
-        // Check if all dependencies are satisfied
-        const allSatisfied = call.dependencies.every((dep) => this.completedResults.has(dep));
+        // Check if all dependencies are satisfied (including from prior iterations)
+        const allSatisfied = call.dependencies.every(
+          (dep) => this.completedResults.has(dep) || this.priorCompletedInvocations.has(dep),
+        );
         if (allSatisfied) {
           readyToExecute.push(call);
         }
@@ -986,7 +1020,10 @@ export class StreamProcessor {
       const pendingIds = new Set(this.gadgetsAwaitingDependencies.keys());
 
       for (const [invocationId, call] of this.gadgetsAwaitingDependencies) {
-        const missingDeps = call.dependencies.filter((dep) => !this.completedResults.has(dep));
+        // Filter to deps that are not in current or prior completed sets
+        const missingDeps = call.dependencies.filter(
+          (dep) => !this.completedResults.has(dep) && !this.priorCompletedInvocations.has(dep),
+        );
 
         // Categorize the dependency issue
         const circularDeps = missingDeps.filter((dep) => pendingIds.has(dep));
@@ -1057,5 +1094,25 @@ export class StreamProcessor {
     await Promise.allSettled(
       observers.map((observer) => this.safeObserve(observer)),
     );
+  }
+
+  // ==========================================================================
+  // Public accessors for cross-iteration dependency tracking
+  // ==========================================================================
+
+  /**
+   * Get all invocation IDs that completed successfully in this iteration.
+   * Used by Agent to accumulate completed IDs across iterations.
+   */
+  getCompletedInvocationIds(): Set<string> {
+    return new Set(this.completedResults.keys());
+  }
+
+  /**
+   * Get all invocation IDs that failed in this iteration.
+   * Used by Agent to accumulate failed IDs across iterations.
+   */
+  getFailedInvocationIds(): Set<string> {
+    return new Set(this.failedInvocations);
   }
 }
