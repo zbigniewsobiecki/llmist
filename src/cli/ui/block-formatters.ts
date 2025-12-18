@@ -294,8 +294,9 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   if (node.name === "TellUser" && node.parameters?.message) {
     const message = String(node.parameters.message);
     const rendered = renderMarkdown(message);
-    // Add margin (empty line) above and below for visual separation
-    result += `\n\n${rendered}\n\n`;
+    // Single blank line above and below for visual separation
+    // (double blank lines cause excessive spacing with consecutive TellUser calls)
+    result += `\n\n${rendered}\n`;
   }
 
   return result;

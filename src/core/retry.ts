@@ -326,7 +326,19 @@ export function formatLLMError(error: Error): string {
   }
 
   // Try to extract a clean message from JSON errors
-  // Match patterns like: "message": "...", 'message': '...', message: ...
+  // First try proper JSON parsing (handles nested structures and escaped quotes)
+  try {
+    const parsed = JSON.parse(message);
+    // Support common API error structures: {error: {message: "..."}} or {message: "..."}
+    const extractedMessage = parsed?.error?.message || parsed?.message;
+    if (typeof extractedMessage === "string" && extractedMessage.length > 0) {
+      return extractedMessage.trim();
+    }
+  } catch {
+    // Not valid JSON, fall through to regex
+  }
+
+  // Fall back to regex extraction for malformed JSON or partial strings
   const jsonMatch = message.match(/["']?message["']?\s*[:=]\s*["']([^"']+)["']/i);
   if (jsonMatch) {
     return jsonMatch[1].trim();

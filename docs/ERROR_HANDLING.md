@@ -335,6 +335,65 @@ if (isRetryableError(error)) {
 }
 ```
 
+### Retry vs Error Controllers
+
+Understanding when each error handling mechanism runs is important for building robust agents.
+
+**Built-in Retry (stream-level)**: Happens BEFORE the error reaches your hooks
+- Automatic exponential backoff for transient failures
+- Configured via `.withRetry()`
+- Handles 429, 5xx, timeouts, connection errors
+
+**Error Controllers (hook-level)**: Happen AFTER retry exhaustion
+- Custom recovery logic via `afterLLMError` controller
+- Access to retry context via `onRetriesExhausted` callback
+- Can provide fallback responses or modify behavior
+
+```typescript
+// Combined approach: retry first, then custom recovery
+LLMist.createAgent()
+  .withRetry({
+    retries: 3,
+    onRetriesExhausted: (error, attempts) => {
+      metrics.record('llm.retry.exhausted', { attempts });
+    }
+  })
+  .withHooks({
+    controllers: {
+      afterLLMError: async (ctx) => {
+        // This runs AFTER retry gives up (all 3 attempts exhausted)
+        if (ctx.error.message.includes('rate limit')) {
+          return { action: 'recover', fallbackResponse: 'System busy, try again later' };
+        }
+        return { action: 'rethrow' };
+      }
+    }
+  })
+  .ask("Hello");
+```
+
+### Retry and Cancellation
+
+Retry respects `AbortSignal` - if the agent is aborted during a retry delay, the operation fails immediately without completing remaining attempts:
+
+```typescript
+const controller = new AbortController();
+
+const agent = LLMist.createAgent()
+  .withRetry({ retries: 5, minTimeout: 5000 })
+  .ask("Long running task...");
+
+// Start execution
+const runPromise = agent.run();
+
+// Abort after 2 seconds - cancels even if mid-retry
+setTimeout(() => controller.abort(), 2000);
+
+// Agent stops immediately, no more retry attempts
+```
+
+This ensures that cancellation is always responsive, even during exponential backoff delays.
+
 ## Advanced: Hook-Based Retry (Custom)
 
 For advanced scenarios requiring different retry behavior per error type, use controllers:

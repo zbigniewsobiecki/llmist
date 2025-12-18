@@ -292,8 +292,17 @@ describe("retry configuration", () => {
     });
 
     it("should extract message from JSON errors", () => {
+      // Nested error structure
       const jsonError = new Error('{"error": {"message": "Something went wrong"}}');
       expect(formatLLMError(jsonError)).toBe("Something went wrong");
+
+      // Flat message structure
+      const flatError = new Error('{"message": "Direct message"}');
+      expect(formatLLMError(flatError)).toBe("Direct message");
+
+      // Message with quotes (tests proper JSON parsing vs regex)
+      const quotedError = new Error('{"message": "User\'s API key is invalid"}');
+      expect(formatLLMError(quotedError)).toBe("User's API key is invalid");
     });
 
     it("should truncate very long messages", () => {
