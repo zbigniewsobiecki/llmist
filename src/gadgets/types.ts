@@ -822,6 +822,32 @@ export interface ExecutionContext {
    * ```
    */
   hostExports?: HostExports;
+
+  // ==========================================================================
+  // Logging
+  // ==========================================================================
+
+  /**
+   * Logger instance for structured logging.
+   *
+   * External gadgets should use this for logging instead of importing
+   * defaultLogger directly. This ensures logs respect the CLI's configured
+   * log level, format, and destination (file/console).
+   *
+   * The logger is optional to support standalone gadget execution and testing.
+   * Use optional chaining when logging: `ctx.logger?.debug(...)`.
+   *
+   * @example
+   * ```typescript
+   * execute: async (params, ctx) => {
+   *   ctx.logger?.debug("[MyGadget] Starting operation", { itemId: params.id });
+   *   // ... do work ...
+   *   ctx.logger?.info("[MyGadget] Completed successfully");
+   *   return "done";
+   * }
+   * ```
+   */
+  logger?: Logger<ILogObj>;
 }
 
 /**

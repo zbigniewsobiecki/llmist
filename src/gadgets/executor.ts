@@ -287,6 +287,8 @@ export class GadgetExecutor {
         depth: gadgetDepth,
         // Host exports for external gadgets to use host's llmist classes
         hostExports: getHostExportsInternal(),
+        // Logger for structured logging (respects CLI's log level/file config)
+        logger: this.logger,
       };
 
       // Execute gadget (handle both sync and async)

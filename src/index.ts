@@ -317,6 +317,8 @@ export type { ValidationIssue, ValidationResult } from "./gadgets/validation.js"
 export { validateAndApplyDefaults, validateGadgetParams } from "./gadgets/validation.js";
 export type { LoggerOptions } from "./logging/logger.js";
 export { createLogger, defaultLogger } from "./logging/logger.js";
+// Re-export Logger type for external gadgets that need to type ctx.logger
+export type { ILogObj, Logger } from "tslog";
 
 // Utility functions for subagent gadgets
 export type { ResolveValueOptions } from "./utils/config-resolver.js";

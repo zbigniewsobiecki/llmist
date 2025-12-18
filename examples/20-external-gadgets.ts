@@ -221,7 +221,59 @@ Why this matters:
 }
 
 // =============================================================================
-// EXAMPLE 6: Cache structure
+// EXAMPLE 6: Using ctx.logger for consistent logging
+// =============================================================================
+
+function showCtxLoggerPattern() {
+  console.log("=== ctx.logger Pattern (for external gadget developers) ===\n");
+
+  console.log(`
+External gadgets should use ctx.logger for logging instead of importing
+defaultLogger. This ensures logs respect the CLI's --log-level and --log-file
+settings and appear alongside other CLI logs.
+
+// In your external gadget package:
+
+import { Gadget, z } from 'llmist';
+import type { ExecutionContext } from 'llmist';
+
+export class MyGadget extends Gadget({
+  name: 'MyGadget',
+  description: 'Does something useful',
+  schema: z.object({
+    input: z.string().describe('Input to process'),
+  }),
+}) {
+  async execute(
+    params: this['params'],
+    ctx?: ExecutionContext,
+  ): Promise<string> {
+    // ✅ Use ctx.logger - respects CLI's log level and file settings
+    ctx?.logger?.debug('[MyGadget] Starting...', { input: params.input });
+
+    const result = await this.doWork(params.input);
+
+    ctx?.logger?.info('[MyGadget] Completed', { resultLength: result.length });
+
+    return result;
+  }
+}
+
+// ❌ DON'T import defaultLogger directly in external gadgets:
+//    import { defaultLogger } from 'llmist';
+//    defaultLogger.debug('...');  // Won't appear in CLI's log file!
+
+Why ctx.logger works better:
+- Logger is passed from CLI through ExecutionContext
+- Respects --log-level (debug, info, warn, error)
+- Respects --log-file (logs go to file instead of console)
+- Uses same tslog instance as the host for consistent formatting
+- Optional chaining (ctx?.logger?.debug) handles missing context gracefully
+`);
+}
+
+// =============================================================================
+// EXAMPLE 7: Cache structure
 // =============================================================================
 
 function showCacheStructure() {
@@ -258,6 +310,7 @@ async function main() {
   showFactoryPattern();
   showManifestStructure();
   showHostExportsPattern();
+  showCtxLoggerPattern();
   showCacheStructure();
 
   console.log("=== Done ===\n");

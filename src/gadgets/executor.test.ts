@@ -1175,4 +1175,80 @@ describe("GadgetExecutor", () => {
       expect(exports?.z).toBeDefined();
     });
   });
+
+  describe("ctx.logger", () => {
+    // Gadget that captures and tests the logger from context
+    class LoggerCapturingGadget extends Gadget({
+      name: "LoggerCapturing",
+      description: "Captures and uses logger for testing",
+      schema: z.object({}),
+    }) {
+      public capturedLogger: ExecutionContext["logger"] | undefined;
+      public logCalls: { method: string; args: unknown[] }[] = [];
+
+      execute(_params: this["params"], ctx?: ExecutionContext): string {
+        this.capturedLogger = ctx?.logger;
+        // Test that logger methods can be called without errors
+        if (ctx?.logger) {
+          ctx.logger.debug("test debug message", { key: "value" });
+          ctx.logger.info("test info message");
+          ctx.logger.warn("test warn message");
+        }
+        return "captured";
+      }
+    }
+
+    it("provides logger to gadgets", async () => {
+      const gadget = new LoggerCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "LoggerCapturing",
+        invocationId: "log-1",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      expect(gadget.capturedLogger).toBeDefined();
+    });
+
+    it("logger has standard logging methods", async () => {
+      const gadget = new LoggerCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "LoggerCapturing",
+        invocationId: "log-2",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executor.execute(call);
+
+      const logger = gadget.capturedLogger;
+      expect(logger).toBeDefined();
+      expect(typeof logger?.debug).toBe("function");
+      expect(typeof logger?.info).toBe("function");
+      expect(typeof logger?.warn).toBe("function");
+      expect(typeof logger?.error).toBe("function");
+    });
+
+    it("logger can be called with structured data", async () => {
+      const gadget = new LoggerCapturingGadget();
+      registry.registerByClass(gadget);
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "LoggerCapturing",
+        invocationId: "log-3",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      // Should not throw - logger methods are called in execute()
+      const result = await executor.execute(call);
+      expect(result.result).toBe("captured");
+    });
+  });
 });
