@@ -1,3 +1,47 @@
+## 7.0.0 (2025-12-18)
+
+* feat: add logger to ExecutionContext for external gadgets (#210) ([784bf2b](https://github.com/zbigniewsobiecki/llmist/commit/784bf2b)), closes [#210](https://github.com/zbigniewsobiecki/llmist/issues/210)
+* feat(agent): add automatic cost tracking to ExecutionTree ([876f4cf](https://github.com/zbigniewsobiecki/llmist/commit/876f4cf))
+* feat(tui): add chat-like scrolling and fix raw viewer data mix-up (#204) ([21a4bcd](https://github.com/zbigniewsobiecki/llmist/commit/21a4bcd)), closes [#204](https://github.com/zbigniewsobiecki/llmist/issues/204)
+* feat(tui): enhance raw viewers and fix cost tracking (#202) ([15b0d2a](https://github.com/zbigniewsobiecki/llmist/commit/15b0d2a)), closes [#202](https://github.com/zbigniewsobiecki/llmist/issues/202)
+* fix(agent): resolve cross-iteration gadget dependencies (#209) ([34bc2fe](https://github.com/zbigniewsobiecki/llmist/commit/34bc2fe)), closes [#209](https://github.com/zbigniewsobiecki/llmist/issues/209)
+* fix(cli): fix @unblessed/core terminfo path and add Docker locale support (#206) ([eeba93d](https://github.com/zbigniewsobiecki/llmist/commit/eeba93d)), closes [#206](https://github.com/zbigniewsobiecki/llmist/issues/206)
+* fix(logging): singleton WriteStream and TUI lookup optimization (#205) ([8de4fcc](https://github.com/zbigniewsobiecki/llmist/commit/8de4fcc)), closes [#205](https://github.com/zbigniewsobiecki/llmist/issues/205)
+* refactor(agent): reduce code duplication and improve maintainability (#207) ([d1a6636](https://github.com/zbigniewsobiecki/llmist/commit/d1a6636)), closes [#207](https://github.com/zbigniewsobiecki/llmist/issues/207)
+* refactor(cli): remove Docker sandboxing support (#208) ([aeda202](https://github.com/zbigniewsobiecki/llmist/commit/aeda202)), closes [#208](https://github.com/zbigniewsobiecki/llmist/issues/208)
+* Merge pull request #201 from zbigniewsobiecki/feat/automatic-cost-tracking ([ff4034d](https://github.com/zbigniewsobiecki/llmist/commit/ff4034d)), closes [#201](https://github.com/zbigniewsobiecki/llmist/issues/201)
+* Merge pull request #203 from zbigniewsobiecki/docs/update-for-v6.1-v6.2 ([8e64551](https://github.com/zbigniewsobiecki/llmist/commit/8e64551)), closes [#203](https://github.com/zbigniewsobiecki/llmist/issues/203)
+* docs: update documentation for v6.1.0 and v6.2.0 features ([f6f93ef](https://github.com/zbigniewsobiecki/llmist/commit/f6f93ef))
+
+
+### BREAKING CHANGE
+
+* Docker sandboxing has been completely removed from the CLI.
+
+## Removed
+- `src/cli/docker/` directory (10 files: wrapper, config, dockerfile, image-manager, types, tests)
+- `docs/DOCKER.md` documentation
+- CLI flags: `--docker`, `--docker-ro`, `--no-docker`
+- Config options: `[docker]` section, `docker`, `docker-cwd-permission` in profiles
+- TUI 🐳 whale indicator for container detection
+
+## Modified
+- `src/cli/agent-command.ts` - Remove Docker execution logic
+- `src/cli/config.ts` - Remove Docker config schema and validation
+- `src/cli/option-helpers.ts` - Remove Docker CLI options
+- `src/cli/constants.ts` - Remove Docker flag definitions
+- `src/cli/environment.ts` - Remove DockerConfig from interface
+- `src/cli/program.ts` - Remove dockerConfig passing
+- `docs/CLI.md` - Remove Docker references from documentation
+
+## Bonus improvements
+- `src/cli/external-gadgets.ts` - Improve cache validation to check entry point exists
+- `examples/21-browseweb-multi-call.ts` - Add BrowseWeb multi-call test example
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 6.2.0 (2025-12-17)
 
 * Merge pull request #200 from zbigniewsobiecki/dev ([6c78b49](https://github.com/zbigniewsobiecki/llmist/commit/6c78b49)), closes [#200](https://github.com/zbigniewsobiecki/llmist/issues/200)
