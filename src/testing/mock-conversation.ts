@@ -78,6 +78,11 @@ export class MockConversationManager implements IConversationManager {
     return [...this.baseMessages];
   }
 
+  getConversationHistory(): LLMMessage[] {
+    // For mock, just return the runtime history (no initial messages concept)
+    return [...this.history];
+  }
+
   replaceHistory(newHistory: LLMMessage[]): void {
     this.replacementHistory = [...newHistory];
     this.history = [...newHistory];

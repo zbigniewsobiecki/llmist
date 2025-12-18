@@ -39,6 +39,9 @@ export class InputHandler {
   /** Callback when Ctrl+B is pressed (toggle focus mode) */
   private ctrlBCallback: (() => void) | null = null;
 
+  /** Callback for mid-session input (user submits while agent is running) */
+  private midSessionHandler: ((message: string) => void) | null = null;
+
   constructor(
     inputBar: Textbox,
     body: Box,
@@ -102,6 +105,17 @@ export class InputHandler {
    */
   onCtrlB(callback: () => void): void {
     this.ctrlBCallback = callback;
+  }
+
+  /**
+   * Set handler for mid-session input.
+   * Called when user submits input while an agent session is running
+   * (not during an AskUser prompt or REPL prompt wait).
+   *
+   * @param handler - Function to call with the user's message
+   */
+  setMidSessionHandler(handler: (message: string) => void): void {
+    this.midSessionHandler = handler;
   }
 
   /**
@@ -243,8 +257,12 @@ export class InputHandler {
 
       // Resolve with the user's input
       resolve(value);
+    } else if (this.midSessionHandler) {
+      // Mid-session input - inject into running agent
+      this.midSessionHandler(value);
+      this.setIdle();
     } else {
-      // No pending input - just reset
+      // No pending input and no mid-session handler - just reset
       this.setIdle();
     }
   }

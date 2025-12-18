@@ -37,6 +37,7 @@ import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.j
 import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
 import { CompactionManager } from "./compaction/manager.js";
 import { ConversationManager } from "./conversation-manager.js";
+import type { IConversationManager } from "./interfaces.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
 import { GadgetOutputStore } from "./gadget-output-store.js";
 import {
@@ -239,6 +240,9 @@ export class Agent {
   // Cross-iteration dependency tracking - allows gadgets to depend on results from prior iterations
   private readonly completedInvocationIds: Set<string> = new Set();
   private readonly failedInvocationIds: Set<string> = new Set();
+
+  // Queue for user messages injected during agent execution (REPL mid-session input)
+  private readonly pendingUserMessages: string[] = [];
 
   // Execution Tree - first-class model for nested subagent support
   private readonly tree: ExecutionTree;
@@ -579,6 +583,46 @@ export class Agent {
   }
 
   /**
+   * Get the conversation manager for this agent.
+   * Used by REPL mode to extract session history for continuation.
+   *
+   * @returns The conversation manager containing all messages
+   *
+   * @example
+   * ```typescript
+   * // After running agent, extract history for next session
+   * const history = agent.getConversation().getConversationHistory();
+   * // Pass to next agent via builder.withHistory()
+   * ```
+   */
+  getConversation(): IConversationManager {
+    return this.conversation;
+  }
+
+  /**
+   * Inject a user message to be processed in the next iteration.
+   * Used by REPL mode to allow user input during a running session.
+   *
+   * The message is queued and will be added to the conversation before
+   * the next LLM call. This allows users to provide additional context
+   * or instructions while the agent is executing.
+   *
+   * @param message - The user message to inject
+   *
+   * @example
+   * ```typescript
+   * // While agent is running in TUI:
+   * tui.onMidSessionInput((msg) => {
+   *   agent.injectUserMessage(msg);
+   * });
+   * ```
+   */
+  injectUserMessage(message: string): void {
+    this.pendingUserMessages.push(message);
+    this.logger.debug("User message queued for injection", { message });
+  }
+
+  /**
    * Run the agent loop.
    * Clean, simple orchestration - all complexity is in StreamProcessor.
    *
@@ -602,6 +646,16 @@ export class Agent {
       // Check abort signal at start of each iteration
       if (await this.checkAbortAndNotify(currentIteration)) {
         return;
+      }
+
+      // Process any injected user messages (from REPL mid-session input)
+      while (this.pendingUserMessages.length > 0) {
+        const msg = this.pendingUserMessages.shift()!;
+        this.conversation.addUserMessage(msg);
+        this.logger.info("Injected user message into conversation", {
+          iteration: currentIteration,
+          messageLength: msg.length,
+        });
       }
 
       this.logger.debug("Starting iteration", { iteration: currentIteration });

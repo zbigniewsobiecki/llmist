@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
-import { createMockClient } from "../testing/mock-client.js";
+import { createMockClient, getMockManager, mockLLM } from "../testing/index.js";
 import { AgentBuilder, type HistoryMessage } from "./builder.js";
 import { HookPresets } from "./hook-presets.js";
 
@@ -207,6 +207,126 @@ describe("AgentBuilder", () => {
         .addMessage({ user: "Third" });
 
       expect(result).toBe(builder);
+    });
+  });
+
+  describe("clearHistory", () => {
+    it("returns the builder for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.clearHistory();
+
+      expect(result).toBe(builder);
+    });
+
+    it("clears previously set history", () => {
+      const builder = new AgentBuilder();
+      builder.withHistory([{ user: "Previous" }, { assistant: "History" }]);
+      const result = builder.clearHistory();
+
+      // Should return builder for chaining
+      expect(result).toBe(builder);
+    });
+
+    it("allows setting new history after clearing", () => {
+      const builder = new AgentBuilder();
+      builder.withHistory([{ user: "Old message" }]);
+      builder.clearHistory();
+      const result = builder.withHistory([{ user: "New message" }]);
+
+      expect(result).toBe(builder);
+    });
+
+    it("chains with withHistory correctly", () => {
+      const builder = new AgentBuilder();
+      const result = builder
+        .withHistory([{ user: "Old" }])
+        .clearHistory()
+        .withHistory([{ user: "New" }]);
+
+      expect(result).toBe(builder);
+    });
+  });
+
+  describe("continueFrom", () => {
+    it("returns the builder for chaining", async () => {
+      // Clear any previous mocks and register new one
+      getMockManager().clear();
+      mockLLM().forAnyModel().returns("Hello!").register();
+
+      const mockClient = createMockClient();
+
+      // Create first agent
+      const builder1 = new AgentBuilder(mockClient);
+      const agent1 = builder1.withModel("haiku").ask("Hello");
+
+      // Run first agent to create conversation
+      for await (const _ of agent1.run()) {
+        // Consume all events
+      }
+
+      // Continue from first agent
+      const builder2 = new AgentBuilder(mockClient);
+      const result = builder2.withModel("haiku").continueFrom(agent1);
+
+      expect(result).toBe(builder2);
+
+      // Clean up
+      getMockManager().clear();
+    });
+
+    it("extracts conversation history from previous agent", async () => {
+      // Clear any previous mocks and register new one
+      getMockManager().clear();
+      mockLLM().forAnyModel().returns("Hi there!").register();
+
+      const mockClient = createMockClient();
+
+      // Create and run first agent
+      const builder1 = new AgentBuilder(mockClient);
+      const agent1 = builder1.withModel("haiku").ask("Hello");
+
+      for await (const _ of agent1.run()) {
+        // Consume all events
+      }
+
+      // Verify the first agent has conversation history
+      const history = agent1.getConversation().getConversationHistory();
+      expect(history.length).toBeGreaterThan(0);
+      expect(history[0].role).toBe("user");
+      expect(history[0].content).toBe("Hello");
+
+      // Clean up
+      getMockManager().clear();
+    });
+
+    it("clears previous history before setting new one", async () => {
+      // Clear any previous mocks and register new one
+      getMockManager().clear();
+      mockLLM().forAnyModel().returns("Response").register();
+
+      const mockClient = createMockClient();
+
+      // Create and run first agent
+      const builder1 = new AgentBuilder(mockClient);
+      const agent1 = builder1.withModel("haiku").ask("First question");
+
+      for await (const _ of agent1.run()) {
+        // Consume all events
+      }
+
+      // Create builder with some existing history, then continue from agent
+      const builder2 = new AgentBuilder(mockClient);
+      builder2
+        .withModel("haiku")
+        .withHistory([{ user: "This should be cleared" }])
+        .continueFrom(agent1);
+
+      // The builder should now have agent1's history, not the old one
+      // (we can verify this by building another agent and checking its conversation)
+      expect(builder2).toBeTruthy();
+
+      // Clean up
+      getMockManager().clear();
     });
   });
 

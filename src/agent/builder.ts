@@ -275,6 +275,65 @@ export class AgentBuilder {
   }
 
   /**
+   * Clear any previously set conversation history.
+   * Used before setting new cumulative history in REPL mode.
+   *
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Reset history before setting new cumulative history
+   * builder.clearHistory().withHistory(cumulativeHistory);
+   * ```
+   */
+  clearHistory(): this {
+    this.initialMessages = [];
+    return this;
+  }
+
+  /**
+   * Continue conversation from a previous agent's history.
+   * Extracts full conversation history and sets it as initial messages.
+   *
+   * This is the recommended way to implement REPL session continuation.
+   * It automatically handles history extraction and format conversion.
+   *
+   * @param agent - The previous agent to continue from
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // REPL loop with session continuity
+   * let previousAgent: Agent | null = null;
+   *
+   * while (true) {
+   *   if (previousAgent) {
+   *     builder.continueFrom(previousAgent);
+   *   }
+   *   const agent = builder.ask(prompt);
+   *   await runAgent(agent);
+   *   previousAgent = agent;
+   * }
+   * ```
+   */
+  continueFrom(agent: Agent): this {
+    const history = agent.getConversation().getConversationHistory();
+    this.clearHistory();
+
+    // Add each message from the previous agent's conversation
+    for (const msg of history) {
+      if (msg.role === "user") {
+        this.initialMessages.push({ role: "user", content: msg.content });
+      } else if (msg.role === "assistant") {
+        this.initialMessages.push({ role: "assistant", content: msg.content });
+      }
+      // Skip system messages - they're regenerated from the builder's config
+    }
+
+    return this;
+  }
+
+  /**
    * Set the human input handler for interactive conversations.
    *
    * @param handler - Function to handle human input requests
