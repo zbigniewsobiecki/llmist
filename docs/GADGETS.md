@@ -431,6 +431,7 @@ The `ExecutionContext` provides an `AbortSignal` for handling cancellation, espe
 | `reportCost(amount)` | `function` | Report costs in USD |
 | `llmist` | `CostReportingLLMist?` | Wrapped LLM client (optional) |
 | `signal` | `AbortSignal` | Abort signal for cancellation (always provided) |
+| `logger` | `Logger<ILogObj>?` | Structured logger (see [Logging in Gadgets](#logging-in-gadgets)) |
 
 ### Using the Abort Signal
 
@@ -496,6 +497,87 @@ execute: async ({ url }, ctx) => {
 ```
 
 **See Also:** [Error Handling - Gadget Cancellation](./ERROR_HANDLING.md#gadget-cancellation) for more patterns.
+
+## Logging in Gadgets
+
+The `ExecutionContext` provides a `logger` property for structured logging within gadgets. This logger respects the CLI's configured log level, format, and output destination (console or file).
+
+### Basic Usage
+
+```typescript
+class APIGadget extends Gadget({
+  description: 'Calls external API',
+  schema: z.object({ endpoint: z.string() }),
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    ctx?.logger?.debug('[APIGadget] Starting request', { endpoint: params.endpoint });
+
+    const response = await fetch(params.endpoint);
+
+    ctx?.logger?.info('[APIGadget] Request completed', { status: response.status });
+
+    return await response.text();
+  }
+}
+```
+
+### Why ctx.logger?
+
+- **CLI integration** - Logs respect `--log-level` and `--log-file` CLI options
+- **Consistent formatting** - Uses the same tslog instance as the agent
+- **Zero configuration** - Just use `ctx?.logger?.debug(...)`, no setup needed
+- **External gadget support** - Works correctly even for gadgets from npm packages
+
+### Available Log Methods
+
+The logger provides standard tslog methods:
+
+```typescript
+ctx?.logger?.trace('Detailed trace info');
+ctx?.logger?.debug('Debug information');
+ctx?.logger?.info('General information');
+ctx?.logger?.warn('Warning message');
+ctx?.logger?.error('Error occurred', { error: err });
+ctx?.logger?.fatal('Critical failure');
+```
+
+### Structured Logging
+
+Pass objects as additional arguments for structured logging:
+
+```typescript
+ctx?.logger?.debug('[MyGadget] Processing item', {
+  itemId: params.id,
+  timestamp: Date.now(),
+  metadata: { source: 'api', priority: 'high' },
+});
+```
+
+### For External Gadget Authors
+
+External gadgets (npm packages) should use `ctx.logger` instead of importing `defaultLogger`. This ensures logs appear in the host CLI's configured log destination:
+
+```typescript
+// ✅ Correct - uses host's logger configuration
+ctx?.logger?.debug('[MyGadget] Starting...');
+
+// ❌ Avoid - creates separate logger instance
+import { defaultLogger } from 'llmist';
+defaultLogger.debug('[MyGadget] Starting...');  // May not appear in log file
+```
+
+### Testing Gadgets with Logger
+
+When testing gadgets, the logger is optional - gadgets should handle its absence gracefully:
+
+```typescript
+import { testGadget } from 'llmist/testing';
+
+// Logger is not provided in test context by default
+const result = await testGadget(myGadget, { param: 'value' });
+
+// Gadget should use optional chaining: ctx?.logger?.debug(...)
+```
 
 ## Special Exceptions
 

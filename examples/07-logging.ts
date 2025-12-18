@@ -4,7 +4,7 @@
  * Run: bunx tsx examples/07-logging.ts
  */
 
-import { createLogger, Gadget, HookPresets, LLMist } from "llmist";
+import { createLogger, Gadget, HookPresets, LLMist, type ExecutionContext } from "llmist";
 import { z } from "zod";
 
 class Calculator extends Gadget({
@@ -18,6 +18,36 @@ class Calculator extends Gadget({
   execute(params: this["params"]): string {
     const { a, b, op } = params;
     return op === "add" ? String(a + b) : String(a * b);
+  }
+}
+
+// Gadget that uses ctx.logger for internal logging
+class LoggingCalculator extends Gadget({
+  description: "Performs arithmetic with detailed logging",
+  schema: z.object({
+    a: z.number(),
+    b: z.number(),
+    op: z.enum(["add", "multiply"]),
+  }),
+}) {
+  execute(params: this["params"], ctx?: ExecutionContext): string {
+    const { a, b, op } = params;
+
+    // Use ctx.logger for structured logging
+    // This respects CLI's --log-level and --log-file settings
+    ctx?.logger?.debug("[LoggingCalculator] Starting calculation", {
+      operation: op,
+      operands: { a, b },
+    });
+
+    const result = op === "add" ? a + b : a * b;
+
+    ctx?.logger?.info("[LoggingCalculator] Calculation complete", {
+      result,
+      operation: op,
+    });
+
+    return String(result);
   }
 }
 
@@ -136,6 +166,31 @@ async function main() {
     .withGadgets(Calculator)
     .withHooks(HookPresets.merge(HookPresets.logging(), HookPresets.errorLogging()))
     .askAndCollect("Add 1 and 1");
+
+  console.log();
+
+  // ==========================================================================
+  // 7. Gadget internal logging with ctx.logger
+  // ==========================================================================
+  console.log("7. Gadget using ctx.logger (internal structured logging):\n");
+
+  // When gadgets need to log internally, they can use ctx.logger
+  // This logger is automatically configured with the CLI's settings
+  // (--log-level, --log-file) so logs appear in the right place
+  const debugLogger = createLogger({ minLevel: "debug" });
+
+  await LLMist.createAgent()
+    .withModel("haiku")
+    .withGadgets(LoggingCalculator)
+    .withLogger(debugLogger) // Logger is passed to gadgets via ctx.logger
+    .askAndCollect("Multiply 6 by 7");
+
+  console.log(`
+Note: ctx.logger is especially useful for:
+- External gadgets (npm packages) that need to respect CLI settings
+- Complex gadgets with multiple steps that benefit from debug logging
+- Structured logging with JSON-compatible metadata
+`);
 
   console.log("\n=== Done ===");
 }
