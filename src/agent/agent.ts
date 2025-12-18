@@ -236,6 +236,10 @@ export class Agent {
   // Counter for generating synthetic invocation IDs for wrapped text content
   private syntheticInvocationCounter = 0;
 
+  // Cross-iteration dependency tracking - allows gadgets to depend on results from prior iterations
+  private readonly completedInvocationIds: Set<string> = new Set();
+  private readonly failedInvocationIds: Set<string> = new Set();
+
   // Execution Tree - first-class model for nested subagent support
   private readonly tree: ExecutionTree;
   private readonly parentNodeId: NodeId | null;
@@ -661,6 +665,9 @@ export class Agent {
           tree: this.tree,
           parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
           baseDepth: this.baseDepth,
+          // Cross-iteration dependency tracking
+          priorCompletedInvocations: this.completedInvocationIds,
+          priorFailedInvocations: this.failedInvocationIds,
         });
 
         // Consume the stream processor generator, yielding events in real-time
@@ -698,6 +705,14 @@ export class Agent {
         // Ensure we received the completion metadata
         if (!streamMetadata) {
           throw new Error("Stream processing completed without metadata event");
+        }
+
+        // Collect completed/failed invocation IDs for cross-iteration dependency tracking
+        for (const id of processor.getCompletedInvocationIds()) {
+          this.completedInvocationIds.add(id);
+        }
+        for (const id of processor.getFailedInvocationIds()) {
+          this.failedInvocationIds.add(id);
         }
 
         // Use streamMetadata as the result for remaining logic

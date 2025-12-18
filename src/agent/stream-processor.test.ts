@@ -1650,4 +1650,106 @@ test value
       expect(errorResult?.type === "gadget_result" && errorResult.result.error).toBe("Test error");
     });
   });
+
+  describe("Cross-Iteration Dependency Resolution", () => {
+    it("executes gadget immediately when dependency is in priorCompletedInvocations", async () => {
+      const gadgetB = createMockGadget({ name: "GadgetB", result: "result_b" });
+      registry.registerByClass(gadgetB);
+
+      // Simulate that "gadget_a" completed in a previous iteration
+      const priorCompletedInvocations = new Set(["gadget_a"]);
+
+      const processor = new StreamProcessor({
+        iteration: 2, // Second iteration
+        registry,
+        priorCompletedInvocations,
+      });
+
+      // GadgetB depends on gadget_a (from prior iteration)
+      const gadgetCall = createGadgetCallString(
+        "GadgetB",
+        {},
+        { invocationId: "gadget_b", dependencies: ["gadget_a"] },
+      );
+      const stream = createTextStream(gadgetCall);
+      const result = await consumeStream(processor, stream);
+
+      // Should execute successfully - no "missing dependency" error
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(1);
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "result_b",
+      );
+      expect(gadgetB.getCallCount()).toBe(1);
+    });
+
+    it("skips gadget when dependency failed in prior iteration", async () => {
+      const gadgetB = createMockGadget({ name: "GadgetB", result: "result_b" });
+      registry.registerByClass(gadgetB);
+
+      // Simulate that "gadget_a" failed in a previous iteration
+      const priorFailedInvocations = new Set(["gadget_a"]);
+
+      const processor = new StreamProcessor({
+        iteration: 2,
+        registry,
+        priorFailedInvocations,
+      });
+
+      // GadgetB depends on gadget_a (which failed)
+      const gadgetCall = createGadgetCallString(
+        "GadgetB",
+        {},
+        { invocationId: "gadget_b", dependencies: ["gadget_a"] },
+      );
+      const stream = createTextStream(gadgetCall);
+      const result = await consumeStream(processor, stream);
+
+      // Should be skipped due to failed dependency
+      const skipEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+      expect(skipEvents).toHaveLength(1);
+      expect(gadgetB.getCallCount()).toBe(0);
+    });
+
+    it("returns completed invocation IDs via getCompletedInvocationIds()", async () => {
+      const gadgetA = createMockGadget({ name: "GadgetA", result: "result_a" });
+      const gadgetB = createMockGadget({ name: "GadgetB", result: "result_b" });
+      registry.registerByClass(gadgetA);
+      registry.registerByClass(gadgetB);
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      const gadgetCalls = [
+        createGadgetCallString("GadgetA", {}, { invocationId: "id_a" }),
+        createGadgetCallString("GadgetB", {}, { invocationId: "id_b" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      await consumeStream(processor, stream);
+
+      const completedIds = processor.getCompletedInvocationIds();
+      expect(completedIds.has("id_a")).toBe(true);
+      expect(completedIds.has("id_b")).toBe(true);
+      expect(completedIds.size).toBe(2);
+    });
+
+    it("returns failed invocation IDs via getFailedInvocationIds()", async () => {
+      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
+      registry.registerByClass(errorGadget);
+
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      const gadgetCall = createGadgetCallString(
+        "ErrorGadget",
+        {},
+        { invocationId: "error_id" },
+      );
+      const stream = createTextStream(gadgetCall);
+      await consumeStream(processor, stream);
+
+      const failedIds = processor.getFailedInvocationIds();
+      expect(failedIds.has("error_id")).toBe(true);
+      expect(failedIds.size).toBe(1);
+    });
+  });
 });
