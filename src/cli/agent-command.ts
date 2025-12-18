@@ -13,13 +13,6 @@ import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
 import { COMMANDS } from "./constants.js";
-import {
-  createDockerContext,
-  type DockerOptions,
-  DockerSkipError,
-  executeInDocker,
-  resolveDockerEnabled,
-} from "./docker/index.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
@@ -60,42 +53,6 @@ export async function executeAgent(
   options: CLIAgentOptions,
   env: CLIEnvironment,
 ): Promise<void> {
-  // Check if Docker sandboxing is enabled
-  const dockerOptions: DockerOptions = {
-    docker: options.docker ?? false,
-    dockerRo: options.dockerRo ?? false,
-    noDocker: options.noDocker ?? false,
-  };
-
-  const dockerEnabled = resolveDockerEnabled(
-    env.dockerConfig,
-    dockerOptions,
-    options.docker, // Profile-level docker: true/false
-  );
-
-  if (dockerEnabled) {
-    // Execute inside Docker container
-    const ctx = createDockerContext(
-      env.dockerConfig,
-      dockerOptions,
-      env.argv.slice(2), // Remove 'node' and script path
-      process.cwd(),
-      options.dockerCwdPermission, // Profile-level CWD permission override
-    );
-
-    try {
-      await executeInDocker(ctx);
-      // executeInDocker calls process.exit(), so we won't reach here
-    } catch (error) {
-      // DockerSkipError means we're already inside a container, continue normally
-      if (error instanceof DockerSkipError) {
-        // Continue with normal execution
-      } else {
-        throw error;
-      }
-    }
-  }
-
   const client = env.createClient();
 
   // Detect TUI mode early: use TUI when both stdin and stdout are TTY
