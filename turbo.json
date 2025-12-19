@@ -12,11 +12,11 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "outputs": []
+      "cache": false
     },
     "test:unit": {
       "dependsOn": ["build"],
-      "outputs": []
+      "cache": false
     },
     "test:e2e": {
       "dependsOn": ["build"],

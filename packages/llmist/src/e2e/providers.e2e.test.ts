@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import type { LLMMessage } from "../core/messages.js";
-import { mockLLM } from "../testing/index.js";
+import { mockLLM } from "../../../testing/src/index.js";
 import { clearAllMocks, createMockE2EClient } from "./mock-setup.js";
 
 /**

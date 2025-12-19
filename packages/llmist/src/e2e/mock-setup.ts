@@ -3,7 +3,7 @@
  * Provides helpers for creating common mock scenarios with realistic responses
  */
 
-import { createMockClient, getMockManager, mockLLM } from "../testing/index.js";
+import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 
 /**
  * Creates a mock client with automatic cleanup

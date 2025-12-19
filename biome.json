@@ -1,5 +1,4 @@
 {
-  "root": false,
   "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
   "formatter": {
     "indentStyle": "space",
@@ -20,7 +19,9 @@
         "noImplicitAnyLet": "warn"
       },
       "correctness": {
-        "noUnreachable": "warn"
+        "noUnreachable": "warn",
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "warn"
       }
     }
   },
@@ -31,6 +32,6 @@
     }
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/coverage"]
+    "includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.json", "!**/dist", "!**/node_modules", "!**/coverage", "!**/.turbo"]
   }
 }

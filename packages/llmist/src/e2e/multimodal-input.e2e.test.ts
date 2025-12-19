@@ -20,7 +20,7 @@ import {
   text,
 } from "../core/input-content.js";
 import { LLMMessageBuilder } from "../core/messages.js";
-import { createMockClient, getMockManager, mockLLM } from "../testing/index.js";
+import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 
 describe("E2E: Multimodal Input Support", () => {
   beforeEach(() => {

@@ -9,7 +9,7 @@ import { ExecutionTree } from "../core/execution-tree.js";
 import type { ExecutionEvent } from "../core/execution-events.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import type { ExecutionContext } from "../gadgets/types.js";
-import { createMockClient, getMockManager } from "../testing/index.js";
+import { createMockClient, getMockManager } from "../../../testing/src/index.js";
 import { AgentBuilder } from "./builder.js";
 
 // A simple subagent gadget that creates its own agent using withParentContext

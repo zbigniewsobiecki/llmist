@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
 import { Gadget } from "../gadgets/typed-gadget.js";
-import { MathGadget, TestGadget } from "../testing/helpers.js";
+import { MathGadget, TestGadget } from "../../../testing/src/helpers.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
 import { audioFromBase64, imageFromBase64, imageFromUrl, text } from "./input-content.js";
 import { extractMessageText, isLLMMessage, LLMMessageBuilder, normalizeMessageContent } from "./messages.js";

@@ -6,7 +6,7 @@ import {
   ErrorGadget,
   MathGadget,
   TestGadget,
-} from "../testing/helpers.js";
+} from "../../../testing/src/helpers.js";
 import { AbortException, TaskCompletionSignal } from "./exceptions.js";
 import { GadgetExecutor } from "./executor.js";
 import { GadgetRegistry } from "./registry.js";

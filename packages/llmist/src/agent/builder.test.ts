@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
-import { createMockClient, getMockManager, mockLLM } from "../testing/index.js";
+import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 import { AgentBuilder, type HistoryMessage } from "./builder.js";
 import { HookPresets } from "./hook-presets.js";
 

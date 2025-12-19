@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { LLMist } from "../core/client.js";
 import type { LLMMessage } from "../core/messages.js";
-import { createMockClient, getMockManager, mockLLM } from "../testing/index.js";
+import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 
 /**
  * Simple E2E tests for the specified models using mock responses

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { z } from "zod";
-import { ErrorGadget, MathGadget, TestGadget } from "../testing/helpers.js";
+import { ErrorGadget, MathGadget, TestGadget } from "../../../testing/src/helpers.js";
 import { GadgetRegistry } from "./registry.js";
 import { Gadget } from "./typed-gadget.js";
 

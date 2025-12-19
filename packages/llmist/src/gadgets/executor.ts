@@ -415,17 +415,23 @@ export class GadgetExecutor {
         };
       }
 
-      // Check if this is a HumanInputRequiredException
-      if (error instanceof HumanInputRequiredException) {
+      // Check if this is a HumanInputRequiredException using duck typing
+      // (handles module duplication issues in monorepos)
+      const isHumanInputError =
+        error instanceof Error &&
+        error.name === "HumanInputRequiredException" &&
+        "question" in error;
+      if (isHumanInputError) {
+        const question = (error as HumanInputRequiredException).question;
         this.logger.info("Gadget requested human input", {
           gadgetName: call.gadgetName,
-          question: error.question,
+          question,
         });
 
         // If callback is provided, call it and wait for answer
         if (this.requestHumanInput) {
           try {
-            const answer = await this.requestHumanInput(error.question);
+            const answer = await this.requestHumanInput(question);
             this.logger.debug("Human input received", {
               gadgetName: call.gadgetName,
               answerLength: answer.length,

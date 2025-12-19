@@ -5,7 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { createMockClient, getMockManager, mockLLM } from "../../testing/index.js";
+import { createMockClient, getMockManager, mockLLM } from "../../../../testing/src/index.js";
 
 describe("VisionNamespace", () => {
   beforeEach(() => {

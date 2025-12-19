@@ -6,12 +6,12 @@ import { TaskCompletionSignal } from "../gadgets/exceptions.js";
 import type { StreamCompletionEvent, StreamEvent } from "../gadgets/types.js";
 import { resetGlobalInvocationCounter } from "../gadgets/parser.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import { createMockGadget, mockGadget } from "../testing/mock-gadget.js";
+import { createMockGadget, mockGadget } from "../../../testing/src/mock-gadget.js";
 import {
   createEmptyStream,
   createTestStream,
   createTextStream,
-} from "../testing/stream-helpers.js";
+} from "../../../testing/src/stream-helpers.js";
 import type { LLMStreamChunk } from "../core/client.js";
 import type { AgentHooks } from "./hooks.js";
 import { StreamProcessor } from "./stream-processor.js";

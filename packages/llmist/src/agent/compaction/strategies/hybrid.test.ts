@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import type { LLMMessage } from "../../../core/messages.js";
-import { createMockClient, MockManager, mockLLM } from "../../../testing/index.js";
+import { createMockClient, MockManager, mockLLM } from "../../../../../testing/src/index.js";
 import type { ResolvedCompactionConfig } from "../config.js";
 import type { CompactionContext } from "../strategy.js";
 import { HybridStrategy } from "./hybrid.js";

@@ -8,7 +8,7 @@ import { TaskCompletionSignal, HumanInputRequiredException } from "../gadgets/ex
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import type { StreamEvent } from "../gadgets/types.js";
-import { createMockClient } from "../testing/index.js";
+import { createMockClient } from "../../../testing/src/index.js";
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
