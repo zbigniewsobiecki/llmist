@@ -5,7 +5,7 @@
 
 echo "Running pre-commit checks..."
 
-# Run typecheck
+# Run typecheck (uses Turborepo)
 echo "→ Running typecheck..."
 bun run typecheck
 TYPECHECK_EXIT=$?
@@ -29,15 +29,40 @@ fi
 
 echo "✓ Linter passed"
 
-# Run unit tests (excluding E2E tests)
+# Run unit tests across all packages (direct, not via Turborepo - see note below)
+# NOTE: We run tests directly instead of `bun run test` because Turborepo's
+# output capture interferes with @unblessed/node terminal tests. The TUI tests
+# require a proper terminal environment that Turbo's process spawning doesn't provide.
 echo "→ Running unit tests..."
-bun test src/agent src/core src/gadgets src/providers src/testing --timeout 30000
-TEST_EXIT=$?
 
-if [ $TEST_EXIT -ne 0 ]; then
-  echo "❌ Unit tests failed! Please fix failing tests before committing."
+# Run llmist package tests
+echo "  → Testing llmist..."
+(cd packages/llmist && bun test src --ignore-pattern='**/e2e/**')
+LLMIST_EXIT=$?
+if [ $LLMIST_EXIT -ne 0 ]; then
+  echo "❌ llmist tests failed!"
   exit 1
 fi
+
+# Run testing package tests
+echo "  → Testing @llmist/testing..."
+(cd packages/testing && bun test src)
+TESTING_EXIT=$?
+if [ $TESTING_EXIT -ne 0 ]; then
+  echo "❌ @llmist/testing tests failed!"
+  exit 1
+fi
+
+# Run CLI package tests
+echo "  → Testing @llmist/cli..."
+(cd packages/cli && bun test src)
+CLI_EXIT=$?
+if [ $CLI_EXIT -ne 0 ]; then
+  echo "❌ @llmist/cli tests failed!"
+  exit 1
+fi
+
+TEST_EXIT=0
 
 echo "✓ Unit tests passed"
 echo "✓ All pre-commit checks passed!"

@@ -1,0 +1,62 @@
+{
+  "name": "@llmist/testing",
+  "version": "7.0.0",
+  "description": "Testing utilities for llmist - mock LLM responses and test agents",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src",
+    "clean": "rimraf dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zbigniewsobiecki/llmist.git",
+    "directory": "packages/testing"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "llmist",
+    "testing",
+    "mock",
+    "llm",
+    "agents",
+    "test-utilities"
+  ],
+  "author": "Zbigniew Sobiecki <zbigniew@sobiecki.name>",
+  "license": "MIT",
+  "sideEffects": false,
+  "peerDependencies": {
+    "llmist": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "bun-types": "^1.3.2",
+    "llmist": "workspace:*",
+    "rimraf": "^5.0.5",
+    "tslog": "^4.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.4.5",
+    "zod": "^4.1.12"
+  }
+}

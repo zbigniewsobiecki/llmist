@@ -339,7 +339,8 @@ LLMs can specify execution order between gadgets. Independent gadgets run in par
 ### 🧪 Mock Testing
 
 ```typescript
-import { LLMist, mockLLM, createMockClient } from 'llmist';
+import { LLMist } from 'llmist';
+import { mockLLM, createMockClient } from '@llmist/testing';
 
 mockLLM()
   .forModel('gpt-5')
@@ -355,7 +356,7 @@ const answer = await mockClient.createAgent()
 console.log(answer); // "The answer is 42" - no API call made!
 ```
 
-📖 **[Testing Guide](./docs/TESTING.md)** | **[Examples](./examples/mock-testing-example.ts)**
+📖 **[Testing Guide](./docs/TESTING.md)**
 
 ### 📊 Model Catalog & Cost Estimation
 
@@ -471,16 +472,27 @@ llmist follows **SOLID principles** with a composable architecture.
 
 ## 🧪 Development
 
+This is a monorepo with the following packages:
+
+| Package | Description |
+|---------|-------------|
+| `llmist` | Core library (agents, gadgets, providers) |
+| `@llmist/testing` | Testing utilities and mocks |
+| `@llmist/cli` | CLI application (`llmist` binary) |
+
 ```bash
 bun install
 
-# Run tests
-bun test              # All tests
-bun run test:unit     # Unit tests only
-bun run test:e2e      # E2E tests only
+# Run all packages
+bun run build         # Build all packages (Turborepo)
+bun run test          # Test all packages
+bun run typecheck     # Type-check all packages
 
-# Build and lint
-bun run build
+# Run specific package
+bun run build --filter=llmist
+bun run test --filter=@llmist/cli
+
+# Lint and format
 bun run lint
 bun run format
 ```
