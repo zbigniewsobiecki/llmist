@@ -1,6 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll, mock } from "bun:test";
 import { setRuntime, NodeRuntime, Screen, Box } from "@unblessed/node";
 import { StatusBar } from "./status-bar.js";
+import { ExecutionTree } from "../../core/execution-tree.js";
 
 // Initialize unblessed for testing
 let screen: Screen;
@@ -316,6 +317,84 @@ describe("StatusBar", () => {
 
     test("handles empty string", () => {
       expect(StatusBar.estimateTokens("")).toBe(0);
+    });
+  });
+
+  describe("subscribeToTree", () => {
+    test("clears all activity state when subscribing to new tree", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      // Add some activity
+      bar.startLLMCall("#1", "claude");
+      bar.startGadget("ReadFile");
+
+      // Verify activity is present
+      let content = statusBox.getContent();
+      expect(content).toContain("ReadFile");
+
+      // Subscribe to a new tree - should clear stale activity
+      const tree = new ExecutionTree();
+      bar.subscribeToTree(tree);
+
+      // Verify activity is cleared
+      content = statusBox.getContent();
+      expect(content).not.toContain("#1");
+      expect(content).not.toContain("ReadFile");
+    });
+
+    test("previous tree subscription is unsubscribed when subscribing to new tree", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      const tree1 = new ExecutionTree();
+      const tree2 = new ExecutionTree();
+
+      // Subscribe to first tree
+      bar.subscribeToTree(tree1);
+
+      // Add LLM call via first tree - should be tracked
+      tree1.addLLMCall({ iteration: 0, model: "sonnet" });
+      let content = statusBox.getContent();
+      expect(content).toContain("#1"); // 0-indexed becomes #1 display
+
+      // Subscribe to second tree - clears activity and unsubscribes from first
+      bar.subscribeToTree(tree2);
+
+      // Add to first tree - should NOT be tracked anymore
+      tree1.addLLMCall({ iteration: 1, model: "haiku" });
+      content = statusBox.getContent();
+      expect(content).not.toContain("#2");
+
+      // Add to second tree - should be tracked
+      tree2.addLLMCall({ iteration: 0, model: "opus" });
+      content = statusBox.getContent();
+      expect(content).toContain("#1");
+    });
+
+    test("subscribeToTree returns unsubscribe function", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      const tree = new ExecutionTree();
+      const unsubscribe = bar.subscribeToTree(tree);
+
+      // Should be a function
+      expect(typeof unsubscribe).toBe("function");
+
+      // Add LLM call while subscribed
+      tree.addLLMCall({ iteration: 0, model: "test" });
+      let content = statusBox.getContent();
+      expect(content).toContain("#1");
+
+      // Clear and unsubscribe
+      bar.clearActivity();
+      unsubscribe();
+
+      // Add another LLM call after unsubscribe - should NOT be tracked
+      tree.addLLMCall({ iteration: 1, model: "test" });
+      content = statusBox.getContent();
+      expect(content).not.toContain("#2");
     });
   });
 });

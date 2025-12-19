@@ -624,4 +624,64 @@ describe("BlockRenderer", () => {
       unsubscribe();
     });
   });
+
+  describe("addUserMessage", () => {
+    test("creates a text node with formatted user message", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      const id = renderer.addUserMessage("Test message");
+
+      // ID should start with "user_"
+      expect(id).toMatch(/^user_\d+$/);
+    });
+
+    test("adds user messages to root level", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      const id1 = renderer.addUserMessage("First message");
+      const id2 = renderer.addUserMessage("Second message");
+
+      // Both should be created (not deduplicated like LLM calls)
+      expect(id1).not.toBe(id2);
+      expect(id1).toMatch(/^user_\d+$/);
+      expect(id2).toMatch(/^user_\d+$/);
+    });
+
+    test("each user message creates a unique ID", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      const ids = new Set<string>();
+      for (let i = 0; i < 5; i++) {
+        const id = renderer.addUserMessage(`Message ${i}`);
+        ids.add(id);
+      }
+
+      // All IDs should be unique
+      expect(ids.size).toBe(5);
+    });
+
+    test("handles empty message", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      const id = renderer.addUserMessage("");
+
+      expect(id).toMatch(/^user_\d+$/);
+    });
+
+    test("clear() does not affect user message ID counter uniqueness", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      const id1 = renderer.addUserMessage("Before clear");
+      renderer.clear();
+      const id2 = renderer.addUserMessage("After clear");
+
+      // IDs should still be unique after clear
+      expect(id1).not.toBe(id2);
+    });
+  });
 });

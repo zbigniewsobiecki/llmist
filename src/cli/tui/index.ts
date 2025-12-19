@@ -615,11 +615,21 @@ export class TUIApp {
    * Used between agent runs to get the next user prompt.
    * Stays in current mode (browse) - user can Tab to input or Enter to start typing.
    */
+  /**
+   * Wait for user to enter a prompt.
+   *
+   * After the prompt is submitted, focus mode switches to BROWSE so the user
+   * can see the agent's response. For mid-session input while the agent is
+   * running, users can press Enter or Tab to switch back to INPUT mode.
+   *
+   * Note: For initial startup without a CLI prompt, call setFocusMode("input")
+   * BEFORE this method so users can immediately start typing.
+   */
   async waitForPrompt(): Promise<string> {
     // Don't force input mode - let user review output in browse mode first
     // User can press Tab to switch to input mode, or Enter to start typing
     const result = await this.inputHandler.waitForPrompt();
-    // Return to browse mode after prompt is entered (in case user was in input mode)
+    // Return to browse mode after prompt is entered (so user can see agent output)
     this.setFocusMode("browse");
     return result;
   }
