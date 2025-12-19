@@ -1,3 +1,83 @@
+## 8.0.0 (2025-12-19)
+
+* fix(release): run version sync before npm to resolve workspace:* protocol ([5e06c5f](https://github.com/zbigniewsobiecki/llmist/commit/5e06c5f))
+* fix(release): use npm publish directly instead of semantic-release/npm ([d7c1c63](https://github.com/zbigniewsobiecki/llmist/commit/d7c1c63))
+* Merge pull request #216 from zbigniewsobiecki/dev ([97df35d](https://github.com/zbigniewsobiecki/llmist/commit/97df35d)), closes [#216](https://github.com/zbigniewsobiecki/llmist/issues/216)
+* ci(release): add automated npm publishing for monorepo (#215) ([26f0b8f](https://github.com/zbigniewsobiecki/llmist/commit/26f0b8f)), closes [#215](https://github.com/zbigniewsobiecki/llmist/issues/215)
+* feat: restructure into monorepo with Bun workspaces and Turborepo (#214) ([843be08](https://github.com/zbigniewsobiecki/llmist/commit/843be08)), closes [#214](https://github.com/zbigniewsobiecki/llmist/issues/214)
+* feat(agent): add configurable retry with exponential backoff (#212) ([35692de](https://github.com/zbigniewsobiecki/llmist/commit/35692de)), closes [#212](https://github.com/zbigniewsobiecki/llmist/issues/212)
+* feat(agent): add REPL session continuation and mid-session injection APIs (#211) ([ef3af79](https://github.com/zbigniewsobiecki/llmist/commit/ef3af79)), closes [#211](https://github.com/zbigniewsobiecki/llmist/issues/211)
+* feat(tui): improve REPL UX with message echo and input mode defaults (#213) ([538dc0e](https://github.com/zbigniewsobiecki/llmist/commit/538dc0e)), closes [#213](https://github.com/zbigniewsobiecki/llmist/issues/213)
+
+
+### BREAKING CHANGE
+
+* Testing utilities moved to @llmist/testing package.
+
+This restructures llmist from a single package into a world-class
+monorepo with the following packages:
+
+- `llmist` - Core library (agents, gadgets, providers)
+- `@llmist/testing` - Testing utilities and mocks (optional peer dep)
+- `@llmist/cli` - CLI application (binary remains `llmist`)
+- `@llmist/docs` - Documentation site placeholder (private)
+
+Tooling:
+- Bun Workspaces for package management
+- Turborepo for build orchestration and caching
+- tsup for ESM/CJS/DTS builds per package
+
+Changes:
+- Updated CI workflow for monorepo structure
+- Updated pre-commit hook to use Turborepo commands
+- Updated documentation (README, CLAUDE.md, TESTING.md)
+- Migrated biome.json to latest schema version
+- Added LLMCallInfo export for CLI subagent display
+
+Migration guide:
+- Import testing utilities from `@llmist/testing` instead of `llmist`
+- Install `@llmist/testing` as devDependency if using mocks
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* fix: resolve test imports and module duplication issues in monorepo
+
+- Update llmist package tests to use relative imports to testing package
+- Fix E2E tests to import from relative testing source path
+- Use duck typing for HumanInputRequiredException detection (handles
+  module duplication in monorepos)
+- Update pre-commit to run tests directly instead of via Turborepo
+  (Turborepo's output capture interferes with @unblessed/node terminal tests)
+- Disable test caching in turbo.json for consistent results
+- Update biome.json schema and file patterns
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* fix: replace vitest imports with bun:test in agent tests
+
+- Convert builder.test.ts and tree-sharing.test.ts to use bun:test
+- Replace vi.fn() with mock() for compatibility with bun:test
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* test: add coverage for PR review concerns
+
+- Fix AgentBuilder build() tests to use mock clients for isolated environments
+- Add sideEffects: false to all package.json files for better tree-shaking
+- Run CI tests directly instead of via Turborepo to avoid TTY capture issues
+- Note: @llmist/testing devDep was intentionally not added to llmist to avoid
+  circular dependency in Turborepo (tests import from relative paths anyway)
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 7.0.0 (2025-12-18)
 
 * feat: add logger to ExecutionContext for external gadgets (#210) ([784bf2b](https://github.com/zbigniewsobiecki/llmist/commit/784bf2b)), closes [#210](https://github.com/zbigniewsobiecki/llmist/issues/210)
