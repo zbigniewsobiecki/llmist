@@ -72,10 +72,24 @@ jobs:
         run: |
           VERSION=$(node -p "require('./packages/llmist/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "🚀 Force publishing llmist@$VERSION..."
-          cd packages/llmist && npm publish --access public
-          echo "🚀 Force publishing @llmist/cli@$VERSION..."
-          cd ../cli && npm publish --access public
+
+          # Check if llmist@VERSION is already published
+          if npm view llmist@$VERSION version 2>/dev/null; then
+            echo "⏭️  llmist@$VERSION already published, skipping..."
+          else
+            echo "🚀 Force publishing llmist@$VERSION..."
+            cd packages/llmist && npm publish --access public
+            cd ../..
+          fi
+
+          # Check if @llmist/cli@VERSION is already published
+          if npm view @llmist/cli@$VERSION version 2>/dev/null; then
+            echo "⏭️  @llmist/cli@$VERSION already published, skipping..."
+          else
+            echo "🚀 Force publishing @llmist/cli@$VERSION..."
+            cd packages/cli && npm publish --access public
+          fi
+
           echo "✅ Force publish complete!"
 
       - name: Run semantic-release
