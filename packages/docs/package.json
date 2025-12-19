@@ -1,0 +1,9 @@
+{
+  "name": "@llmist/docs",
+  "version": "7.0.0",
+  "private": true,
+  "scripts": {
+    "start": "echo 'Docusaurus not yet configured'",
+    "build": "echo 'Docusaurus not yet configured'"
+  }
+}

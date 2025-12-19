@@ -5,7 +5,7 @@
 
 echo "Running pre-commit checks..."
 
-# Run typecheck
+# Run typecheck (uses Turborepo)
 echo "→ Running typecheck..."
 bun run typecheck
 TYPECHECK_EXIT=$?
@@ -29,9 +29,9 @@ fi
 
 echo "✓ Linter passed"
 
-# Run unit tests (excluding E2E tests)
+# Run unit tests across all packages (uses Turborepo)
 echo "→ Running unit tests..."
-bun test src/agent src/core src/gadgets src/providers src/testing --timeout 30000
+bun run test
 TEST_EXIT=$?
 
 if [ $TEST_EXIT -ne 0 ]; then

@@ -38,15 +38,34 @@ gh pr create --base main --head dev --title "chore(release): merge dev to main"
 
 ## Testing
 
-- Run `bun test` before committing
-- E2E tests: `bun test src/e2e --timeout 60000`
-- Parser tests: `bun test src/gadgets/parser.test.ts`
+- Run `bun run test` to test all packages (uses Turborepo)
+- Run `bun run test --filter=llmist` for core library tests only
+- E2E tests: `bun run test:e2e --filter=llmist`
 
-## Project Structure
+## Project Structure (Monorepo)
 
-- `src/agent/` - Agent implementation and stream processing
-- `src/core/` - Core types, messages, and client
-- `src/gadgets/` - Gadget system (parser, executor, registry)
-- `src/cli/` - CLI implementation
-- `src/providers/` - LLM provider integrations (Anthropic, OpenAI, Gemini)
-- `examples/` - Example gadgets and usage
+This is a Bun Workspaces + Turborepo monorepo with the following packages:
+
+```
+packages/
+├── llmist/           # Core library (npm: llmist)
+│   └── src/
+│       ├── agent/    # Agent implementation and stream processing
+│       ├── core/     # Core types, messages, and client
+│       ├── gadgets/  # Gadget system (parser, executor, registry)
+│       ├── providers/# LLM provider integrations
+│       └── e2e/      # End-to-end tests
+├── testing/          # Testing utilities (npm: @llmist/testing)
+├── cli/              # CLI application (npm: @llmist/cli, binary: llmist)
+└── docs/             # Documentation site (private)
+examples/             # Example gadgets and usage (uses published packages)
+```
+
+### Build Commands
+
+```bash
+bun run build         # Build all packages
+bun run test          # Test all packages
+bun run typecheck     # Type-check all packages
+bun run lint          # Lint entire repo
+```

@@ -1,0 +1,96 @@
+{
+  "name": "llmist",
+  "version": "7.0.0",
+  "description": "TypeScript LLM client with streaming tool execution. Tools fire mid-stream. Built-in function calling works with any model—no structured outputs or native tool support required.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src --ignore-pattern='**/e2e/**'",
+    "test:unit": "bun test src/agent src/core src/gadgets src/providers",
+    "test:e2e": "bun test src/e2e --timeout 60000 --bail 1",
+    "clean": "rimraf dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zbigniewsobiecki/llmist.git",
+    "directory": "packages/llmist"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "llm",
+    "ai",
+    "agent",
+    "agents",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini",
+    "gpt",
+    "streaming",
+    "function-calling",
+    "tool-calling",
+    "typescript",
+    "universal-client",
+    "multi-provider",
+    "hooks",
+    "gadgets",
+    "chatbot",
+    "chatgpt",
+    "agentic",
+    "language-model",
+    "generative-ai",
+    "bun",
+    "nodejs"
+  ],
+  "author": "Zbigniew Sobiecki <zbigniew@sobiecki.name>",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
+    "@google/genai": "^1.27.0",
+    "chalk": "^5.6.2",
+    "diff": "^8.0.2",
+    "eta": "^4.4.1",
+    "fast-deep-equal": "^3.1.3",
+    "js-toml": "^1.0.2",
+    "js-yaml": "^4.1.0",
+    "marked": "^15.0.12",
+    "marked-terminal": "^7.3.0",
+    "openai": "^6.0.0",
+    "p-retry": "^7.1.1",
+    "tiktoken": "^1.0.22",
+    "tslog": "^4.10.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/diff": "^8.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/marked-terminal": "^6.1.1",
+    "@types/node": "^20.12.7",
+    "bun-types": "^1.3.2",
+    "dotenv": "^17.2.3",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.4.5"
+  }
+}
