@@ -1,3 +1,10 @@
+## 8.1.0 (2025-12-19)
+
+* Merge pull request #218 from zbigniewsobiecki/dev ([574b97f](https://github.com/zbigniewsobiecki/llmist/commit/574b97f)), closes [#218](https://github.com/zbigniewsobiecki/llmist/issues/218)
+* feat(cli): support factory-based external gadgets and git URL presets (#217) ([252a247](https://github.com/zbigniewsobiecki/llmist/commit/252a247)), closes [#217](https://github.com/zbigniewsobiecki/llmist/issues/217)
+* ci: add force_publish option for manual npm releases ([ed76ac6](https://github.com/zbigniewsobiecki/llmist/commit/ed76ac6))
+* ci: skip already-published packages in force_publish ([68f0543](https://github.com/zbigniewsobiecki/llmist/commit/68f0543))
+
 ## 8.0.0 (2025-12-19)
 
 * fix(release): run version sync before npm to resolve workspace:* protocol ([5e06c5f](https://github.com/zbigniewsobiecki/llmist/commit/5e06c5f))
