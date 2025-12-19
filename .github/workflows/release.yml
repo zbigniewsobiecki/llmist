@@ -45,6 +45,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: bun install
@@ -62,27 +63,40 @@ jobs:
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           BEFORE_SHA=$(git rev-parse HEAD)
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             echo "Running in dry-run mode"
             bunx semantic-release --dry-run
           else
-            # Run semantic-release, capture exit code but don't fail yet
-            # This allows dev sync to run even if npm publish fails
+            # Run semantic-release (publishes llmist package to npm)
+            # The @semantic-release/exec plugin runs sync-versions.js to sync all package versions
             bunx semantic-release || RELEASE_EXIT_CODE=$?
           fi
           AFTER_SHA=$(git rev-parse HEAD)
           # Check if a release commit was made (HEAD changed)
           if [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
             echo "released=true" >> $GITHUB_OUTPUT
-            echo "✅ Release commit detected - dev branch will be synced"
+            # Extract version from the release commit
+            VERSION=$(node -p "require('./packages/llmist/package.json').version")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "✅ Release $VERSION created"
           else
             echo "released=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ No release commit - skipping dev sync"
+            echo "ℹ️ No release commit - skipping publish"
           fi
           # Exit with the original exit code if semantic-release failed
           exit ${RELEASE_EXIT_CODE:-0}
+
+      - name: Publish @llmist/cli to npm
+        if: ${{ steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "Publishing @llmist/cli@${{ steps.semantic.outputs.version }}..."
+          cd packages/cli
+          npm publish --access public
 
       - name: Sync dev branch
         if: ${{ always() && steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' }}
