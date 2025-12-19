@@ -7,6 +7,7 @@ import {
   formatLLMCallOpening,
   formatNestedGadgetResult,
   formatTokens,
+  formatUserMessage,
   renderMarkdown,
   truncateValue,
 } from "./formatters.js";
@@ -1229,5 +1230,44 @@ describe("truncateValue", () => {
       const result = truncateValue(longString, maxLen);
       expect(result.length).toBeLessThanOrEqual(maxLen);
     }
+  });
+});
+
+describe("formatUserMessage", () => {
+  it("renders user message with person icon", () => {
+    const result = formatUserMessage("Hello!");
+    expect(result).toContain("👤");
+    expect(result).toContain("Hello!");
+  });
+
+  it("includes ANSI codes for cyan coloring", () => {
+    const result = formatUserMessage("Test message");
+    // Check for ANSI escape sequence
+    expect(result.includes("\x1b[")).toBe(true);
+  });
+
+  it("renders markdown in user messages", () => {
+    const result = formatUserMessage("**Bold** and *italic*");
+    expect(result).toContain("Bold");
+    expect(result).toContain("italic");
+  });
+
+  it("adds newlines for visual separation", () => {
+    const result = formatUserMessage("test");
+    expect(result.startsWith("\n")).toBe(true);
+    expect(result.endsWith("\n")).toBe(true);
+  });
+
+  it("handles empty message", () => {
+    const result = formatUserMessage("");
+    expect(result).toContain("👤");
+    expect(result.startsWith("\n")).toBe(true);
+  });
+
+  it("handles multiline messages", () => {
+    const result = formatUserMessage("Line 1\nLine 2\nLine 3");
+    expect(result).toContain("Line 1");
+    expect(result).toContain("Line 2");
+    expect(result).toContain("Line 3");
   });
 });

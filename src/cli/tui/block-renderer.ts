@@ -30,7 +30,7 @@ import {
   getIndent,
   getContinuationIndent,
 } from "../ui/block-formatters.js";
-import { renderMarkdown } from "../ui/formatters.js";
+import { renderMarkdown, formatUserMessage } from "../ui/formatters.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BlockRenderer Class
@@ -331,6 +331,34 @@ export class BlockRenderer {
       depth: 0,
       parentId: null,
       content,
+      children: [] as never[],
+    };
+
+    this.nodes.set(id, node);
+    this.rootIds.push(id);
+    this.rebuildBlocks();
+    return id;
+  }
+
+  /**
+   * Add a user message block (for REPL mid-session input).
+   *
+   * Displays immediately with a distinct icon (👤) to differentiate
+   * from LLM responses. Non-selectable like other text blocks.
+   *
+   * @param message - The user's input message
+   * @returns The block ID
+   */
+  addUserMessage(message: string): string {
+    const id = this.generateId("user");
+    const formatted = formatUserMessage(message);
+
+    const node: TextNode = {
+      id,
+      type: "text",
+      depth: 0,
+      parentId: null,
+      content: formatted,
       children: [] as never[],
     };
 

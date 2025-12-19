@@ -554,8 +554,10 @@ export async function executeAgent(
   // Piped mode: Run once and exit
   if (tui) {
     // Wire up mid-session input: when user submits input during a running session,
-    // inject it into the current agent's conversation for the next LLM iteration
+    // echo the message immediately and inject it into the agent's conversation
     tui.onMidSessionInput((message) => {
+      // Echo the user's message immediately (before agent processes)
+      tui.showUserMessage(message);
       if (currentAgent) {
         currentAgent.injectUserMessage(message);
       }
@@ -564,7 +566,9 @@ export async function executeAgent(
     // Get initial prompt (from CLI arg or wait for user input)
     let currentPrompt = prompt;
     if (!currentPrompt) {
+      tui.setFocusMode("input"); // Start in input mode for fresh sessions
       currentPrompt = await tui.waitForPrompt();
+      tui.showUserMessage(currentPrompt); // Echo the user's message
     }
 
     // REPL loop
@@ -580,6 +584,7 @@ export async function executeAgent(
 
       // Wait for next prompt
       currentPrompt = await tui.waitForPrompt();
+      tui.showUserMessage(currentPrompt); // Echo the user's message
     }
   } else {
     // Piped mode: run once and exit

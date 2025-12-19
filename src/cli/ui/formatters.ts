@@ -159,6 +159,27 @@ export function renderMarkdownWithSeparators(text: string): string {
 }
 
 /**
+ * Formats a user message for display in the TUI REPL.
+ *
+ * Uses a distinct icon (👤) and cyan coloring to differentiate user input
+ * from LLM responses. The message content is rendered with markdown support.
+ *
+ * @param message - The user's message text
+ * @returns Formatted string with icon and markdown rendering
+ *
+ * @example
+ * ```typescript
+ * formatUserMessage("Can you add unit tests for this?");
+ * // Returns: "\n👤 Can you add unit tests for this?\n"
+ * ```
+ */
+export function formatUserMessage(message: string): string {
+  const icon = chalk.cyan("👤");
+  const rendered = renderMarkdown(message);
+  return `\n${icon} ${rendered}\n`;
+}
+
+/**
  * Formats token count with 'k' suffix for thousands.
  *
  * Uses compact notation to save terminal space while maintaining readability.
