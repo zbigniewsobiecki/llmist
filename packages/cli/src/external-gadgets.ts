@@ -93,16 +93,51 @@ export function isExternalPackageSpecifier(specifier: string): boolean {
  * - `webasto@2.0.0:minimal` - all combined
  * - `git+https://github.com/user/repo` - git URL
  * - `git+https://github.com/user/repo#v1.0.0` - git URL with ref
+ * - `git+https://github.com/user/repo#v1.0.0:minimal` - git URL with ref and preset
+ * - `git+https://github.com/user/repo:minimal` - git URL with preset (no ref)
  */
 export function parseGadgetSpecifier(specifier: string): GadgetSpecifier | null {
-  // Git URL
+  // Git URL: git+URL[#ref][:preset]
   if (specifier.startsWith("git+")) {
     const url = specifier.slice(4);
-    const [baseUrl, ref] = url.split("#");
+    let baseUrl: string;
+    let ref: string | undefined;
+    let preset: string | undefined;
+
+    if (url.includes("#")) {
+      const hashIndex = url.indexOf("#");
+      baseUrl = url.slice(0, hashIndex);
+      const refAndPreset = url.slice(hashIndex + 1);
+
+      if (refAndPreset.includes(":")) {
+        const colonIndex = refAndPreset.indexOf(":");
+        ref = refAndPreset.slice(0, colonIndex);
+        preset = refAndPreset.slice(colonIndex + 1);
+      } else {
+        ref = refAndPreset;
+      }
+    } else {
+      // Check for :preset without #ref (but be careful not to match https: port)
+      // The preset must come after the .git extension or after a /
+      const gitExtIndex = url.indexOf(".git");
+      if (gitExtIndex !== -1) {
+        const afterGit = url.slice(gitExtIndex + 4);
+        if (afterGit.startsWith(":")) {
+          baseUrl = url.slice(0, gitExtIndex + 4);
+          preset = afterGit.slice(1);
+        } else {
+          baseUrl = url;
+        }
+      } else {
+        baseUrl = url;
+      }
+    }
+
     return {
       type: "git",
       package: baseUrl,
       version: ref,
+      preset,
     };
   }
 
@@ -362,8 +397,53 @@ export async function loadExternalGadgets(
     throw new Error(`Failed to import '${specifier}': ${message}`);
   }
 
-  // Extract gadgets
-  let gadgets = extractGadgetsFromModule(exports);
+  let gadgets: AbstractGadget[] = [];
+
+  // Check if this is a factory-based package
+  if (manifest?.factory) {
+    const exportsObj = exports as Record<string, unknown>;
+
+    // Try factory functions in order of specificity
+    if (spec.preset && typeof exportsObj.createGadgetsByPreset === "function") {
+      // Use preset-specific factory
+      const result = await (exportsObj.createGadgetsByPreset as (preset: string) => Promise<unknown>)(
+        spec.preset,
+      );
+      gadgets = extractGadgetsFromModule(result);
+      // Clear gadgetNames since factory already handled the preset filtering
+      gadgetNames = null;
+    } else if (gadgetNames && typeof exportsObj.createGadgetsByName === "function") {
+      // Use name-specific factory
+      const result = await (exportsObj.createGadgetsByName as (names: string[]) => Promise<unknown>)(
+        gadgetNames,
+      );
+      gadgets = extractGadgetsFromModule(result);
+      // Clear gadgetNames since factory already filtered
+      gadgetNames = null;
+    } else {
+      // Try common factory function names
+      const factoryNames = [
+        "createGadgets",
+        "createDhalsimGadgets",
+        "createAllGadgets",
+        "gadgets",
+        "default",
+      ];
+
+      for (const name of factoryNames) {
+        if (typeof exportsObj[name] === "function") {
+          const result = await (exportsObj[name] as () => Promise<unknown>)();
+          gadgets = extractGadgetsFromModule(result);
+          if (gadgets.length > 0) break;
+        }
+      }
+    }
+  }
+
+  // Fall back to extracting gadgets directly from exports
+  if (gadgets.length === 0) {
+    gadgets = extractGadgetsFromModule(exports);
+  }
 
   // Filter by name if specific gadgets requested
   if (gadgetNames) {
