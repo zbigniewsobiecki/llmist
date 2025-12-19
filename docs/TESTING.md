@@ -5,7 +5,8 @@ Mock LLM responses for zero-cost, deterministic tests.
 ## Quick Start
 
 ```typescript
-import { mockLLM, createMockClient, LLMist } from 'llmist';
+import { LLMist } from 'llmist';
+import { mockLLM, createMockClient } from '@llmist/testing';
 
 // Register a mock
 mockLLM()
@@ -119,7 +120,8 @@ mockLLM()
 ## Testing with Agents
 
 ```typescript
-import { mockLLM, createMockClient, LLMist, Gadget, z } from 'llmist';
+import { LLMist, Gadget, z } from 'llmist';
+import { mockLLM, createMockClient } from '@llmist/testing';
 
 class Calculator extends Gadget({
   description: 'Adds numbers',
@@ -158,7 +160,7 @@ test('agent uses calculator', async () => {
 ## Clearing Mocks
 
 ```typescript
-import { getMockManager } from 'llmist';
+import { getMockManager } from '@llmist/testing';
 
 beforeEach(() => {
   getMockManager().clear();
@@ -173,7 +175,8 @@ getMockManager().unregister(mockId);
 
 ```typescript
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { mockLLM, createMockClient, getMockManager, LLMist, Gadget, z } from 'llmist';
+import { LLMist, Gadget, z } from 'llmist';
+import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
 
 class Weather extends Gadget({
   description: 'Gets weather',
@@ -254,10 +257,10 @@ const isIntegration = process.env.RUN_INTEGRATION === 'true';
 
 ## Gadget Testing Utilities
 
-Test gadgets in isolation without the full agent loop. Import from `llmist/testing`:
+Test gadgets in isolation without the full agent loop. Import from `@llmist/testing`:
 
 ```typescript
-import { testGadget, testGadgetBatch, createMockGadget, mockGadget } from 'llmist/testing';
+import { testGadget, testGadgetBatch, createMockGadget, mockGadget } from '@llmist/testing';
 ```
 
 ### testGadget
@@ -265,8 +268,8 @@ import { testGadget, testGadgetBatch, createMockGadget, mockGadget } from 'llmis
 Execute a gadget with schema validation and default application:
 
 ```typescript
-import { testGadget } from 'llmist/testing';
 import { createGadget, z } from 'llmist';
+import { testGadget } from '@llmist/testing';
 
 const calculator = createGadget({
   description: 'Add numbers',
@@ -299,7 +302,7 @@ const result = await testGadget(gadget, rawParams, { skipValidation: true });
 Test multiple parameter sets at once:
 
 ```typescript
-import { testGadgetBatch } from 'llmist/testing';
+import { testGadgetBatch } from '@llmist/testing';
 
 const results = await testGadgetBatch(calculator, [
   { a: 1, b: 2 },
@@ -317,7 +320,7 @@ const results = await testGadgetBatch(calculator, [
 Create mock gadgets for testing agent interactions:
 
 ```typescript
-import { createMockGadget, mockGadget } from 'llmist/testing';
+import { createMockGadget, mockGadget } from '@llmist/testing';
 
 // Simple mock with static result
 const weatherMock = createMockGadget({

@@ -58,18 +58,31 @@ LLMist.createAgent()
 | `.withGadgets(...gadgets)` | `GadgetOrClass[]` | Register gadgets (classes or instances) |
 | `.withDefaultGadgetTimeout(ms)` | `number` | Default timeout for all gadgets |
 
-### Error Handling
+### Error Handling & Retry
 
 | Method | Type | Default | Description |
 |--------|------|---------|-------------|
 | `.withStopOnGadgetError(stop)` | `boolean` | `true` | Stop on first gadget error |
 | `.withErrorHandler(handler)` | Function | none | Custom error handling |
+| `.withRetry(config)` | `RetryConfig` | Enabled, 3 retries | Configure retry with exponential backoff |
+| `.withoutRetry()` | - | - | Disable automatic retry |
 
 ```typescript
 .withErrorHandler((ctx) => {
   // Return true to continue, false to stop
   return ctx.errorType !== 'execution';
 })
+
+// Configure retry behavior for rate limits and transient errors
+.withRetry({
+  retries: 5,           // Max retry attempts
+  minTimeout: 2000,     // Initial delay (ms)
+  maxTimeout: 60000,    // Max delay (ms)
+  onRetry: (error, attempt) => console.log(`Retry ${attempt}`),
+})
+
+// Disable retry entirely
+.withoutRetry()
 ```
 
 ### Conversation
