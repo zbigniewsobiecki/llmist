@@ -5,16 +5,16 @@
     "@semantic-release/release-notes-generator",
     "@semantic-release/changelog",
     [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "node scripts/sync-versions.js ${nextRelease.version}"
+      }
+    ],
+    [
       "@semantic-release/npm",
       {
         "npmPublish": true,
         "pkgRoot": "packages/llmist"
-      }
-    ],
-    [
-      "@semantic-release/exec",
-      {
-        "prepareCmd": "node scripts/sync-versions.js"
       }
     ],
     [

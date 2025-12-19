@@ -3,10 +3,15 @@
  * Syncs version across all packages in the monorepo.
  * Used by semantic-release before npm publish.
  *
+ * Usage:
+ *   node scripts/sync-versions.js [version]
+ *
+ * If version is provided as argument, uses that version.
+ * Otherwise falls back to reading from packages/llmist/package.json.
+ *
  * This script:
- * 1. Reads the version from root package.json
- * 2. Updates all package versions to match
- * 3. Replaces `workspace:*` with actual version for publishing
+ * 1. Updates all package versions to match
+ * 2. Replaces `workspace:*` with actual version for publishing
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,9 +19,12 @@ import { join } from "node:path";
 const ROOT = process.cwd();
 const PACKAGES = ["packages/llmist", "packages/cli", "packages/testing"];
 
-// Get version from llmist package.json (source of truth)
-const llmistPkg = JSON.parse(readFileSync(join(ROOT, "packages/llmist/package.json"), "utf8"));
-const version = llmistPkg.version;
+// Get version from command line argument or fallback to llmist package.json
+let version = process.argv[2];
+if (!version) {
+  const llmistPkg = JSON.parse(readFileSync(join(ROOT, "packages/llmist/package.json"), "utf8"));
+  version = llmistPkg.version;
+}
 
 console.log(`Syncing version ${version} across packages...`);
 
