@@ -129,7 +129,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "Publishing @llmist/cli@${{ steps.semantic.outputs.version }}..."
+          # Rebuild CLI to include correct version (was built before version sync)
           cd packages/cli
+          bun run build
           npm publish --access public
 
       - name: Sync dev branch
