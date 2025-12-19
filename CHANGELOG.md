@@ -1,3 +1,9 @@
+## <small>8.1.1 (2025-12-19)</small>
+
+* Merge pull request #219 from zbigniewsobiecki/fix/external-gadgets-build-tolerance ([b1b195f](https://github.com/zbigniewsobiecki/llmist/commit/b1b195f)), closes [#219](https://github.com/zbigniewsobiecki/llmist/issues/219)
+* Merge pull request #220 from zbigniewsobiecki/dev ([ce85243](https://github.com/zbigniewsobiecki/llmist/commit/ce85243)), closes [#220](https://github.com/zbigniewsobiecki/llmist/issues/220)
+* fix(cli): tolerate TypeScript errors in external gadget builds ([04c6579](https://github.com/zbigniewsobiecki/llmist/commit/04c6579))
+
 ## 8.1.0 (2025-12-19)
 
 * Merge pull request #218 from zbigniewsobiecki/dev ([574b97f](https://github.com/zbigniewsobiecki/llmist/commit/574b97f)), closes [#218](https://github.com/zbigniewsobiecki/llmist/issues/218)
