@@ -271,14 +271,21 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
       }
 
       // Run build if available (git packages need to be built)
-      try {
-        const packageJson = JSON.parse(fs.readFileSync(path.join(cacheDir, "package.json"), "utf-8"));
-        if (packageJson.scripts?.build) {
+      const packageJson = JSON.parse(fs.readFileSync(path.join(cacheDir, "package.json"), "utf-8"));
+      if (packageJson.scripts?.build) {
+        try {
           execSync("bun run build", { cwd: cacheDir, stdio: "inherit" });
+        } catch (error) {
+          // Build may fail (e.g., TypeScript errors in test files) but the main bundle
+          // may still be created. Check if the entry point exists before failing.
+          const entryPoint = packageJson.llmist?.gadgets || "./dist/index.js";
+          const entryPointPath = path.join(cacheDir, entryPoint);
+          if (!fs.existsSync(entryPointPath)) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to build package '${spec.package}': ${message}`);
+          }
+          // Entry point exists, continue despite build errors
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to build package '${spec.package}': ${message}`);
       }
     }
   }

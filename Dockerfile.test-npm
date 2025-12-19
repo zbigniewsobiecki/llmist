@@ -3,23 +3,29 @@
 #   docker build -f Dockerfile.test-npm -t llmist-test .
 #   docker run --rm -e GEMINI_API_KEY="your-key" llmist-test
 #   docker run --rm -e GEMINI_API_KEY="key" -e ANTHROPIC_API_KEY="key" llmist-test
-#
-# Note: External gadget tests (Test 3, 4) require version 8.1.0+ for factory support
 
 FROM node:22-slim
 
-# Install build tools for native dependencies (better-sqlite3, sharp)
+# Install build tools for native dependencies (better-sqlite3, sharp) and bun
 RUN apt-get update && apt-get install -y \
     python3 \
     build-essential \
     git \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install bun (required for external gadget installation from git URLs)
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:$PATH"
 
 WORKDIR /app
 
 # Install packages from npm (not from local workspace)
-RUN npm install -g @llmist/cli@8.0.0 && \
-    npm install llmist@8.0.0
+# Use --force to ensure we get the exact version even if cached
+RUN npm cache clean --force && \
+    npm install -g @llmist/cli@8.1.0 && \
+    npm install llmist@8.1.0
 
 # Create a simple test script for llmist library
 RUN cat > test-library.mjs << 'EOF'
@@ -93,7 +99,7 @@ fi
 
 echo "📦 Package versions:"
 echo "   llmist CLI: $(llmist --version)"
-LIB_VERSION=$(node -e "import('llmist').then(m => console.log(m.LLMist ? '8.0.0' : 'unknown'))")
+LIB_VERSION=$(node -e "import('llmist').then(m => console.log(m.LLMist ? '8.1.0' : 'unknown'))")
 echo "   llmist lib: $LIB_VERSION"
 echo ""
 
