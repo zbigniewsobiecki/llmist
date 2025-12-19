@@ -1,3 +1,8 @@
+## <small>8.1.2 (2025-12-19)</small>
+
+* Merge pull request #221 from zbigniewsobiecki/dev ([f5f7b7d](https://github.com/zbigniewsobiecki/llmist/commit/f5f7b7d)), closes [#221](https://github.com/zbigniewsobiecki/llmist/issues/221)
+* fix(ci): rebuild CLI before publish to include correct version ([0bb1b89](https://github.com/zbigniewsobiecki/llmist/commit/0bb1b89))
+
 ## <small>8.1.1 (2025-12-19)</small>
 
 * Merge pull request #219 from zbigniewsobiecki/fix/external-gadgets-build-tolerance ([b1b195f](https://github.com/zbigniewsobiecki/llmist/commit/b1b195f)), closes [#219](https://github.com/zbigniewsobiecki/llmist/issues/219)
