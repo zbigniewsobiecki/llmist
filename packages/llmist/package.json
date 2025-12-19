@@ -65,6 +65,7 @@
   ],
   "author": "Zbigniew Sobiecki <zbigniew@sobiecki.name>",
   "license": "MIT",
+  "sideEffects": false,
   "dependencies": {
     "@anthropic-ai/sdk": "^0.69.0",
     "@google/genai": "^1.27.0",

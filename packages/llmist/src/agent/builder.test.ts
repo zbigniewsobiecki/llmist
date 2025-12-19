@@ -872,15 +872,18 @@ describe("AgentBuilder", () => {
 
   describe("build()", () => {
     it("creates an agent without a user prompt", () => {
-      const builder = new AgentBuilder();
-      const agent = builder.withModel("gpt4-mini").build();
+      // Use mock client to avoid requiring real API keys in isolated test environments
+      const mockClient = createMockClient();
+      const builder = new AgentBuilder(mockClient);
+      const agent = builder.withModel("mock:test").build();
 
       expect(agent).toBeDefined();
     });
 
     it("provides access to the gadget registry via getRegistry()", () => {
-      const agent = new AgentBuilder()
-        .withModel("sonnet")
+      const mockClient = createMockClient();
+      const agent = new AgentBuilder(mockClient)
+        .withModel("mock:test")
         .withGadgets(Calculator, Weather)
         .withGadgetOutputLimit(false) // Disable to avoid auto-registered GadgetOutputViewer
         .build();
@@ -896,7 +899,8 @@ describe("AgentBuilder", () => {
     });
 
     it("throws error when run() is called without user prompt", async () => {
-      const agent = new AgentBuilder().withModel("gpt4-mini").build();
+      const mockClient = createMockClient();
+      const agent = new AgentBuilder(mockClient).withModel("mock:test").build();
 
       const runGenerator = agent.run();
 
@@ -904,7 +908,11 @@ describe("AgentBuilder", () => {
     });
 
     it("ask() still works normally and provides getRegistry()", () => {
-      const agent = new AgentBuilder().withModel("gpt4-mini").withGadgets(Calculator).ask("Hello");
+      const mockClient = createMockClient();
+      const agent = new AgentBuilder(mockClient)
+        .withModel("mock:test")
+        .withGadgets(Calculator)
+        .ask("Hello");
 
       expect(agent).toBeDefined();
       expect(agent.getRegistry()).toBeDefined();
@@ -912,8 +920,9 @@ describe("AgentBuilder", () => {
     });
 
     it("preserves all configuration in build()", () => {
-      const agent = new AgentBuilder()
-        .withModel("sonnet")
+      const mockClient = createMockClient();
+      const agent = new AgentBuilder(mockClient)
+        .withModel("mock:test")
         .withSystem("You are helpful")
         .withTemperature(0.7)
         .withMaxIterations(5)

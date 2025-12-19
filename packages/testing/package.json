@@ -45,6 +45,7 @@
   ],
   "author": "Zbigniew Sobiecki <zbigniew@sobiecki.name>",
   "license": "MIT",
+  "sideEffects": false,
   "peerDependencies": {
     "llmist": "^7.0.0"
   },

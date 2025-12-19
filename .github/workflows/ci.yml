@@ -53,7 +53,12 @@ jobs:
         run: bun run lint
 
       - name: Run unit tests
-        run: bun run test
+        # Run tests directly (not via Turborepo) to avoid TTY output capture issues
+        # with @unblessed/node terminal tests
+        run: |
+          cd packages/llmist && bun test src --ignore-pattern='**/e2e/**'
+          cd ../testing && bun test src
+          cd ../cli && bun test src
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
