@@ -746,6 +746,18 @@ export class TUIApp {
   }
 
   /**
+   * Display a user message in the TUI.
+   *
+   * Used for REPL mode to echo user input before the agent processes it.
+   * Shows immediately with a distinct icon (👤) to differentiate from LLM responses.
+   *
+   * @param message - The user's message text
+   */
+  showUserMessage(message: string): void {
+    this.blockRenderer.addUserMessage(message);
+  }
+
+  /**
    * Show a temporary hint in the body.
    */
   private showHint(message: string): void {

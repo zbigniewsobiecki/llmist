@@ -246,9 +246,13 @@ export class StatusBar {
       this.treeUnsubscribe();
     }
 
-    // Clear previous mappings
+    // Clear ALL previous state (activity tracking + node mappings)
+    // This prevents stale LLM/gadget activity from previous tree subscriptions
+    this.activeLLMCalls.clear();
+    this.activeGadgets.clear();
     this.nodeIdToLabel.clear();
     this.nodeIdToGadgetName.clear();
+    this.maybeStopSpinner();
 
     this.treeUnsubscribe = tree.onAll((event: ExecutionEvent) => {
       this.handleTreeEvent(event);
