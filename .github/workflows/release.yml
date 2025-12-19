@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      force_publish:
+        description: 'Force publish current versions (skip semantic-release)'
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -59,7 +64,22 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config core.hooksPath /dev/null
 
+      - name: Force publish (skip semantic-release)
+        if: ${{ github.event.inputs.force_publish == 'true' }}
+        id: force_publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./packages/llmist/package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "🚀 Force publishing llmist@$VERSION..."
+          cd packages/llmist && npm publish --access public
+          echo "🚀 Force publishing @llmist/cli@$VERSION..."
+          cd ../cli && npm publish --access public
+          echo "✅ Force publish complete!"
+
       - name: Run semantic-release
+        if: ${{ github.event.inputs.force_publish != 'true' }}
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
@@ -90,7 +110,7 @@ jobs:
           exit ${RELEASE_EXIT_CODE:-0}
 
       - name: Publish @llmist/cli to npm
-        if: ${{ steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' }}
+        if: ${{ steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' && github.event.inputs.force_publish != 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
