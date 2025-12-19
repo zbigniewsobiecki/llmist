@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
 import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
@@ -353,7 +353,7 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       const result = builder.withHooks({
         observers: {
-          onLLMCallStart: vi.fn(),
+          onLLMCallStart: mock(() => {}),
         },
       });
 
@@ -371,7 +371,7 @@ describe("AgentBuilder", () => {
 
     it("accepts a callback function", () => {
       const builder = new AgentBuilder();
-      const callback = vi.fn();
+      const callback = mock(() => {});
       const result = builder.withSubagentEventCallback(callback);
 
       expect(result).toBe(builder);
@@ -393,7 +393,7 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       const mockCtx = {
         invocationId: "test-123",
-        onSubagentEvent: vi.fn(),
+        onSubagentEvent: mock(() => {}),
       };
       const result = builder.withParentContext(mockCtx as never);
 
@@ -404,7 +404,7 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       const mockCtx = {
         invocationId: "test-123",
-        onSubagentEvent: vi.fn(),
+        onSubagentEvent: mock(() => {}),
       };
       const result = builder.withParentContext(mockCtx as never, 2);
 
@@ -423,7 +423,7 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       const mockCtx = {
         invocationId: "test-123",
-        onSubagentEvent: vi.fn(),
+        onSubagentEvent: mock(() => {}),
       };
       const result = builder
         .withModel("sonnet")
@@ -516,7 +516,7 @@ describe("AgentBuilder", () => {
   describe("onHumanInput", () => {
     it("sets human input handler", () => {
       const builder = new AgentBuilder();
-      const handler = vi.fn(async () => "response");
+      const handler = mock(async () => "response");
 
       const result = builder.onHumanInput(handler);
 
@@ -781,7 +781,7 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       const customHandler = {
         type: "custom" as const,
-        handler: vi.fn(async () => ({ action: "continue" as const })),
+        handler: mock(async () => ({ action: "continue" as const })),
       };
 
       const result = builder.withTextOnlyHandler(customHandler);
@@ -1146,7 +1146,7 @@ describe("AgentBuilder", () => {
     });
 
     it("preserves existing hooks when trailing message is added", () => {
-      const onLLMCallStart = vi.fn();
+      const onLLMCallStart = mock(() => {});
       const builder = new AgentBuilder();
       builder.withHooks({
         observers: { onLLMCallStart },
@@ -1168,7 +1168,7 @@ describe("AgentBuilder", () => {
     });
 
     it("composes with existing beforeLLMCall controller", async () => {
-      const existingController = vi.fn(async () => ({
+      const existingController = mock(async () => ({
         action: "proceed" as const,
         modifiedOptions: { temperature: 0.5 },
       }));
@@ -1214,7 +1214,7 @@ describe("AgentBuilder", () => {
     });
 
     it("does not add trailing message when existing controller returns skip", async () => {
-      const existingController = vi.fn(async () => ({
+      const existingController = mock(async () => ({
         action: "skip" as const,
         syntheticResponse: "Cached response",
       }));
@@ -1252,7 +1252,7 @@ describe("AgentBuilder", () => {
     });
 
     it("calls dynamic message function with correct context", async () => {
-      const messageFn = vi.fn(
+      const messageFn = mock(
         (ctx: { iteration: number; maxIterations: number }) =>
           `Iteration ${ctx.iteration}/${ctx.maxIterations}`,
       );
