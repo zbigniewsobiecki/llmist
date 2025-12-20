@@ -1,0 +1,255 @@
+---
+title: Gadget Examples
+description: Canonical examples of common gadget patterns
+sidebar:
+  order: 3
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This page contains canonical examples of common gadget patterns. Reference these examples instead of duplicating code across documentation.
+
+## Calculator Gadget
+
+The classic example demonstrating basic gadget structure:
+
+<Tabs>
+  <TabItem label="Class-based">
+    ```typescript
+    import { Gadget, z } from 'llmist';
+
+    export class Calculator extends Gadget({
+      description: 'Performs arithmetic operations',
+      schema: z.object({
+        operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
+        a: z.number(),
+        b: z.number(),
+      }),
+    }) {
+      execute(params: this['params']): string {
+        const { operation, a, b } = params;
+        switch (operation) {
+          case 'add': return String(a + b);
+          case 'subtract': return String(a - b);
+          case 'multiply': return String(a * b);
+          case 'divide': return String(a / b);
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Function-based">
+    ```typescript
+    import { createGadget, z } from 'llmist';
+
+    export const calculator = createGadget({
+      name: 'Calculator',
+      description: 'Performs arithmetic operations',
+      schema: z.object({
+        operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
+        a: z.number(),
+        b: z.number(),
+      }),
+      execute: ({ operation, a, b }) => {
+        switch (operation) {
+          case 'add': return String(a + b);
+          case 'subtract': return String(a - b);
+          case 'multiply': return String(a * b);
+          case 'divide': return String(a / b);
+        }
+      },
+    });
+    ```
+  </TabItem>
+</Tabs>
+
+## File System Gadget
+
+Read file contents with size limiting:
+
+```typescript
+import { Gadget, z } from 'llmist';
+import * as fs from 'fs/promises';
+
+export class ReadFile extends Gadget({
+  description: 'Read contents of a file',
+  schema: z.object({
+    path: z.string().describe('Absolute or relative file path'),
+    maxBytes: z.number().optional().describe('Maximum bytes to read'),
+  }),
+}) {
+  async execute(params: this['params']): Promise<string> {
+    const content = await fs.readFile(params.path, 'utf-8');
+    const limit = params.maxBytes ?? 10000;
+    return content.slice(0, limit);
+  }
+}
+```
+
+## HTTP Request Gadget
+
+Make HTTP requests with configurable timeout:
+
+```typescript
+import { Gadget, z } from 'llmist';
+
+export class HttpGet extends Gadget({
+  description: 'Make HTTP GET request',
+  schema: z.object({
+    url: z.string().url().describe('URL to fetch'),
+    headers: z.record(z.string()).optional().describe('Request headers'),
+  }),
+  timeoutMs: 30000,  // 30 second timeout
+}) {
+  async execute(params: this['params']): Promise<string> {
+    const response = await fetch(params.url, {
+      headers: params.headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.text();
+  }
+}
+```
+
+## Human Input Gadget
+
+Pause execution to ask the user a question:
+
+```typescript
+import { Gadget, HumanInputRequiredException, z } from 'llmist';
+
+export class AskUser extends Gadget({
+  description: 'Ask the user a question and wait for their response',
+  schema: z.object({
+    question: z.string().describe('Question to ask the user'),
+  }),
+}) {
+  execute(params: this['params']): string {
+    throw new HumanInputRequiredException(params.question);
+  }
+}
+```
+
+<Aside type="note">
+  `HumanInputRequiredException` pauses the agent loop and waits for user input before continuing.
+</Aside>
+
+## Task Completion Gadget
+
+Signal that the agent has completed its task:
+
+```typescript
+import { Gadget, TaskCompletionSignal, z } from 'llmist';
+
+export class Done extends Gadget({
+  description: 'Signal that the task is complete',
+  schema: z.object({
+    summary: z.string().describe('Summary of what was accomplished'),
+  }),
+}) {
+  execute(params: this['params']): string {
+    throw new TaskCompletionSignal(params.summary);
+  }
+}
+```
+
+<Aside type="note">
+  `TaskCompletionSignal` breaks the agent loop and returns the summary as the final result.
+</Aside>
+
+## Shell Command Gadget
+
+Execute shell commands (use with caution):
+
+```typescript
+import { Gadget, z } from 'llmist';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+export class RunCommand extends Gadget({
+  description: 'Execute a shell command',
+  schema: z.object({
+    command: z.string().describe('Shell command to execute'),
+    cwd: z.string().optional().describe('Working directory'),
+  }),
+  timeoutMs: 60000,
+}) {
+  async execute(params: this['params']): Promise<string> {
+    const { stdout, stderr } = await execAsync(params.command, {
+      cwd: params.cwd,
+      timeout: 55000,
+    });
+    return stdout + (stderr ? `\nSTDERR:\n${stderr}` : '');
+  }
+}
+```
+
+<Aside type="caution">
+  Shell command gadgets are powerful but dangerous. Always validate input and consider using gadget approval in CLI mode.
+</Aside>
+
+## Web Search Gadget
+
+Search the web using an API:
+
+```typescript
+import { Gadget, z } from 'llmist';
+
+export class WebSearch extends Gadget({
+  description: 'Search the web for information',
+  schema: z.object({
+    query: z.string().describe('Search query'),
+    numResults: z.number().min(1).max(10).default(5),
+  }),
+}) {
+  async execute(params: this['params']): Promise<string> {
+    // Replace with your preferred search API
+    const response = await fetch(
+      `https://api.search.example/search?q=${encodeURIComponent(params.query)}&n=${params.numResults}`
+    );
+    const results = await response.json();
+    return JSON.stringify(results, null, 2);
+  }
+}
+```
+
+## Database Query Gadget
+
+Execute database queries safely:
+
+```typescript
+import { Gadget, z } from 'llmist';
+
+export class DatabaseQuery extends Gadget({
+  description: 'Execute a read-only SQL query',
+  schema: z.object({
+    query: z.string().describe('SQL SELECT query'),
+  }),
+}) {
+  constructor(private db: Database) {
+    super();
+  }
+
+  async execute(params: this['params']): Promise<string> {
+    // Validate query is read-only
+    if (!params.query.trim().toUpperCase().startsWith('SELECT')) {
+      throw new Error('Only SELECT queries are allowed');
+    }
+
+    const results = await this.db.query(params.query);
+    return JSON.stringify(results, null, 2);
+  }
+}
+```
+
+## See Also
+
+- [Creating Gadgets](/library/guides/creating-gadgets/) - Full guide to gadget development
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Using gadgets with the CLI
+- [Testing Gadgets](/testing/gadgets/) - Testing your gadgets

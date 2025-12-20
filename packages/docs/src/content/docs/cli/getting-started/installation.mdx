@@ -10,14 +10,14 @@ import { Aside, Code, Steps, Tabs, TabItem } from '@astrojs/starlight/components
 ## Installation
 
 <Tabs>
-  <TabItem label="npm">
-    ```bash
-    npm install -g @llmist/cli
-    ```
-  </TabItem>
   <TabItem label="bun">
     ```bash
     bun add -g @llmist/cli
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm install -g @llmist/cli
     ```
   </TabItem>
   <TabItem label="pnpm">
@@ -28,6 +28,21 @@ import { Aside, Code, Steps, Tabs, TabItem } from '@astrojs/starlight/components
   <TabItem label="yarn">
     ```bash
     yarn global add @llmist/cli
+    ```
+  </TabItem>
+</Tabs>
+
+Or run directly without installing:
+
+<Tabs>
+  <TabItem label="bunx">
+    ```bash
+    bunx llmist --help
+    ```
+  </TabItem>
+  <TabItem label="npx">
+    ```bash
+    npx llmist --help
     ```
   </TabItem>
 </Tabs>
@@ -44,17 +59,11 @@ llmist --version
 
 1. **Set up API keys**
 
-   Set at least one provider API key:
+   Set at least one provider API key. See [Environment Variables](/reference/environment/) for all options.
 
    ```bash
-   # OpenAI
-   export OPENAI_API_KEY=sk-...
-
-   # Anthropic
    export ANTHROPIC_API_KEY=sk-ant-...
-
-   # Google Gemini
-   export GEMINI_API_KEY=...
+   # or OPENAI_API_KEY, GEMINI_API_KEY
    ```
 
 2. **Initialize configuration (optional)**

@@ -47,7 +47,6 @@ export default defineConfig({
             { label: "Core Concepts", autogenerate: { directory: "library/guides" } },
             { label: "Providers", autogenerate: { directory: "library/providers" } },
             { label: "Advanced", collapsed: true, autogenerate: { directory: "library/advanced" } },
-            { label: "Reference", collapsed: true, autogenerate: { directory: "library/reference" } },
           ],
         },
         {
@@ -67,7 +66,16 @@ export default defineConfig({
             { label: "Mocking", autogenerate: { directory: "testing/mocking" } },
             { label: "Testing Gadgets", autogenerate: { directory: "testing/gadgets" } },
             { label: "Testing Agents", autogenerate: { directory: "testing/agents" } },
-            { label: "Utilities", autogenerate: { directory: "testing/utilities" } },
+          ],
+        },
+        {
+          label: "Reference",
+          items: [
+            { label: "Models & Aliases", link: "/reference/models/" },
+            { label: "Environment Variables", link: "/reference/environment/" },
+            { label: "Gadget Examples", link: "/reference/gadget-examples/" },
+            { label: "Block Format", link: "/reference/block-format/" },
+            { label: "Error Types", link: "/reference/errors/" },
           ],
         },
         { label: "Cookbook", autogenerate: { directory: "cookbook" } },

@@ -1,0 +1,86 @@
+---
+title: Quick Start
+description: Build your first AI agent in minutes
+sidebar:
+  order: 2
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Build AI agents with any LLM provider in minutes.
+
+## Your First Agent
+
+```typescript
+import { LLMist, Gadget, z } from 'llmist';
+
+// 1. Define a tool (called "gadget" in llmist)
+class Calculator extends Gadget({
+  description: 'Performs arithmetic operations',
+  schema: z.object({
+    operation: z.enum(['add', 'multiply']),
+    a: z.number(),
+    b: z.number(),
+  }),
+}) {
+  execute(params: this['params']): string {
+    const { a, b, operation } = params;
+    return operation === 'add' ? String(a + b) : String(a * b);
+  }
+}
+
+// 2. Create and run agent
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(Calculator)
+  .askAndCollect('What is 15 times 23?');
+
+console.log(answer); // "15 times 23 equals 345"
+```
+
+<Aside type="tip">
+  See [Models & Aliases](/reference/models/) for all available model shortcuts like `sonnet`, `haiku`, `flash`, etc.
+</Aside>
+
+## Quick Methods (No Gadgets)
+
+For simple completions without tools:
+
+<Tabs>
+  <TabItem label="One-shot">
+    ```typescript
+    const answer = await LLMist.complete('What is the capital of France?');
+    console.log(answer);
+    ```
+  </TabItem>
+  <TabItem label="Streaming">
+    ```typescript
+    for await (const chunk of LLMist.stream('Tell me a story')) {
+      process.stdout.write(chunk);
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Switching Models
+
+Use short aliases or full model names:
+
+```typescript
+// Aliases (recommended)
+.withModel('sonnet')    // Anthropic Claude Sonnet
+.withModel('haiku')     // Anthropic Claude Haiku
+.withModel('flash')     // Google Gemini Flash
+.withModel('gpt5')      // OpenAI GPT-5
+
+// Full names with provider prefix
+.withModel('anthropic:claude-sonnet-4-5')
+.withModel('openai:gpt-5')
+```
+
+## Next Steps
+
+- [Creating Gadgets](/library/guides/creating-gadgets/) - Build custom tools
+- [Streaming](/library/guides/streaming/) - Handle real-time responses
+- [Hooks](/library/guides/hooks/) - Monitor and customize execution
+- [Gadget Examples](/reference/gadget-examples/) - Common gadget patterns

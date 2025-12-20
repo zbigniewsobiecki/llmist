@@ -174,28 +174,13 @@ llmist complete "Hello" --model flash
 
 ## Interactive TUI
 
-When running in an interactive terminal, llmist provides:
+When running in an interactive terminal, `llmist agent` provides a rich Terminal User Interface with keyboard navigation, real-time status, and debug views.
 
-- Interactive blocks for LLM calls and gadget executions
-- Keyboard navigation to browse execution history
-- Real-time status bar showing tokens, cost, and elapsed time
-- Raw viewer to inspect actual LLM requests and responses
-
-**Keyboard Shortcuts:**
-
-| Key | Action |
-|-----|--------|
-| `↑` / `k` | Select previous block |
-| `↓` / `j` | Select next block |
-| `Enter` | Toggle expand/collapse |
-| `r` | View raw request |
-| `R` | View raw response |
-| `Ctrl+B` | Toggle browse/input mode |
-| `Ctrl+C` (×2) | Quit |
+See [TUI Overview](/cli/tui/overview/) for full documentation and keyboard shortcuts.
 
 ## See Also
 
-- [CLI Configuration](/cli/configuration/) - TOML, gadget approval, environment variables
-- [CLI Gadgets](/cli/gadgets/) - Writing local gadgets
-- [Gadget Ecosystem](/cli/ecosystem/) - Third-party packages (Dhalsim, etc.)
-- [Gadgets Guide](/guides/gadgets/) - Complete gadget development reference
+- [CLI Configuration](/cli/configuration/toml-reference/) - TOML, gadget approval, environment variables
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Writing local gadgets
+- [Gadget Ecosystem](/cli/gadgets/external-gadgets/) - Third-party packages (Dhalsim, etc.)
+- [Gadgets Guide](/library/guides/gadgets/) - Complete gadget development reference

@@ -1,0 +1,80 @@
+---
+title: Installation
+description: Install llmist and set up your environment
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Install the Package
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bun add llmist
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm install llmist
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add llmist
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add llmist
+    ```
+  </TabItem>
+</Tabs>
+
+## Environment Setup
+
+Set an API key for at least one provider:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+# or
+export ANTHROPIC_API_KEY="sk-ant-..."
+# or
+export GEMINI_API_KEY="..."
+```
+
+<Aside type="tip">
+  llmist auto-discovers providers based on available API keys. See [Environment Variables](/reference/environment/) for all configuration options.
+</Aside>
+
+## Verify Installation
+
+```typescript
+import { LLMist } from 'llmist';
+
+const answer = await LLMist.complete('Hello!');
+console.log(answer);
+```
+
+## TypeScript Configuration
+
+llmist is written in TypeScript with full type definitions included. Recommended `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler"
+  }
+}
+```
+
+## Next Steps
+
+- [Quick Start](/library/getting-started/quick-start/) - Build your first agent
+- [Configuration](/library/getting-started/configuration/) - All available options
+- [CLI Installation](/cli/getting-started/installation/) - Install the command-line interface
+- [Testing Installation](/testing/getting-started/installation/) - Set up unit testing

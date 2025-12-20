@@ -1,7 +1,11 @@
 ---
 title: Block Format
 description: Parameter syntax reference for gadget calls
+sidebar:
+  order: 4
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 llmist uses a simple block format that works with any text model. This format uses marker prefixes to delimit gadget calls and their parameters—no native tool calling or structured outputs required.
 
@@ -100,7 +104,9 @@ Single-line values are automatically coerced to appropriate types:
 | `hello` | string | `"hello"` |
 | (multiline) | string | preserved as-is |
 
-**Important**: Multiline values are never coerced—they always remain strings. This is intentional for code blocks and content.
+<Aside type="note">
+  Multiline values are never coerced—they always remain strings. This is intentional for code blocks and content.
+</Aside>
 
 ## Multiline Values
 
@@ -244,6 +250,6 @@ any_character    = (* any Unicode character *) ;
 
 ## See Also
 
-- [Gadgets Guide](/guides/gadgets/) - Creating custom gadgets
-- [CLI Reference](/cli/reference/) - Command-line usage
-- [Configuration](/getting-started/configuration/) - All configuration options
+- [Creating Gadgets](/library/guides/creating-gadgets/) - Full guide to gadget creation
+- [Gadget Examples](/reference/gadget-examples/) - Common gadget patterns
+- [CLI Reference](/cli/commands/overview/) - Command-line usage
