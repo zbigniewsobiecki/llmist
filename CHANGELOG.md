@@ -1,3 +1,10 @@
+## <small>8.1.4 (2025-12-20)</small>
+
+* Merge pull request #224 from zbigniewsobiecki/dev ([7afe15c](https://github.com/zbigniewsobiecki/llmist/commit/7afe15c)), closes [#224](https://github.com/zbigniewsobiecki/llmist/issues/224)
+* Merge pull request #226 from zbigniewsobiecki/dev ([68e3bb5](https://github.com/zbigniewsobiecki/llmist/commit/68e3bb5)), closes [#226](https://github.com/zbigniewsobiecki/llmist/issues/226)
+* fix(docs): add missing content.config.ts for Starlight (#225) ([0662c03](https://github.com/zbigniewsobiecki/llmist/commit/0662c03)), closes [#225](https://github.com/zbigniewsobiecki/llmist/issues/225)
+* ci: add docs deployment to Cloudflare Pages ([ef8930e](https://github.com/zbigniewsobiecki/llmist/commit/ef8930e))
+
 ## <small>8.1.3 (2025-12-20)</small>
 
 * Merge pull request #223 from zbigniewsobiecki/dev ([22fbf59](https://github.com/zbigniewsobiecki/llmist/commit/22fbf59)), closes [#223](https://github.com/zbigniewsobiecki/llmist/issues/223)
