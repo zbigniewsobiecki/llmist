@@ -24,6 +24,7 @@
     "test": "bun test src",
     "clean": "rimraf dist"
   },
+  "homepage": "https://llmist.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/zbigniewsobiecki/llmist.git",
