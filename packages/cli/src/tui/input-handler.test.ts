@@ -3,8 +3,7 @@ import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen, Textbox, Box } from "@unblessed/node";
 import { InputHandler } from "./input-handler.js";
 
-// Skip TUI tests when not in a TTY (e.g., in CI/Turborepo)
-const isTTY = process.stdout.isTTY && process.stdin.isTTY;
+// TUI tests use mock streams - no real TTY needed
 
 // Mock streams to prevent terminal escape sequences from being written
 class MockOutputStream extends Writable {
@@ -27,7 +26,6 @@ let mockOutput: MockOutputStream;
 let mockInput: MockInputStream;
 
 beforeAll(() => {
-  if (!isTTY) return;
   setRuntime(new NodeRuntime());
   mockOutput = new MockOutputStream();
   mockInput = new MockInputStream();
@@ -68,7 +66,7 @@ afterAll(() => {
   }
 });
 
-describe.skipIf(!isTTY)("InputHandler", () => {
+describe("InputHandler", () => {
   describe("constructor", () => {
     test("initializes with idle prompt", () => {
       const renderCallback = mock(() => {});
