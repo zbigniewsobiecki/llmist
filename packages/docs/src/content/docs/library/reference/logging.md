@@ -178,6 +178,6 @@ await LLMist.createAgent()
 
 ## See Also
 
-- [Debugging Guide](/reference/debugging/) - Troubleshooting techniques
-- [CLI Configuration](/cli/configuration/) - CLI logging settings
-- [Hooks Guide](/guides/hooks/) - Custom monitoring with hooks
+- [Debugging Guide](/library/reference/debugging/) - Troubleshooting techniques
+- [CLI Configuration](/cli/configuration/toml-reference/) - CLI logging settings
+- [Hooks Guide](/library/guides/hooks/) - Custom monitoring with hooks

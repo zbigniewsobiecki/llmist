@@ -98,5 +98,5 @@ describe('MyAgent', () => {
 
 ## Next Steps
 
-- [Mocking LLM Responses](/testing/mocking/) - Detailed mock configuration
-- [Testing Gadgets](/testing/gadget-testing/) - Test gadgets in isolation
+- [Mocking LLM Responses](/testing/mocking/overview/) - Detailed mock configuration
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - Test gadgets in isolation

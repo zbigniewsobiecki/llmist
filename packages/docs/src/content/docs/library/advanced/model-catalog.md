@@ -9,12 +9,18 @@ Query model specs, estimate costs, and find the right model.
 
 | Alias | Full Model |
 |-------|------------|
-| `gpt5` | `openai:gpt-5` |
+| `gpt5` | `openai:gpt-5.2` (latest flagship) |
+| `gpt5.2` | `openai:gpt-5.2` |
+| `gpt5.1` | `openai:gpt-5.1` |
 | `gpt5-mini` | `openai:gpt-5-mini` |
-| `sonnet` | `anthropic:claude-sonnet-4-5-20250929` |
-| `haiku` | `anthropic:claude-haiku-4-5-20251001` |
-| `opus` | `anthropic:claude-opus-4-5-20251124` |
+| `gpt5-nano` | `openai:gpt-5-nano` |
+| `o1` | `openai:o1` |
+| `o3` | `openai:o3` |
+| `sonnet` | `anthropic:claude-sonnet-4-5` |
+| `haiku` | `anthropic:claude-haiku-4-5` |
+| `opus` | `anthropic:claude-opus-4-5` |
 | `flash` | `gemini:gemini-2.5-flash` |
+| `flash-lite` | `gemini:gemini-2.5-flash-lite` |
 | `pro` | `gemini:gemini-3-pro-preview` |
 
 ## Model Registry API
@@ -74,5 +80,5 @@ console.log(cheapest.modelId);
 
 ## See Also
 
-- [Custom Models](/advanced/custom-models/) - Register your own models
-- [Providers Guide](/advanced/providers/) - Provider configuration
+- [Custom Models](/library/advanced/custom-models/) - Register your own models
+- [Providers Guide](/library/advanced/providers/) - Provider configuration

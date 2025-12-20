@@ -14,10 +14,10 @@ Collect all text into a string:
 ```typescript
 const answer = await LLMist.createAgent()
   .withModel('haiku')
-  .withGadgets(Calculator)
-  .askAndCollect('What is 2 + 2?');
+  .withGadgets(FloppyDisk)
+  .askAndCollect('How many floppies for a 10MB file?');
 
-console.log(answer); // "2 + 2 equals 4"
+console.log(answer); // "A 10MB file requires 7 floppy disks."
 ```
 
 ### 2. `askWith()` - Event Handlers
@@ -27,8 +27,8 @@ Handle events as they happen:
 ```typescript
 await LLMist.createAgent()
   .withModel('sonnet')
-  .withGadgets(Calculator)
-  .askWith('Calculate 100 / 4', {
+  .withGadgets(ArcadeHighScore)
+  .askWith('Check high scores for Pac-Man', {
     onText: (text) => process.stdout.write(text),
     onGadgetCall: (call) => console.log(`Calling: ${call.gadgetName}`),
     onGadgetResult: (result) => console.log(`Result: ${result.result}`),
@@ -42,9 +42,9 @@ Full control with async iteration:
 
 ```typescript
 const agent = LLMist.createAgent()
-  .withModel('gpt4')
-  .withGadgets(Calculator)
-  .ask('What is 7 + 8?');
+  .withModel('gpt4o')
+  .withGadgets(DialUpModem)
+  .ask('Connect me to AOL');
 
 for await (const event of agent.run()) {
   switch (event.type) {
@@ -152,6 +152,6 @@ for await (const chunk of client.streamText('Tell me a story')) {
 
 ## See Also
 
-- [Gadgets Guide](/guides/gadgets/) - Creating tools
-- [Hooks Guide](/guides/hooks/) - Monitoring streams
-- [Human-in-the-Loop](/guides/human-in-loop/) - Handling user input events
+- [Gadgets Guide](/library/guides/gadgets/) - Creating tools
+- [Hooks Guide](/library/guides/hooks/) - Monitoring streams
+- [Human-in-the-Loop](/library/guides/human-in-loop/) - Handling user input events

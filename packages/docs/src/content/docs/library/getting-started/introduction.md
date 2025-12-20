@@ -25,14 +25,15 @@ for await (const event of agent.run()) {
 llmist implements its own tool calling via a simple block format. No `response_format: json`. No native tool support needed. Works with any model from supported providers.
 
 ```
-!!!GADGET_START[Calculator]
-!!!ARG[operation] add
-!!!ARG[a] 15
-!!!ARG[b] 23
+!!!GADGET_START:FloppyDisk
+!!!ARG:filename
+DOOM.ZIP
+!!!ARG:megabytes
+50
 !!!GADGET_END
 ```
 
-Markers are fully [configurable](/getting-started/configuration/).
+Markers are fully [configurable](/library/guides/creating-gadgets/#customizing-markers).
 
 ### Multi-Provider Support
 
@@ -51,9 +52,9 @@ Fluent builder, async iterators, full TypeScript inference. Hook into any lifecy
 ```typescript
 const answer = await LLMist.createAgent()
   .withModel('sonnet')
-  .withGadgets(Calculator, Weather)
+  .withGadgets(FloppyDisk, DialUpModem)
   .withHooks(HookPresets.monitoring())
-  .askAndCollect('What is 15 + 23?');
+  .askAndCollect('How many floppies for DOOM.ZIP?');
 ```
 
 ## Packages
@@ -66,5 +67,5 @@ const answer = await LLMist.createAgent()
 
 ## Next Steps
 
-- [Installation](/getting-started/installation/) - Get llmist set up
-- [Quick Start](/getting-started/quick-start/) - Build your first agent
+- [Installation](/library/getting-started/installation/) - Get llmist set up
+- [Quick Start](/library/getting-started/quick-start/) - Build your first agent

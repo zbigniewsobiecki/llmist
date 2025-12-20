@@ -75,7 +75,7 @@ Technical overview of llmist's design.
 
 ## See Also
 
-- [Hooks Guide](/guides/hooks/) - Lifecycle hooks
-- [Execution Tree](/advanced/execution-tree/) - Tree structure details
-- [Providers Guide](/advanced/providers/) - Provider adapters
-- [Cost Tracking](/guides/cost-tracking/) - Token and cost monitoring
+- [Hooks Guide](/library/guides/hooks/) - Lifecycle hooks
+- [Execution Tree](/library/advanced/execution-tree/) - Tree structure details
+- [Providers Guide](/library/advanced/providers/) - Provider adapters
+- [Cost Tracking](/library/guides/cost-tracking/) - Token and cost monitoring

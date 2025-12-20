@@ -272,6 +272,6 @@ const agent = await LLMist.createAgent()
 
 ## See Also
 
-- [Cost Tracking](/guides/cost-tracking/) - Monitor token usage and costs
-- [Hooks Guide](/guides/hooks/) - Full hooks reference
-- [Streaming Guide](/guides/streaming/) - Handle all event types
+- [Cost Tracking](/library/guides/cost-tracking/) - Monitor token usage and costs
+- [Hooks Guide](/library/guides/hooks/) - Full hooks reference
+- [Streaming Guide](/library/guides/streaming/) - Handle all event types

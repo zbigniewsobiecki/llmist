@@ -19,14 +19,23 @@
 
 /**
  * Map of common model aliases to their full provider:model-id format.
+ *
+ * Updated: 2025-12-20
  */
 export const MODEL_ALIASES: Record<string, string> = {
-  // OpenAI aliases
+  // OpenAI aliases - GPT-5.2 is the latest flagship
   gpt4: "openai:gpt-4o",
   gpt4o: "openai:gpt-4o",
-  gpt5: "openai:gpt-5",
+  "gpt4o-mini": "openai:gpt-4o-mini",
+  gpt5: "openai:gpt-5.2", // Latest flagship
+  "gpt5.2": "openai:gpt-5.2",
+  "gpt5.1": "openai:gpt-5.1",
   "gpt5-mini": "openai:gpt-5-mini",
   "gpt5-nano": "openai:gpt-5-nano",
+  "gpt5-codex": "openai:gpt-5-codex",
+  o1: "openai:o1",
+  o3: "openai:o3",
+  "o4-mini": "openai:o4-mini",
 
   // Anthropic aliases
   sonnet: "anthropic:claude-sonnet-4-5",
@@ -36,11 +45,12 @@ export const MODEL_ALIASES: Record<string, string> = {
   opus: "anthropic:claude-opus-4-5",
   "claude-opus": "anthropic:claude-opus-4-5",
 
-  // Gemini aliases
-  flash: "gemini:gemini-2.0-flash",
-  "gemini-flash": "gemini:gemini-2.0-flash",
-  "gemini-pro": "gemini:gemini-2.5-pro",
-  pro: "gemini:gemini-2.5-pro",
+  // Gemini aliases - 2.5 Flash is the recommended fast model
+  flash: "gemini:gemini-2.5-flash",
+  "gemini-flash": "gemini:gemini-2.5-flash",
+  "flash-lite": "gemini:gemini-2.5-flash-lite",
+  "gemini-pro": "gemini:gemini-3-pro-preview",
+  pro: "gemini:gemini-3-pro-preview",
 };
 
 /**

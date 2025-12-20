@@ -250,7 +250,7 @@ describe("Quick Methods", () => {
 
       expect(client.stream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: "gemini:gemini-2.0-flash",
+          model: "gemini:gemini-2.5-flash",
         }),
       );
     });

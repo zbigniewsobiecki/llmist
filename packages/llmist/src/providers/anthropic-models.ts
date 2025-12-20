@@ -40,10 +40,10 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
     contextWindow: 200_000,
     maxOutputTokens: 64_000,
     pricing: {
-      input: 1.0,
-      output: 5.0,
-      cachedInput: 0.1,
-      cacheWriteInput: 1.25,
+      input: 0.8,
+      output: 4.0,
+      cachedInput: 0.08,
+      cacheWriteInput: 1.0,
     },
     knowledgeCutoff: "2025-02",
     features: {
@@ -206,6 +206,33 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
       notes: "Legacy model - upgrade to Haiku 4.5 for better performance",
     },
   },
+  // Dated Opus 4.5
+  {
+    provider: "anthropic",
+    modelId: "claude-opus-4-5-20251124",
+    displayName: "Claude Opus 4.5",
+    contextWindow: 200_000,
+    maxOutputTokens: 64_000,
+    pricing: {
+      input: 5.0,
+      output: 25.0,
+      cachedInput: 0.5,
+      cacheWriteInput: 6.25,
+    },
+    knowledgeCutoff: "2025-03",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+    },
+    metadata: {
+      family: "Claude 4",
+      releaseDate: "2025-11-24",
+      notes: "Most powerful model for coding and computer use. Extended thinking support.",
+    },
+  },
+
   // Modern aliases (recommended by Anthropic)
   {
     provider: "anthropic",
@@ -214,10 +241,10 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
     contextWindow: 200_000,
     maxOutputTokens: 64_000,
     pricing: {
-      input: 1.0,
-      output: 5.0,
-      cachedInput: 0.1,
-      cacheWriteInput: 1.25,
+      input: 0.8,
+      output: 4.0,
+      cachedInput: 0.08,
+      cacheWriteInput: 1.0,
     },
     knowledgeCutoff: "2025-02",
     features: {

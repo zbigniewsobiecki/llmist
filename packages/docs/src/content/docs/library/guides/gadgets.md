@@ -3,7 +3,7 @@ title: Gadgets (Tools)
 description: Create custom functions that LLMs can call
 ---
 
-Gadgets are functions that LLMs can call. llmist uses a simple block format with `!!!ARG:` markers that works with any text model - no native tool calling required. See [Block Format Reference](/guides/block-format/) for detailed syntax documentation.
+Gadgets are functions that LLMs can call. llmist uses a simple block format with `!!!ARG:` markers that works with any text model - no native tool calling required. See [Block Format Reference](/reference/block-format/) for detailed syntax documentation.
 
 ## Quick Start
 
@@ -11,30 +11,30 @@ Gadgets are functions that LLMs can call. llmist uses a simple block format with
 import { Gadget, createGadget, z } from 'llmist';
 
 // Class-based (recommended for complex gadgets)
-class Calculator extends Gadget({
-  description: 'Performs arithmetic',
+class FloppyDisk extends Gadget({
+  description: 'Calculates how many 1.44MB floppy disks are needed',
   schema: z.object({
-    operation: z.enum(['add', 'subtract']),
-    a: z.number(),
-    b: z.number(),
+    filename: z.string(),
+    megabytes: z.number().positive(),
   }),
 }) {
   execute(params: this['params']): string {
-    const { operation, a, b } = params; // Fully typed!
-    return operation === 'add' ? String(a + b) : String(a - b);
+    const { filename, megabytes } = params; // Fully typed!
+    const disks = Math.ceil(megabytes / 1.44);
+    return `${filename} requires ${disks} floppy disk(s)`;
   }
 }
 
 // Function-based (simpler for one-off gadgets)
-const calculator = createGadget({
-  description: 'Performs arithmetic',
+const floppyDisk = createGadget({
+  description: 'Calculates how many 1.44MB floppy disks are needed',
   schema: z.object({
-    operation: z.enum(['add', 'subtract']),
-    a: z.number(),
-    b: z.number(),
+    filename: z.string(),
+    megabytes: z.number().positive(),
   }),
-  execute: ({ operation, a, b }) => {
-    return operation === 'add' ? String(a + b) : String(a - b);
+  execute: ({ filename, megabytes }) => {
+    const disks = Math.ceil(megabytes / 1.44);
+    return `${filename} requires ${disks} floppy disk(s)`;
   },
 });
 ```
@@ -44,18 +44,18 @@ const calculator = createGadget({
 Full type safety with `this['params']`:
 
 ```typescript
-class Weather extends Gadget({
-  description: 'Get weather for a city',
+class DialUpModem extends Gadget({
+  description: 'Connect to the internet via dial-up modem',
   schema: z.object({
-    city: z.string().min(1).describe('City name'),
-    units: z.enum(['celsius', 'fahrenheit']).optional(),
+    phoneNumber: z.string().min(1).describe('ISP phone number'),
+    baud: z.enum(['14400', '28800', '33600', '56000']).optional(),
   }),
-  timeoutMs: 10000, // Optional timeout
+  timeoutMs: 30000, // Connection can be slow!
 }) {
   async execute(params: this['params']): Promise<string> {
-    const { city, units = 'celsius' } = params;
-    const data = await fetchWeather(city);
-    return `${city}: ${data.temp}°${units === 'celsius' ? 'C' : 'F'}`;
+    const { phoneNumber, baud = '56000' } = params;
+    await simulateHandshake();
+    return `ATDT ${phoneNumber}... CONNECT ${baud}. You've got mail!`;
   }
 }
 ```
@@ -65,16 +65,16 @@ class Weather extends Gadget({
 For simpler use cases:
 
 ```typescript
-const weather = createGadget({
-  name: 'weather', // Optional custom name
-  description: 'Get weather for a city',
+const screenSaver = createGadget({
+  name: 'ScreenSaver', // Optional custom name
+  description: 'Activate a Windows 98 screensaver',
   schema: z.object({
-    city: z.string(),
+    style: z.enum(['pipes', 'starfield', 'maze', 'flying-toasters']),
   }),
-  timeoutMs: 10000,
-  execute: async ({ city }) => {
-    const data = await fetchWeather(city);
-    return `${city}: ${data.temp}°C`;
+  timeoutMs: 5000,
+  execute: async ({ style }) => {
+    await activateScreenSaver(style);
+    return `Activating ${style} screensaver. Move mouse to exit.`;
   },
 });
 ```
@@ -158,36 +158,36 @@ z.object({
 Provide usage examples to help LLMs understand how to call your gadget correctly:
 
 ```typescript
-const calculator = createGadget({
-  description: 'Performs arithmetic operations',
+const highScore = createGadget({
+  description: 'Record a high score on the arcade leaderboard',
   schema: z.object({
-    operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-    a: z.number().describe('First number'),
-    b: z.number().describe('Second number'),
+    game: z.enum(['pac-man', 'galaga', 'donkey-kong']),
+    initials: z.string().length(3).describe('Player initials'),
+    score: z.number().int().positive().describe('Points scored'),
   }),
   examples: [
     {
-      params: { operation: 'add', a: 15, b: 23 },
-      output: '38',
-      comment: 'Add two numbers'
+      params: { game: 'pac-man', initials: 'AAA', score: 999999 },
+      output: 'AAA: 999,999 points on pac-man - NEW HIGH SCORE!',
+      comment: 'Record a new high score'
     }
   ],
-  execute: ({ operation, a, b }) => { /* ... */ },
+  execute: ({ game, initials, score }) => { /* ... */ },
 });
 ```
 
 ## Async Gadgets
 
 ```typescript
-class APIGadget extends Gadget({
-  description: 'Fetches data from API',
-  schema: z.object({ endpoint: z.string() }),
-  timeoutMs: 30000, // 30 second timeout
+class BBSFetch extends Gadget({
+  description: 'Fetch content from a BBS or web server',
+  schema: z.object({ url: z.string().url() }),
+  timeoutMs: 30000, // 30 second timeout (dial-up is slow!)
 }) {
   async execute(params: this['params']): Promise<string> {
-    const response = await fetch(params.endpoint);
-    const data = await response.json();
-    return JSON.stringify(data);
+    const response = await fetch(params.url);
+    const data = await response.text();
+    return data.slice(0, 10000); // Limit for context size
   }
 }
 ```
@@ -197,19 +197,20 @@ class APIGadget extends Gadget({
 Gadgets that call paid APIs can report their costs:
 
 ```typescript
-const paidApiGadget = createGadget({
-  name: 'PaidAPI',
-  description: 'Calls a paid external API',
+const longDistanceCall = createGadget({
+  name: 'LongDistanceCall',
+  description: 'Make a long distance phone call (charges apply!)',
   schema: z.object({
-    query: z.string().describe('Query to send to the API'),
+    phoneNumber: z.string().describe('Phone number to call'),
+    minutes: z.number().int().positive().describe('Duration in minutes'),
   }),
-  execute: async ({ query }, ctx) => {
-    const response = await callExternalApi(query);
+  execute: async ({ phoneNumber, minutes }, ctx) => {
+    const response = await makeCall(phoneNumber, minutes);
 
-    // Report cost via callback
-    ctx.reportCost(0.001); // $0.001
+    // Report cost: $0.25 per minute for long distance
+    ctx.reportCost(minutes * 0.25);
 
-    return JSON.stringify(response);
+    return `Call to ${phoneNumber} complete. Duration: ${minutes} min.`;
   },
 });
 ```
@@ -273,8 +274,8 @@ class AskUser extends Gadget({
 
 ## See Also
 
-- [Creating Gadgets Guide](/guides/creating-gadgets/) - Complete gadget development tutorial
-- [Testing Gadgets](/testing/gadget-testing/) - Test gadgets and mock utilities
-- [Streaming Guide](/guides/streaming/) - Handle gadget events
-- [Error Handling](/reference/error-handling/) - Gadget error strategies
-- [Human-in-the-Loop](/guides/human-in-loop/) - Interactive workflows
+- [Creating Gadgets Guide](/library/guides/creating-gadgets/) - Complete gadget development tutorial
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - Test gadgets and mock utilities
+- [Streaming Guide](/library/guides/streaming/) - Handle gadget events
+- [Error Handling](/library/reference/error-handling/) - Gadget error strategies
+- [Human-in-the-Loop](/library/guides/human-in-loop/) - Interactive workflows

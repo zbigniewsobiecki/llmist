@@ -230,6 +230,12 @@ export interface ImageModelSpec {
     textRendering?: boolean;
     /** Supports transparency */
     transparency?: boolean;
+    /** Supports image editing/inpainting */
+    editing?: boolean;
+    /** Supports video generation (Sora) */
+    videoGeneration?: boolean;
+    /** Supports extended duration video */
+    extendedDuration?: boolean;
   };
 }
 

@@ -1,9 +1,9 @@
 ---
 title: llmist
-description: TypeScript LLM client with streaming tool execution
+description: Streaming-first multi-provider LLM client in TypeScript with home-made tool calling
 template: splash
 hero:
-  tagline: Tools execute while the LLM streams. Any model. Clean API.
+  tagline: Your own tool syntax. Any model. Full observability.
   image:
     file: ../../assets/llmist-icon.png
   actions:
@@ -38,20 +38,20 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
   />
 </CardGrid>
 
-## Why llmist?
+## Core Capabilities
 
 <CardGrid stagger>
+  <Card title="Home-Made Tool Calling" icon="puzzle">
+    llmist uses its own block format for tools—no JSON mode or native function calling required. Works with any model.
+  </Card>
   <Card title="Streaming Tool Execution" icon="rocket">
     Gadgets execute the moment their block is parsed—not after the response completes. Real-time UX without buffering.
   </Card>
-  <Card title="Built-in Function Calling" icon="puzzle">
-    llmist implements its own tool calling via a simple block format. No JSON mode required. Works with any model.
-  </Card>
   <Card title="Multi-Provider Support" icon="random">
-    OpenAI, Anthropic, and Gemini out of the box. Use model shortcuts like `sonnet`, `haiku`, or `flash`.
+    OpenAI, Anthropic, and Gemini out of the box. Caching-aware, built-in cost calculation, multimodal support.
   </Card>
-  <Card title="Composable Agent API" icon="seti:typescript">
-    Fluent builder, async iterators, full TypeScript inference. Hook into any lifecycle point.
+  <Card title="Powerful Hook System" icon="setting">
+    Three-layer architecture for observability, flow control, benchmarking, and deep app/UI integration.
   </Card>
 </CardGrid>
 
@@ -64,26 +64,26 @@ bun add llmist
 ```typescript
 import { LLMist, Gadget, z } from 'llmist';
 
-class Calculator extends Gadget({
-  description: 'Performs arithmetic operations',
+class FloppyDisk extends Gadget({
+  description: 'Calculates how many 1.44MB floppy disks are needed to store a file',
   schema: z.object({
-    operation: z.enum(['add', 'multiply']),
-    a: z.number(),
-    b: z.number(),
+    filename: z.string(),
+    megabytes: z.number().positive(),
   }),
 }) {
   execute(params: this['params']): string {
-    const { operation, a, b } = params;
-    return operation === 'add' ? String(a + b) : String(a * b);
+    const { filename, megabytes } = params;
+    const disks = Math.ceil(megabytes / 1.44);
+    return `${filename} requires ${disks} floppy disk${disks > 1 ? 's' : ''}. Please label them 1 of ${disks}, 2 of ${disks}...`;
   }
 }
 
 const answer = await LLMist.createAgent()
   .withModel('sonnet')
-  .withGadgets(Calculator)
-  .askAndCollect('What is 15 times 23?');
+  .withGadgets(FloppyDisk)
+  .askAndCollect('How many floppies do I need for a 10MB file called DOOM.ZIP?');
 
-console.log(answer); // "15 times 23 equals 345"
+console.log(answer); // "DOOM.ZIP requires 7 floppy disks..."
 ```
 
 ## Packages

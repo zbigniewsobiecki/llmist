@@ -74,11 +74,11 @@ When running without a TTY (e.g., in scripts or CI), the TUI is disabled and out
 
 ```bash
 # Runs without TUI
-echo "Calculate 2+2" | llmist agent
+echo "How many floppies for DOOM.ZIP?" | llmist agent -g ./floppy.ts
 ```
 
 Use the `--quiet` flag to suppress all output except gadget results:
 
 ```bash
-llmist agent "What is 2+2?" --quiet
+llmist agent "Check my high score" -g ./arcade.ts --quiet
 ```

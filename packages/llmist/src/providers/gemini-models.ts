@@ -5,7 +5,7 @@
  * with their specifications, pricing (Standard Paid tier), and capabilities.
  *
  * Pricing source: https://ai.google.dev/gemini-api/docs/pricing
- * Last updated: 2025-11-29
+ * Last updated: 2025-12-20
  */
 
 import type { ModelSpec } from "../core/model-catalog.js";
@@ -36,6 +36,33 @@ export const GEMINI_MODELS: ModelSpec[] = [
       releaseDate: "2025-11-18",
       notes:
         "Best model for multimodal understanding, agentic and vibe-coding. Deep Think mode available.",
+    },
+  },
+
+  // Gemini 3 Flash (Preview)
+  {
+    provider: "gemini",
+    modelId: "gemini-3-flash-preview",
+    displayName: "Gemini 3 Flash (Preview)",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    pricing: {
+      input: 0.4, // $0.40 for text/image/video
+      output: 3.0,
+      cachedInput: 0.04,
+    },
+    knowledgeCutoff: "2025-01",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "Gemini 3",
+      releaseDate: "2025-12",
+      notes: "Fast, cost-effective model with Deep Think mode. Good for agentic tasks.",
     },
   },
 

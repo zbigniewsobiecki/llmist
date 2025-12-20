@@ -34,7 +34,7 @@ description: 'ALWAYS use this for ANY math calculation.',
 
 Add to system prompt:
 ```typescript
-.withSystem('Use Calculator for ALL arithmetic.')
+.withSystem('Use FloppyDisk to calculate disk requirements.')
 ```
 
 ### Parameter Validation Failed

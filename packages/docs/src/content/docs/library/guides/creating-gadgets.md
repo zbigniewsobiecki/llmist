@@ -16,21 +16,20 @@ Best for complex gadgets with state, dependencies, or multiple methods:
 ```typescript
 import { Gadget, z } from 'llmist';
 
-class Calculator extends Gadget({
-  description: 'Performs arithmetic operations',
+class Tamagotchi extends Gadget({
+  description: 'Check on your virtual pet and perform care actions',
   schema: z.object({
-    operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-    a: z.number().describe('First operand'),
-    b: z.number().describe('Second operand'),
+    action: z.enum(['feed', 'play', 'sleep', 'status']),
+    petName: z.string().describe('Name of your digital companion'),
   }),
 }) {
   execute(params: this['params']): string {
-    const { operation, a, b } = params;  // Fully typed!
-    switch (operation) {
-      case 'add': return String(a + b);
-      case 'subtract': return String(a - b);
-      case 'multiply': return String(a * b);
-      case 'divide': return b !== 0 ? String(a / b) : 'Error: Division by zero';
+    const { action, petName } = params;  // Fully typed!
+    switch (action) {
+      case 'feed': return `${petName} ate the food. Happiness +10.`;
+      case 'play': return `${petName} played ball. Energy -5, Happiness +15.`;
+      case 'sleep': return `${petName} is sleeping. Zzz... Energy restored.`;
+      case 'status': return `${petName}: Hunger 3/10, Happiness 8/10, Energy 6/10`;
     }
   }
 }
@@ -43,16 +42,19 @@ Simpler for one-off gadgets without state:
 ```typescript
 import { createGadget, z } from 'llmist';
 
-const calculator = createGadget({
-  name: 'Calculator',  // Optional - defaults to 'AnonymousGadget'
-  description: 'Performs arithmetic operations',
+const coinFlip = createGadget({
+  name: 'CoinFlip',
+  description: 'Flip a coin to make important life decisions',
   schema: z.object({
-    operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-    a: z.number(),
-    b: z.number(),
+    question: z.string().describe('The decision you need help with'),
+    bestOf: z.number().int().min(1).max(5).default(1),
   }),
-  execute: ({ operation, a, b }) => {
-    // Implementation
+  execute: ({ question, bestOf }) => {
+    const flips = Array.from({ length: bestOf }, () =>
+      Math.random() > 0.5 ? 'heads' : 'tails'
+    );
+    const heads = flips.filter(f => f === 'heads').length;
+    return `${question}: ${heads > bestOf/2 ? 'Yes (heads)' : 'No (tails)'} [${flips.join(', ')}]`;
   },
 });
 ```
@@ -201,7 +203,7 @@ const paidApi = createGadget({
 });
 ```
 
-Costs appear in the [ExecutionTree](/advanced/execution-tree/) and [Cost Tracking](/guides/cost-tracking/).
+Costs appear in the [ExecutionTree](/library/advanced/execution-tree/) and [Cost Tracking](/library/guides/cost-tracking/).
 
 ## Providing Examples
 
@@ -402,20 +404,22 @@ Configure agent behavior with `.withStopOnGadgetError()`:
 
 ```typescript
 // ❌ Vague
-description: 'Does stuff with files'
+description: 'Does stuff with games'
 
 // ✅ Clear and specific
-description: 'Read the contents of a text file. Returns the file content as a string, limited to first 10KB.'
+description: 'Load a saved game from a memory card slot. Returns save data as JSON, or error if slot is empty.'
 ```
 
 ### 2. Validate Input
 
 ```typescript
 schema: z.object({
-  path: z.string()
+  slot: z.number()
+    .int()
     .min(1)
-    .refine(p => !p.includes('..'), 'Path traversal not allowed'),
-  maxSize: z.number().min(1).max(1_000_000).default(10_000),
+    .max(15)
+    .describe('Memory card slot (1-15)'),
+  saveName: z.string().max(8).regex(/^[A-Z0-9]+$/, 'Only uppercase letters and numbers'),
 })
 ```
 
@@ -423,17 +427,17 @@ schema: z.object({
 
 ```typescript
 async execute(params: this['params']): Promise<string> {
-  const content = await fetchLargeContent();
-  return content.slice(0, 50_000);  // Don't blow up context
+  const levelData = await loadDOOMWad(params.wadFile);
+  return levelData.slice(0, 50_000);  // Don't blow up context
 }
 ```
 
 ### 4. Use Timeouts
 
 ```typescript
-class SlowAPI extends Gadget({
-  description: 'Call slow external API',
-  schema: z.object({ query: z.string() }),
+class BBSConnection extends Gadget({
+  description: 'Connect to a bulletin board system over 2400 baud',
+  schema: z.object({ phoneNumber: z.string(), handle: z.string() }),
   timeoutMs: 30000,  // Always set timeouts for network calls
 }) { /* ... */ }
 ```
@@ -444,15 +448,15 @@ Design gadgets that can be safely retried:
 
 ```typescript
 // ✅ Idempotent - safe to retry
-class GetUser extends Gadget({
-  description: 'Get user by ID',
-  schema: z.object({ id: z.string() }),
+class CheckHighScore extends Gadget({
+  description: 'Check if a score would make the leaderboard',
+  schema: z.object({ game: z.string(), score: z.number() }),
 }) { /* ... */ }
 
 // ⚠️ Not idempotent - be careful
-class CreateUser extends Gadget({
-  description: 'Create a new user',
-  schema: z.object({ name: z.string(), email: z.string() }),
+class InsertCoin extends Gadget({
+  description: 'Insert a coin to start the game',
+  schema: z.object({ quarters: z.number().int().positive() }),
 }) { /* ... */ }
 ```
 
@@ -463,25 +467,24 @@ class CreateUser extends Gadget({
 ```typescript
 import { testGadget } from '@llmist/testing';
 
-describe('Calculator', () => {
-  it('adds numbers correctly', async () => {
-    const result = await testGadget(Calculator, {
-      operation: 'add',
-      a: 15,
-      b: 23,
+describe('Tamagotchi', () => {
+  it('feeds the pet correctly', async () => {
+    const result = await testGadget(Tamagotchi, {
+      action: 'feed',
+      petName: 'PixelPal',
     });
 
-    expect(result).toBe('38');
+    expect(result).toContain('Happiness +10');
   });
 
-  it('handles division by zero', async () => {
-    const result = await testGadget(Calculator, {
-      operation: 'divide',
-      a: 10,
-      b: 0,
+  it('reports status', async () => {
+    const result = await testGadget(Tamagotchi, {
+      action: 'status',
+      petName: 'BitBuddy',
     });
 
-    expect(result).toContain('Error');
+    expect(result).toContain('BitBuddy:');
+    expect(result).toContain('Hunger');
   });
 });
 ```
@@ -491,43 +494,43 @@ describe('Calculator', () => {
 ```typescript
 import { mockLLM, createMockClient } from '@llmist/testing';
 
-describe('Agent with Calculator', () => {
-  it('uses calculator for math questions', async () => {
+describe('Agent with Tamagotchi', () => {
+  it('uses tamagotchi for pet care', async () => {
     mockLLM()
       .forAnyModel()
-      .whenMessageContains('calculate')
-      .returns('!!!GADGET_START[Calculator]\n!!!ARG[operation] add\n!!!ARG[a] 15\n!!!ARG[b] 23\n!!!GADGET_END')
+      .whenMessageContains('care for')
+      .returns('!!!GADGET_START:Tamagotchi\n!!!ARG:action\nstatus\n!!!ARG:petName\nPixelPal\n!!!GADGET_END')
       .register();
 
     const client = createMockClient();
     const result = await client.createAgent()
-      .withGadgets(Calculator)
-      .askAndCollect('Calculate 15 + 23');
+      .withGadgets(Tamagotchi)
+      .askAndCollect('How is my pet PixelPal doing?');
 
     // Verify gadget was called
   });
 });
 ```
 
-See [Testing Guide](/testing/overview/) for more testing patterns.
+See [Testing Guide](/testing/getting-started/quick-start/) for more testing patterns.
 
 ## Common Gadget Patterns
 
 ### File Operations
 
 ```typescript
-class WriteFile extends Gadget({
-  description: 'Write content to a file',
+class SaveGame extends Gadget({
+  description: 'Save game state to a file on the memory card',
   schema: z.object({
-    path: z.string().describe('File path'),
-    content: z.string().describe('Content to write'),
+    slot: z.string().describe('Save slot path'),
+    saveData: z.string().describe('Serialized game state'),
     append: z.boolean().default(false),
   }),
 }) {
   async execute(params: this['params']): Promise<string> {
     const flag = params.append ? 'a' : 'w';
-    await fs.writeFile(params.path, params.content, { flag });
-    return `Written ${params.content.length} bytes to ${params.path}`;
+    await fs.writeFile(params.slot, params.saveData, { flag });
+    return `Saved ${params.saveData.length} bytes to ${params.slot}`;
   }
 }
 ```
@@ -535,8 +538,8 @@ class WriteFile extends Gadget({
 ### HTTP Requests
 
 ```typescript
-class HttpRequest extends Gadget({
-  description: 'Make HTTP requests',
+class GopherFetch extends Gadget({
+  description: 'Fetch content from a Gopher or HTTP server',
   schema: z.object({
     method: z.enum(['GET', 'POST', 'PUT', 'DELETE']),
     url: z.string().url(),
@@ -565,10 +568,10 @@ class HttpRequest extends Gadget({
 ### Shell Commands
 
 ```typescript
-class ShellCommand extends Gadget({
-  description: 'Execute shell commands',
+class DOSCommand extends Gadget({
+  description: 'Execute commands in the DOS shell',
   schema: z.object({
-    command: z.string().describe('Command to execute'),
+    command: z.string().describe('Command to execute (e.g., DIR, COPY, DEL)'),
     cwd: z.string().optional().describe('Working directory'),
   }),
   timeoutMs: 60000,
@@ -586,8 +589,8 @@ class ShellCommand extends Gadget({
 
 ## See Also
 
-- [Gadgets Reference](/guides/gadgets/) - Quick reference for gadget syntax
-- [Block Format](/guides/block-format/) - How LLMs call gadgets
-- [Testing Gadgets](/testing/gadget-testing/) - Testing utilities
-- [CLI Gadgets](/cli/gadgets/) - Using gadgets with the CLI
-- [Human-in-the-Loop](/guides/human-in-loop/) - Interactive workflows
+- [Gadget Examples](/reference/gadget-examples/) - More example patterns
+- [Block Format](/reference/block-format/) - How LLMs call gadgets
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - Testing utilities
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Using gadgets with the CLI
+- [Human-in-the-Loop](/library/guides/human-in-loop/) - Interactive workflows

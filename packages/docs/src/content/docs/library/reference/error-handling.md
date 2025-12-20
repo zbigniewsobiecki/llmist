@@ -110,5 +110,5 @@ async execute(params, ctx) {
 
 ## See Also
 
-- [Hooks Guide](/guides/hooks/) - Lifecycle control
-- [Gadgets Guide](/guides/gadgets/) - Creating gadgets
+- [Hooks Guide](/library/guides/hooks/) - Lifecycle control
+- [Gadgets Guide](/library/guides/gadgets/) - Creating gadgets

@@ -85,5 +85,5 @@ const subtreeCost = ctx?.tree?.getSubtreeCost(ctx.nodeId!);
 
 ## See Also
 
-- [Subagents](/advanced/subagents/) - Creating nested agent gadgets
-- [Hooks](/guides/hooks/) - Lifecycle monitoring
+- [Subagents](/library/advanced/subagents/) - Creating nested agent gadgets
+- [Hooks](/library/guides/hooks/) - Lifecycle monitoring

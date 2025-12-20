@@ -68,5 +68,5 @@ client.modelRegistry.registerModel({
 
 ## See Also
 
-- [Model Catalog](/advanced/model-catalog/) - Query models and costs
-- [Providers Guide](/advanced/providers/) - Provider configuration
+- [Model Catalog](/library/advanced/model-catalog/) - Query models and costs
+- [Providers Guide](/library/advanced/providers/) - Provider configuration

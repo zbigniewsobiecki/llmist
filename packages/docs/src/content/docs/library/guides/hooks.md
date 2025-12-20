@@ -180,13 +180,13 @@ await LLMist.createAgent()
 
 ```typescript
 describe('Agent tests', () => {
-  it('should calculate correctly', async () => {
+  it('should calculate floppy disk requirements', async () => {
     const result = await LLMist.createAgent()
       .withHooks(HookPresets.silent())
-      .withGadgets(Calculator)
-      .askAndCollect("What is 15 times 23?");
+      .withGadgets(FloppyDisk)
+      .askAndCollect("How many floppies for a 10MB file?");
 
-    expect(result).toContain("345");
+    expect(result).toContain("7");
   });
 });
 ```
@@ -244,6 +244,6 @@ const myHooks = HookPresets.merge(
 
 ## See Also
 
-- [Streaming Guide](/guides/streaming/) - Event handling
-- [Debugging Guide](/reference/debugging/) - Using hooks for debugging
-- [Error Handling](/reference/error-handling/) - Recovery strategies
+- [Streaming Guide](/library/guides/streaming/) - Event handling
+- [Debugging Guide](/library/reference/debugging/) - Using hooks for debugging
+- [Error Handling](/library/reference/error-handling/) - Recovery strategies

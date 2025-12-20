@@ -173,7 +173,7 @@ Thrown when gadget parameters fail Zod validation.
 import { GadgetValidationError } from 'llmist';
 
 // If LLM provides invalid parameters:
-// { a: "not a number", b: 5 }
+// { filename: 123, megabytes: "fifty" }  // should be string and number
 // GadgetValidationError is thrown with validation details
 ```
 

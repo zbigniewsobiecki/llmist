@@ -178,6 +178,6 @@ Control behavior when LLM responds without calling gadgets:
 
 ## See Also
 
-- [Gadgets Guide](/guides/gadgets/) - Creating custom gadgets
-- [Streaming Guide](/guides/streaming/) - Event handling
-- [Error Handling](/reference/error-handling/) - Handling input errors
+- [Gadgets Guide](/library/guides/gadgets/) - Creating custom gadgets
+- [Streaming Guide](/library/guides/streaming/) - Event handling
+- [Error Handling](/library/reference/error-handling/) - Handling input errors
