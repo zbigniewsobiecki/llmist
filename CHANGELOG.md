@@ -1,3 +1,10 @@
+## 9.1.0 (2025-12-20)
+
+* fix: use workspace protocol for internal dependencies ([7449762](https://github.com/zbigniewsobiecki/llmist/commit/7449762))
+* fix(docs): improve text color contrast for readability ([5b87994](https://github.com/zbigniewsobiecki/llmist/commit/5b87994)), closes [#059669](https://github.com/zbigniewsobiecki/llmist/issues/059669) [#ffffff](https://github.com/zbigniewsobiecki/llmist/issues/ffffff) [#6ee7b7](https://github.com/zbigniewsobiecki/llmist/issues/6ee7b7) [#17171e](https://github.com/zbigniewsobiecki/llmist/issues/17171e)
+* feat: publish @llmist/testing package to npm ([1c8958a](https://github.com/zbigniewsobiecki/llmist/commit/1c8958a))
+* docs: update tagline to "The flexible agent and tool layer for any LLM" ([905a277](https://github.com/zbigniewsobiecki/llmist/commit/905a277))
+
 ## 9.0.0 (2025-12-20)
 
 * Merge pull request #229 from zbigniewsobiecki/docs/comprehensive-documentation-overhaul ([e8b32d4](https://github.com/zbigniewsobiecki/llmist/commit/e8b32d4)), closes [#229](https://github.com/zbigniewsobiecki/llmist/issues/229)
