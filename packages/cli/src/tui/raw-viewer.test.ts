@@ -1,17 +1,41 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
+import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen } from "@unblessed/node";
 import { showRawViewer, type RawViewerMode } from "./raw-viewer.js";
 import type { LLMMessage } from "llmist";
 
+// Skip TUI tests when not in a TTY (e.g., in CI/Turborepo)
+const isTTY = process.stdout.isTTY && process.stdin.isTTY;
+
+// Mock streams to prevent terminal escape sequences from being written
+class MockOutputStream extends Writable {
+  _write(_chunk: Buffer | string, _encoding: string, callback: () => void): void {
+    callback();
+  }
+}
+
+class MockInputStream extends Readable {
+  _read(): void {
+    // No-op - never emit data
+  }
+}
+
 // Initialize unblessed for testing
 let screen: Screen;
+let mockOutput: MockOutputStream;
+let mockInput: MockInputStream;
 
 beforeAll(() => {
+  if (!isTTY) return;
   setRuntime(new NodeRuntime());
+  mockOutput = new MockOutputStream();
+  mockInput = new MockInputStream();
   screen = new Screen({
     smartCSR: true,
     title: "test",
     fullUnicode: true,
+    input: mockInput,
+    output: mockOutput,
   });
 });
 
@@ -21,7 +45,7 @@ afterAll(() => {
   }
 });
 
-describe("Raw Viewer", () => {
+describe.skipIf(!isTTY)("Raw Viewer", () => {
   describe("showRawViewer", () => {
     test("returns handle with closed promise and close function", () => {
       const handle = showRawViewer({

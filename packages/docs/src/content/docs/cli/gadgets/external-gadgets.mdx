@@ -273,6 +273,77 @@ Users can then:
   </TabItem>
 </Tabs>
 
+### Package Manifest Types
+
+Import manifest types from llmist for type-safe package development:
+
+```typescript
+import type {
+  LLMistPackageManifest,
+  SubagentManifestEntry,
+  PresetDefinition,
+  SessionManifestEntry,
+} from 'llmist';
+import { parseManifest, hasPreset, listSubagents, getSubagent } from 'llmist';
+```
+
+Full manifest structure:
+
+```typescript
+const manifest: LLMistPackageManifest = {
+  // Entry point for all gadgets
+  gadgets: './dist/index.js',
+
+  // Factory function entry point (optional)
+  factory: './dist/index.js',
+
+  // Presets: array of gadget names or "*" for all
+  presets: {
+    minimal: ['Navigate', 'Screenshot'],
+    readonly: ['Navigate', 'GetFullPageContent', 'Screenshot'],
+    all: '*',  // All exported gadgets
+  },
+
+  // Subagent definitions (optional)
+  subagents: {
+    BrowseWeb: {
+      entryPoint: './dist/index.js',
+      export: 'Dhalsim',  // Export name
+      description: 'Autonomous web browser agent',
+      defaultModel: 'sonnet',
+      maxIterations: 15,
+    },
+  },
+
+  // Session factory metadata (optional)
+  session: {
+    factory: 'getSessionManager',
+    type: 'browser',
+  },
+};
+```
+
+Parsing utilities:
+
+```typescript
+import { readFileSync } from 'fs';
+import { parseManifest, hasPreset, getPresetGadgets, listSubagents } from 'llmist';
+
+// Parse manifest from package.json
+const pkg = JSON.parse(readFileSync('package.json', 'utf-8'));
+const manifest = parseManifest(pkg);
+
+// Check presets
+if (hasPreset(manifest, 'minimal')) {
+  const gadgets = getPresetGadgets(manifest, 'minimal');
+  // ['Navigate', 'Screenshot']
+}
+
+// List subagents
+const subagentNames = listSubagents(manifest);
+// ['BrowseWeb']
+```
+
 ### Publishing to npm
 
 ```bash

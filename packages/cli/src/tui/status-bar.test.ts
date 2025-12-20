@@ -1,18 +1,43 @@
 import { describe, expect, test, beforeAll, afterAll, mock } from "bun:test";
+import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen, Box } from "@unblessed/node";
 import { StatusBar } from "./status-bar.js";
 import { ExecutionTree } from "llmist";
 
+// Skip TUI tests when not in a TTY (e.g., in CI/Turborepo)
+// These tests require terminfo which may not be available in all environments
+const isTTY = process.stdout.isTTY && process.stdin.isTTY;
+
+// Mock streams to prevent terminal escape sequences from being written
+class MockOutputStream extends Writable {
+  _write(_chunk: Buffer | string, _encoding: string, callback: () => void): void {
+    callback();
+  }
+}
+
+class MockInputStream extends Readable {
+  _read(): void {
+    // No-op - never emit data
+  }
+}
+
 // Initialize unblessed for testing
 let screen: Screen;
 let statusBox: Box;
+let mockOutput: MockOutputStream;
+let mockInput: MockInputStream;
 
 beforeAll(() => {
+  if (!isTTY) return;
   setRuntime(new NodeRuntime());
+  mockOutput = new MockOutputStream();
+  mockInput = new MockInputStream();
   screen = new Screen({
     smartCSR: true,
     title: "test",
     fullUnicode: true,
+    input: mockInput,
+    output: mockOutput,
   });
 
   statusBox = new Box({
@@ -32,7 +57,7 @@ afterAll(() => {
   }
 });
 
-describe("StatusBar", () => {
+describe.skipIf(!isTTY)("StatusBar", () => {
   describe("constructor", () => {
     test("initializes with provided model", () => {
       const renderCallback = mock(() => {});

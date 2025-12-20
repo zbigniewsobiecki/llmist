@@ -15,7 +15,7 @@ import path from "node:path";
 import os from "node:os";
 import { pathToFileURL } from "node:url";
 
-import type { AbstractGadget } from "llmist";
+import type { AbstractGadget, LLMistPackageManifest } from "llmist";
 import { extractGadgetsFromModule } from "./gadgets.js";
 
 /**
@@ -38,34 +38,6 @@ export interface GadgetSpecifier {
   gadgetName?: string;
 }
 
-/**
- * Manifest structure from package.json llmist field.
- */
-export interface LlmistManifest {
-  /** Entry point for all gadgets */
-  gadgets?: string;
-  /** Factory function entry point */
-  factory?: string;
-  /** Subagent definitions */
-  subagents?: Record<
-    string,
-    {
-      entryPoint: string;
-      export: string;
-      description?: string;
-      uses?: string[];
-      defaultModel?: string;
-      maxIterations?: number;
-    }
-  >;
-  /** Preset definitions */
-  presets?: Record<string, string[] | "*">;
-  /** Session factory info */
-  session?: {
-    factory: string;
-    type: string;
-  };
-}
 
 /**
  * Check if a specifier is an external package (npm or git).
@@ -294,7 +266,7 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
 /**
  * Read the llmist manifest from a package.
  */
-function readManifest(packageDir: string): LlmistManifest | null {
+function readManifest(packageDir: string): LLMistPackageManifest | null {
   const packageJsonPath = path.join(packageDir, "package.json");
   if (!fs.existsSync(packageJsonPath)) {
     return null;

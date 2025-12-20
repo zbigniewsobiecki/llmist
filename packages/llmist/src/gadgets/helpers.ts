@@ -1,12 +1,28 @@
 /**
- * Helper functions for gadget authors to easily return media outputs.
+ * Helper functions for gadget authors.
  *
- * These functions provide type-specific conveniences while using the
- * generic GadgetMediaOutput system underneath.
+ * This module provides:
+ * 1. Response formatting helpers (gadgetSuccess, gadgetError, withErrorHandling)
+ * 2. Media output helpers (resultWithImage, resultWithAudio, etc.)
  *
- * @example
+ * @example Response helpers
  * ```typescript
- * import { resultWithImage } from "llmist/gadgets";
+ * import { gadgetSuccess, gadgetError, withErrorHandling } from "llmist";
+ *
+ * // Simple response formatting
+ * return gadgetSuccess({ url: "https://example.com", title: "Example" });
+ * return gadgetError("Element not found", { selector: ".missing" });
+ *
+ * // Automatic error handling wrapper
+ * const safeExecute = withErrorHandling(async (params) => {
+ *   // your code here - errors are automatically caught and formatted
+ *   return gadgetSuccess({ result: "done" });
+ * });
+ * ```
+ *
+ * @example Media output helpers
+ * ```typescript
+ * import { resultWithImage } from "llmist";
  *
  * const screenshotGadget = createGadget({
  *   name: "Screenshot",
@@ -25,11 +41,106 @@
 
 import { detectAudioMimeType, detectImageMimeType } from "../core/input-content.js";
 import type {
+  ExecutionContext,
   GadgetExecuteResultWithMedia,
   GadgetMediaOutput,
   MediaKind,
   MediaMetadata,
 } from "./types.js";
+
+// ============================================================================
+// Response Formatting Helpers
+// ============================================================================
+
+/**
+ * Create a success response as JSON string.
+ *
+ * This is a convenience helper for gadgets that return JSON-formatted responses.
+ * It automatically adds `success: true` and stringifies the result.
+ *
+ * @param data - Additional data to include in the response
+ * @returns JSON string with success: true and provided data
+ *
+ * @example
+ * ```typescript
+ * return gadgetSuccess({ url: page.url(), title: await page.title() });
+ * // Returns: '{"success":true,"url":"...","title":"..."}'
+ * ```
+ */
+export function gadgetSuccess(data: Record<string, unknown> = {}): string {
+  return JSON.stringify({ success: true, ...data });
+}
+
+/**
+ * Create an error response as JSON string.
+ *
+ * This is a convenience helper for gadgets that return JSON-formatted errors.
+ * It stringifies the error message and any additional details.
+ *
+ * @param message - Error message
+ * @param details - Additional error details (e.g., suggestions, context)
+ * @returns JSON string with error message and details
+ *
+ * @example
+ * ```typescript
+ * return gadgetError("Element not found", { selector: ".missing", suggestions: ["Try #id instead"] });
+ * // Returns: '{"error":"Element not found","selector":".missing","suggestions":[...]}'
+ * ```
+ */
+export function gadgetError(message: string, details?: Record<string, unknown>): string {
+  return JSON.stringify({ error: message, ...details });
+}
+
+/**
+ * Safely extract error message from unknown error type.
+ *
+ * Handles both Error instances and other thrown values.
+ *
+ * @param error - Unknown error value
+ * @returns String error message
+ */
+export function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Wrap a gadget execute function with automatic error handling.
+ *
+ * This higher-order function catches any errors thrown during execution
+ * and converts them to properly formatted error responses.
+ *
+ * @param execute - The execute function to wrap
+ * @returns A wrapped function that catches errors and returns gadgetError responses
+ *
+ * @example
+ * ```typescript
+ * const safeExecute = withErrorHandling(async (params: MyParams) => {
+ *   // Your code here - if it throws, error is caught and formatted
+ *   const result = await riskyOperation(params.id);
+ *   return gadgetSuccess({ result });
+ * });
+ *
+ * // In gadget:
+ * execute(params) {
+ *   return safeExecute(params);
+ * }
+ * ```
+ */
+export function withErrorHandling<TParams>(
+  execute: (params: TParams, ctx?: ExecutionContext) => Promise<string> | string,
+): (params: TParams, ctx?: ExecutionContext) => Promise<string> {
+  return async (params: TParams, ctx?: ExecutionContext): Promise<string> => {
+    try {
+      return await execute(params, ctx);
+    } catch (error) {
+      return gadgetError(getErrorMessage(error));
+    }
+  };
+}
+
+// ============================================================================
+// Media Output Helpers
+// ============================================================================
 
 /**
  * Create a GadgetMediaOutput from raw data.
