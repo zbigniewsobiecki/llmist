@@ -85,6 +85,42 @@ function expandHomePath(input: string): string {
 }
 
 /**
+ * Parsed local file specifier with optional gadget name.
+ */
+interface LocalSpecifier {
+  path: string;
+  gadgetName?: string;
+}
+
+/**
+ * Parse a local file specifier that may include a /GadgetName suffix.
+ * The gadget name must be PascalCase (start with uppercase letter).
+ *
+ * @param specifier - Local file path, possibly with /GadgetName suffix
+ * @returns Parsed path and optional gadget name
+ *
+ * @example
+ * parseLocalSpecifier("~/gadgets/index.ts/BrowseWeb")
+ * // => { path: "~/gadgets/index.ts", gadgetName: "BrowseWeb" }
+ *
+ * parseLocalSpecifier("~/gadgets/index.ts")
+ * // => { path: "~/gadgets/index.ts" }
+ */
+function parseLocalSpecifier(specifier: string): LocalSpecifier {
+  // Match trailing /PascalCaseName (uppercase letter followed by alphanumeric)
+  const match = specifier.match(/^(.+)\/([A-Z][a-zA-Z0-9]*)$/);
+  if (match) {
+    const [, basePath, gadgetName] = match;
+    // Verify basePath exists as file/dir (after expanding ~)
+    const expandedPath = expandHomePath(basePath);
+    if (fs.existsSync(expandedPath)) {
+      return { path: basePath, gadgetName };
+    }
+  }
+  return { path: specifier };
+}
+
+/**
  * Determines if a specifier is a file path vs npm module name.
  * File paths start with ., /, ~ or contain path separators.
  *
@@ -212,7 +248,10 @@ export function extractGadgetsFromModule(moduleExports: unknown): AbstractGadget
  *    - "webasto:minimal" - npm package with preset
  *    - "webasto/Navigate" - npm package with specific gadget
  *    - "git+https://..." - git URL
+ *    - "git+https://...#ref/GadgetName" - git URL with specific gadget
  * 4. File paths (starting with ., /, ~) - resolve and import
+ *    - "~/path/to/gadgets.ts" - all gadgets from module
+ *    - "~/path/to/gadgets.ts/BrowseWeb" - specific gadget by name
  * 5. npm module names - dynamic import from node_modules
  *
  * @param specifiers - Array of gadget specifiers
@@ -252,7 +291,12 @@ export async function loadGadgets(
     }
 
     // Fall back to file/npm resolution
-    const resolved = resolveGadgetSpecifier(specifier, cwd);
+    // Check for /GadgetName suffix on local file paths
+    const localSpec = isFileLikeSpecifier(specifier) ? parseLocalSpecifier(specifier) : null;
+    const pathToResolve = localSpec?.path ?? specifier;
+    const gadgetNameFilter = localSpec?.gadgetName;
+
+    const resolved = resolveGadgetSpecifier(pathToResolve, cwd);
     let exports: unknown;
     try {
       exports = await importer(resolved);
@@ -268,6 +312,21 @@ export async function loadGadgets(
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to initialize gadgets from module '${specifier}': ${message}`);
     }
+
+    // Filter by gadget name if specified
+    if (gadgetNameFilter) {
+      const filtered = extracted.filter(
+        (g) => g.name?.toLowerCase() === gadgetNameFilter.toLowerCase(),
+      );
+      if (filtered.length === 0) {
+        throw new Error(
+          `Gadget '${gadgetNameFilter}' not found in module '${pathToResolve}'. ` +
+            `Available gadgets: ${extracted.map((g) => g.name).join(", ")}`,
+        );
+      }
+      extracted = filtered;
+    }
+
     if (extracted.length === 0) {
       throw new Error(`Module '${specifier}' does not export any Gadget instances.`);
     }

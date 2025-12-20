@@ -67,41 +67,65 @@ export function isExternalPackageSpecifier(specifier: string): boolean {
  * - `git+https://github.com/user/repo#v1.0.0` - git URL with ref
  * - `git+https://github.com/user/repo#v1.0.0:minimal` - git URL with ref and preset
  * - `git+https://github.com/user/repo:minimal` - git URL with preset (no ref)
+ * - `git+https://github.com/user/repo#dev/BrowseWeb` - git URL with ref and specific gadget
+ * - `git+https://github.com/user/repo.git/BrowseWeb` - git URL with specific gadget (no ref)
  */
 export function parseGadgetSpecifier(specifier: string): GadgetSpecifier | null {
-  // Git URL: git+URL[#ref][:preset]
+  // Git URL: git+URL[#ref][:preset][/gadgetName]
   if (specifier.startsWith("git+")) {
     const url = specifier.slice(4);
     let baseUrl: string;
     let ref: string | undefined;
     let preset: string | undefined;
+    let gadgetName: string | undefined;
+
+    // Helper to extract /GadgetName suffix (PascalCase identifier)
+    const extractGadgetName = (str: string): { rest: string; gadgetName?: string } => {
+      const match = str.match(/^(.*)\/([A-Z][a-zA-Z0-9]*)$/);
+      if (match) {
+        return { rest: match[1], gadgetName: match[2] };
+      }
+      return { rest: str };
+    };
 
     if (url.includes("#")) {
       const hashIndex = url.indexOf("#");
       baseUrl = url.slice(0, hashIndex);
-      const refAndPreset = url.slice(hashIndex + 1);
+      let refAndRest = url.slice(hashIndex + 1);
 
-      if (refAndPreset.includes(":")) {
-        const colonIndex = refAndPreset.indexOf(":");
-        ref = refAndPreset.slice(0, colonIndex);
-        preset = refAndPreset.slice(colonIndex + 1);
+      // Extract gadget name first (from the end)
+      const gadgetResult = extractGadgetName(refAndRest);
+      refAndRest = gadgetResult.rest;
+      gadgetName = gadgetResult.gadgetName;
+
+      if (refAndRest.includes(":")) {
+        const colonIndex = refAndRest.indexOf(":");
+        ref = refAndRest.slice(0, colonIndex);
+        preset = refAndRest.slice(colonIndex + 1);
       } else {
-        ref = refAndPreset;
+        ref = refAndRest;
       }
     } else {
-      // Check for :preset without #ref (but be careful not to match https: port)
-      // The preset must come after the .git extension or after a /
+      // Check for :preset and /gadgetName without #ref
+      // The preset must come after the .git extension
       const gitExtIndex = url.indexOf(".git");
       if (gitExtIndex !== -1) {
-        const afterGit = url.slice(gitExtIndex + 4);
+        let afterGit = url.slice(gitExtIndex + 4);
+        baseUrl = url.slice(0, gitExtIndex + 4);
+
+        // Extract gadget name first
+        const gadgetResult = extractGadgetName(afterGit);
+        afterGit = gadgetResult.rest;
+        gadgetName = gadgetResult.gadgetName;
+
         if (afterGit.startsWith(":")) {
-          baseUrl = url.slice(0, gitExtIndex + 4);
           preset = afterGit.slice(1);
-        } else {
-          baseUrl = url;
         }
       } else {
-        baseUrl = url;
+        // No .git extension - try to extract gadget name from end
+        const gadgetResult = extractGadgetName(url);
+        baseUrl = gadgetResult.rest;
+        gadgetName = gadgetResult.gadgetName;
       }
     }
 
@@ -110,6 +134,7 @@ export function parseGadgetSpecifier(specifier: string): GadgetSpecifier | null 
       package: baseUrl,
       version: ref,
       preset,
+      gadgetName,
     };
   }
 
