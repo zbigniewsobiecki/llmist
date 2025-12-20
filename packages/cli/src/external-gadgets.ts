@@ -43,8 +43,13 @@ export interface GadgetSpecifier {
  * Check if a specifier is an external package (npm or git).
  */
 export function isExternalPackageSpecifier(specifier: string): boolean {
-  // npm package patterns
-  if (/^@?[a-z0-9][\w.-]*(?:@[\w.-]+)?(?::[a-z]+)?(?:\/\w+)?$/i.test(specifier)) {
+  // npm package patterns - supports both unscoped (pkg) and scoped (@scope/pkg)
+  // Format: [@scope/]package[@version][:preset][/GadgetName]
+  if (
+    /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*(?:@[\w.-]+)?(?::[a-z]+)?(?:\/[A-Z]\w*)?$/i.test(
+      specifier,
+    )
+  ) {
     return true;
   }
   // git URL patterns
