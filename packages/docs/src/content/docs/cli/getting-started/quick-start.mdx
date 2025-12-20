@@ -31,40 +31,28 @@ The `agent` command runs an AI agent that can use tools (gadgets):
 llmist agent "What time is it in Tokyo?"
 ```
 
-With the TUI (Terminal UI) mode for a richer experience:
-
-```bash
-llmist agent --tui "Help me plan a trip to Japan"
-```
+When running in a terminal (both stdin and stdout are TTY), the agent automatically uses TUI mode with an interactive interface featuring expandable blocks, keyboard navigation, and live streaming.
 
 <Aside type="tip">
-  TUI mode provides an interactive interface with expandable blocks, keyboard navigation, and live streaming.
+  TUI mode activates automatically in interactive terminals. Use `--quiet` to disable it for scripting.
 </Aside>
 
-## Using Built-in Gadgets
+## Built-in Gadgets
 
-The CLI includes several built-in gadgets:
+The CLI includes three built-in gadgets for agent-user communication:
 
-<Tabs>
-  <TabItem label="Filesystem">
-    ```bash
-    llmist agent --builtins filesystem \
-      "Read the package.json and summarize the dependencies"
-    ```
-  </TabItem>
-  <TabItem label="Shell">
-    ```bash
-    llmist agent --builtins shell \
-      "Check which node version is installed"
-    ```
-  </TabItem>
-  <TabItem label="Web">
-    ```bash
-    llmist agent --builtins web \
-      "Search for the latest TypeScript release"
-    ```
-  </TabItem>
-</Tabs>
+| Gadget | Purpose |
+|--------|---------|
+| **AskUser** | Ask the user a question and wait for their response |
+| **TellUser** | Display important messages (info, success, warning, error) |
+| **Finish** | Signal that the agent has completed its task |
+
+These are registered automatically. Use `--no-builtins` to disable them.
+
+<Aside type="note">
+  For filesystem, shell, or web capabilities, create custom gadgets or use the library API.
+  See [Creating Gadgets](/cli/gadgets/local-gadgets/) for examples.
+</Aside>
 
 ## Creating a Local Gadget
 
