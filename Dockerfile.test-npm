@@ -3,6 +3,10 @@
 #   docker build -f Dockerfile.test-npm -t llmist-test .
 #   docker run --rm -e GEMINI_API_KEY="your-key" llmist-test
 #   docker run --rm -e GEMINI_API_KEY="key" -e ANTHROPIC_API_KEY="key" llmist-test
+#
+# Note: External gadgets from git URLs (dhalsim) may fail in Docker due to
+# Bun-specific dependencies that don't work under Node.js. This is a known
+# limitation that requires the external package to use Node.js-compatible deps.
 
 FROM node:22-slim
 
@@ -22,10 +26,10 @@ ENV PATH="/root/.bun/bin:$PATH"
 WORKDIR /app
 
 # Install packages from npm (not from local workspace)
-# Use --force to ensure we get the exact version even if cached
+# Use @latest to get the most recent published version
 RUN npm cache clean --force && \
-    npm install -g @llmist/cli@8.1.1 && \
-    npm install llmist@8.1.1
+    npm install -g @llmist/cli@latest && \
+    npm install llmist@latest
 
 # Create a simple test script for llmist library
 RUN cat > test-library.mjs << 'EOF'
@@ -99,7 +103,8 @@ fi
 
 echo "📦 Package versions:"
 echo "   llmist CLI: $(llmist --version)"
-LIB_VERSION=$(node -e "import('llmist').then(m => console.log(m.LLMist ? '8.1.1' : 'unknown'))")
+# Get lib version by finding the package.json relative to the module
+LIB_VERSION=$(node -e "const p = require.resolve('llmist'); const fs = require('fs'); const path = require('path'); let dir = path.dirname(p); while (!fs.existsSync(path.join(dir, 'package.json')) && dir !== '/') dir = path.dirname(dir); console.log(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).version);")
 echo "   llmist lib: $LIB_VERSION"
 echo ""
 
@@ -134,8 +139,10 @@ llmist agent "List the gadgets you have available. Just list their names, nothin
   --max-iterations 1 \
   2>&1 && echo "" && echo "✅ dhalsim gadgets loaded successfully!" || {
     echo ""
-    echo "⚠️  Failed to load dhalsim gadgets"
-    echo "   This may be due to native dependencies (better-sqlite3, sharp)"
+    echo "⚠️  Failed to load dhalsim gadgets (expected in Docker)"
+    echo "   Root cause: dhalsim uses bun-better-sqlite3 (Bun-only package)"
+    echo "   The CLI runs under Node.js which can't import TypeScript files"
+    echo "   This is a dhalsim issue, not an llmist issue"
     echo "   Continuing with other tests..."
   }
 

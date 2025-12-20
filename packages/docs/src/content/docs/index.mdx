@@ -1,0 +1,87 @@
+---
+title: llmist
+description: TypeScript LLM client with streaming tool execution
+template: splash
+hero:
+  tagline: Tools execute while the LLM streams. Any model. Clean API.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get Started
+      link: /getting-started/introduction/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/zbigniewsobiecki/llmist
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Why llmist?
+
+<CardGrid stagger>
+  <Card title="Streaming Tool Execution" icon="rocket">
+    Gadgets execute the moment their block is parsed—not after the response completes. Real-time UX without buffering.
+  </Card>
+  <Card title="Built-in Function Calling" icon="puzzle">
+    llmist implements its own tool calling via a simple block format. No JSON mode required. Works with any model.
+  </Card>
+  <Card title="Multi-Provider Support" icon="random">
+    OpenAI, Anthropic, and Gemini out of the box. Use model shortcuts like `sonnet`, `haiku`, or `flash`.
+  </Card>
+  <Card title="Composable Agent API" icon="seti:typescript">
+    Fluent builder, async iterators, full TypeScript inference. Hook into any lifecycle point.
+  </Card>
+</CardGrid>
+
+## Quick Start
+
+```bash
+npm install llmist
+```
+
+```typescript
+import { LLMist, Gadget, z } from 'llmist';
+
+class Calculator extends Gadget({
+  description: 'Performs arithmetic operations',
+  schema: z.object({
+    operation: z.enum(['add', 'multiply']),
+    a: z.number(),
+    b: z.number(),
+  }),
+}) {
+  execute(params: this['params']): string {
+    const { operation, a, b } = params;
+    return operation === 'add' ? String(a + b) : String(a * b);
+  }
+}
+
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(Calculator)
+  .askAndCollect('What is 15 times 23?');
+
+console.log(answer); // "15 times 23 equals 345"
+```
+
+## Packages
+
+<CardGrid>
+  <Card title="llmist" icon="seti:npm">
+    Core library with agents, gadgets, and providers.
+
+    `npm install llmist`
+  </Card>
+  <Card title="@llmist/cli" icon="seti:shell">
+    Command-line interface for quick completions and agent runs.
+
+    `npx llmist agent "Your prompt"`
+  </Card>
+  <Card title="@llmist/testing" icon="seti:test">
+    Testing utilities and mocks for unit testing your agents.
+
+    `npm install -D @llmist/testing`
+  </Card>
+</CardGrid>
