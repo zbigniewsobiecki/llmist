@@ -449,6 +449,31 @@ describe("custom argPrefix propagation", () => {
     expect(customMatches.length).toBeGreaterThan(0);
     expect(defaultMatches.length).toBe(0);
   });
+
+  it("passes all three custom prefixes to gadget.getInstruction() for gadget examples", () => {
+    // This test verifies the fix for: custom gadget-start-prefix and gadget-end-prefix
+    // not being applied to gadget-specific examples in the AVAILABLE GADGETS section
+    const builder = new LLMMessageBuilder();
+    builder.addGadgets([new ExampleGadget()], {
+      startPrefix: "<<GADGET>>:",
+      endPrefix: "<</GADGET>>",
+      argPrefix: "@@ARG:",
+    });
+
+    const messages = builder.build();
+    const content = messages[0]?.content ?? "";
+
+    // Gadget-specific examples should use ALL custom prefixes
+    // The ExampleGadget has an example with params: { query: "test search" }
+    expect(content).toContain("<<GADGET>>:ExampleGadget");
+    expect(content).toContain("@@ARG:query");
+    expect(content).toContain("<</GADGET>>");
+
+    // Should NOT contain any default prefixes
+    expect(content).not.toContain("!!!GADGET_START:");
+    expect(content).not.toContain("!!!GADGET_END");
+    expect(content).not.toContain("!!!ARG:");
+  });
 });
 
 describe("Multimodal Content Support", () => {
