@@ -161,3 +161,4 @@ niu_code_review*.txt
 e2e-test-results.txt
 gadget-test-output.log
 .dev-setup
+packages/docs/.astro/
