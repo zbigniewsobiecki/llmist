@@ -1,0 +1,96 @@
+---
+title: Why llmist?
+description: What llmist offers as a streaming-first multi-provider LLM client
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+## What is llmist?
+
+llmist is a **streaming-first multi-provider LLM client** in TypeScript with a **home-made tool calling system**.
+
+Rather than waiting for a complete LLM response before parsing tool calls, llmist executes tools **while the LLM is still streaming**. The moment a tool call block is fully parsed, execution begins.
+
+```typescript
+// Tools execute AS the LLM streams
+for await (const event of agent.run()) {
+  if (event.type === 'gadget_start') {
+    console.log(`Starting: ${event.gadgetName}...`);
+  }
+  if (event.type === 'gadget_complete') {
+    console.log(`Result: ${event.result}`);
+  }
+  if (event.type === 'text') {
+    process.stdout.write(event.text);
+  }
+}
+```
+
+<Aside type="tip">
+  Real-time tool execution means your users see progress immediately, not after the LLM finishes thinking.
+</Aside>
+
+## Core Capabilities
+
+<CardGrid>
+  <Card title="Home-Made Tool Calling" icon="puzzle">
+    llmist uses its own block format for tool calls—no JSON mode or native function calling required. Works with **any model** that can follow instructions.
+  </Card>
+  <Card title="Multi-Provider Support" icon="random">
+    First-class support for **OpenAI, Anthropic, and Gemini**. Auto-discovery from environment variables. Model shortcuts like `sonnet`, `gpt4o`, `flash`.
+  </Card>
+  <Card title="Full TypeScript Inference" icon="seti:typescript">
+    Gadget parameters are fully typed from Zod schemas. No type assertions needed. Your IDE knows the exact shape of every parameter.
+  </Card>
+  <Card title="Powerful Hook System" icon="setting">
+    Three-layer architecture: **Observers** (read-only monitoring), **Interceptors** (synchronous transforms), **Controllers** (async lifecycle control).
+  </Card>
+</CardGrid>
+
+## Simple, Expressive API
+
+```typescript
+import { LLMist, Gadget, z } from 'llmist';
+
+class ScreenSaver extends Gadget({
+  description: 'Selects a Windows 98 screensaver',
+  schema: z.object({
+    style: z.enum(['pipes', 'starfield', 'maze', 'flying-toasters']),
+  }),
+}) {
+  execute(params: this['params']): string {
+    const { style } = params;
+    return `Activating ${style} screensaver. Move mouse to deactivate.`;
+  }
+}
+
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(ScreenSaver)
+  .askAndCollect("I'm bored. Start the 3D pipes screensaver.");
+```
+
+## Who Should Use llmist?
+
+<CardGrid stagger>
+  <Card title="Building Real-Time AI UX" icon="rocket">
+    If you need responsive, streaming AI experiences where users see tool execution in real-time.
+  </Card>
+  <Card title="Multi-Provider Applications" icon="random">
+    If you want to switch between OpenAI, Anthropic, and Gemini without code changes.
+  </Card>
+  <Card title="Type-Safe AI Development" icon="seti:typescript">
+    If you want full TypeScript inference for tool parameters and responses.
+  </Card>
+  <Card title="Command-Line AI Workflows" icon="seti:shell">
+    If you need a powerful CLI for AI automation and scripting.
+  </Card>
+</CardGrid>
+
+## Get Started
+
+Choose your path based on how you want to use llmist:
+
+- **[Library](/library/getting-started/introduction/)** - Integrate into your TypeScript/JavaScript application
+- **[CLI](/cli/getting-started/introduction/)** - Run agents from the command line
+- **[Testing](/testing/getting-started/introduction/)** - Mock LLM responses in your tests

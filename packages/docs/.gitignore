@@ -1,0 +1,6 @@
+# Generated TypeDoc API documentation
+src/content/docs/api/
+
+# Build output
+dist/
+.astro/

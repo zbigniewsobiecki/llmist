@@ -1,0 +1,106 @@
+---
+title: Providers Overview
+description: Multi-provider LLM support in llmist
+sidebar:
+  order: 1
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+llmist supports multiple LLM providers out of the box with automatic discovery and seamless switching.
+
+## Supported Providers
+
+<CardGrid>
+  <LinkCard
+    title="OpenAI"
+    description="GPT-5, GPT-4, DALL-E, TTS"
+    href="/library/providers/openai/"
+  />
+  <LinkCard
+    title="Anthropic"
+    description="Claude Sonnet, Haiku, Opus"
+    href="/library/providers/anthropic/"
+  />
+  <LinkCard
+    title="Gemini"
+    description="Gemini Pro, Flash, Imagen"
+    href="/library/providers/gemini/"
+  />
+</CardGrid>
+
+## Auto-Discovery
+
+llmist automatically discovers available providers from environment variables:
+
+```bash
+# Set one or more API keys
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GEMINI_API_KEY=...
+```
+
+```typescript
+import { LLMist } from 'llmist';
+
+// Providers are auto-discovered from environment
+const client = new LLMist();
+
+// Use any available model
+const agent = client.createAgent()
+  .withModel('sonnet')  // Uses Anthropic
+  .ask('Hello!');
+```
+
+<Aside type="tip">
+  You don't need to configure providers explicitly—just set the API keys and llmist handles the rest.
+</Aside>
+
+## Model Shortcuts
+
+Use friendly aliases instead of full model names:
+
+| Alias | Full Model | Provider |
+|-------|------------|----------|
+| `gpt5` | `openai:gpt-5` | OpenAI |
+| `gpt5-mini` | `openai:gpt-5-mini` | OpenAI |
+| `sonnet` | `anthropic:claude-sonnet-4-5` | Anthropic |
+| `haiku` | `anthropic:claude-haiku-4-5` | Anthropic |
+| `opus` | `anthropic:claude-opus-4-5` | Anthropic |
+| `flash` | `gemini:gemini-2.5-flash` | Gemini |
+| `pro` | `gemini:gemini-3-pro-preview` | Gemini |
+
+## Explicit Provider Selection
+
+You can also specify the provider explicitly:
+
+```typescript
+// With provider prefix
+.withModel('openai:gpt-5')
+.withModel('anthropic:claude-sonnet-4-5-20250929')
+.withModel('gemini:gemini-2.5-flash')
+```
+
+## Manual Provider Configuration
+
+For advanced use cases, configure providers manually:
+
+```typescript
+import { LLMist, OpenAIChatProvider } from 'llmist';
+
+const client = new LLMist({
+  autoDiscoverProviders: false,
+  adapters: [
+    new OpenAIChatProvider({
+      apiKey: process.env.MY_OPENAI_KEY,
+      baseUrl: 'https://my-proxy.com/v1',
+    }),
+  ],
+});
+```
+
+## Next Steps
+
+- [OpenAI Provider](/library/providers/openai/) - GPT models, DALL-E, TTS
+- [Anthropic Provider](/library/providers/anthropic/) - Claude models
+- [Gemini Provider](/library/providers/gemini/) - Gemini models, Imagen

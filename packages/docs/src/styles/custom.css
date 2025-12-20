@@ -58,3 +58,12 @@
   background: var(--sl-color-accent);
   color: var(--sl-color-white);
 }
+
+/* Fix LinkCard title contrast in dark mode */
+:root[data-theme="dark"] .sl-link-card .title {
+  color: var(--sl-color-accent);
+}
+
+:root[data-theme="dark"] .sl-link-card:hover .title {
+  color: var(--sl-color-accent-high);
+}

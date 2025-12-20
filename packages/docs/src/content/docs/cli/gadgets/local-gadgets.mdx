@@ -1,0 +1,145 @@
+---
+title: CLI Gadgets
+description: Write gadgets for use with llmist agent
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Write gadgets (tools) for use with `llmist agent`.
+
+<Aside type="tip">
+  For detailed gadget patterns and examples, see [Creating Gadgets](/library/guides/creating-gadgets/) and [Gadget Examples](/reference/gadget-examples/).
+</Aside>
+
+## Quick Start
+
+Create a file with a gadget class:
+
+```typescript title="floppy.ts"
+import { Gadget, z } from 'llmist';
+
+export class FloppyDisk extends Gadget({
+  description: 'Calculate how many 1.44MB floppy disks are needed',
+  schema: z.object({
+    filename: z.string(),
+    megabytes: z.number().positive(),
+  }),
+}) {
+  execute(params: this['params']): string {
+    const { filename, megabytes } = params;
+    const disks = Math.ceil(megabytes / 1.44);
+    return `${filename} requires ${disks} floppy disk(s). Label them 1/${disks}, 2/${disks}...`;
+  }
+}
+```
+
+Use it:
+
+```bash
+llmist agent "How many floppies for DOOM.ZIP at 50MB?" --gadget ./floppy.ts
+```
+
+## File Requirements
+
+Gadget files must:
+1. Export one or more gadget classes
+2. Use TypeScript or JavaScript
+3. Be a valid ES module
+
+```typescript
+// Multiple exports work
+export class FloppyDisk extends Gadget({ ... }) { ... }
+export class DialUpModem extends Gadget({ ... }) { ... }
+
+// Default exports work too
+export default class ArcadeHighScore extends Gadget({ ... }) { ... }
+```
+
+## Loading Multiple Gadgets
+
+<Tabs>
+  <TabItem label="Multiple Files">
+    ```bash
+    llmist agent "Calculate floppies and connect to BBS" \
+      --gadget ./floppy.ts \
+      --gadget ./dialup.ts
+    ```
+  </TabItem>
+  <TabItem label="Single File">
+    ```typescript title="retro-tools.ts"
+    export class FloppyDisk extends Gadget({ ... }) { ... }
+    export class DialUpModem extends Gadget({ ... }) { ... }
+    ```
+    ```bash
+    llmist agent "Calculate floppies and dial up" --gadget ./retro-tools.ts
+    ```
+  </TabItem>
+</Tabs>
+
+## External Gadgets
+
+Load gadgets from npm packages or git repositories:
+
+```bash
+# npm package (Dhalsim browser automation)
+llmist agent "Navigate to apple.com" -g dhalsim
+
+# Use a preset
+llmist agent "Browse the web" -g dhalsim:minimal
+
+# git URL
+llmist agent "task" -g git+https://github.com/user/repo.git
+
+# Combine sources
+llmist agent "Complex task" \
+  -g ./local-gadget.ts \
+  -g dhalsim:minimal \
+  -g builtin:ReadFile
+```
+
+See [Gadget Ecosystem](/cli/gadgets/external-gadgets/) for detailed documentation on Dhalsim, presets, and creating your own packages.
+
+## Testing Gadgets
+
+Use the `gadget` command to test in isolation:
+
+```bash
+# Run interactively
+llmist gadget run ./floppy.ts
+
+# View gadget info
+llmist gadget info ./floppy.ts
+
+# Validate structure
+llmist gadget validate ./floppy.ts
+
+# Pipe JSON input
+echo '{"filename": "DOOM.ZIP", "megabytes": 50}' | llmist gadget run ./floppy.ts
+```
+
+## Creating External Packages
+
+Add an `llmist` field to `package.json`:
+
+```json
+{
+  "name": "my-gadgets",
+  "llmist": {
+    "gadgets": "./dist/index.js",
+    "presets": {
+      "all": "*",
+      "minimal": ["GadgetA", "GadgetB"]
+    }
+  }
+}
+```
+
+## See Also
+
+- [Creating Gadgets](/library/guides/creating-gadgets/) - Comprehensive gadget development guide
+- [Gadget Examples](/reference/gadget-examples/) - Common gadget patterns
+- [Gadget Ecosystem](/cli/gadgets/external-gadgets/) - Third-party gadgets and packages
+- [CLI Configuration](/cli/configuration/toml-reference/) - Gadget approval settings
+- [Testing Gadgets](/testing/gadgets/) - Unit testing gadgets

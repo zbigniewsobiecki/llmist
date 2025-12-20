@@ -1,0 +1,235 @@
+---
+title: Testing Quick Start
+description: Write your first mock test for an AI agent
+sidebar:
+  order: 3
+---
+
+import { Aside, Code, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Let's write a complete test for an AI agent with gadgets.
+
+## Testing a Simple Agent
+
+Here's a basic test that mocks an LLM response:
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
+
+describe('Greeting Agent', () => {
+  beforeEach(() => {
+    getMockManager().clear();
+  });
+
+  it('should respond to greetings', async () => {
+    // 1. Set up the mock
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('hello')
+      .returns('Hello! How can I assist you today?')
+      .register();
+
+    // 2. Create client with mock provider
+    const client = createMockClient();
+
+    // 3. Run the agent
+    const response = await client.createAgent()
+      .withModel('sonnet')
+      .askAndCollect('hello there!');
+
+    // 4. Assert
+    expect(response).toContain('Hello');
+    expect(response).toContain('assist');
+  });
+});
+```
+
+## Testing Gadget Calls
+
+When your agent uses gadgets, mock the LLM to return gadget calls:
+
+```typescript
+import { Gadget, z } from 'llmist';
+import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
+
+// Define a gadget
+class FloppyCalculator extends Gadget({
+  description: 'Calculates how many 1.44MB floppy disks are needed',
+  schema: z.object({
+    filename: z.string(),
+    megabytes: z.number().positive(),
+  }),
+}) {
+  execute(params: this['params']): string {
+    const disks = Math.ceil(params.megabytes / 1.44);
+    return `${params.filename} needs ${disks} floppy disk(s)`;
+  }
+}
+
+describe('Floppy Calculator Agent', () => {
+  beforeEach(() => {
+    getMockManager().clear();
+  });
+
+  it('should calculate floppy disk requirements', async () => {
+    // Mock LLM to call the gadget, then respond
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('floppies')
+      .returns(`Let me calculate that for you.
+
+!!!GADGET_START:FloppyCalculator
+!!!ARG:filename
+DOOM.ZIP
+!!!ARG:megabytes
+10
+!!!GADGET_END
+
+You'll need 7 floppy disks for DOOM.ZIP!`)
+      .register();
+
+    const client = createMockClient();
+    const response = await client.createAgent()
+      .withModel('sonnet')
+      .withGadgets(FloppyCalculator)
+      .askAndCollect('How many floppies do I need for a 10MB DOOM.ZIP?');
+
+    expect(response).toContain('7');
+  });
+});
+```
+
+<Aside type="tip">
+  The gadget call format (`!!!GADGET_START:...`) is llmist's block format. The LLM learns this from the system prompt.
+</Aside>
+
+## Testing Gadgets in Isolation
+
+Use `testGadget()` to test gadget logic without an agent:
+
+```typescript
+import { testGadget } from '@llmist/testing';
+import { FloppyCalculator } from './gadgets/floppy-calculator';
+
+describe('FloppyCalculator Gadget', () => {
+  it('should calculate single disk', async () => {
+    const result = await testGadget(FloppyCalculator, {
+      filename: 'TETRIS.EXE',
+      megabytes: 1,
+    });
+
+    expect(result).toContain('1 floppy disk');
+  });
+
+  it('should calculate multiple disks', async () => {
+    const result = await testGadget(FloppyCalculator, {
+      filename: 'QUAKE.ZIP',
+      megabytes: 50,
+    });
+
+    expect(result).toContain('35 floppy disk');
+  });
+});
+```
+
+## Testing Multi-Turn Conversations
+
+Mock multiple responses for back-and-forth conversations:
+
+```typescript
+describe('Multi-turn Conversation', () => {
+  it('should handle follow-up questions', async () => {
+    // First response - checking high scores
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('high score')
+      .returns('The high score on Pac-Man is AAA with 999,999 points!')
+      .times(1)
+      .register();
+
+    // Follow-up response - who holds it
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('beat it')
+      .returns('To beat the high score, you need to clear all 256 levels!')
+      .times(1)
+      .register();
+
+    const client = createMockClient();
+    const agent = client.createAgent().withModel('sonnet');
+
+    const response1 = await agent.askAndCollect("What's the high score on Pac-Man?");
+    expect(response1).toContain('999,999');
+
+    const response2 = await agent.askAndCollect('How do I beat it?');
+    expect(response2).toContain('256 levels');
+  });
+});
+```
+
+## Verifying Gadget Calls
+
+Use `createMockGadget()` to spy on gadget calls:
+
+```typescript
+import { createMockGadget, mockLLM, createMockClient } from '@llmist/testing';
+import { z } from 'llmist';
+
+describe('Gadget Call Verification', () => {
+  it('should call the arcade gadget with correct params', async () => {
+    const mockArcade = createMockGadget({
+      name: 'ArcadeHighScore',
+      description: 'Check high scores on an arcade cabinet',
+      schema: z.object({ game: z.string() }),
+      result: 'AAA - 999,999',
+    });
+
+    mockLLM()
+      .forAnyModel()
+      .returns(`!!!GADGET_START:ArcadeHighScore
+!!!ARG:game
+pac-man
+!!!GADGET_END
+
+The top score is legendary!`)
+      .register();
+
+    const client = createMockClient();
+    await client.createAgent()
+      .withGadgets(mockArcade)
+      .askAndCollect('High scores for Pac-Man?');
+
+    // Verify the gadget was called
+    expect(mockArcade.getCallCount()).toBe(1);
+    expect(mockArcade.wasCalledWith({ game: 'pac-man' })).toBe(true);
+  });
+});
+```
+
+## Testing Error Handling
+
+```typescript
+describe('Error Handling', () => {
+  it('should handle LLM errors gracefully', async () => {
+    mockLLM()
+      .forAnyModel()
+      .throwsError(new Error('Rate limit exceeded'))
+      .register();
+
+    const client = createMockClient();
+
+    await expect(
+      client.createAgent()
+        .withModel('sonnet')
+        .askAndCollect('Hello')
+    ).rejects.toThrow('Rate limit exceeded');
+  });
+});
+```
+
+## Next Steps
+
+- [MockBuilder API](/testing/mocking/mock-builder/) - Advanced mocking patterns
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - In-depth gadget testing
+- [Testing Agents](/testing/agents/multi-turn/) - Complex agent scenarios

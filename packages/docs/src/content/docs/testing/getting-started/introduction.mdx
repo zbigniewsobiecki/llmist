@@ -1,0 +1,103 @@
+---
+title: Testing Introduction
+description: Mock LLM responses in your test suite with @llmist/testing
+sidebar:
+  order: 1
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+
+**@llmist/testing** provides utilities to mock LLM responses in your test suite. Write deterministic tests for AI-powered applications without making real API calls.
+
+## Why Mock LLM Responses?
+
+<CardGrid>
+  <Card title="Deterministic Tests" icon="approve-check">
+    Get the same response every time - no flaky tests due to LLM variability
+  </Card>
+  <Card title="Fast Execution" icon="rocket">
+    No network calls means tests run in milliseconds, not seconds
+  </Card>
+  <Card title="No API Costs" icon="document">
+    Run thousands of tests without spending on API calls
+  </Card>
+  <Card title="Edge Cases" icon="warning">
+    Test error handling, timeouts, and unusual responses easily
+  </Card>
+</CardGrid>
+
+## Key Features
+
+- **MockBuilder** - Fluent API to define mock responses based on model and message content
+- **testGadget()** - Test gadgets in isolation without an agent
+- **createMockGadget()** - Create spy gadgets to verify calls
+- **Stream Helpers** - Collect and inspect streaming responses
+- **CLI Helpers** - Test CLI applications with mocked stdin/stdout
+
+## Quick Example
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { mockLLM, createMockClient } from '@llmist/testing';
+
+describe('My AI Feature', () => {
+  it('should process user requests', async () => {
+    // Set up mock response
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('hello')
+      .returns('Hello! How can I help you today?')
+      .register();
+
+    // Create client with mock provider
+    const client = createMockClient();
+
+    // Run your agent
+    const response = await client.createAgent()
+      .withModel('sonnet')
+      .askAndCollect('hello');
+
+    expect(response).toContain('Hello');
+  });
+});
+```
+
+<Aside type="tip">
+  The mock system is framework-agnostic and works with Vitest, Jest, Mocha, or any test runner.
+</Aside>
+
+## What You Can Test
+
+| Scenario | Tool |
+|----------|------|
+| Agent responses | `mockLLM()` + `createMockClient()` |
+| Gadget execution | `testGadget()` |
+| Gadget call verification | `createMockGadget()` |
+| Multi-turn conversations | `mockLLM().times(n)` |
+| Error handling | `mockLLM().throwsError()` |
+| Streaming behavior | `collectStream()` |
+
+## Next Steps
+
+<CardGrid>
+  <LinkCard
+    title="Installation"
+    description="Add @llmist/testing to your project"
+    href="/testing/getting-started/installation/"
+  />
+  <LinkCard
+    title="Quick Start"
+    description="Write your first mock test"
+    href="/testing/getting-started/quick-start/"
+  />
+  <LinkCard
+    title="MockBuilder API"
+    description="Full mocking capabilities"
+    href="/testing/mocking/mock-builder/"
+  />
+  <LinkCard
+    title="Testing Gadgets"
+    description="Test gadgets in isolation"
+    href="/testing/gadgets/test-gadget/"
+  />
+</CardGrid>

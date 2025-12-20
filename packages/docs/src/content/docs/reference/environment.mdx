@@ -1,0 +1,123 @@
+---
+title: Environment Variables
+description: Complete reference for all llmist environment variables
+sidebar:
+  order: 2
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+llmist uses environment variables for provider authentication and configuration.
+
+## Provider API Keys
+
+Set these environment variables to enable provider auto-discovery:
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Google Gemini
+export GEMINI_API_KEY="..."
+```
+
+<Aside type="tip">
+  llmist automatically discovers and configures providers based on which API keys are set. No manual provider registration required.
+</Aside>
+
+## Auto-Discovery Behavior
+
+When you create an agent without specifying a provider, llmist:
+
+1. Checks for API keys in environment variables
+2. Registers providers with valid keys
+3. Selects the appropriate provider based on model name
+
+```typescript
+// Auto-discovers providers from environment
+const agent = LLMist.createAgent()
+  .withModel('sonnet');  // Uses Anthropic if ANTHROPIC_API_KEY is set
+```
+
+## Logging Configuration
+
+| Variable | Description | Values |
+|----------|-------------|--------|
+| `LLMIST_LOG_LEVEL` | Logging verbosity | `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
+| `LLMIST_LOG_FILE` | Path to log file | Any valid file path |
+| `LLMIST_LOG_RESET` | Clear log on start | `true`, `false` |
+
+### Example Logging Setup
+
+```bash
+# Enable debug logging to file
+export LLMIST_LOG_LEVEL="debug"
+export LLMIST_LOG_FILE="./llmist.log"
+export LLMIST_LOG_RESET="true"
+```
+
+<Aside type="note">
+  When `LLMIST_LOG_RESET` is `true`, the log file is cleared each time the application starts.
+</Aside>
+
+## CLI-Specific Flags
+
+These can also be set via command-line flags:
+
+| Flag | Environment Variable | Description |
+|------|---------------------|-------------|
+| `--log-level` | `LLMIST_LOG_LEVEL` | Set log level |
+| `--log-file` | `LLMIST_LOG_FILE` | Set log file path |
+
+```bash
+# Via flag
+llmist agent "Hello" --log-level debug --log-file ./debug.log
+
+# Via environment
+LLMIST_LOG_LEVEL=debug LLMIST_LOG_FILE=./debug.log llmist agent "Hello"
+```
+
+## Provider-Specific Variables
+
+### OpenAI
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | API key (required) |
+| `OPENAI_ORG_ID` | Organization ID (optional) |
+| `OPENAI_BASE_URL` | Custom API endpoint (optional) |
+
+### Anthropic
+
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | API key (required) |
+| `ANTHROPIC_BASE_URL` | Custom API endpoint (optional) |
+
+### Google Gemini
+
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | API key (required) |
+
+## Best Practices
+
+1. **Never commit API keys** - Use `.env` files or secret managers
+2. **Use different keys per environment** - Separate dev/staging/production
+3. **Rotate keys regularly** - Update keys periodically for security
+
+### Using .env Files
+
+```bash
+# .env (add to .gitignore!)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Load with your preferred method:
+- Node.js: `dotenv` package
+- Bun: Built-in `.env` support
+- Shell: `source .env` or `export $(cat .env | xargs)`

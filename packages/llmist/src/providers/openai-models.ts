@@ -1,22 +1,76 @@
 /**
  * OpenAI Model Specifications
  *
- * Model data for OpenAI models including GPT-5, GPT-4.1, GPT-4o, and o-series
+ * Model data for OpenAI models including GPT-5.2, GPT-5.1, GPT-5, GPT-4.1, GPT-4o, and o-series
  * with their specifications, pricing (Standard tier), and capabilities.
  *
  * Pricing source: https://openai.com/api/pricing (Standard tier)
- * Last updated: 2025-11-29
+ * Last updated: 2025-12-20
  */
 
 import type { ModelSpec } from "../core/model-catalog.js";
 
 export const OPENAI_MODELS: ModelSpec[] = [
-  // GPT-5 Family
+  // GPT-5.2 Family (Latest flagship)
+  {
+    provider: "openai",
+    modelId: "gpt-5.2",
+    displayName: "GPT-5.2",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    pricing: {
+      input: 1.25,
+      output: 10.0,
+      cachedInput: 0.125,
+    },
+    knowledgeCutoff: "2025-03-31",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+      fineTuning: true,
+    },
+    metadata: {
+      family: "GPT-5.2",
+      releaseDate: "2025-12-01",
+      notes: "Latest flagship model with 1M context window and enhanced reasoning.",
+      supportsTemperature: false,
+    },
+  },
+  {
+    provider: "openai",
+    modelId: "gpt-5.2-pro",
+    displayName: "GPT-5.2 Pro",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    pricing: {
+      input: 15.0,
+      output: 120.0,
+    },
+    knowledgeCutoff: "2025-03-31",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "GPT-5.2",
+      releaseDate: "2025-12-01",
+      notes: "Premium tier GPT-5.2 with enhanced reasoning. Does not support prompt caching.",
+      supportsTemperature: false,
+    },
+  },
+
+  // GPT-5.1 Family
   {
     provider: "openai",
     modelId: "gpt-5.1",
     displayName: "GPT-5.1",
-    contextWindow: 128_000,
+    contextWindow: 1_000_000,
     maxOutputTokens: 32_768,
     pricing: {
       input: 1.25,
@@ -33,17 +87,69 @@ export const OPENAI_MODELS: ModelSpec[] = [
       fineTuning: true,
     },
     metadata: {
-      family: "GPT-5",
+      family: "GPT-5.1",
       releaseDate: "2025-11-12",
-      notes: "Latest GPT-5 with improved instruction following. 2-3x faster than GPT-5.",
+      notes: "GPT-5 variant with improved instruction following. 2-3x faster than GPT-5.",
       supportsTemperature: false,
     },
   },
   {
     provider: "openai",
+    modelId: "gpt-5.1-codex",
+    displayName: "GPT-5.1 Codex",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 32_768,
+    pricing: {
+      input: 1.25,
+      output: 10.0,
+      cachedInput: 0.125,
+    },
+    knowledgeCutoff: "2024-09-30",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "GPT-5.1",
+      notes: "GPT-5.1 variant optimized for code generation and analysis.",
+      supportsTemperature: false,
+    },
+  },
+  {
+    provider: "openai",
+    modelId: "gpt-5.1-codex-max",
+    displayName: "GPT-5.1 Codex Max",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 32_768,
+    pricing: {
+      input: 1.25,
+      output: 10.0,
+      cachedInput: 0.125,
+    },
+    knowledgeCutoff: "2024-09-30",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "GPT-5.1",
+      notes: "Extended thinking variant of GPT-5.1 Codex for complex code tasks.",
+      supportsTemperature: false,
+    },
+  },
+
+  // GPT-5 Family
+  {
+    provider: "openai",
     modelId: "gpt-5",
     displayName: "GPT-5",
-    contextWindow: 272_000,
+    contextWindow: 1_000_000,
     maxOutputTokens: 128_000,
     pricing: {
       input: 1.25,
@@ -62,8 +168,32 @@ export const OPENAI_MODELS: ModelSpec[] = [
     metadata: {
       family: "GPT-5",
       releaseDate: "2025-08-07",
-      notes:
-        "Best model for coding and agentic tasks. Adaptive reasoning with 90% caching discount.",
+      notes: "High-capability model for coding and agentic tasks. 90% caching discount.",
+      supportsTemperature: false,
+    },
+  },
+  {
+    provider: "openai",
+    modelId: "gpt-5-codex",
+    displayName: "GPT-5 Codex",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    pricing: {
+      input: 1.25,
+      output: 10.0,
+      cachedInput: 0.125,
+    },
+    knowledgeCutoff: "2024-09-30",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "GPT-5",
+      notes: "GPT-5 variant optimized for code generation and analysis.",
       supportsTemperature: false,
     },
   },
@@ -290,6 +420,30 @@ export const OPENAI_MODELS: ModelSpec[] = [
     metadata: {
       family: "o-series",
       notes: "Advanced reasoning model with chain-of-thought",
+      supportsTemperature: false,
+    },
+  },
+  {
+    provider: "openai",
+    modelId: "o1-pro",
+    displayName: "o1 Pro",
+    contextWindow: 200_000,
+    maxOutputTokens: 100_000,
+    pricing: {
+      input: 150.0,
+      output: 600.0,
+    },
+    knowledgeCutoff: "2024-12-01",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "o-series",
+      notes: "Premium tier o1 with extended reasoning. Does not support prompt caching.",
       supportsTemperature: false,
     },
   },

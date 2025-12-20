@@ -12,11 +12,11 @@
 </p>
 
 <p align="center">
-  <strong>TypeScript LLM client with streaming tool execution</strong>
+  <strong>Streaming-first multi-provider LLM client in TypeScript with home-made tool calling</strong>
 </p>
 
 <p align="center">
-  <em>Tools execute while the LLM streams. Any model. Clean API.</em>
+  <em>Your own tool syntax. Any model. Full observability.</em>
 </p>
 
 ---
@@ -26,7 +26,7 @@
 ## Installation
 
 ```bash
-npm install llmist
+bun add llmist
 ```
 
 ## Packages
@@ -37,63 +37,140 @@ npm install llmist
 | [`@llmist/cli`](https://www.npmjs.com/package/@llmist/cli) | Command-line interface |
 | [`@llmist/testing`](https://www.npmjs.com/package/@llmist/testing) | Testing utilities and mocks |
 
-## Features
+## Core Capabilities
 
-### Core Library (`llmist`)
+### Gadget System (Home-Made Tool Calling)
 
-| Feature | Description | Docs | Example |
-|---------|-------------|------|---------|
-| **Streaming Tool Execution** | Gadgets execute the moment their block is parsed—not after the response completes. | [Streaming](/packages/docs/src/content/docs/guides/streaming.md) | [05-streaming.ts](/examples/05-streaming.ts) |
-| **Built-in Function Calling** | Simple block format works with any text model—no native tool support required. | [Block Format](/packages/docs/src/content/docs/guides/block-format.md) | [01-basic-usage.ts](/examples/01-basic-usage.ts) |
-| **Multi-Provider Support** | OpenAI, Anthropic, and Gemini with automatic provider discovery from env vars. | [Providers](/packages/docs/src/content/docs/advanced/providers.md) | - |
-| **Fluent Agent API** | Chainable builder pattern with full TypeScript inference. | [Quick Start](/packages/docs/src/content/docs/getting-started/quick-start.md) | [13-syntactic-sugar.ts](/examples/13-syntactic-sugar.ts) |
-| **Class & Function Gadgets** | Two ways to create tools—classes for complex gadgets, functions for simple ones. | [Creating Gadgets](/packages/docs/src/content/docs/guides/creating-gadgets.md) | [02-custom-gadgets.ts](/examples/02-custom-gadgets.ts) |
-| **Lifecycle Hooks** | Observe, intercept, and control agent execution with presets or custom hooks. | [Hooks](/packages/docs/src/content/docs/guides/hooks.md) | [03-hooks.ts](/examples/03-hooks.ts) |
-| **Human-in-the-Loop** | Request user input mid-execution for interactive workflows. | [Human-in-Loop](/packages/docs/src/content/docs/guides/human-in-loop.md) | [04-human-in-loop.ts](/examples/04-human-in-loop.ts) |
-| **Context Compaction** | Automatic context management prevents overflow in long conversations. | [Compaction](/packages/docs/src/content/docs/advanced/compaction.md) | - |
-| **Cost Tracking** | Real-time token counting and cost estimation across providers. | [Cost Tracking](/packages/docs/src/content/docs/guides/cost-tracking.md) | [06-model-catalog.ts](/examples/06-model-catalog.ts) |
-| **Subagents** | Spawn nested agents for complex multi-step tasks. | [Subagents](/packages/docs/src/content/docs/advanced/subagents.md) | - |
-| **Gadget Dependencies** | DAG execution—independent gadgets run in parallel, dependent ones wait. | [Block Format](/packages/docs/src/content/docs/guides/block-format.md#dependencies) | [11-gadget-dependencies.ts](/examples/11-gadget-dependencies.ts) |
-| **Custom Models** | Register fine-tuned or custom models with pricing and limits. | [Custom Models](/packages/docs/src/content/docs/advanced/custom-models.md) | - |
-| **Multimodal** | Vision and image input support for compatible models. | [Multimodal](/packages/docs/src/content/docs/advanced/multimodal.md) | - |
+llmist implements its own tool calling syntax called "gadgets" - no native function calling or structured output required.
 
-### CLI (`@llmist/cli`)
+- **[LLM- and streaming-friendly block format](https://llmist.dev/reference/block-format/)** — Tools execute the moment their block is parsed, not after the response completes
+- **[Built-in dependencies](https://llmist.dev/reference/block-format/#dependencies)** — DAG execution with parallel independent gadgets and sequential dependent ones
+- **Works with any model** — Any LLM that can follow instructions can use gadgets
+- **Configurable syntax markers** — Customize the block delimiters to fit your needs
 
-| Feature | Description | Docs |
-|---------|-------------|------|
-| **Quick Completions** | Stream responses from any model via command line. | [CLI Reference](/packages/docs/src/content/docs/cli/reference.md) |
-| **Agent Mode** | Run full agent loop with local gadget files. | [CLI Gadgets](/packages/docs/src/content/docs/cli/gadgets.md) |
-| **External Gadgets** | Load gadgets from npm packages or git URLs (e.g., Dhalsim). | [Ecosystem](/packages/docs/src/content/docs/cli/ecosystem.md) |
-| **TOML Configuration** | Reusable profiles, prompt templates, and custom commands. | [Configuration](/packages/docs/src/content/docs/cli/configuration.md) |
-| **Interactive TUI** | Browse execution history, view raw requests/responses. | [CLI Reference](/packages/docs/src/content/docs/cli/reference.md#interactive-tui) |
+### Agent API
 
-### Testing (`@llmist/testing`)
+Low-boilerplate, TypeScript-first API for building agents and subagents.
 
-| Feature | Description | Docs |
-|---------|-------------|------|
-| **Mock LLM Responses** | Deterministic testing without API calls using fluent mock builder. | [Testing Overview](/packages/docs/src/content/docs/testing/overview.md) |
-| **Gadget Testing** | Test gadgets in isolation with `testGadget()` utility. | [Gadget Testing](/packages/docs/src/content/docs/testing/gadget-testing.md) |
-| **Mock Gadgets** | Create mock gadgets for agent integration tests. | [Mocking](/packages/docs/src/content/docs/testing/mocking.md) |
+- **[Fluent builder pattern](https://llmist.dev/library/getting-started/quick-start/)** — Chainable `.withModel()`, `.withGadgets()`, `.withHooks()` configuration
+- **Full TypeScript inference** — Gadget parameters are typed from Zod schemas, no assertions needed
+- **[Class & function gadgets](https://llmist.dev/library/guides/creating-gadgets/)** — Classes for complex tools, simple functions for quick ones
+- **[Subagent spawning](https://llmist.dev/library/advanced/subagents/)** — Nested agents for complex multi-step tasks
+
+### Hook System
+
+Three-layer architecture for deep integration with agent execution. [Learn more →](https://llmist.dev/library/guides/hooks/)
+
+- **Observers** — Read-only monitoring for logging and analytics
+- **Interceptors** — Synchronous transforms for modifying messages
+- **Controllers** — Async lifecycle control for flow management
+
+Use cases: observability, flow control, benchmarking, [human-in-the-loop](https://llmist.dev/library/guides/human-in-loop/), deep app/UI integration.
+
+### Multi-Provider Support
+
+First-class support for multiple LLM providers with unified API. [Learn more →](https://llmist.dev/library/providers/overview/)
+
+- **[OpenAI, Anthropic, Gemini](https://llmist.dev/library/providers/overview/)** — Auto-discovery from environment variables
+- **Caching-aware** — Tracks cached vs. uncached tokens for accurate metrics
+- **[Built-in cost calculation](https://llmist.dev/library/guides/cost-tracking/)** — Real-time token counting and cost estimation
+- **[Multimodal](https://llmist.dev/library/advanced/multimodal/)** — Vision and image input support
+- **[Extensible](https://llmist.dev/library/advanced/custom-models/)** — Add custom providers or models
+
+### CLI & TUI
+
+Developer-first command-line experience for running and building agents. [Learn more →](https://llmist.dev/cli/getting-started/introduction/)
+
+- **[Config-driven](https://llmist.dev/cli/configuration/toml-reference/)** — TOML configuration for reusable profiles and templates
+- **[3rd party gadget system](https://llmist.dev/cli/gadgets/external-gadgets/)** — Load gadgets from local files, git URLs, or npm packages
+- **[Publish your own](https://llmist.dev/cli/gadgets/local-gadgets/)** — Write and easily share your gadgetry
+- **Raw LLM access** — Control over logging and direct access to request/response content
+- **[Interactive TUI](https://llmist.dev/cli/tui/overview/)** — Browse execution history, inspect raw payloads
+
+### Testing Infrastructure
+
+Full mocking for deterministic, LLM-free testing. [Learn more →](https://llmist.dev/testing/getting-started/introduction/)
+
+- **[MockBuilder](https://llmist.dev/testing/mocking/overview/)** — Fluent API for scripting mock responses
+- **[Gadget testing](https://llmist.dev/testing/gadgets/test-gadget/)** — `testGadget()` utility for isolated gadget tests
+- **Agent mocking** — Test full agent flows without API calls
 
 ## Quick Start
 
-```bash
-# Set your API key
-export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, GEMINI_API_KEY
+### Library
 
-# Run an example
-bunx tsx examples/01-basic-usage.ts
+```bash
+bun add llmist
+export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, GEMINI_API_KEY
 ```
 
-See the [Quick Start Guide](/packages/docs/src/content/docs/getting-started/quick-start.md) for a complete walkthrough.
+```typescript
+import { LLMist, Gadget, z } from 'llmist';
+
+class DialUp extends Gadget({
+  description: 'Simulates connecting to the internet via 56k modem',
+  schema: z.object({
+    phoneNumber: z.string().describe('ISP dial-up number'),
+    baud: z.enum(['14400', '28800', '33600', '56000']).default('56000'),
+  }),
+}) {
+  execute(params: this['params']): string {
+    return `ATDT ${params.phoneNumber}... CONNECT ${params.baud}. You've got mail!`;
+  }
+}
+
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(DialUp)
+  .askAndCollect('Connect me to AOL');
+```
+
+### CLI
+
+```bash
+bun install -g @llmist/cli
+
+# Quick completion
+llmist complete "Explain TypeScript generics"
+
+# Run agent with local gadgets
+llmist agent "Search for files" --gadgets ./my-gadgets/
+
+# Use BrowseWeb subagent from Dhalsim for web automation
+llmist agent "Find the iPhone 16 Pro price on apple.com" --gadgets dhalsim/BrowseWeb
+```
+
+See [Dhalsim](https://github.com/zbigniewsobiecki/dhalsim) for browser automation gadgets.
+
+### Testing
+
+```bash
+bun add -D @llmist/testing
+```
+
+```typescript
+import { testGadget, mockLLM, createMockClient } from '@llmist/testing';
+
+// Test gadgets in isolation
+const result = await testGadget(new Calculator(), { a: 5, b: 3 });
+expect(result.result).toBe('8');
+
+// Mock LLM responses for agent tests
+mockLLM()
+  .whenMessageContains('hello')
+  .returns('Hi there! How can I help?')
+  .register();
+
+const agent = LLMist.createAgent()
+  .withClient(createMockClient());
+
+const response = await agent.askAndCollect('hello');
+// Deterministic result, no API calls
+```
 
 ## Documentation
 
-Browse documentation in [`packages/docs/`](/packages/docs/src/content/docs/) or run the docs site locally:
-
-```bash
-bun run docs:dev
-```
+Browse documentation at [llmist.dev](https://llmist.dev).
 
 ## Examples
 

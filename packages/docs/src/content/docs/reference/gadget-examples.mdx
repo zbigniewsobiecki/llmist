@@ -1,0 +1,246 @@
+---
+title: Gadget Examples
+description: Canonical examples of common gadget patterns
+sidebar:
+  order: 3
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This page contains canonical examples of common gadget patterns. Reference these examples instead of duplicating code across documentation.
+
+## Floppy Disk Calculator
+
+The classic example demonstrating basic gadget structure:
+
+<Tabs>
+  <TabItem label="Class-based">
+    ```typescript
+    import { Gadget, z } from 'llmist';
+
+    export class FloppyDisk extends Gadget({
+      description: 'Calculates how many 1.44MB floppy disks are needed to store a file',
+      schema: z.object({
+        filename: z.string().describe('Name of the file'),
+        megabytes: z.number().positive().describe('File size in MB'),
+      }),
+    }) {
+      execute(params: this['params']): string {
+        const { filename, megabytes } = params;
+        const disks = Math.ceil(megabytes / 1.44);
+        return `${filename} requires ${disks} floppy disk${disks > 1 ? 's' : ''}. Label them 1 of ${disks}, 2 of ${disks}...`;
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Function-based">
+    ```typescript
+    import { createGadget, z } from 'llmist';
+
+    export const floppyDisk = createGadget({
+      name: 'FloppyDisk',
+      description: 'Calculates how many 1.44MB floppy disks are needed to store a file',
+      schema: z.object({
+        filename: z.string().describe('Name of the file'),
+        megabytes: z.number().positive().describe('File size in MB'),
+      }),
+      execute: ({ filename, megabytes }) => {
+        const disks = Math.ceil(megabytes / 1.44);
+        return `${filename} requires ${disks} floppy disk${disks > 1 ? 's' : ''}. Label them 1 of ${disks}, 2 of ${disks}...`;
+      },
+    });
+    ```
+  </TabItem>
+</Tabs>
+
+## Memory Card Reader
+
+Load saved game data with size limiting:
+
+```typescript
+import { Gadget, z } from 'llmist';
+import * as fs from 'fs/promises';
+
+export class MemoryCardRead extends Gadget({
+  description: 'Load save data from a memory card slot',
+  schema: z.object({
+    slot: z.number().int().min(1).max(15).describe('Memory card slot (1-15)'),
+    maxBytes: z.number().optional().describe('Maximum bytes to read'),
+  }),
+}) {
+  async execute(params: this['params']): Promise<string> {
+    const path = `./saves/slot${params.slot}.sav`;
+    const content = await fs.readFile(path, 'utf-8');
+    const limit = params.maxBytes ?? 10000;
+    return content.slice(0, limit);
+  }
+}
+```
+
+## BBS Fetch Gadget
+
+Connect to a BBS or web server with configurable timeout:
+
+```typescript
+import { Gadget, z } from 'llmist';
+
+export class BBSFetch extends Gadget({
+  description: 'Fetch content from a BBS or web server',
+  schema: z.object({
+    url: z.string().url().describe('URL to fetch (supports gopher:// and http://)'),
+    headers: z.record(z.string()).optional().describe('Request headers'),
+  }),
+  timeoutMs: 30000,  // 30 second timeout (dial-up is slow!)
+}) {
+  async execute(params: this['params']): Promise<string> {
+    const response = await fetch(params.url, {
+      headers: params.headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Connection failed: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.text();
+  }
+}
+```
+
+## Human Input Gadget
+
+Pause execution to ask the user a question:
+
+```typescript
+import { Gadget, HumanInputRequiredException, z } from 'llmist';
+
+export class AskUser extends Gadget({
+  description: 'Ask the user a question and wait for their response',
+  schema: z.object({
+    question: z.string().describe('Question to ask the user'),
+  }),
+}) {
+  execute(params: this['params']): string {
+    throw new HumanInputRequiredException(params.question);
+  }
+}
+```
+
+<Aside type="note">
+  `HumanInputRequiredException` pauses the agent loop and waits for user input before continuing.
+</Aside>
+
+## Task Completion Gadget
+
+Signal that the agent has completed its task:
+
+```typescript
+import { Gadget, TaskCompletionSignal, z } from 'llmist';
+
+export class Done extends Gadget({
+  description: 'Signal that the task is complete',
+  schema: z.object({
+    summary: z.string().describe('Summary of what was accomplished'),
+  }),
+}) {
+  execute(params: this['params']): string {
+    throw new TaskCompletionSignal(params.summary);
+  }
+}
+```
+
+<Aside type="note">
+  `TaskCompletionSignal` breaks the agent loop and returns the summary as the final result.
+</Aside>
+
+## DOS Command Gadget
+
+Execute commands in the DOS shell (use with caution):
+
+```typescript
+import { Gadget, z } from 'llmist';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+export class DOSCommand extends Gadget({
+  description: 'Execute a command in the DOS shell',
+  schema: z.object({
+    command: z.string().describe('DOS command (DIR, COPY, DEL, etc.)'),
+    cwd: z.string().optional().describe('Working directory (C:\\GAMES\\, etc.)'),
+  }),
+  timeoutMs: 60000,
+}) {
+  async execute(params: this['params']): Promise<string> {
+    const { stdout, stderr } = await execAsync(params.command, {
+      cwd: params.cwd,
+      timeout: 55000,
+    });
+    return stdout + (stderr ? `\nSTDERR:\n${stderr}` : '');
+  }
+}
+```
+
+<Aside type="caution">
+  Shell command gadgets are powerful but dangerous. Always validate input and consider using gadget approval in CLI mode.
+</Aside>
+
+## AltaVista Search Gadget
+
+Search the web using an API (remember when AltaVista was the best?):
+
+```typescript
+import { Gadget, z } from 'llmist';
+
+export class AltaVistaSearch extends Gadget({
+  description: 'Search the World Wide Web for information',
+  schema: z.object({
+    query: z.string().describe('Search query (try +exact +phrase)'),
+    numResults: z.number().min(1).max(10).default(5),
+  }),
+}) {
+  async execute(params: this['params']): Promise<string> {
+    // Replace with your preferred search API
+    const response = await fetch(
+      `https://api.search.example/search?q=${encodeURIComponent(params.query)}&n=${params.numResults}`
+    );
+    const results = await response.json();
+    return JSON.stringify(results, null, 2);
+  }
+}
+```
+
+## Leaderboard Query Gadget
+
+Query the arcade high scores database safely:
+
+```typescript
+import { Gadget, z } from 'llmist';
+
+export class LeaderboardQuery extends Gadget({
+  description: 'Query the arcade high scores leaderboard',
+  schema: z.object({
+    query: z.string().describe('SQL SELECT query for the leaderboard'),
+  }),
+}) {
+  constructor(private db: Database) {
+    super();
+  }
+
+  async execute(params: this['params']): Promise<string> {
+    // Validate query is read-only (no cheating!)
+    if (!params.query.trim().toUpperCase().startsWith('SELECT')) {
+      throw new Error('Nice try! Only SELECT queries allowed. No hacking the scores.');
+    }
+
+    const results = await this.db.query(params.query);
+    return JSON.stringify(results, null, 2);
+  }
+}
+```
+
+## See Also
+
+- [Creating Gadgets](/library/guides/creating-gadgets/) - Full guide to gadget development
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Using gadgets with the CLI
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - Testing your gadgets

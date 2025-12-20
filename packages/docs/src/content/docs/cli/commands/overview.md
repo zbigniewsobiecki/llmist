@@ -1,0 +1,186 @@
+---
+title: CLI Reference
+description: Command-line interface for llmist
+---
+
+Command-line interface for llmist.
+
+## Installation
+
+```bash
+npm install -g llmist
+# or use directly
+bunx llmist
+npx llmist
+```
+
+## Commands
+
+### `init` - Initialize Configuration
+
+Create a starter configuration file at `~/.llmist/cli.toml`:
+
+```bash
+llmist init
+```
+
+### `complete` - Simple Completion
+
+Stream a single response without agent loop:
+
+```bash
+llmist complete "Explain TypeScript generics" --model haiku
+```
+
+**Options:**
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--model <model>` | `-m` | Model name or alias | `gpt-5-nano` |
+| `--system <prompt>` | `-s` | System prompt | none |
+| `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
+| `--max-tokens <n>` | | Max output tokens | Provider default |
+| `--quiet` | `-q` | Suppress all output except content | false |
+
+### `agent` - Agent with Gadgets
+
+Run the full agent loop with tools:
+
+```bash
+llmist agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonnet
+```
+
+**Options:**
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--model <model>` | `-m` | Model name or alias | `gpt-5-nano` |
+| `--system <prompt>` | `-s` | System prompt | none |
+| `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
+| `--max-iterations <n>` | `-i` | Max agent iterations | 10 |
+| `--gadget <path>` | `-g` | Gadget file (repeatable) | none |
+| `--no-builtins` | | Disable all built-in gadgets | false |
+| `--no-builtin-interaction` | | Disable AskUser gadget | false |
+| `--quiet` | `-q` | Suppress output except TellUser | false |
+
+**Built-in Gadgets:**
+
+| Gadget | Description |
+|--------|-------------|
+| `AskUser` | Asks the user a question and waits for response |
+| `TellUser` | Outputs a message with type indicator. Set `done=true` to end conversation |
+
+### `gadget` - Test and Inspect Gadgets
+
+```bash
+llmist gadget run ./floppy.ts
+llmist gadget info ./floppy.ts
+llmist gadget validate ./floppy.ts
+```
+
+## Configuration File
+
+The CLI loads configuration from `~/.llmist/cli.toml`:
+
+```toml
+# ~/.llmist/cli.toml
+
+[complete]
+model = "anthropic:claude-sonnet-4-5"
+temperature = 0.7
+
+[agent]
+model = "anthropic:claude-sonnet-4-5"
+max-iterations = 15
+gadget = ["~/gadgets/common-tools.ts"]
+
+# Custom command
+[code-review]
+type = "agent"
+description = "Review code for bugs and best practices."
+system = "You are a senior code reviewer."
+max-iterations = 5
+```
+
+### Inheritance
+
+Sections can inherit settings:
+
+```toml
+[agent]
+model = "anthropic:claude-sonnet-4-5"
+max-iterations = 15
+
+[code-review]
+inherits = "agent"
+temperature = 0.3
+system = "You are a code reviewer."
+```
+
+### Prompt Templates
+
+Define reusable prompts with Eta templating:
+
+```toml
+[prompts]
+base-assistant = "You are a helpful AI assistant."
+expert = """
+<%~ include("@base-assistant") %>
+You are also an expert in <%= it.field %>.
+"""
+
+[my-expert]
+system = '<%~ include("@expert", {field: "TypeScript"}) %>'
+```
+
+## Global Options
+
+| Flag | Description |
+|------|-------------|
+| `--log-level <level>` | Log level: silly, trace, debug, info, warn, error, fatal |
+| `--log-file <path>` | Path to log file |
+| `--version` | Show version number |
+| `--help` | Show help |
+
+## Environment Variables
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export GEMINI_API_KEY="..."
+
+# Logging
+export LLMIST_LOG_LEVEL="debug"
+export LLMIST_LOG_FILE="./app.log"
+```
+
+## Stdin Input
+
+Pipe content to llmist:
+
+```bash
+cat code.ts | llmist complete "Review this code"
+git diff | llmist complete "Summarize changes"
+```
+
+## Model Shortcuts
+
+```bash
+llmist complete "Hello" --model haiku
+llmist complete "Hello" --model sonnet
+llmist complete "Hello" --model gpt4o
+llmist complete "Hello" --model flash
+```
+
+## Interactive TUI
+
+When running in an interactive terminal, `llmist agent` provides a rich Terminal User Interface with keyboard navigation, real-time status, and debug views.
+
+See [TUI Overview](/cli/tui/overview/) for full documentation and keyboard shortcuts.
+
+## See Also
+
+- [CLI Configuration](/cli/configuration/toml-reference/) - TOML, gadget approval, environment variables
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Writing local gadgets
+- [Gadget Ecosystem](/cli/gadgets/external-gadgets/) - Third-party packages (Dhalsim, etc.)
+- [Gadgets Guide](/library/guides/gadgets/) - Complete gadget development reference

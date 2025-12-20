@@ -1,0 +1,129 @@
+---
+title: Testing Installation
+description: Install and configure @llmist/testing
+sidebar:
+  order: 2
+---
+
+import { Code, Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+## Installation
+
+Add `@llmist/testing` as a dev dependency:
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bun add -D @llmist/testing
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm install -D @llmist/testing
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add -D @llmist/testing
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add -D @llmist/testing
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside>
+  `@llmist/testing` has `llmist` as a peer dependency. Make sure you have `llmist` installed in your project.
+</Aside>
+
+## Test Setup
+
+### With Vitest
+
+```typescript title="test/setup.ts"
+import { beforeEach } from 'vitest';
+import { getMockManager } from '@llmist/testing';
+
+beforeEach(() => {
+  // Clear all registered mocks before each test
+  getMockManager().clear();
+});
+```
+
+Configure in `vitest.config.ts`:
+
+```typescript title="vitest.config.ts"
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    setupFiles: ['./test/setup.ts'],
+  },
+});
+```
+
+### With Jest
+
+```typescript title="test/setup.ts"
+import { getMockManager } from '@llmist/testing';
+
+beforeEach(() => {
+  getMockManager().clear();
+});
+```
+
+Configure in `jest.config.js`:
+
+```javascript title="jest.config.js"
+module.exports = {
+  setupFilesAfterEnv: ['./test/setup.ts'],
+};
+```
+
+## Basic Usage Pattern
+
+<Steps>
+
+1. **Import testing utilities**
+
+   ```typescript
+   import { mockLLM, createMockClient } from '@llmist/testing';
+   ```
+
+2. **Register mock responses**
+
+   ```typescript
+   mockLLM()
+     .forAnyModel()
+     .whenMessageContains('hello')
+     .returns('Hi there!')
+     .register();
+   ```
+
+3. **Create a mock client**
+
+   ```typescript
+   const client = createMockClient();
+   ```
+
+4. **Run your agent**
+
+   ```typescript
+   const response = await client.createAgent()
+     .withModel('sonnet')
+     .askAndCollect('hello world');
+   ```
+
+5. **Assert on the response**
+
+   ```typescript
+   expect(response).toContain('Hi there!');
+   ```
+
+</Steps>
+
+## Next Steps
+
+Now that you have testing set up, continue to the [Quick Start](/testing/getting-started/quick-start/) to write your first mock test!
