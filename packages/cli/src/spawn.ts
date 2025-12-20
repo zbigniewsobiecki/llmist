@@ -60,6 +60,38 @@ export interface SpawnResult {
 }
 
 /**
+ * Adapt Bun.Subprocess to SpawnResult interface.
+ * This explicit mapping ensures type safety and makes the contract between
+ * our code and Bun's API explicit, catching any future API changes at compile time.
+ *
+ * Note: Bun returns `undefined` for non-piped streams, we normalize to `null`.
+ */
+function adaptBunProcess(proc: {
+  exited: Promise<number>;
+  stdout: ReadableStream<Uint8Array> | undefined;
+  stderr: ReadableStream<Uint8Array> | undefined;
+  stdin: { write(data: string): number; end(): void } | undefined;
+  kill(): void;
+}): SpawnResult {
+  return {
+    exited: proc.exited,
+    stdout: proc.stdout ?? null,
+    stderr: proc.stderr ?? null,
+    stdin: proc.stdin
+      ? {
+          write(data: string) {
+            proc.stdin?.write(data);
+          },
+          end() {
+            proc.stdin?.end();
+          },
+        }
+      : null,
+    kill: () => proc.kill(),
+  };
+}
+
+/**
  * Convert a Node.js Readable stream to a web ReadableStream.
  */
 function nodeStreamToReadableStream(nodeStream: Readable | null): ReadableStream<Uint8Array> | null {
@@ -92,8 +124,8 @@ function nodeStreamToReadableStream(nodeStream: Readable | null): ReadableStream
  */
 export function spawn(argv: string[], options: SpawnOptions = {}): SpawnResult {
   if (isBun) {
-    // Use Bun's native spawn
-    return Bun.spawn(argv, options) as SpawnResult;
+    // Use Bun's native spawn with type-safe adapter
+    return adaptBunProcess(Bun.spawn(argv, options));
   }
 
   // Node.js fallback
