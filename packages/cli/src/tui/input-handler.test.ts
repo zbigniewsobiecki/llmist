@@ -1,18 +1,42 @@
 import { describe, expect, test, beforeAll, afterAll, mock } from "bun:test";
+import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen, Textbox, Box } from "@unblessed/node";
 import { InputHandler } from "./input-handler.js";
+
+// Skip TUI tests when not in a TTY (e.g., in CI/Turborepo)
+const isTTY = process.stdout.isTTY && process.stdin.isTTY;
+
+// Mock streams to prevent terminal escape sequences from being written
+class MockOutputStream extends Writable {
+  _write(_chunk: Buffer | string, _encoding: string, callback: () => void): void {
+    callback();
+  }
+}
+
+class MockInputStream extends Readable {
+  _read(): void {
+    // No-op - never emit data
+  }
+}
 
 // Initialize unblessed for testing
 let screen: Screen;
 let inputBar: Textbox;
 let body: Box;
+let mockOutput: MockOutputStream;
+let mockInput: MockInputStream;
 
 beforeAll(() => {
+  if (!isTTY) return;
   setRuntime(new NodeRuntime());
+  mockOutput = new MockOutputStream();
+  mockInput = new MockInputStream();
   screen = new Screen({
     smartCSR: true,
     title: "test",
     fullUnicode: true,
+    input: mockInput,
+    output: mockOutput,
   });
 
   inputBar = new Textbox({
@@ -44,7 +68,7 @@ afterAll(() => {
   }
 });
 
-describe("InputHandler", () => {
+describe.skipIf(!isTTY)("InputHandler", () => {
   describe("constructor", () => {
     test("initializes with idle prompt", () => {
       const renderCallback = mock(() => {});
