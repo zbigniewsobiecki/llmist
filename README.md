@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <em>Your own tool syntax. Any model. Full observability.</em>
+  <em>The flexible agent and tool layer for any LLM.</em>
 </p>
 
 ---
