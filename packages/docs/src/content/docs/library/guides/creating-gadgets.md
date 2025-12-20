@@ -235,6 +235,40 @@ class DatabaseQuery extends Gadget({
 }
 ```
 
+### How Examples Appear in Prompts
+
+When you define examples, they're rendered in the LLM's system prompt using the block format. Here's what the LLM sees for the DatabaseQuery gadget above:
+
+```
+Examples:
+# Query with parameter binding
+!!!GADGET_START:DatabaseQuery
+!!!ARG:query
+SELECT * FROM users WHERE id = ?
+!!!ARG:params/0
+123
+!!!GADGET_END
+
+Expected Output:
+[{"id": 123, "name": "John"}]
+
+---
+
+# Simple count query
+!!!GADGET_START:DatabaseQuery
+!!!ARG:query
+SELECT COUNT(*) FROM orders
+!!!GADGET_END
+
+Expected Output:
+[{"count": 42}]
+```
+
+This teaches the LLM:
+- The exact marker format to use (`!!!GADGET_START`, `!!!ARG`, `!!!GADGET_END`)
+- How to structure parameters (including arrays with `/0`, `/1` indices)
+- What kind of output to expect
+
 ## Special Exceptions
 
 ### TaskCompletionSignal
