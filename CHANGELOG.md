@@ -1,3 +1,12 @@
+## 9.2.0 (2025-12-20)
+
+* Merge pull request #242 from zbigniewsobiecki/dev ([07cedda](https://github.com/zbigniewsobiecki/llmist/commit/07cedda)), closes [#242](https://github.com/zbigniewsobiecki/llmist/issues/242)
+* docs: add package READMEs, error handling guide, and update CLAUDE.md (#241) ([e891038](https://github.com/zbigniewsobiecki/llmist/commit/e891038)), closes [#241](https://github.com/zbigniewsobiecki/llmist/issues/241)
+* fix(cli): add cross-runtime spawn utility for Node.js compatibility (#238) ([4d66239](https://github.com/zbigniewsobiecki/llmist/commit/4d66239)), closes [#238](https://github.com/zbigniewsobiecki/llmist/issues/238)
+* fix(cli): enable TUI tests to run in CI environments (#240) ([60e8e25](https://github.com/zbigniewsobiecki/llmist/commit/60e8e25)), closes [#240](https://github.com/zbigniewsobiecki/llmist/issues/240)
+* fix(llmist): pass all custom prefixes to gadget.getInstruction() (#239) ([213bc71](https://github.com/zbigniewsobiecki/llmist/commit/213bc71)), closes [#239](https://github.com/zbigniewsobiecki/llmist/issues/239)
+* feat: add gadget response helpers, format/timing utilities, and session management (#237) ([5a5d5ba](https://github.com/zbigniewsobiecki/llmist/commit/5a5d5ba)), closes [#237](https://github.com/zbigniewsobiecki/llmist/issues/237)
+
 ## <small>9.1.2 (2025-12-20)</small>
 
 * Merge pull request #236 from zbigniewsobiecki/dev ([a1cdeb0](https://github.com/zbigniewsobiecki/llmist/commit/a1cdeb0)), closes [#236](https://github.com/zbigniewsobiecki/llmist/issues/236)
