@@ -1,26 +1,15 @@
 ---
 title: Why llmist?
-description: What makes llmist different from other LLM libraries
+description: What llmist offers as a streaming-first multi-provider LLM client
 ---
 
-import { Aside, Badge, Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
-## The Problem with Traditional LLM Libraries
+## What is llmist?
 
-Most LLM libraries treat tool/function calling as a sequential process:
+llmist is a **streaming-first multi-provider LLM client** in TypeScript with a **home-made tool calling system**.
 
-1. Send message to LLM
-2. Wait for complete response
-3. Parse tool calls from response
-4. Execute tools
-5. Send results back to LLM
-6. Repeat
-
-This creates a poor user experience—users wait for the entire response before seeing any tool execution.
-
-## llmist's Approach: Streaming Tool Execution
-
-llmist executes tools **while the LLM is still streaming**. The moment a tool call block is fully parsed, execution begins—no waiting for the response to complete.
+Rather than waiting for a complete LLM response before parsing tool calls, llmist executes tools **while the LLM is still streaming**. The moment a tool call block is fully parsed, execution begins.
 
 ```typescript
 // Tools execute AS the LLM streams
@@ -41,14 +30,14 @@ for await (const event of agent.run()) {
   Real-time tool execution means your users see progress immediately, not after the LLM finishes thinking.
 </Aside>
 
-## Key Differentiators
+## Core Capabilities
 
 <CardGrid>
-  <Card title="Universal Tool Calling" icon="puzzle">
-    llmist uses its own block format for tool calls—no JSON mode required. Works with **any model** that can follow instructions, not just those with native function calling.
+  <Card title="Home-Made Tool Calling" icon="puzzle">
+    llmist uses its own block format for tool calls—no JSON mode or native function calling required. Works with **any model** that can follow instructions.
   </Card>
   <Card title="Multi-Provider Support" icon="random">
-    First-class support for **OpenAI, Anthropic, and Gemini**. Auto-discovery from environment variables. Model shortcuts like `sonnet`, `gpt5`, `flash`.
+    First-class support for **OpenAI, Anthropic, and Gemini**. Auto-discovery from environment variables. Model shortcuts like `sonnet`, `gpt4o`, `flash`.
   </Card>
   <Card title="Full TypeScript Inference" icon="seti:typescript">
     Gadget parameters are fully typed from Zod schemas. No type assertions needed. Your IDE knows the exact shape of every parameter.
@@ -58,67 +47,28 @@ for await (const event of agent.run()) {
   </Card>
 </CardGrid>
 
-## Code Comparison
+## Simple, Expressive API
 
-<Tabs>
-  <TabItem label="llmist">
-    ```typescript
-    import { LLMist, Gadget, z } from 'llmist';
+```typescript
+import { LLMist, Gadget, z } from 'llmist';
 
-    class Weather extends Gadget({
-      description: 'Get weather for a city',
-      schema: z.object({ city: z.string() }),
-    }) {
-      async execute({ city }) {
-        return `Weather in ${city}: 72°F, sunny`;
-      }
-    }
+class ScreenSaver extends Gadget({
+  description: 'Selects a Windows 98 screensaver',
+  schema: z.object({
+    style: z.enum(['pipes', 'starfield', 'maze', 'flying-toasters']),
+  }),
+}) {
+  execute(params: this['params']): string {
+    const { style } = params;
+    return `Activating ${style} screensaver. Move mouse to deactivate.`;
+  }
+}
 
-    const answer = await LLMist.createAgent()
-      .withModel('sonnet')
-      .withGadgets(Weather)
-      .askAndCollect('What is the weather in Paris?');
-    ```
-  </TabItem>
-  <TabItem label="Other Libraries">
-    ```typescript
-    // Typical LLM library pattern
-    const client = new SomeClient({ apiKey: '...' });
-
-    const tools = [{
-      name: 'weather',
-      description: 'Get weather for a city',
-      parameters: { type: 'object', properties: { city: { type: 'string' } } },
-    }];
-
-    let response = await client.chat({
-      messages: [{ role: 'user', content: 'Weather in Paris?' }],
-      tools,
-    });
-
-    // Manual tool execution loop
-    while (response.tool_calls) {
-      for (const call of response.tool_calls) {
-        const result = await executeToolManually(call);
-        // Add result to messages...
-      }
-      response = await client.chat({ messages, tools });
-    }
-    ```
-  </TabItem>
-</Tabs>
-
-## Feature Comparison
-
-| Feature | llmist | LangChain | Vercel AI SDK |
-|---------|--------|-----------|---------------|
-| Streaming tool execution | ✅ Native | ❌ Sequential | ⚠️ Limited |
-| Works with any model | ✅ Block format | ⚠️ Depends | ❌ Native only |
-| Type-safe gadgets | ✅ Full Zod inference | ⚠️ Manual | ⚠️ Partial |
-| Multi-provider | ✅ 3 built-in | ✅ Many | ✅ Many |
-| Hook system | ✅ 3-layer | ⚠️ Callbacks | ⚠️ Limited |
-| CLI included | ✅ Full-featured | ❌ No | ❌ No |
-| Testing utilities | ✅ MockBuilder | ⚠️ Basic | ⚠️ Basic |
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(ScreenSaver)
+  .askAndCollect("I'm bored. Start the 3D pipes screensaver.");
+```
 
 ## Who Should Use llmist?
 

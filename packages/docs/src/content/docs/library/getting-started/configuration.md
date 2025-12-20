@@ -49,7 +49,7 @@ LLMist.createAgent()
 
 | Method | Type | Default | Description |
 |--------|------|---------|-------------|
-| `.withModel(model)` | `string` | `openai:gpt-5-mini` | Model name or alias |
+| `.withModel(model)` | `string` | `openai:gpt-5.2` | Model name or alias |
 | `.withSystem(prompt)` | `string` | none | System prompt |
 | `.withTemperature(temp)` | `number` | Provider default | Temperature (0-1) |
 | `.withMaxIterations(n)` | `number` | 10 | Max agent loop iterations |
@@ -217,7 +217,7 @@ LLMist.stream(prompt, options);
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `model` | `string` | `gpt-5-mini` | Model name or alias |
+| `model` | `string` | `gpt-5.2` | Model name or alias |
 | `temperature` | `number` | Provider default | Temperature (0-1) |
 | `systemPrompt` | `string` | none | System prompt |
 | `maxTokens` | `number` | Provider default | Max tokens to generate |
@@ -232,8 +232,8 @@ LLMist.stream(prompt, options);
 
 ## See Also
 
-- [Quick Start](/getting-started/quick-start/) - Quick setup
-- [Agent Configuration Guide](/guides/agent-configuration/) - Use case patterns
-- [Providers Guide](/advanced/providers/) - Provider configuration
-- [Hooks Guide](/guides/hooks/) - Lifecycle hooks
-- [Compaction](/advanced/compaction/) - Context management
+- [Quick Start](/library/getting-started/quick-start/) - Quick setup
+- [Agent Configuration Guide](/library/guides/agent-configuration/) - Use case patterns
+- [Providers Guide](/library/advanced/providers/) - Provider configuration
+- [Hooks Guide](/library/guides/hooks/) - Lifecycle hooks
+- [Compaction](/library/advanced/compaction/) - Context management

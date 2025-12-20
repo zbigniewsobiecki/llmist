@@ -12,7 +12,7 @@ Track costs after an agent run:
 ```typescript
 const answer = await LLMist.createAgent()
   .withModel('sonnet')
-  .withGadgets(Calculator)
+  .withGadgets(FloppyDisk)
   .withHooks({
     observers: {
       onAgentComplete: (ctx) => {
@@ -22,7 +22,7 @@ const answer = await LLMist.createAgent()
       },
     },
   })
-  .askAndCollect('Calculate 15 * 23');
+  .askAndCollect('How many floppies for DOOM.ZIP at 50MB?');
 ```
 
 Output:
@@ -213,6 +213,6 @@ await LLMist.createAgent()
 
 ## See Also
 
-- [Execution Tree](/advanced/execution-tree/) - Tree structure and navigation
-- [Model Catalog](/advanced/model-catalog/) - Model specs and features
-- [Hooks Guide](/guides/hooks/) - Lifecycle monitoring
+- [Execution Tree](/library/advanced/execution-tree/) - Tree structure and navigation
+- [Model Catalog](/library/advanced/model-catalog/) - Model specs and features
+- [Hooks Guide](/library/guides/hooks/) - Lifecycle monitoring

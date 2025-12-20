@@ -17,25 +17,20 @@ Write gadgets (tools) for use with `llmist agent`.
 
 Create a file with a gadget class:
 
-```typescript title="calculator.ts"
+```typescript title="floppy.ts"
 import { Gadget, z } from 'llmist';
 
-export class Calculator extends Gadget({
-  description: 'Performs arithmetic',
+export class FloppyDisk extends Gadget({
+  description: 'Calculate how many 1.44MB floppy disks are needed',
   schema: z.object({
-    a: z.number(),
-    b: z.number(),
-    op: z.enum(['add', 'subtract', 'multiply', 'divide']),
+    filename: z.string(),
+    megabytes: z.number().positive(),
   }),
 }) {
   execute(params: this['params']): string {
-    const { a, b, op } = params;
-    switch (op) {
-      case 'add': return String(a + b);
-      case 'subtract': return String(a - b);
-      case 'multiply': return String(a * b);
-      case 'divide': return String(a / b);
-    }
+    const { filename, megabytes } = params;
+    const disks = Math.ceil(megabytes / 1.44);
+    return `${filename} requires ${disks} floppy disk(s). Label them 1/${disks}, 2/${disks}...`;
   }
 }
 ```
@@ -43,7 +38,7 @@ export class Calculator extends Gadget({
 Use it:
 
 ```bash
-llmist agent "What is 15 * 23?" --gadget ./calculator.ts
+llmist agent "How many floppies for DOOM.ZIP at 50MB?" --gadget ./floppy.ts
 ```
 
 ## File Requirements
@@ -55,11 +50,11 @@ Gadget files must:
 
 ```typescript
 // Multiple exports work
-export class Calculator extends Gadget({ ... }) { ... }
-export class Weather extends Gadget({ ... }) { ... }
+export class FloppyDisk extends Gadget({ ... }) { ... }
+export class DialUpModem extends Gadget({ ... }) { ... }
 
 // Default exports work too
-export default class MyGadget extends Gadget({ ... }) { ... }
+export default class ArcadeHighScore extends Gadget({ ... }) { ... }
 ```
 
 ## Loading Multiple Gadgets
@@ -67,18 +62,18 @@ export default class MyGadget extends Gadget({ ... }) { ... }
 <Tabs>
   <TabItem label="Multiple Files">
     ```bash
-    llmist agent "Calculate and get weather" \
-      --gadget ./calculator.ts \
-      --gadget ./weather.ts
+    llmist agent "Calculate floppies and connect to BBS" \
+      --gadget ./floppy.ts \
+      --gadget ./dialup.ts
     ```
   </TabItem>
   <TabItem label="Single File">
-    ```typescript title="tools.ts"
-    export class Calculator extends Gadget({ ... }) { ... }
-    export class Weather extends Gadget({ ... }) { ... }
+    ```typescript title="retro-tools.ts"
+    export class FloppyDisk extends Gadget({ ... }) { ... }
+    export class DialUpModem extends Gadget({ ... }) { ... }
     ```
     ```bash
-    llmist agent "Calculate and get weather" --gadget ./tools.ts
+    llmist agent "Calculate floppies and dial up" --gadget ./retro-tools.ts
     ```
   </TabItem>
 </Tabs>
@@ -112,16 +107,16 @@ Use the `gadget` command to test in isolation:
 
 ```bash
 # Run interactively
-llmist gadget run ./calculator.ts
+llmist gadget run ./floppy.ts
 
 # View gadget info
-llmist gadget info ./calculator.ts
+llmist gadget info ./floppy.ts
 
 # Validate structure
-llmist gadget validate ./calculator.ts
+llmist gadget validate ./floppy.ts
 
 # Pipe JSON input
-echo '{"a": 5, "b": 3, "op": "add"}' | llmist gadget run ./calculator.ts
+echo '{"filename": "DOOM.ZIP", "megabytes": 50}' | llmist gadget run ./floppy.ts
 ```
 
 ## Creating External Packages

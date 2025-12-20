@@ -106,5 +106,5 @@ const totalCost = ctx?.tree?.getSubtreeCost(ctx.nodeId!);
 
 ## See Also
 
-- [Execution Tree](/advanced/execution-tree/) - Cost and hierarchy tracking
-- [Gadgets Guide](/guides/gadgets/) - Creating gadgets
+- [Execution Tree](/library/advanced/execution-tree/) - Cost and hierarchy tracking
+- [Gadgets Guide](/library/guides/gadgets/) - Creating gadgets

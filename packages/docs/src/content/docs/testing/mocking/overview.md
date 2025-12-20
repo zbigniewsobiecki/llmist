@@ -44,7 +44,7 @@ mockLLM()
 mockLLM().returns('Hello!')
 
 // Gadget call
-mockLLM().returnsGadgetCall('Calculator', { a: 5, b: 3 })
+mockLLM().returnsGadgetCall('FloppyDisk', { filename: 'DOOM.ZIP', megabytes: 50 })
 
 // Multiple gadget calls
 mockLLM()
@@ -75,26 +75,26 @@ mockLLM().once()
 ### Basic Agent Test
 
 ```typescript
-test('agent uses calculator', async () => {
-  // First call: LLM requests calculator
+test('agent calculates floppy disks', async () => {
+  // First call: LLM requests FloppyDisk gadget
   mockLLM()
     .forAnyModel()
-    .returnsGadgetCall('Calculator', { a: 5, b: 3 })
+    .returnsGadgetCall('FloppyDisk', { filename: 'DOOM.ZIP', megabytes: 50 })
     .register();
 
   // Second call: LLM sees result and responds
   mockLLM()
     .forAnyModel()
-    .whenMessageContains('Result: 8')
-    .returns('The answer is 8!')
+    .whenMessageContains('35 floppy disk(s)')
+    .returns('You need 35 floppy disks for DOOM.ZIP!')
     .register();
 
   const client = createMockClient();
   const answer = await client.createAgent()
-    .withGadgets(Calculator)
-    .askAndCollect('What is 5 + 3?');
+    .withGadgets(FloppyDisk)
+    .askAndCollect('How many floppies for DOOM.ZIP at 50MB?');
 
-  expect(answer).toContain('8');
+  expect(answer).toContain('35');
 });
 ```
 
@@ -106,27 +106,27 @@ test('multi-turn conversation', async () => {
   mockLLM()
     .forAnyModel()
     .whenMessageContains('Hello')
-    .returns('Hi there! How can I help?')
+    .returns('Hi there! Ready to dial up?')
     .register();
 
   // Turn 2
   mockLLM()
     .forAnyModel()
-    .whenMessageContains('weather')
-    .returnsGadgetCall('Weather', { city: 'NYC' })
+    .whenMessageContains('connect')
+    .returnsGadgetCall('DialUpModem', { number: '555-1234', baud: 56000 })
     .register();
 
   // Turn 3
   mockLLM()
     .forAnyModel()
-    .whenMessageContains('72°F')
-    .returns('It\'s 72°F in NYC!')
+    .whenMessageContains('Connected at 56000 baud')
+    .returns('You\'re connected at 56k! Welcome to the BBS.')
     .register();
 
   const client = createMockClient();
   const agent = client.createAgent()
-    .withGadgets(Weather)
-    .ask('Hello, what\'s the weather?');
+    .withGadgets(DialUpModem)
+    .ask('Hello, can you connect me to the BBS?');
 
   // Consume all turns
   const events = [];
@@ -134,7 +134,7 @@ test('multi-turn conversation', async () => {
     events.push(event);
   }
 
-  expect(events.some(e => e.type === 'text' && e.content.includes('72°F'))).toBe(true);
+  expect(events.some(e => e.type === 'text' && e.content.includes('56k'))).toBe(true);
 });
 ```
 
@@ -207,5 +207,5 @@ console.log(stats.unmatched);
 
 ## See Also
 
-- [Testing Overview](/testing/overview/) - Introduction to testing
-- [Testing Gadgets](/testing/gadget-testing/) - Test gadgets in isolation
+- [Quick Start](/testing/getting-started/quick-start/) - Introduction to testing
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - Test gadgets in isolation

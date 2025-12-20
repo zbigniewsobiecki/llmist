@@ -80,18 +80,23 @@ Create a custom gadget for your agent:
 
 2. **Create a gadget file**
 
-   ```typescript title="gadgets/weather.ts"
+   ```typescript title="gadgets/arcade.ts"
    import { Gadget, z } from 'llmist';
 
-   export default class Weather extends Gadget({
-     description: 'Get current weather for a city',
+   export default class ArcadeHighScore extends Gadget({
+     description: 'Check or record high scores on the arcade cabinet',
      schema: z.object({
-       city: z.string().describe('City name'),
+       game: z.enum(['pac-man', 'galaga', 'donkey-kong']),
+       action: z.enum(['check', 'record']),
+       initials: z.string().length(3).optional(),
+       score: z.number().optional(),
      }),
    }) {
-     async execute({ city }) {
-       // In a real gadget, you'd call a weather API
-       return `Weather in ${city}: 72°F, sunny`;
+     execute(params: this['params']): string {
+       if (params.action === 'check') {
+         return `High scores for ${params.game}: AAA-999999, BBB-888888, CCC-777777`;
+       }
+       return `${params.initials} recorded ${params.score} on ${params.game}!`;
      }
    }
    ```
@@ -99,8 +104,8 @@ Create a custom gadget for your agent:
 3. **Run the agent with your gadget**
 
    ```bash
-   llmist agent --gadgets ./gadgets/weather.ts \
-     "What's the weather like in San Francisco?"
+   llmist agent --gadgets ./gadgets/arcade.ts \
+     "Check the high scores for Pac-Man"
    ```
 
 </Steps>
@@ -109,7 +114,7 @@ Your directory structure:
 
 <FileTree>
 - gadgets/
-  - weather.ts
+  - arcade.ts
 - package.json
 </FileTree>
 

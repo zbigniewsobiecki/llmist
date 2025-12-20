@@ -113,7 +113,7 @@ Set default mode for all unconfigured gadgets:
 
 ```toml
 [agent]
-gadget-approval = { "*" = "denied", ReadFile = "allowed", Calculator = "allowed" }
+gadget-approval = { "*" = "denied", ReadFile = "allowed", FloppyDisk = "allowed" }
 ```
 
 ### Example Configurations

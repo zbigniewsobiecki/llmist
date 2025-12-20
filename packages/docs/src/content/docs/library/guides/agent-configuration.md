@@ -25,10 +25,10 @@ Agent with gadgets for specific capabilities:
 ```typescript
 const result = await LLMist.createAgent()
   .withModel('sonnet')
-  .withSystem('You are a math tutor. Show your work.')
-  .withGadgets(Calculator, Grapher)
+  .withSystem('You are an arcade historian.')
+  .withGadgets(ArcadeHighScore, FloppyDisk)
   .withMaxIterations(5)
-  .askAndCollect('Graph y = x^2 and find x when y = 16');
+  .askAndCollect('What were the top Pac-Man scores and how many floppies to back them up?');
 ```
 
 ### Long-Running Task Agent
@@ -153,20 +153,20 @@ const agent = LLMist.createAgent()
 const conversation = [];
 const agent = LLMist.createAgent()
   .withModel('sonnet')
-  .withGadgets(Calculator);
+  .withGadgets(FloppyDisk);
 
 // First turn
-conversation.push({ user: 'What is 15 * 23?' });
+conversation.push({ user: 'How many floppies for a 10MB file?' });
 const response1 = await agent
   .withHistory(conversation)
-  .askAndCollect('What is 15 * 23?');
+  .askAndCollect('How many floppies for a 10MB file?');
 conversation.push({ assistant: response1 });
 
 // Second turn
-conversation.push({ user: 'Double that result' });
+conversation.push({ user: 'What about a 50MB file?' });
 const response2 = await agent
   .withHistory(conversation)
-  .askAndCollect('Double that result');
+  .askAndCollect('What about a 50MB file?');
 ```
 
 ### Trailing Messages
@@ -305,7 +305,7 @@ const dataAgent = LLMist.createAgent()
 ```typescript
 const interactiveAgent = LLMist.createAgent()
   .withModel('sonnet')
-  .withGadgets(AskUser, TellUser, Calculator)
+  .withGadgets(AskUser, TellUser, FloppyDisk)
   .onHumanInput(async (question) => {
     return await showPrompt(question);
   })
@@ -390,8 +390,8 @@ const agent = LLMist.createAgent()
 
 ## See Also
 
-- [Configuration Reference](/getting-started/configuration/) - All options
-- [Hooks Guide](/guides/hooks/) - Lifecycle hooks
-- [Compaction](/advanced/compaction/) - Context management
-- [Cost Tracking](/guides/cost-tracking/) - Monitor costs
-- [Streaming Guide](/guides/streaming/) - Event handling
+- [Models & Aliases](/reference/models/) - All available models
+- [Hooks Guide](/library/guides/hooks/) - Lifecycle hooks
+- [Compaction](/library/advanced/compaction/) - Context management
+- [Cost Tracking](/library/guides/cost-tracking/) - Monitor costs
+- [Streaming Guide](/library/guides/streaming/) - Event handling

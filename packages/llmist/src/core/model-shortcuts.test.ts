@@ -28,7 +28,7 @@ describe("Model Shortcuts", () => {
       expect(MODEL_ALIASES["gpt4"]).toBe("openai:gpt-4o");
       expect(MODEL_ALIASES["sonnet"]).toBe("anthropic:claude-sonnet-4-5");
       expect(MODEL_ALIASES["haiku"]).toBe("anthropic:claude-haiku-4-5");
-      expect(MODEL_ALIASES["flash"]).toBe("gemini:gemini-2.0-flash");
+      expect(MODEL_ALIASES["flash"]).toBe("gemini:gemini-2.5-flash");
     });
   });
 
@@ -55,13 +55,13 @@ describe("Model Shortcuts", () => {
       });
 
       it("should resolve flash alias", () => {
-        expect(resolveModel("flash")).toBe("gemini:gemini-2.0-flash");
+        expect(resolveModel("flash")).toBe("gemini:gemini-2.5-flash");
       });
 
       it("should be case-insensitive for aliases", () => {
         expect(resolveModel("GPT4")).toBe("openai:gpt-4o");
         expect(resolveModel("SONNET")).toBe("anthropic:claude-sonnet-4-5");
-        expect(resolveModel("Flash")).toBe("gemini:gemini-2.0-flash");
+        expect(resolveModel("Flash")).toBe("gemini:gemini-2.5-flash");
       });
     });
 

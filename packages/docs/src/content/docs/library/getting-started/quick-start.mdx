@@ -15,27 +15,28 @@ Build AI agents with any LLM provider in minutes.
 import { LLMist, Gadget, z } from 'llmist';
 
 // 1. Define a tool (called "gadget" in llmist)
-class Calculator extends Gadget({
-  description: 'Performs arithmetic operations',
+class HighScore extends Gadget({
+  description: 'Records a high score to the eternal leaderboard',
   schema: z.object({
-    operation: z.enum(['add', 'multiply']),
-    a: z.number(),
-    b: z.number(),
+    initials: z.string().length(3).describe('Player initials (3 characters)'),
+    score: z.number().int().positive(),
+    game: z.enum(['pac-man', 'galaga', 'donkey-kong', 'space-invaders']),
   }),
 }) {
   execute(params: this['params']): string {
-    const { a, b, operation } = params;
-    return operation === 'add' ? String(a + b) : String(a * b);
+    const { initials, score, game } = params;
+    // In a real arcade, this would write to NVRAM
+    return `${initials} scored ${score.toLocaleString()} on ${game}. A new challenger approaches!`;
   }
 }
 
 // 2. Create and run agent
 const answer = await LLMist.createAgent()
   .withModel('sonnet')
-  .withGadgets(Calculator)
-  .askAndCollect('What is 15 times 23?');
+  .withGadgets(HighScore)
+  .askAndCollect('I got 999,999 on Pac-Man! My initials are AAA.');
 
-console.log(answer); // "15 times 23 equals 345"
+console.log(answer); // "AAA scored 999,999 on pac-man. A new challenger approaches!"
 ```
 
 <Aside type="tip">

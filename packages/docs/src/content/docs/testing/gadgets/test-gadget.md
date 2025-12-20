@@ -13,16 +13,15 @@ Use `testGadget()` to test gadgets with automatic validation:
 
 ```typescript
 import { testGadget } from '@llmist/testing';
-import { Calculator } from './calculator';
+import { FloppyDisk } from './floppy';
 
-test('calculator adds correctly', async () => {
-  const result = await testGadget(Calculator, {
-    operation: 'add',
-    a: 5,
-    b: 3,
+test('calculates floppy disks correctly', async () => {
+  const result = await testGadget(FloppyDisk, {
+    filename: 'DOOM.ZIP',
+    megabytes: 50,
   });
 
-  expect(result.result).toBe('8');
+  expect(result.result).toContain('35 floppy disk(s)');
   expect(result.error).toBeUndefined();
 });
 ```
@@ -41,10 +40,9 @@ interface TestGadgetResult {
 
 ```typescript
 test('rejects invalid parameters', async () => {
-  const result = await testGadget(Calculator, {
-    operation: 'add',
-    a: 'not a number', // Invalid!
-    b: 3,
+  const result = await testGadget(FloppyDisk, {
+    filename: 'DOOM.ZIP',
+    megabytes: 'not a number', // Invalid!
   });
 
   expect(result.error).toBeDefined();
@@ -56,11 +54,11 @@ test('rejects invalid parameters', async () => {
 
 ```typescript
 test('async gadget completes', async () => {
-  const result = await testGadget(FetchData, {
-    url: 'https://api.example.com/data',
+  const result = await testGadget(BBSFetch, {
+    url: 'bbs://local-bbs.net/files',
   });
 
-  expect(result.result).toContain('data');
+  expect(result.result).toContain('files');
 });
 ```
 
@@ -71,42 +69,42 @@ Use `createMockGadget()` when testing agents to avoid executing real gadgets:
 ```typescript
 import { createMockGadget, mockLLM, createMockClient } from '@llmist/testing';
 
-test('agent handles weather gadget', async () => {
+test('agent handles arcade gadget', async () => {
   // Create a mock that returns canned response
-  const mockWeather = createMockGadget({
-    name: 'Weather',
-    result: 'Sunny, 72°F',
+  const mockArcade = createMockGadget({
+    name: 'ArcadeHighScore',
+    result: 'New high score! AAA - 999,999',
   });
 
   mockLLM()
     .forAnyModel()
-    .returnsGadgetCall('Weather', { city: 'NYC' })
+    .returnsGadgetCall('ArcadeHighScore', { initials: 'AAA', score: 999999, game: 'pac-man' })
     .register();
 
   mockLLM()
     .forAnyModel()
-    .whenMessageContains('72°F')
-    .returns('The weather is nice!')
+    .whenMessageContains('999,999')
+    .returns('Incredible! A new PAC-MAN world record!')
     .register();
 
   const client = createMockClient();
   const answer = await client.createAgent()
-    .withGadgets(mockWeather)
-    .askAndCollect('What\'s the weather in NYC?');
+    .withGadgets(mockArcade)
+    .askAndCollect('Record my perfect PAC-MAN score!');
 
-  expect(answer).toContain('nice');
+  expect(answer).toContain('world record');
 });
 ```
 
 ### Dynamic Mock Results
 
 ```typescript
-const mockWeather = createMockGadget({
-  name: 'Weather',
+const mockDialUp = createMockGadget({
+  name: 'DialUpModem',
   execute: (params) => {
-    if (params.city === 'NYC') return 'Sunny, 72°F';
-    if (params.city === 'London') return 'Rainy, 55°F';
-    return 'Unknown city';
+    if (params.baud >= 56000) return 'Connected at 56k! Lightning fast!';
+    if (params.baud >= 28800) return 'Connected at 28.8k. Acceptable.';
+    return 'Connected at 14.4k. Time for an upgrade.';
   },
 });
 ```
@@ -114,12 +112,13 @@ const mockWeather = createMockGadget({
 ### Mock with Validation
 
 ```typescript
-const mockWeather = createMockGadget({
-  name: 'Weather',
+const mockArcade = createMockGadget({
+  name: 'ArcadeHighScore',
   schema: z.object({
-    city: z.string().min(1),
+    initials: z.string().length(3),
+    score: z.number().positive(),
   }),
-  result: 'Sunny, 72°F',
+  result: 'High score recorded!',
 });
 ```
 
@@ -193,28 +192,28 @@ Test gadgets within a full agent loop:
 test('full agent flow with real gadgets', async () => {
   mockLLM()
     .forAnyModel()
-    .returnsGadgetCall('Calculator', { operation: 'add', a: 10, b: 20 })
+    .returnsGadgetCall('FloppyDisk', { filename: 'QUAKE.ZIP', megabytes: 100 })
     .register();
 
   mockLLM()
     .forAnyModel()
-    .whenMessageContains('Result: 30')
-    .returns('The sum is 30.')
+    .whenMessageContains('70 floppy disk(s)')
+    .returns('You need 70 floppy disks for QUAKE. Start labeling!')
     .register();
 
   const client = createMockClient();
 
-  // Use the REAL Calculator gadget, but mock the LLM
+  // Use the REAL FloppyDisk gadget, but mock the LLM
   const answer = await client.createAgent()
-    .withGadgets(Calculator) // Real implementation
-    .askAndCollect('Add 10 and 20');
+    .withGadgets(FloppyDisk) // Real implementation
+    .askAndCollect('How many floppies for QUAKE at 100MB?');
 
-  expect(answer).toBe('The sum is 30.');
+  expect(answer).toBe('You need 70 floppy disks for QUAKE. Start labeling!');
 });
 ```
 
 ## See Also
 
-- [Testing Overview](/testing/overview/) - Introduction to testing
-- [Mocking LLM Responses](/testing/mocking/) - Mock LLM calls
-- [Gadgets Guide](/guides/gadgets/) - Creating gadgets
+- [Quick Start](/testing/getting-started/quick-start/) - Introduction to testing
+- [Mocking LLM Responses](/testing/mocking/overview/) - Mock LLM calls
+- [Gadgets Guide](/library/guides/gadgets/) - Creating gadgets

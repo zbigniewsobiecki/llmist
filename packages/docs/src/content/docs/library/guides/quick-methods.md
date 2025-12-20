@@ -52,7 +52,7 @@ for await (const chunk of LLMist.stream('Tell me a story')) {
 
 // With options
 for await (const chunk of LLMist.stream('Write code', {
-  model: 'gpt4',
+  model: 'gpt4o',
   systemPrompt: 'You are a coding assistant',
 })) {
   process.stdout.write(chunk);
@@ -95,7 +95,7 @@ Works with all model shortcuts:
 ```typescript
 await LLMist.complete('Hello', { model: 'haiku' });
 await LLMist.complete('Hello', { model: 'sonnet' });
-await LLMist.complete('Hello', { model: 'gpt4' });
+await LLMist.complete('Hello', { model: 'gpt4o' });
 await LLMist.complete('Hello', { model: 'flash' });
 ```
 
@@ -127,6 +127,6 @@ const answer = await LLMist.createAgent()
 
 ## See Also
 
-- [Quick Start](/getting-started/quick-start/) - Full guide
-- [Streaming Guide](/guides/streaming/) - Agent streaming
-- [Configuration](/getting-started/configuration/) - All options
+- [Quick Start](/library/getting-started/quick-start/) - Full guide
+- [Streaming Guide](/library/guides/streaming/) - Agent streaming
+- [Models & Aliases](/reference/models/) - All available models

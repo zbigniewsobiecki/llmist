@@ -9,7 +9,7 @@ import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 This page contains canonical examples of common gadget patterns. Reference these examples instead of duplicating code across documentation.
 
-## Calculator Gadget
+## Floppy Disk Calculator
 
 The classic example demonstrating basic gadget structure:
 
@@ -18,22 +18,17 @@ The classic example demonstrating basic gadget structure:
     ```typescript
     import { Gadget, z } from 'llmist';
 
-    export class Calculator extends Gadget({
-      description: 'Performs arithmetic operations',
+    export class FloppyDisk extends Gadget({
+      description: 'Calculates how many 1.44MB floppy disks are needed to store a file',
       schema: z.object({
-        operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-        a: z.number(),
-        b: z.number(),
+        filename: z.string().describe('Name of the file'),
+        megabytes: z.number().positive().describe('File size in MB'),
       }),
     }) {
       execute(params: this['params']): string {
-        const { operation, a, b } = params;
-        switch (operation) {
-          case 'add': return String(a + b);
-          case 'subtract': return String(a - b);
-          case 'multiply': return String(a * b);
-          case 'divide': return String(a / b);
-        }
+        const { filename, megabytes } = params;
+        const disks = Math.ceil(megabytes / 1.44);
+        return `${filename} requires ${disks} floppy disk${disks > 1 ? 's' : ''}. Label them 1 of ${disks}, 2 of ${disks}...`;
       }
     }
     ```
@@ -42,64 +37,60 @@ The classic example demonstrating basic gadget structure:
     ```typescript
     import { createGadget, z } from 'llmist';
 
-    export const calculator = createGadget({
-      name: 'Calculator',
-      description: 'Performs arithmetic operations',
+    export const floppyDisk = createGadget({
+      name: 'FloppyDisk',
+      description: 'Calculates how many 1.44MB floppy disks are needed to store a file',
       schema: z.object({
-        operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-        a: z.number(),
-        b: z.number(),
+        filename: z.string().describe('Name of the file'),
+        megabytes: z.number().positive().describe('File size in MB'),
       }),
-      execute: ({ operation, a, b }) => {
-        switch (operation) {
-          case 'add': return String(a + b);
-          case 'subtract': return String(a - b);
-          case 'multiply': return String(a * b);
-          case 'divide': return String(a / b);
-        }
+      execute: ({ filename, megabytes }) => {
+        const disks = Math.ceil(megabytes / 1.44);
+        return `${filename} requires ${disks} floppy disk${disks > 1 ? 's' : ''}. Label them 1 of ${disks}, 2 of ${disks}...`;
       },
     });
     ```
   </TabItem>
 </Tabs>
 
-## File System Gadget
+## Memory Card Reader
 
-Read file contents with size limiting:
+Load saved game data with size limiting:
 
 ```typescript
 import { Gadget, z } from 'llmist';
 import * as fs from 'fs/promises';
 
-export class ReadFile extends Gadget({
-  description: 'Read contents of a file',
+export class MemoryCardRead extends Gadget({
+  description: 'Load save data from a memory card slot',
   schema: z.object({
-    path: z.string().describe('Absolute or relative file path'),
+    slot: z.number().int().min(1).max(15).describe('Memory card slot (1-15)'),
     maxBytes: z.number().optional().describe('Maximum bytes to read'),
   }),
 }) {
   async execute(params: this['params']): Promise<string> {
-    const content = await fs.readFile(params.path, 'utf-8');
+    const path = `./saves/slot${params.slot}.sav`;
+    const content = await fs.readFile(path, 'utf-8');
     const limit = params.maxBytes ?? 10000;
     return content.slice(0, limit);
   }
 }
 ```
 
-## HTTP Request Gadget
+## BBS Fetch Gadget
 
-Make HTTP requests with configurable timeout:
+Connect to a BBS or web server with configurable timeout:
 
 ```typescript
 import { Gadget, z } from 'llmist';
 
-export class HttpGet extends Gadget({
-  description: 'Make HTTP GET request',
+export class BBSFetch extends Gadget({
+  description: 'Fetch content from a BBS or web server',
   schema: z.object({
-    url: z.string().url().describe('URL to fetch'),
+    url: z.string().url().describe('URL to fetch (supports gopher:// and http://)'),
     headers: z.record(z.string()).optional().describe('Request headers'),
   }),
-  timeoutMs: 30000,  // 30 second timeout
+  timeoutMs: 30000,  // 30 second timeout (dial-up is slow!)
 }) {
   async execute(params: this['params']): Promise<string> {
     const response = await fetch(params.url, {
@@ -107,7 +98,7 @@ export class HttpGet extends Gadget({
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`Connection failed: ${response.status} ${response.statusText}`);
     }
 
     return await response.text();
@@ -161,9 +152,9 @@ export class Done extends Gadget({
   `TaskCompletionSignal` breaks the agent loop and returns the summary as the final result.
 </Aside>
 
-## Shell Command Gadget
+## DOS Command Gadget
 
-Execute shell commands (use with caution):
+Execute commands in the DOS shell (use with caution):
 
 ```typescript
 import { Gadget, z } from 'llmist';
@@ -172,11 +163,11 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
-export class RunCommand extends Gadget({
-  description: 'Execute a shell command',
+export class DOSCommand extends Gadget({
+  description: 'Execute a command in the DOS shell',
   schema: z.object({
-    command: z.string().describe('Shell command to execute'),
-    cwd: z.string().optional().describe('Working directory'),
+    command: z.string().describe('DOS command (DIR, COPY, DEL, etc.)'),
+    cwd: z.string().optional().describe('Working directory (C:\\GAMES\\, etc.)'),
   }),
   timeoutMs: 60000,
 }) {
@@ -194,17 +185,17 @@ export class RunCommand extends Gadget({
   Shell command gadgets are powerful but dangerous. Always validate input and consider using gadget approval in CLI mode.
 </Aside>
 
-## Web Search Gadget
+## AltaVista Search Gadget
 
-Search the web using an API:
+Search the web using an API (remember when AltaVista was the best?):
 
 ```typescript
 import { Gadget, z } from 'llmist';
 
-export class WebSearch extends Gadget({
-  description: 'Search the web for information',
+export class AltaVistaSearch extends Gadget({
+  description: 'Search the World Wide Web for information',
   schema: z.object({
-    query: z.string().describe('Search query'),
+    query: z.string().describe('Search query (try +exact +phrase)'),
     numResults: z.number().min(1).max(10).default(5),
   }),
 }) {
@@ -219,17 +210,17 @@ export class WebSearch extends Gadget({
 }
 ```
 
-## Database Query Gadget
+## Leaderboard Query Gadget
 
-Execute database queries safely:
+Query the arcade high scores database safely:
 
 ```typescript
 import { Gadget, z } from 'llmist';
 
-export class DatabaseQuery extends Gadget({
-  description: 'Execute a read-only SQL query',
+export class LeaderboardQuery extends Gadget({
+  description: 'Query the arcade high scores leaderboard',
   schema: z.object({
-    query: z.string().describe('SQL SELECT query'),
+    query: z.string().describe('SQL SELECT query for the leaderboard'),
   }),
 }) {
   constructor(private db: Database) {
@@ -237,9 +228,9 @@ export class DatabaseQuery extends Gadget({
   }
 
   async execute(params: this['params']): Promise<string> {
-    // Validate query is read-only
+    // Validate query is read-only (no cheating!)
     if (!params.query.trim().toUpperCase().startsWith('SELECT')) {
-      throw new Error('Only SELECT queries are allowed');
+      throw new Error('Nice try! Only SELECT queries allowed. No hacking the scores.');
     }
 
     const results = await this.db.query(params.query);
@@ -252,4 +243,4 @@ export class DatabaseQuery extends Gadget({
 
 - [Creating Gadgets](/library/guides/creating-gadgets/) - Full guide to gadget development
 - [CLI Gadgets](/cli/gadgets/local-gadgets/) - Using gadgets with the CLI
-- [Testing Gadgets](/testing/gadgets/) - Testing your gadgets
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - Testing your gadgets

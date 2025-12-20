@@ -47,7 +47,7 @@ llmist complete "Explain TypeScript generics" --model haiku
 Run the full agent loop with tools:
 
 ```bash
-llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
+llmist agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonnet
 ```
 
 **Options:**
@@ -73,9 +73,9 @@ llmist agent "Calculate 15 * 23" --gadget ./calculator.ts --model sonnet
 ### `gadget` - Test and Inspect Gadgets
 
 ```bash
-llmist gadget run ./calculator.ts
-llmist gadget info ./calculator.ts
-llmist gadget validate ./calculator.ts
+llmist gadget run ./floppy.ts
+llmist gadget info ./floppy.ts
+llmist gadget validate ./floppy.ts
 ```
 
 ## Configuration File
@@ -168,7 +168,7 @@ git diff | llmist complete "Summarize changes"
 ```bash
 llmist complete "Hello" --model haiku
 llmist complete "Hello" --model sonnet
-llmist complete "Hello" --model gpt4
+llmist complete "Hello" --model gpt4o
 llmist complete "Hello" --model flash
 ```
 

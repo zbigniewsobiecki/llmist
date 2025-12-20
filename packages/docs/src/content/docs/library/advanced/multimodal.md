@@ -10,7 +10,7 @@ llmist supports image and speech generation with automatic cost tracking.
 ```typescript
 const result = await client.image.generate({
   model: 'dall-e-3',
-  prompt: 'A serene mountain landscape at sunset',
+  prompt: 'A 1990s desktop computer with flying toasters as a screensaver',
   size: '1024x1024',
   quality: 'hd',
 });
@@ -31,12 +31,12 @@ console.log('Cost:', result.cost);
 ```typescript
 const result = await client.image.generate({
   model: 'dall-e-3',
-  prompt: 'A robot learning to paint',
+  prompt: '8-bit pixel art of a floppy disk with legs running away',
   responseFormat: 'b64_json',
 });
 
 const buffer = Buffer.from(result.images[0].b64Json!, 'base64');
-fs.writeFileSync('robot.png', buffer);
+fs.writeFileSync('floppy.png', buffer);
 ```
 
 ## Speech Generation (TTS)
@@ -62,29 +62,30 @@ console.log('Cost:', result.cost);
 
 ```bash
 # Image
-llmist image "A cat wearing a top hat" -m dall-e-3 -o cat.png
+llmist image "A Windows 95 error dialog that says 'Success'" -m dall-e-3 -o success.png
 
 # Speech
-llmist speech "Hello, world!" -m tts-1 --voice nova -o hello.mp3
+llmist speech "You've got mail!" -m tts-1 --voice nova -o aol.mp3
 ```
 
 ## Using with Gadgets
 
 ```typescript
-const ImageGenerator = createGadget({
-  description: 'Generates an image',
+class ScreenSaverGenerator extends Gadget({
+  description: 'Generates a 90s-style screensaver image',
   schema: z.object({
-    prompt: z.string(),
+    style: z.enum(['flying-toasters', '3d-pipes', 'starfield', 'maze']),
   }),
-  execute: async (params, ctx) => {
-    const result = await ctx.llmist.image.generate({
+}) {
+  async execute(params: this['params'], ctx?: ExecutionContext): Promise<string> {
+    const result = await ctx!.llmist.image.generate({
       model: 'dall-e-3',
-      prompt: params.prompt,
+      prompt: `A ${params.style} screensaver in the style of Windows 95`,
     });
     // Cost is automatically tracked!
-    return result.images[0]?.url ?? 'Image generated';
-  },
-});
+    return result.images[0]?.url ?? 'Screensaver generated';
+  }
+}
 ```
 
 ## See Also

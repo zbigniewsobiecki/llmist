@@ -112,14 +112,14 @@ my-gadgets/
 ├── package.json
 ├── index.ts          # Exports gadgets
 └── src/
-    ├── calculator.ts
-    └── weather.ts
+    ├── floppy.ts
+    └── arcade.ts
 ```
 
 ```typescript
 // index.ts
-export { Calculator } from './src/calculator.js';
-export { Weather } from './src/weather.js';
+export { FloppyDisk } from './src/floppy.js';
+export { ArcadeHighScore } from './src/arcade.js';
 ```
 
 ## Creating Your Own Package
@@ -245,6 +245,6 @@ llmist agent "Complex research task" \
 
 ## See Also
 
-- [CLI Gadgets](/cli/gadgets/) - Creating local gadgets
-- [CLI Configuration](/cli/configuration/) - Gadget approval settings
-- [Subagents](/advanced/subagents/) - Building subagent gadgets
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Creating local gadgets
+- [CLI Configuration](/cli/configuration/toml-reference/) - Gadget approval settings
+- [Subagents](/library/advanced/subagents/) - Building subagent gadgets

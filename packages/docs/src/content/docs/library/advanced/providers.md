@@ -72,5 +72,5 @@ interface ProviderAdapter {
 
 ## See Also
 
-- [Model Catalog](/advanced/model-catalog/) - Query available models
-- [Custom Models](/advanced/custom-models/) - Register fine-tuned models
+- [Model Catalog](/library/advanced/model-catalog/) - Query available models
+- [Custom Models](/library/advanced/custom-models/) - Register fine-tuned models

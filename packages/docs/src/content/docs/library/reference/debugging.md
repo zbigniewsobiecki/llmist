@@ -81,5 +81,5 @@ llmist agent "test" --gadget ./tool.ts 2>&1
 
 ## See Also
 
-- [Hooks Guide](/guides/hooks/) - All hook types
-- [Troubleshooting](/reference/troubleshooting/) - Common issues
+- [Hooks Guide](/library/guides/hooks/) - All hook types
+- [Troubleshooting](/library/reference/troubleshooting/) - Common issues
