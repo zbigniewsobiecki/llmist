@@ -369,12 +369,17 @@ export async function loadExternalGadgets(
   let entryPoint: string;
   let gadgetNames: string[] | null = null;
 
+  // Track if we're loading a subagent (skip factory pattern for subagents)
+  let isSubagent = false;
+
   if (spec.gadgetName) {
-    // Single gadget requested
+    // Single gadget requested - filter by the user-specified name
     gadgetNames = [spec.gadgetName];
-    // Check if it's a subagent
-    if (manifest?.subagents?.[spec.gadgetName]) {
-      entryPoint = manifest.subagents[spec.gadgetName].entryPoint;
+    // Check if it's a subagent to get the correct entry point
+    const subagentInfo = manifest?.subagents?.[spec.gadgetName];
+    if (subagentInfo) {
+      entryPoint = subagentInfo.entryPoint;
+      isSubagent = true; // Subagents should be extracted directly, not via factory
     } else {
       entryPoint = manifest?.gadgets || "./dist/index.js";
     }
@@ -417,8 +422,8 @@ export async function loadExternalGadgets(
 
   let gadgets: AbstractGadget[] = [];
 
-  // Check if this is a factory-based package
-  if (manifest?.factory) {
+  // Check if this is a factory-based package (skip for subagents - they're extracted directly)
+  if (manifest?.factory && !isSubagent) {
     const exportsObj = exports as Record<string, unknown>;
 
     // Try factory functions in order of specificity
