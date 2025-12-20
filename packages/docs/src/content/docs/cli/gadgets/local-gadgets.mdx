@@ -95,37 +95,43 @@ export default class ArcadeHighScore extends Gadget({ ... }) { ... }
 
 ## Loading Specific Gadgets
 
-Use the `/GadgetName` suffix to load a specific gadget from a file or package:
+Load a specific gadget from a file or package using the appropriate suffix:
 
 <Tabs>
   <TabItem label="bun">
     ```bash
-    # Load only FloppyDisk from a file with multiple exports
-    bunx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts/FloppyDisk
+    # Load only FloppyDisk from a file with multiple exports (colon separator)
+    bunx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts:FloppyDisk
 
-    # Load BrowseWeb subagent from Dhalsim package
+    # Load BrowseWeb subagent from npm package (slash separator)
     bunx @llmist/cli agent "Browse apple.com" -g dhalsim/BrowseWeb
 
-    # Load from git URL
+    # Load from scoped npm package
+    bunx @llmist/cli agent "task" -g @myorg/my-gadgets/MyGadget
+
+    # Load from git URL (slash separator)
     bunx @llmist/cli agent "task" -g git+https://github.com/user/repo#main/MyGadget
     ```
   </TabItem>
   <TabItem label="npm">
     ```bash
-    # Load only FloppyDisk from a file with multiple exports
-    npx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts/FloppyDisk
+    # Load only FloppyDisk from a file with multiple exports (colon separator)
+    npx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts:FloppyDisk
 
-    # Load BrowseWeb subagent from Dhalsim package
+    # Load BrowseWeb subagent from npm package (slash separator)
     npx @llmist/cli agent "Browse apple.com" -g dhalsim/BrowseWeb
 
-    # Load from git URL
+    # Load from scoped npm package
+    npx @llmist/cli agent "task" -g @myorg/my-gadgets/MyGadget
+
+    # Load from git URL (slash separator)
     npx @llmist/cli agent "task" -g git+https://github.com/user/repo#main/MyGadget
     ```
   </TabItem>
 </Tabs>
 
 <Aside type="note">
-  The gadget name must be PascalCase (e.g., `MyGadget`, `BrowseWeb`). This matches the class name of the gadget.
+  The gadget name must be PascalCase (e.g., `MyGadget`, `BrowseWeb`). Local file paths use a **colon** separator (`:GadgetName`) to avoid ambiguity with filesystem paths, while npm packages and git URLs use a **slash** separator (`/GadgetName`).
 </Aside>
 
 ## External Gadgets

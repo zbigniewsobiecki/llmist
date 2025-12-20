@@ -93,29 +93,27 @@ interface LocalSpecifier {
 }
 
 /**
- * Parse a local file specifier that may include a /GadgetName suffix.
+ * Parse a local file specifier that may include a :GadgetName suffix.
  * The gadget name must be PascalCase (start with uppercase letter).
+ * Uses colon separator to avoid ambiguity with filesystem paths.
  *
- * @param specifier - Local file path, possibly with /GadgetName suffix
+ * @param specifier - Local file path, possibly with :GadgetName suffix
  * @returns Parsed path and optional gadget name
  *
  * @example
- * parseLocalSpecifier("~/gadgets/index.ts/BrowseWeb")
+ * parseLocalSpecifier("~/gadgets/index.ts:BrowseWeb")
  * // => { path: "~/gadgets/index.ts", gadgetName: "BrowseWeb" }
  *
  * parseLocalSpecifier("~/gadgets/index.ts")
  * // => { path: "~/gadgets/index.ts" }
  */
 function parseLocalSpecifier(specifier: string): LocalSpecifier {
-  // Match trailing /PascalCaseName (uppercase letter followed by alphanumeric)
-  const match = specifier.match(/^(.+)\/([A-Z][a-zA-Z0-9]*)$/);
+  // Match trailing :PascalCaseName (colon + uppercase letter followed by alphanumeric)
+  // Use colon separator to avoid ambiguity with filesystem paths
+  const match = specifier.match(/^(.+):([A-Z][a-zA-Z0-9]*)$/);
   if (match) {
     const [, basePath, gadgetName] = match;
-    // Verify basePath exists as file/dir (after expanding ~)
-    const expandedPath = expandHomePath(basePath);
-    if (fs.existsSync(expandedPath)) {
-      return { path: basePath, gadgetName };
-    }
+    return { path: basePath, gadgetName };
   }
   return { path: specifier };
 }
@@ -251,7 +249,7 @@ export function extractGadgetsFromModule(moduleExports: unknown): AbstractGadget
  *    - "git+https://...#ref/GadgetName" - git URL with specific gadget
  * 4. File paths (starting with ., /, ~) - resolve and import
  *    - "~/path/to/gadgets.ts" - all gadgets from module
- *    - "~/path/to/gadgets.ts/BrowseWeb" - specific gadget by name
+ *    - "~/path/to/gadgets.ts:BrowseWeb" - specific gadget by name (colon separator)
  * 5. npm module names - dynamic import from node_modules
  *
  * @param specifiers - Array of gadget specifiers

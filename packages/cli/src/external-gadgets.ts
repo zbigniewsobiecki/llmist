@@ -140,18 +140,32 @@ export function parseGadgetSpecifier(specifier: string): GadgetSpecifier | null 
 
   // npm package with optional version, preset, and gadget name
   // Format: package[@version][:preset][/gadgetName]
-  const npmMatch = specifier.match(
-    /^(@?[a-z0-9][\w.-]*)(?:@([\w.-]+))?(?::([a-z]+))?(?:\/(\w+))?$/i,
+  // For scoped packages: @scope/package[@version][:preset][/gadgetName]
+
+  // Extract /GadgetName suffix first (PascalCase at the end)
+  let npmSpecifier = specifier;
+  let npmGadgetName: string | undefined;
+  const gadgetMatch = specifier.match(/^(.+)\/([A-Z][a-zA-Z0-9]*)$/);
+  if (gadgetMatch) {
+    npmSpecifier = gadgetMatch[1];
+    npmGadgetName = gadgetMatch[2];
+  }
+
+  // Now parse the rest: scoped or unscoped package[@version][:preset]
+  // Scoped: @scope/package[@version][:preset]
+  // Unscoped: package[@version][:preset]
+  const npmMatch = npmSpecifier.match(
+    /^(@[a-z0-9][\w.-]*\/[a-z0-9][\w.-]*|[a-z0-9][\w.-]*)(?:@([\w.-]+))?(?::([a-z]+))?$/i,
   );
 
   if (npmMatch) {
-    const [, pkg, version, preset, gadgetName] = npmMatch;
+    const [, pkg, version, preset] = npmMatch;
     return {
       type: "npm",
       package: pkg,
       version,
       preset,
-      gadgetName,
+      gadgetName: npmGadgetName,
     };
   }
 
