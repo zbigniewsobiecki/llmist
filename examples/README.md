@@ -34,6 +34,7 @@ bunx tsx examples/01-basic-usage.ts
 | [09-filesystem-gadgets.ts](./09-filesystem-gadgets.ts) | Secure file system operations with path sandboxing |
 | [10-text-handling.ts](./10-text-handling.ts) | Text response handling: textOnlyHandler, textWithGadgetsHandler |
 | [11-gadget-dependencies.ts](./11-gadget-dependencies.ts) | Gadget dependencies (DAG execution) |
+| [12-error-handling.ts](./12-error-handling.ts) | Error handling patterns, recovery, retries |
 | [13-syntactic-sugar.ts](./13-syntactic-sugar.ts) | Fluent API showcase |
 | [14-hints.ts](./14-hints.ts) | LLM assistance hints (iteration progress, parallel gadgets) |
 | [15-trailing-messages.ts](./15-trailing-messages.ts) | Ephemeral trailing messages injected per LLM request |
