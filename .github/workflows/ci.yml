@@ -52,6 +52,15 @@ jobs:
       - name: Run linter
         run: bun run lint
 
+      - name: Setup Node.js (for cross-runtime tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run Node.js spawn integration test
+        # Verify spawn utility works in Node.js (not just Bun)
+        run: node --experimental-strip-types scripts/test-node-spawn.mjs
+
       - name: Run unit tests
         # Run tests directly (not via Turborepo) to avoid TTY output capture issues
         # with @unblessed/node terminal tests
