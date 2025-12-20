@@ -6,6 +6,20 @@
       "outputs": ["dist/**"],
       "inputs": ["src/**/*.ts", "tsconfig.json", "tsup.config.ts"]
     },
+    "@llmist/docs#build": {
+      "dependsOn": ["llmist#build"],
+      "outputs": ["dist/**"],
+      "inputs": ["src/**", "astro.config.mjs", "tsconfig.json"]
+    },
+    "@llmist/docs#dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "@llmist/docs#preview": {
+      "dependsOn": ["@llmist/docs#build"],
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []
