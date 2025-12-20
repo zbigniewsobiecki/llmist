@@ -52,7 +52,7 @@
   "devDependencies": {
     "@types/node": "^20.12.7",
     "bun-types": "^1.3.2",
-    "llmist": "^9.0.0",
+    "llmist": "workspace:*",
     "rimraf": "^5.0.5",
     "tslog": "^4.10.2",
     "tsup": "^8.3.5",

@@ -37,7 +37,7 @@
   "license": "MIT",
   "sideEffects": false,
   "dependencies": {
-    "llmist": "^8.0.0",
+    "llmist": "workspace:*",
     "@unblessed/node": "^1.0.0-alpha.23",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
@@ -50,7 +50,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@llmist/testing": "^8.0.0",
+    "@llmist/testing": "workspace:*",
     "@types/diff": "^8.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/marked-terminal": "^6.1.1",
