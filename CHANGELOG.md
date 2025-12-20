@@ -1,3 +1,9 @@
+## <small>9.1.2 (2025-12-20)</small>
+
+* Merge pull request #236 from zbigniewsobiecki/dev ([a1cdeb0](https://github.com/zbigniewsobiecki/llmist/commit/a1cdeb0)), closes [#236](https://github.com/zbigniewsobiecki/llmist/issues/236)
+* fix(cli): add postinstall script to fix @unblessed/core data path bug (#235) ([b6fc043](https://github.com/zbigniewsobiecki/llmist/commit/b6fc043)), closes [#235](https://github.com/zbigniewsobiecki/llmist/issues/235)
+* docs: update CLI commands to use bunx/npx @llmist/cli and fix light mode (#234) ([bf883ca](https://github.com/zbigniewsobiecki/llmist/commit/bf883ca)), closes [#234](https://github.com/zbigniewsobiecki/llmist/issues/234)
+
 ## <small>9.1.1 (2025-12-20)</small>
 
 * Merge pull request #233 from zbigniewsobiecki/dev ([8eeb78c](https://github.com/zbigniewsobiecki/llmist/commit/8eeb78c)), closes [#233](https://github.com/zbigniewsobiecki/llmist/issues/233)
