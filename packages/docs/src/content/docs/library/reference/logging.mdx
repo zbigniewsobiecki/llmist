@@ -3,6 +3,8 @@ title: Logging
 description: Configure logging for llmist
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 llmist uses structured logging for debugging and monitoring.
 
 ## Log Levels
@@ -42,16 +44,32 @@ export LLMIST_LOG_RESET="true"
 
 Use command-line flags:
 
-```bash
-# Set log level
-llmist agent "task" --log-level debug
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Set log level
+    bunx @llmist/cli agent "task" --log-level debug
 
-# Log to file
-llmist agent "task" --log-file ./debug.log
+    # Log to file
+    bunx @llmist/cli agent "task" --log-file ./debug.log
 
-# Combine options
-llmist agent "task" --log-level trace --log-file ./trace.log
-```
+    # Combine options
+    bunx @llmist/cli agent "task" --log-level trace --log-file ./trace.log
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Set log level
+    npx @llmist/cli agent "task" --log-level debug
+
+    # Log to file
+    npx @llmist/cli agent "task" --log-file ./debug.log
+
+    # Combine options
+    npx @llmist/cli agent "task" --log-level trace --log-file ./trace.log
+    ```
+  </TabItem>
+</Tabs>
 
 Or configure in `~/.llmist/cli.toml`:
 
@@ -124,9 +142,18 @@ File output (structured JSON):
 
 ### Capture LLM Interactions
 
-```bash
-LLMIST_LOG_LEVEL=trace llmist agent "task" 2>&1 | tee debug.log
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    LLMIST_LOG_LEVEL=trace bunx @llmist/cli agent "task" 2>&1 | tee debug.log
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    LLMIST_LOG_LEVEL=trace npx @llmist/cli agent "task" 2>&1 | tee debug.log
+    ```
+  </TabItem>
+</Tabs>
 
 ### Debug Gadget Execution
 

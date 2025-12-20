@@ -3,6 +3,8 @@ title: Debugging
 description: Capture raw prompts and troubleshoot issues
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Capture raw prompts, responses, and troubleshoot issues.
 
 ## Quick Debug with Presets
@@ -74,10 +76,20 @@ const logger = createLogger({ minLevel: 'debug' });
 
 ## CLI Debugging
 
-```bash
-llmist complete "test" --model haiku 2>&1 | tee debug.log
-llmist agent "test" --gadget ./tool.ts 2>&1
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli complete "test" --model haiku 2>&1 | tee debug.log
+    bunx @llmist/cli agent "test" --gadget ./tool.ts 2>&1
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli complete "test" --model haiku 2>&1 | tee debug.log
+    npx @llmist/cli agent "test" --gadget ./tool.ts 2>&1
+    ```
+  </TabItem>
+</Tabs>
 
 ## See Also
 
