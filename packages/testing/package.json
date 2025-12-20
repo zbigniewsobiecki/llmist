@@ -1,6 +1,6 @@
 {
   "name": "@llmist/testing",
-  "version": "8.1.2",
+  "version": "8.1.3",
   "private": true,
   "description": "Testing utilities for llmist - mock LLM responses and test agents",
   "type": "module",

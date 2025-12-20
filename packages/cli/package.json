@@ -1,6 +1,6 @@
 {
   "name": "@llmist/cli",
-  "version": "8.1.2",
+  "version": "8.1.3",
   "description": "CLI for llmist - run LLM agents from the command line",
   "type": "module",
   "main": "dist/cli.js",

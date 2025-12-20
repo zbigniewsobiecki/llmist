@@ -1,3 +1,10 @@
+## <small>8.1.3 (2025-12-20)</small>
+
+* Merge pull request #223 from zbigniewsobiecki/dev ([22fbf59](https://github.com/zbigniewsobiecki/llmist/commit/22fbf59)), closes [#223](https://github.com/zbigniewsobiecki/llmist/issues/223)
+* docs: migrate to Astro Starlight documentation site (#222) ([ce7a4b4](https://github.com/zbigniewsobiecki/llmist/commit/ce7a4b4)), closes [#222](https://github.com/zbigniewsobiecki/llmist/issues/222)
+* fix(docker): improve test Dockerfile with better messaging and @latest versions ([cefe745](https://github.com/zbigniewsobiecki/llmist/commit/cefe745))
+* chore: update Dockerfile.test-npm to 8.1.2 ([cd39641](https://github.com/zbigniewsobiecki/llmist/commit/cd39641))
+
 ## <small>8.1.2 (2025-12-19)</small>
 
 * Merge pull request #221 from zbigniewsobiecki/dev ([f5f7b7d](https://github.com/zbigniewsobiecki/llmist/commit/f5f7b7d)), closes [#221](https://github.com/zbigniewsobiecki/llmist/issues/221)
