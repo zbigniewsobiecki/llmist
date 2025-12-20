@@ -432,6 +432,132 @@ Configure agent behavior with `.withStopOnGadgetError()`:
 })
 ```
 
+## Response Formatting Helpers
+
+llmist provides helpers for consistent response formatting:
+
+### gadgetSuccess() and gadgetError()
+
+```typescript
+import { gadgetSuccess, gadgetError, Gadget, z } from 'llmist';
+
+class DatabaseQuery extends Gadget({
+  description: 'Query the database',
+  schema: z.object({ query: z.string() }),
+}) {
+  async execute(params: this['params']): Promise<string> {
+    try {
+      const rows = await db.query(params.query);
+      return gadgetSuccess({
+        rowCount: rows.length,
+        data: rows.slice(0, 10)
+      });
+      // Returns: '{"success":true,"rowCount":42,"data":[...]}'
+    } catch (error) {
+      return gadgetError('Query failed', {
+        query: params.query,
+        suggestions: ['Check syntax', 'Verify table exists']
+      });
+      // Returns: '{"error":"Query failed","query":"...","suggestions":[...]}'
+    }
+  }
+}
+```
+
+### withErrorHandling() Wrapper
+
+Automatically catch exceptions and format them:
+
+```typescript
+import { withErrorHandling, gadgetSuccess, createGadget, z } from 'llmist';
+
+const riskyGadget = createGadget({
+  name: 'RiskyOperation',
+  description: 'Operation that might fail',
+  schema: z.object({ id: z.string() }),
+  execute: withErrorHandling(async ({ id }) => {
+    const result = await riskyOperation(id);
+    return gadgetSuccess({ result });
+  }),
+});
+// If riskyOperation throws, returns: '{"error":"<exception message>"}'
+```
+
+### getErrorMessage() Helper
+
+Extract error message from any error type:
+
+```typescript
+import { getErrorMessage } from 'llmist';
+
+try {
+  await someOperation();
+} catch (error) {
+  const message = getErrorMessage(error);  // Works with Error, string, or any type
+  return gadgetError(message);
+}
+```
+
+## Formatting Utilities
+
+Common formatters for gadget output:
+
+```typescript
+import { format, truncate, formatBytes, formatDate, formatDuration } from 'llmist';
+
+// Truncate long text
+format.truncate("This is a very long message", 15);  // "This is a ve..."
+
+// Format bytes
+format.bytes(1536);       // "1.5 KB"
+format.bytes(1048576);    // "1 MB"
+
+// Format dates
+format.date("2024-01-15T10:30:00Z");  // "Jan 15, 2024, 10:30 AM"
+
+// Format durations
+format.duration(500);     // "500ms"
+format.duration(125000);  // "2m 5s"
+
+// Individual exports also available
+truncate("Long text", 5);           // "Lo..."
+formatBytes(2048);                  // "2 KB"
+formatDuration(65000);              // "1m 5s"
+```
+
+## Timing Utilities
+
+For human-like delays and timeout handling:
+
+```typescript
+import { timing, humanDelay, withTimeout, withRetry } from 'llmist';
+
+// Human-like delays (useful for browser automation)
+await timing.humanDelay(50, 150);  // Random 50-150ms delay
+
+// Random delay value (doesn't wait)
+const delayMs = timing.randomDelay(100, 500);  // Returns number between 100-500
+
+// Timeout wrapper
+const result = await timing.withTimeout(
+  () => slowOperation(),
+  5000  // 5 second timeout
+);
+
+// Retry with backoff
+const data = await timing.withRetry(
+  () => unreliableApi(),
+  {
+    maxRetries: 3,
+    delay: 1000,
+    backoff: 'exponential',  // or 'linear'
+    onRetry: (error, attempt) => console.log(`Retry ${attempt}...`),
+  }
+);
+```
+
+These utilities are especially useful for browser automation gadgets and external API calls.
+
 ## Best Practices
 
 ### 1. Clear Descriptions

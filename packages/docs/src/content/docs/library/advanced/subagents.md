@@ -59,7 +59,79 @@ headless = false        # Show browser
 
 ## Creating a Subagent
 
+### Using createSubagent() Helper (Recommended)
+
+The `createSubagent()` helper simplifies subagent creation by handling:
+- Host exports resolution for tree sharing
+- Model resolution with "inherit" support from CLI config
+- Parent context sharing for cost tracking
+- Logger forwarding
+
 ```typescript
+import { createSubagent, Gadget, z } from 'llmist';
+import type { ExecutionContext, GadgetMediaOutput } from 'llmist';
+
+class MySubagent extends Gadget({
+  name: 'MySubagent',
+  description: 'Accomplishes tasks autonomously',
+  schema: z.object({
+    task: z.string(),
+    model: z.string().optional(),
+  }),
+  timeoutMs: 300000,
+}) {
+  private internalGadgets = [Navigate, Click, Screenshot];
+
+  async execute(
+    params: this['params'],
+    ctx?: ExecutionContext,
+  ): Promise<{ result: string; media?: GadgetMediaOutput[] }> {
+    const agent = createSubagent(ctx!, {
+      name: 'MySubagent',
+      gadgets: this.internalGadgets,
+      model: params.model,      // Optional runtime override
+      defaultModel: 'sonnet',   // Fallback if not inherited
+      maxIterations: 15,
+      systemPrompt: 'You are a helpful automation agent...',
+    }).ask(params.task);
+
+    let result = '';
+    for await (const event of agent.run()) {
+      if (event.type === 'text') result = event.content;
+    }
+
+    return {
+      result,
+      media: ctx?.tree?.getSubtreeMedia(ctx.nodeId!),
+    };
+  }
+}
+```
+
+### SubagentOptions Reference
+
+```typescript
+interface SubagentOptions {
+  name: string;                  // Subagent name (for config resolution)
+  gadgets: AbstractGadget[];     // Gadgets to register
+  systemPrompt?: string;         // System prompt
+  model?: string;                // Runtime override
+  defaultModel?: string;         // Fallback (default: "sonnet")
+  maxIterations?: number;        // Runtime override
+  defaultMaxIterations?: number; // Fallback (default: 15)
+  hooks?: AgentHooks;            // Observer/interceptor hooks
+  temperature?: number;          // LLM temperature
+}
+```
+
+### Manual Pattern (Advanced)
+
+For full control, use `getHostExports()` directly:
+
+```typescript
+import { getHostExports, Gadget, z } from 'llmist';
+import type { ExecutionContext } from 'llmist';
+
 class MySubagent extends Gadget({
   name: 'MySubagent',
   description: 'Accomplishes tasks autonomously',
@@ -70,9 +142,10 @@ class MySubagent extends Gadget({
   timeoutMs: 300000,
 }) {
   async execute(params: this['params'], ctx?: ExecutionContext) {
-    const { AgentBuilder } = getHostExports(ctx!);
+    const { AgentBuilder, LLMist } = getHostExports(ctx!);
+    const client = new LLMist();
 
-    const agent = new AgentBuilder()
+    const agent = new AgentBuilder(client)
       .withParentContext(ctx!)  // Share tree for cost tracking
       .withModel(params.model ?? ctx?.agentConfig?.model ?? 'sonnet')
       .withGadgets(...this.internalGadgets)
@@ -88,6 +161,23 @@ class MySubagent extends Gadget({
       media: ctx?.tree?.getSubtreeMedia(ctx.nodeId!),
     };
   }
+}
+```
+
+### Checking Host Exports Availability
+
+Use `hasHostExports()` for conditional logic when gadgets may run standalone:
+
+```typescript
+import { hasHostExports, createSubagent } from 'llmist';
+
+async execute(params: this['params'], ctx?: ExecutionContext) {
+  if (!hasHostExports(ctx)) {
+    return 'Error: This gadget requires running via llmist agent';
+  }
+
+  const agent = createSubagent(ctx!, { ... });
+  // ...
 }
 ```
 
