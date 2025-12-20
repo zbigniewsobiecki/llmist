@@ -1,0 +1,84 @@
+---
+title: TUI Overview
+description: Terminal User Interface for llmist agent mode
+sidebar:
+  order: 1
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+When running `llmist agent` in an interactive terminal, you get access to a rich Terminal User Interface (TUI) that helps you monitor and interact with the agent's execution.
+
+## Features
+
+### Interactive Blocks
+
+Each LLM call and gadget execution is displayed as a collapsible block:
+
+- **LLM calls** show the streaming response in real-time
+- **Gadget executions** show parameters, status, and results
+- **Expand/collapse** any block to see full details
+
+### Real-time Status Bar
+
+The status bar at the bottom shows:
+
+| Metric | Description |
+|--------|-------------|
+| Tokens | Input/output tokens used |
+| Cost | Estimated cost in USD |
+| Time | Elapsed time for current operation |
+| Model | Current model being used |
+
+### Raw Request/Response Viewer
+
+Debug LLM interactions by viewing:
+- Raw JSON request sent to the provider
+- Full response payload received
+
+<Aside type="tip">
+  Press `r` to view the raw request and `R` to view the raw response for the selected block.
+</Aside>
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Select previous block |
+| `↓` / `j` | Select next block |
+| `Enter` | Toggle expand/collapse selected block |
+| `r` | View raw request |
+| `R` | View raw response |
+| `Ctrl+B` | Toggle browse/input mode |
+| `Ctrl+C` (×2) | Quit agent |
+
+<Aside type="note">
+  Vim-style navigation with `j`/`k` is supported for users familiar with that workflow.
+</Aside>
+
+## Browse vs Input Mode
+
+The TUI has two modes:
+
+1. **Input Mode** (default) - Type messages to send to the agent
+2. **Browse Mode** - Navigate through execution history
+
+Toggle between modes with `Ctrl+B`. In browse mode, you can:
+- Navigate blocks with arrow keys or `j`/`k`
+- Expand blocks to see full content
+- Inspect raw LLM payloads
+
+## Non-Interactive Mode
+
+When running without a TTY (e.g., in scripts or CI), the TUI is disabled and output is streamed directly to stdout:
+
+```bash
+# Runs without TUI
+echo "Calculate 2+2" | llmist agent
+```
+
+Use the `--quiet` flag to suppress all output except gadget results:
+
+```bash
+llmist agent "What is 2+2?" --quiet
+```

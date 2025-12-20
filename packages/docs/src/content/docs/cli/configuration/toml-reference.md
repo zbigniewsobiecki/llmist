@@ -199,6 +199,6 @@ These flags work with any command:
 
 ## See Also
 
-- [CLI Reference](/cli/reference/) - All CLI commands
-- [CLI Gadgets](/cli/gadgets/) - Writing gadgets for CLI
-- [Logging](/reference/logging/) - Detailed logging configuration
+- [CLI Reference](/cli/commands/overview/) - All CLI commands
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Writing gadgets for CLI
+- [Logging](/library/reference/logging/) - Detailed logging configuration

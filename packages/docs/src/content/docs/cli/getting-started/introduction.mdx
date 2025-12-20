@@ -1,0 +1,80 @@
+---
+title: CLI Introduction
+description: Get started with the llmist command-line interface
+sidebar:
+  order: 1
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+
+The **llmist CLI** brings the power of AI agents directly to your terminal. Run completions, interactive agents with tools, generate images and speech, and create powerful automation workflows - all from the command line.
+
+## Why Use the CLI?
+
+<CardGrid>
+  <Card title="Quick Completions" icon="rocket">
+    Get AI responses without writing any code - pipe input, get output
+  </Card>
+  <Card title="Interactive Agents" icon="puzzle">
+    Run agents with gadgets (tools) in an interactive TUI
+  </Card>
+  <Card title="Automation" icon="seti:pipeline">
+    Build powerful pipelines with stdin/stdout integration
+  </Card>
+  <Card title="Custom Commands" icon="setting">
+    Define reusable commands in TOML configuration
+  </Card>
+</CardGrid>
+
+## Key Features
+
+- **8 built-in commands** - complete, agent, image, speech, vision, models, gadget, init
+- **TUI mode** - Beautiful terminal interface with expandable blocks and keyboard navigation
+- **Gadget ecosystem** - Load gadgets from local files, npm packages, or git repositories
+- **TOML configuration** - Define custom commands, templates, and workflows
+- **Gadget approval** - Security controls for tool execution
+
+## Quick Example
+
+```bash
+# Simple completion
+llmist complete "What is the capital of France?"
+
+# Interactive agent with TUI
+llmist agent --tui "Help me organize my project"
+
+# Generate an image
+llmist image "A sunset over mountains" -o sunset.png
+
+# Custom command from config
+llmist code-review ./src/main.ts
+```
+
+<Aside type="tip">
+  The CLI automatically discovers API keys from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
+</Aside>
+
+## Next Steps
+
+<CardGrid>
+  <LinkCard
+    title="Installation"
+    description="Install the CLI globally"
+    href="/cli/getting-started/installation/"
+  />
+  <LinkCard
+    title="Quick Start"
+    description="Run your first agent"
+    href="/cli/getting-started/quick-start/"
+  />
+  <LinkCard
+    title="Commands Reference"
+    description="All available commands"
+    href="/cli/commands/agent/"
+  />
+  <LinkCard
+    title="Configuration"
+    description="TOML config and custom commands"
+    href="/cli/configuration/toml-reference/"
+  />
+</CardGrid>

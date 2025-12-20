@@ -1,0 +1,253 @@
+---
+title: Error Types
+description: Reference for llmist error types and exception handling
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+llmist provides specific error types for different scenarios. Understanding these helps you build robust applications.
+
+## Signal Exceptions
+
+These exceptions are used to control agent flow, not indicate errors:
+
+### HumanInputRequiredException
+
+Pauses the agent loop to request user input.
+
+```typescript
+import { Gadget, HumanInputRequiredException, z } from 'llmist';
+
+class AskUser extends Gadget({
+  description: 'Ask user for input',
+  schema: z.object({ question: z.string() }),
+}) {
+  execute(params: this['params']): string {
+    throw new HumanInputRequiredException(params.question);
+  }
+}
+```
+
+**Behavior:**
+- Agent loop pauses
+- Question is presented to user
+- User response is fed back to the agent
+- Agent continues with the response
+
+### TaskCompletionSignal
+
+Signals that the agent has completed its task.
+
+```typescript
+import { Gadget, TaskCompletionSignal, z } from 'llmist';
+
+class Done extends Gadget({
+  description: 'Signal task completion',
+  schema: z.object({ summary: z.string() }),
+}) {
+  execute(params: this['params']): string {
+    throw new TaskCompletionSignal(params.summary);
+  }
+}
+```
+
+**Behavior:**
+- Agent loop terminates immediately
+- Summary is returned as the final result
+- No further iterations occur
+
+### GadgetDenySignal
+
+Signals that a gadget execution was denied (e.g., by approval system).
+
+```typescript
+import { GadgetDenySignal } from 'llmist';
+
+// Thrown internally when gadget approval is denied
+throw new GadgetDenySignal('User denied file write operation');
+```
+
+**Behavior:**
+- Gadget execution is skipped
+- Denial message is sent back to the LLM
+- Agent can try alternative approaches
+
+## Provider Errors
+
+### ProviderError
+
+Base class for all provider-related errors.
+
+```typescript
+import { ProviderError } from 'llmist';
+
+try {
+  await agent.run();
+} catch (error) {
+  if (error instanceof ProviderError) {
+    console.log('Provider:', error.provider);
+    console.log('Message:', error.message);
+  }
+}
+```
+
+### RateLimitError
+
+Thrown when API rate limits are exceeded.
+
+```typescript
+import { RateLimitError } from 'llmist';
+
+try {
+  await agent.run();
+} catch (error) {
+  if (error instanceof RateLimitError) {
+    console.log('Retry after:', error.retryAfter, 'seconds');
+  }
+}
+```
+
+**Handling:**
+- Use retry configuration
+- Implement exponential backoff
+- Consider using a different model
+
+### AuthenticationError
+
+Thrown when API authentication fails.
+
+```typescript
+import { AuthenticationError } from 'llmist';
+
+try {
+  await agent.run();
+} catch (error) {
+  if (error instanceof AuthenticationError) {
+    console.error('Check your API key');
+  }
+}
+```
+
+## Gadget Errors
+
+### GadgetExecutionError
+
+Thrown when a gadget fails during execution.
+
+```typescript
+import { GadgetExecutionError } from 'llmist';
+
+for await (const event of agent.run()) {
+  if (event.type === 'gadget_error') {
+    console.log('Gadget:', event.gadgetName);
+    console.log('Error:', event.error.message);
+  }
+}
+```
+
+### GadgetTimeoutError
+
+Thrown when a gadget exceeds its timeout.
+
+```typescript
+class SlowGadget extends Gadget({
+  description: 'A slow operation',
+  schema: z.object({}),
+  timeoutMs: 5000,  // 5 second timeout
+}) {
+  async execute(): Promise<string> {
+    // If this takes > 5 seconds, GadgetTimeoutError is thrown
+    await someSlowOperation();
+    return 'done';
+  }
+}
+```
+
+### GadgetValidationError
+
+Thrown when gadget parameters fail Zod validation.
+
+```typescript
+import { GadgetValidationError } from 'llmist';
+
+// If LLM provides invalid parameters:
+// { a: "not a number", b: 5 }
+// GadgetValidationError is thrown with validation details
+```
+
+## Parse Errors
+
+### BlockParseError
+
+Thrown when the block format parser encounters invalid syntax.
+
+Common causes:
+- Duplicate parameter paths
+- Invalid array indices
+- Malformed markers
+
+```typescript
+for await (const event of agent.run()) {
+  if (event.type === 'gadget_parse_error') {
+    console.log('Parse error:', event.parseError);
+    console.log('Raw text:', event.parametersRaw);
+  }
+}
+```
+
+## Error Handling Patterns
+
+### Retry Configuration
+
+```typescript
+const agent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withRetry({
+    maxAttempts: 3,
+    retryOn: ['rate_limit', 'server_error'],
+    backoff: 'exponential',
+  });
+```
+
+### Event-Based Error Handling
+
+```typescript
+for await (const event of agent.run()) {
+  switch (event.type) {
+    case 'gadget_error':
+      console.error(`Gadget ${event.gadgetName} failed:`, event.error);
+      break;
+    case 'llm_error':
+      console.error('LLM call failed:', event.error);
+      break;
+  }
+}
+```
+
+### Try-Catch Pattern
+
+```typescript
+try {
+  const result = await agent.askAndCollect('Do something');
+} catch (error) {
+  if (error instanceof TaskCompletionSignal) {
+    // Expected - task completed normally
+    console.log('Result:', error.message);
+  } else if (error instanceof HumanInputRequiredException) {
+    // Need user input
+    const input = await promptUser(error.message);
+    // Continue with input...
+  } else {
+    // Actual error
+    throw error;
+  }
+}
+```
+
+## See Also
+
+- [Streaming](/library/guides/streaming/) - Handling events during execution
+- [Hooks](/library/guides/hooks/) - Intercepting errors with hooks
+- [Creating Gadgets](/library/guides/creating-gadgets/) - Error handling in gadgets

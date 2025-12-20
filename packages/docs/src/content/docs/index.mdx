@@ -5,10 +5,10 @@ template: splash
 hero:
   tagline: Tools execute while the LLM streams. Any model. Clean API.
   image:
-    file: ../../assets/logo.svg
+    file: ../../assets/llmist-icon.png
   actions:
     - text: Get Started
-      link: /getting-started/introduction/
+      link: /library/getting-started/introduction/
       icon: right-arrow
     - text: View on GitHub
       link: https://github.com/zbigniewsobiecki/llmist
@@ -16,7 +16,27 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Choose Your Path
+
+<CardGrid>
+  <LinkCard
+    title="Library"
+    description="Integrate llmist as a TypeScript library into your applications"
+    href="/library/getting-started/introduction/"
+  />
+  <LinkCard
+    title="CLI"
+    description="Run AI agents from the command line with powerful workflows"
+    href="/cli/getting-started/introduction/"
+  />
+  <LinkCard
+    title="Testing"
+    description="Mock LLM responses for deterministic, fast tests"
+    href="/testing/getting-started/introduction/"
+  />
+</CardGrid>
 
 ## Why llmist?
 
@@ -38,7 +58,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Quick Start
 
 ```bash
-npm install llmist
+bun add llmist
 ```
 
 ```typescript
@@ -72,16 +92,16 @@ console.log(answer); // "15 times 23 equals 345"
   <Card title="llmist" icon="seti:npm">
     Core library with agents, gadgets, and providers.
 
-    `npm install llmist`
+    `bun add llmist`
   </Card>
   <Card title="@llmist/cli" icon="seti:shell">
     Command-line interface for quick completions and agent runs.
 
-    `npx llmist agent "Your prompt"`
+    `bunx llmist agent "Your prompt"`
   </Card>
   <Card title="@llmist/testing" icon="seti:test">
     Testing utilities and mocks for unit testing your agents.
 
-    `npm install -D @llmist/testing`
+    `bun add -D @llmist/testing`
   </Card>
 </CardGrid>

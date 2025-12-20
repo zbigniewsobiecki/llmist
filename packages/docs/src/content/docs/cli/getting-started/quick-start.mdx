@@ -1,0 +1,157 @@
+---
+title: CLI Quick Start
+description: Run your first AI agent from the command line
+sidebar:
+  order: 3
+---
+
+import { Aside, Code, FileTree, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Let's run your first AI agent with gadgets from the command line.
+
+## Your First Completion
+
+The simplest way to use llmist is the `complete` command:
+
+```bash
+llmist complete "What is the capital of France?"
+```
+
+You'll get a streaming response:
+
+```
+The capital of France is Paris.
+```
+
+## Running an Interactive Agent
+
+The `agent` command runs an AI agent that can use tools (gadgets):
+
+```bash
+llmist agent "What time is it in Tokyo?"
+```
+
+With the TUI (Terminal UI) mode for a richer experience:
+
+```bash
+llmist agent --tui "Help me plan a trip to Japan"
+```
+
+<Aside type="tip">
+  TUI mode provides an interactive interface with expandable blocks, keyboard navigation, and live streaming.
+</Aside>
+
+## Using Built-in Gadgets
+
+The CLI includes several built-in gadgets:
+
+<Tabs>
+  <TabItem label="Filesystem">
+    ```bash
+    llmist agent --builtins filesystem \
+      "Read the package.json and summarize the dependencies"
+    ```
+  </TabItem>
+  <TabItem label="Shell">
+    ```bash
+    llmist agent --builtins shell \
+      "Check which node version is installed"
+    ```
+  </TabItem>
+  <TabItem label="Web">
+    ```bash
+    llmist agent --builtins web \
+      "Search for the latest TypeScript release"
+    ```
+  </TabItem>
+</Tabs>
+
+## Creating a Local Gadget
+
+Create a custom gadget for your agent:
+
+<Steps>
+
+1. **Create a gadgets directory**
+
+   ```bash
+   mkdir gadgets
+   ```
+
+2. **Create a gadget file**
+
+   ```typescript title="gadgets/weather.ts"
+   import { Gadget, z } from 'llmist';
+
+   export default class Weather extends Gadget({
+     description: 'Get current weather for a city',
+     schema: z.object({
+       city: z.string().describe('City name'),
+     }),
+   }) {
+     async execute({ city }) {
+       // In a real gadget, you'd call a weather API
+       return `Weather in ${city}: 72°F, sunny`;
+     }
+   }
+   ```
+
+3. **Run the agent with your gadget**
+
+   ```bash
+   llmist agent --gadgets ./gadgets/weather.ts \
+     "What's the weather like in San Francisco?"
+   ```
+
+</Steps>
+
+Your directory structure:
+
+<FileTree>
+- gadgets/
+  - weather.ts
+- package.json
+</FileTree>
+
+## Piping and Automation
+
+The CLI integrates with Unix pipelines:
+
+```bash
+# Summarize a file
+cat README.md | llmist complete "Summarize this document"
+
+# Code review
+cat src/main.ts | llmist complete "Review this code for bugs"
+
+# Process multiple files
+find src -name "*.ts" -exec cat {} \; | \
+  llmist complete "Find potential security issues"
+```
+
+## Choosing a Model
+
+Specify the model with `--model` or `-m`:
+
+```bash
+# Use Claude Sonnet
+llmist complete -m sonnet "Explain quantum computing"
+
+# Use GPT-5
+llmist complete -m gpt5 "Write a haiku about coding"
+
+# Use Gemini Flash (fast and cheap)
+llmist complete -m flash "What is 2 + 2?"
+```
+
+<Aside>
+  Model aliases like `sonnet`, `gpt5`, and `flash` are shortcuts for full model names.
+  See [Models & Aliases](/reference/models/) for all available models.
+</Aside>
+
+## Next Steps
+
+- [CLI Reference](/cli/commands/overview/) - Learn all available commands
+- [Configuration](/cli/configuration/toml-reference/) - Set up custom commands
+- [Writing Gadgets](/cli/gadgets/local-gadgets/) - Create powerful tools
+- [TUI Mode](/cli/tui/overview/) - Master the interactive interface

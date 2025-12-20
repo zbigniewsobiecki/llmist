@@ -1,0 +1,146 @@
+---
+title: Why llmist?
+description: What makes llmist different from other LLM libraries
+---
+
+import { Aside, Badge, Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## The Problem with Traditional LLM Libraries
+
+Most LLM libraries treat tool/function calling as a sequential process:
+
+1. Send message to LLM
+2. Wait for complete response
+3. Parse tool calls from response
+4. Execute tools
+5. Send results back to LLM
+6. Repeat
+
+This creates a poor user experience—users wait for the entire response before seeing any tool execution.
+
+## llmist's Approach: Streaming Tool Execution
+
+llmist executes tools **while the LLM is still streaming**. The moment a tool call block is fully parsed, execution begins—no waiting for the response to complete.
+
+```typescript
+// Tools execute AS the LLM streams
+for await (const event of agent.run()) {
+  if (event.type === 'gadget_start') {
+    console.log(`Starting: ${event.gadgetName}...`);
+  }
+  if (event.type === 'gadget_complete') {
+    console.log(`Result: ${event.result}`);
+  }
+  if (event.type === 'text') {
+    process.stdout.write(event.text);
+  }
+}
+```
+
+<Aside type="tip">
+  Real-time tool execution means your users see progress immediately, not after the LLM finishes thinking.
+</Aside>
+
+## Key Differentiators
+
+<CardGrid>
+  <Card title="Universal Tool Calling" icon="puzzle">
+    llmist uses its own block format for tool calls—no JSON mode required. Works with **any model** that can follow instructions, not just those with native function calling.
+  </Card>
+  <Card title="Multi-Provider Support" icon="random">
+    First-class support for **OpenAI, Anthropic, and Gemini**. Auto-discovery from environment variables. Model shortcuts like `sonnet`, `gpt5`, `flash`.
+  </Card>
+  <Card title="Full TypeScript Inference" icon="seti:typescript">
+    Gadget parameters are fully typed from Zod schemas. No type assertions needed. Your IDE knows the exact shape of every parameter.
+  </Card>
+  <Card title="Powerful Hook System" icon="setting">
+    Three-layer architecture: **Observers** (read-only monitoring), **Interceptors** (synchronous transforms), **Controllers** (async lifecycle control).
+  </Card>
+</CardGrid>
+
+## Code Comparison
+
+<Tabs>
+  <TabItem label="llmist">
+    ```typescript
+    import { LLMist, Gadget, z } from 'llmist';
+
+    class Weather extends Gadget({
+      description: 'Get weather for a city',
+      schema: z.object({ city: z.string() }),
+    }) {
+      async execute({ city }) {
+        return `Weather in ${city}: 72°F, sunny`;
+      }
+    }
+
+    const answer = await LLMist.createAgent()
+      .withModel('sonnet')
+      .withGadgets(Weather)
+      .askAndCollect('What is the weather in Paris?');
+    ```
+  </TabItem>
+  <TabItem label="Other Libraries">
+    ```typescript
+    // Typical LLM library pattern
+    const client = new SomeClient({ apiKey: '...' });
+
+    const tools = [{
+      name: 'weather',
+      description: 'Get weather for a city',
+      parameters: { type: 'object', properties: { city: { type: 'string' } } },
+    }];
+
+    let response = await client.chat({
+      messages: [{ role: 'user', content: 'Weather in Paris?' }],
+      tools,
+    });
+
+    // Manual tool execution loop
+    while (response.tool_calls) {
+      for (const call of response.tool_calls) {
+        const result = await executeToolManually(call);
+        // Add result to messages...
+      }
+      response = await client.chat({ messages, tools });
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Feature Comparison
+
+| Feature | llmist | LangChain | Vercel AI SDK |
+|---------|--------|-----------|---------------|
+| Streaming tool execution | ✅ Native | ❌ Sequential | ⚠️ Limited |
+| Works with any model | ✅ Block format | ⚠️ Depends | ❌ Native only |
+| Type-safe gadgets | ✅ Full Zod inference | ⚠️ Manual | ⚠️ Partial |
+| Multi-provider | ✅ 3 built-in | ✅ Many | ✅ Many |
+| Hook system | ✅ 3-layer | ⚠️ Callbacks | ⚠️ Limited |
+| CLI included | ✅ Full-featured | ❌ No | ❌ No |
+| Testing utilities | ✅ MockBuilder | ⚠️ Basic | ⚠️ Basic |
+
+## Who Should Use llmist?
+
+<CardGrid stagger>
+  <Card title="Building Real-Time AI UX" icon="rocket">
+    If you need responsive, streaming AI experiences where users see tool execution in real-time.
+  </Card>
+  <Card title="Multi-Provider Applications" icon="random">
+    If you want to switch between OpenAI, Anthropic, and Gemini without code changes.
+  </Card>
+  <Card title="Type-Safe AI Development" icon="seti:typescript">
+    If you want full TypeScript inference for tool parameters and responses.
+  </Card>
+  <Card title="Command-Line AI Workflows" icon="seti:shell">
+    If you need a powerful CLI for AI automation and scripting.
+  </Card>
+</CardGrid>
+
+## Get Started
+
+Choose your path based on how you want to use llmist:
+
+- **[Library](/library/getting-started/introduction/)** - Integrate into your TypeScript/JavaScript application
+- **[CLI](/cli/getting-started/introduction/)** - Run agents from the command line
+- **[Testing](/testing/getting-started/introduction/)** - Mock LLM responses in your tests

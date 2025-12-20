@@ -1,0 +1,181 @@
+---
+title: Gemini Provider
+description: Using Google Gemini models with llmist
+sidebar:
+  order: 4
+---
+
+import { Aside, Badge, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Setup
+
+Set your Gemini API key:
+
+```bash
+export GEMINI_API_KEY=...
+```
+
+llmist will automatically discover and use Gemini.
+
+<Aside>
+  Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+</Aside>
+
+## Available Models
+
+### Text Models
+
+| Model | Alias | Best For |
+|-------|-------|----------|
+| `gemini-2.5-flash` | `flash` | Fast, cost-effective (recommended) |
+| `gemini-3-pro-preview` | `pro` | Complex reasoning |
+| `gemini-2.0-flash-thinking` | - | Step-by-step reasoning |
+
+### Image Models
+
+| Model | Description |
+|-------|-------------|
+| `imagen-3` | High-quality image generation |
+
+<Aside type="tip">
+  **Gemini Flash** is extremely fast and cost-effective—great for high-volume tasks and quick responses.
+</Aside>
+
+## Usage Examples
+
+<Tabs>
+  <TabItem label="Basic">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const answer = await LLMist.createAgent()
+      .withModel('flash')
+      .askAndCollect('What is the speed of light?');
+    ```
+  </TabItem>
+  <TabItem label="With Temperature">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const answer = await LLMist.createAgent()
+      .withModel('flash')
+      .withTemperature(0.9)  // More creative
+      .askAndCollect('Write a creative story about AI');
+    ```
+  </TabItem>
+  <TabItem label="Image Generation">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const client = new LLMist();
+    const result = await client.image.generate({
+      prompt: 'A futuristic city at night',
+      model: 'imagen-3',
+    });
+
+    console.log(result.url);
+    ```
+  </TabItem>
+</Tabs>
+
+## Vision (Image Input)
+
+Gemini models have excellent vision capabilities:
+
+```typescript
+import { LLMist, imageFromUrl } from 'llmist';
+
+const answer = await LLMist.createAgent()
+  .withModel('flash')
+  .askWithImage(
+    'What objects are in this image?',
+    imageFromUrl('https://example.com/photo.jpg')
+  )
+  .askAndCollect();
+```
+
+Gemini supports multiple images in a single request:
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('flash')
+  .askWithImage(
+    'Compare these two images',
+    imageFromUrl('https://example.com/image1.jpg'),
+    imageFromUrl('https://example.com/image2.jpg')
+  )
+  .askAndCollect();
+```
+
+## Model Characteristics
+
+### Gemini Flash <Badge text="Fast & Cheap" variant="tip" />
+
+- Extremely fast responses
+- Very cost-effective
+- 1M token context window
+- Great for high-volume tasks
+
+### Gemini Pro <Badge text="Most Capable" variant="note" />
+
+- Best reasoning capabilities
+- Higher latency
+- 1M token context window
+- Best for complex analysis
+
+### Gemini Flash Thinking
+
+- Shows step-by-step reasoning
+- Good for math and logic problems
+- Outputs thinking process
+
+## Configuration Options
+
+```typescript
+import { LLMist, GeminiGenerativeProvider } from 'llmist';
+
+const client = new LLMist({
+  autoDiscoverProviders: false,
+  adapters: [
+    new GeminiGenerativeProvider({
+      apiKey: process.env.GEMINI_API_KEY,
+    }),
+  ],
+});
+```
+
+## Unique Features
+
+### Grounding with Google Search
+
+Gemini can ground responses with real-time Google Search:
+
+```typescript
+// Note: Grounding is configured at the model level
+// Check Google AI Studio for grounding options
+```
+
+### Long Context
+
+Gemini has a 1M token context window—great for:
+- Analyzing entire codebases
+- Processing long documents
+- Multi-document reasoning
+
+## Cost Tracking
+
+```typescript
+for await (const event of agent.run()) {
+  if (event.type === 'llm_call_complete') {
+    console.log('Tokens:', event.usage);
+    console.log('Cost:', event.cost);
+  }
+}
+```
+
+## Best Practices
+
+1. **Use Flash for speed** - Fastest and cheapest option
+2. **Use Pro for reasoning** - Complex analysis and coding
+3. **Leverage 1M context** - Gemini handles very long inputs well
+4. **Multi-image support** - Send multiple images for comparison tasks

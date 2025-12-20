@@ -1,0 +1,146 @@
+---
+title: Anthropic Provider
+description: Using Claude models with llmist
+sidebar:
+  order: 3
+---
+
+import { Aside, Badge, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Setup
+
+Set your Anthropic API key:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+llmist will automatically discover and use Anthropic.
+
+## Available Models
+
+| Model | Alias | Best For |
+|-------|-------|----------|
+| `claude-opus-4-5` | `opus` | Complex reasoning, creative tasks |
+| `claude-sonnet-4-5` | `sonnet` | Balanced performance (recommended) |
+| `claude-haiku-4-5` | `haiku` | Fast, cost-effective tasks |
+
+<Aside type="tip">
+  **Sonnet** is the recommended default—it offers the best balance of capability and cost for most use cases.
+</Aside>
+
+## Usage Examples
+
+<Tabs>
+  <TabItem label="Basic">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const answer = await LLMist.createAgent()
+      .withModel('sonnet')
+      .askAndCollect('Write a haiku about TypeScript');
+    ```
+  </TabItem>
+  <TabItem label="With System Prompt">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const answer = await LLMist.createAgent()
+      .withModel('sonnet')
+      .withSystem('You are a helpful coding assistant. Be concise.')
+      .askAndCollect('How do I read a file in Node.js?');
+    ```
+  </TabItem>
+  <TabItem label="Long Context">
+    ```typescript
+    import { LLMist } from 'llmist';
+    import { readFileSync } from 'fs';
+
+    const codebase = readFileSync('src/main.ts', 'utf-8');
+
+    const answer = await LLMist.createAgent()
+      .withModel('sonnet')
+      .withSystem('You are a code reviewer.')
+      .askAndCollect(`Review this code:\n\n${codebase}`);
+    ```
+  </TabItem>
+</Tabs>
+
+## Vision (Image Input)
+
+Claude models support image input:
+
+```typescript
+import { LLMist, imageFromBuffer } from 'llmist';
+import { readFileSync } from 'fs';
+
+const imageBuffer = readFileSync('diagram.png');
+
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .askWithImage(
+    'Describe this diagram',
+    imageFromBuffer(imageBuffer, 'image/png')
+  )
+  .askAndCollect();
+```
+
+Supported image formats: JPEG, PNG, GIF, WebP
+
+## Model Characteristics
+
+### Claude Opus 4.5 <Badge text="Most Capable" variant="tip" />
+
+- Best for complex reasoning and creative tasks
+- Highest quality outputs
+- Higher latency and cost
+- 200K context window
+
+### Claude Sonnet 4.5 <Badge text="Recommended" variant="success" />
+
+- Best balance of capability and speed
+- Great for coding, analysis, and general tasks
+- Good cost efficiency
+- 200K context window
+
+### Claude Haiku 4.5 <Badge text="Fastest" variant="note" />
+
+- Fastest response times
+- Lowest cost
+- Good for simple tasks and high-volume use
+- 200K context window
+
+## Configuration Options
+
+```typescript
+import { LLMist, AnthropicMessagesProvider } from 'llmist';
+
+const client = new LLMist({
+  autoDiscoverProviders: false,
+  adapters: [
+    new AnthropicMessagesProvider({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      baseUrl: 'https://api.anthropic.com', // Custom endpoint
+    }),
+  ],
+});
+```
+
+## Best Practices
+
+1. **Use Sonnet as default** - Best balance for most tasks
+2. **Reserve Opus for complex reasoning** - When quality matters more than speed
+3. **Use Haiku for high-volume** - Simple tasks, classification, summarization
+4. **Leverage long context** - Claude handles 200K tokens well
+
+## Cost Tracking
+
+```typescript
+for await (const event of agent.run()) {
+  if (event.type === 'llm_call_complete') {
+    console.log('Input tokens:', event.usage?.promptTokens);
+    console.log('Output tokens:', event.usage?.completionTokens);
+    console.log('Estimated cost:', event.cost);
+  }
+}
+```
