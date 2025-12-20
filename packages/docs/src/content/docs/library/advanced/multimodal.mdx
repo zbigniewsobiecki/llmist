@@ -3,6 +3,8 @@ title: Multimodal
 description: Image and speech generation
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 llmist supports image and speech generation with automatic cost tracking.
 
 ## Image Generation
@@ -60,13 +62,26 @@ console.log('Cost:', result.cost);
 
 ## CLI Commands
 
-```bash
-# Image
-llmist image "A Windows 95 error dialog that says 'Success'" -m dall-e-3 -o success.png
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Image
+    bunx @llmist/cli image "A Windows 95 error dialog that says 'Success'" -m dall-e-3 -o success.png
 
-# Speech
-llmist speech "You've got mail!" -m tts-1 --voice nova -o aol.mp3
-```
+    # Speech
+    bunx @llmist/cli speech "You've got mail!" -m tts-1 --voice nova -o aol.mp3
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Image
+    npx @llmist/cli image "A Windows 95 error dialog that says 'Success'" -m dall-e-3 -o success.png
+
+    # Speech
+    npx @llmist/cli speech "You've got mail!" -m tts-1 --voice nova -o aol.mp3
+    ```
+  </TabItem>
+</Tabs>
 
 ## Using with Gadgets
 

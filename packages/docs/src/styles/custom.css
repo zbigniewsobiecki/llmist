@@ -22,6 +22,30 @@
   --sl-color-black: #17171e;
 }
 
+/* Light mode - proper light backgrounds */
+:root[data-theme="light"] {
+  /* Swap white ↔ black for semantic color inversion */
+  --sl-color-white: #17171e;
+  --sl-color-black: #ffffff;
+
+  /* Invert gray scale (light grays become dark, dark become light) */
+  --sl-color-gray-1: #262630;
+  --sl-color-gray-2: #3e3e4c;
+  --sl-color-gray-3: #585868;
+  --sl-color-gray-4: #8b8b9a;
+  --sl-color-gray-5: #c4c4cc;
+  --sl-color-gray-6: #f0f0f4;
+
+  /* Accent adjustments for light backgrounds */
+  --sl-color-accent-low: #d1fae5;
+  --sl-color-accent: #059669;
+  --sl-color-accent-high: #065f46;
+
+  /* Text colors for light mode */
+  --sl-color-text-accent: #047857;
+  --sl-color-text-invert: #ffffff;
+}
+
 /* Dark mode accent adjustments */
 :root[data-theme="dark"] {
   --sl-color-accent-low: #064e3b;

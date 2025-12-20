@@ -3,6 +3,8 @@ title: Gadget Ecosystem
 description: Third-party gadgets and creating your own packages
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 llmist supports loading gadgets from npm packages and git repositories, enabling a rich ecosystem of reusable tools.
 
 ## Dhalsim
@@ -11,13 +13,26 @@ llmist supports loading gadgets from npm packages and git repositories, enabling
 
 ### Installation
 
-```bash
-# Use directly (auto-installed)
-llmist agent "Navigate to apple.com" -g dhalsim
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Use directly (auto-installed)
+    bunx @llmist/cli agent "Navigate to apple.com" -g dhalsim
 
-# Specific version
-llmist agent "Screenshot google.com" -g dhalsim@2.0.0
-```
+    # Specific version
+    bunx @llmist/cli agent "Screenshot google.com" -g dhalsim@2.0.0
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Use directly (auto-installed)
+    npx @llmist/cli agent "Navigate to apple.com" -g dhalsim
+
+    # Specific version
+    npx @llmist/cli agent "Screenshot google.com" -g dhalsim@2.0.0
+    ```
+  </TabItem>
+</Tabs>
 
 ### Available Presets
 
@@ -28,15 +43,30 @@ llmist agent "Screenshot google.com" -g dhalsim@2.0.0
 | `readonly` | Navigation and read-only operations | No form filling or clicking |
 | `subagent` | Autonomous browser agent | BrowseWeb |
 
-```bash
-# Use a preset
-llmist agent "Research topic" -g dhalsim:subagent
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Use a preset
+    bunx @llmist/cli agent "Research topic" -g dhalsim:subagent
 
-# Combine presets with local gadgets
-llmist agent "Complex task" \
-  -g dhalsim:minimal \
-  -g ./my-gadget.ts
-```
+    # Combine presets with local gadgets
+    bunx @llmist/cli agent "Complex task" \
+      -g dhalsim:minimal \
+      -g ./my-gadget.ts
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Use a preset
+    npx @llmist/cli agent "Research topic" -g dhalsim:subagent
+
+    # Combine presets with local gadgets
+    npx @llmist/cli agent "Complex task" \
+      -g dhalsim:minimal \
+      -g ./my-gadget.ts
+    ```
+  </TabItem>
+</Tabs>
 
 ### Individual Gadgets
 
@@ -56,9 +86,18 @@ When using `dhalsim:all` or `dhalsim`, you get:
 
 The `dhalsim:subagent` preset provides **BrowseWeb**, an autonomous browser agent:
 
-```bash
-llmist agent "Find the pricing for Anthropic's API" -g dhalsim:subagent
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli agent "Find the pricing for Anthropic's API" -g dhalsim:subagent
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli agent "Find the pricing for Anthropic's API" -g dhalsim:subagent
+    ```
+  </TabItem>
+</Tabs>
 
 BrowseWeb spawns a nested agent that:
 1. Opens a browser
@@ -92,16 +131,32 @@ class BrowseWeb extends Gadget({
 
 Load gadgets directly from git repositories:
 
-```bash
-# Public repository
-llmist agent "task" -g git+https://github.com/user/my-gadgets.git
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Public repository
+    bunx @llmist/cli agent "task" -g git+https://github.com/user/my-gadgets.git
 
-# Specific branch/tag
-llmist agent "task" -g git+https://github.com/user/my-gadgets.git#v1.0.0
+    # Specific branch/tag
+    bunx @llmist/cli agent "task" -g git+https://github.com/user/my-gadgets.git#v1.0.0
 
-# Private repository (uses git credentials)
-llmist agent "task" -g git+https://github.com/org/private-gadgets.git
-```
+    # Private repository (uses git credentials)
+    bunx @llmist/cli agent "task" -g git+https://github.com/org/private-gadgets.git
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Public repository
+    npx @llmist/cli agent "task" -g git+https://github.com/user/my-gadgets.git
+
+    # Specific branch/tag
+    npx @llmist/cli agent "task" -g git+https://github.com/user/my-gadgets.git#v1.0.0
+
+    # Private repository (uses git credentials)
+    npx @llmist/cli agent "task" -g git+https://github.com/org/private-gadgets.git
+    ```
+  </TabItem>
+</Tabs>
 
 ### Repository Structure
 
@@ -202,10 +257,21 @@ Add presets to `package.json`:
 ```
 
 Users can then:
-```bash
-llmist agent "task" -g my-package:core
-llmist agent "task" -g my-package:advanced
-```
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli agent "task" -g my-package:core
+    bunx @llmist/cli agent "task" -g my-package:advanced
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli agent "task" -g my-package:core
+    npx @llmist/cli agent "task" -g my-package:advanced
+    ```
+  </TabItem>
+</Tabs>
 
 ### Publishing to npm
 
@@ -214,9 +280,19 @@ npm publish
 ```
 
 Users install with:
-```bash
-llmist agent "task" -g my-package
-```
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli agent "task" -g my-package
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli agent "task" -g my-package
+    ```
+  </TabItem>
+</Tabs>
 
 ## Security Considerations
 
@@ -235,13 +311,26 @@ When using third-party gadgets:
 
 Mix local, npm, git, and built-in gadgets:
 
-```bash
-llmist agent "Complex research task" \
-  -g ./local-gadget.ts \
-  -g dhalsim:minimal \
-  -g builtin:ReadFile \
-  -g git+https://github.com/user/my-gadgets.git
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli agent "Complex research task" \
+      -g ./local-gadget.ts \
+      -g dhalsim:minimal \
+      -g builtin:ReadFile \
+      -g git+https://github.com/user/my-gadgets.git
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli agent "Complex research task" \
+      -g ./local-gadget.ts \
+      -g dhalsim:minimal \
+      -g builtin:ReadFile \
+      -g git+https://github.com/user/my-gadgets.git
+    ```
+  </TabItem>
+</Tabs>
 
 ## See Also
 

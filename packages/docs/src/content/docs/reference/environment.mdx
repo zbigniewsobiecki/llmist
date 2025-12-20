@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-import { Aside, Badge } from '@astrojs/starlight/components';
+import { Aside, Badge, Tabs, TabItem } from '@astrojs/starlight/components';
 
 llmist uses environment variables for provider authentication and configuration.
 
@@ -72,13 +72,26 @@ These can also be set via command-line flags:
 | `--log-level` | `LLMIST_LOG_LEVEL` | Set log level |
 | `--log-file` | `LLMIST_LOG_FILE` | Set log file path |
 
-```bash
-# Via flag
-llmist agent "Hello" --log-level debug --log-file ./debug.log
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Via flag
+    bunx @llmist/cli agent "Hello" --log-level debug --log-file ./debug.log
 
-# Via environment
-LLMIST_LOG_LEVEL=debug LLMIST_LOG_FILE=./debug.log llmist agent "Hello"
-```
+    # Via environment
+    LLMIST_LOG_LEVEL=debug LLMIST_LOG_FILE=./debug.log bunx @llmist/cli agent "Hello"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Via flag
+    npx @llmist/cli agent "Hello" --log-level debug --log-file ./debug.log
+
+    # Via environment
+    LLMIST_LOG_LEVEL=debug LLMIST_LOG_FILE=./debug.log npx @llmist/cli agent "Hello"
+    ```
+  </TabItem>
+</Tabs>
 
 ## Provider-Specific Variables
 
