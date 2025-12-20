@@ -1,0 +1,162 @@
+---
+title: Todo Gadgets
+description: Build a todo list system for agent task planning
+---
+
+Create gadgets that let agents plan and track work using a persistent todo list.
+
+## Overview
+
+We'll create:
+- **TodoUpsert** - Create new todos or update existing ones
+- **TodoDelete** - Remove todos by ID
+- Shared storage for session-based YAML persistence
+
+## File Structure
+
+```
+~/.llmist/gadgets/todo/
+├── index.ts      # Exports both gadgets
+├── storage.ts    # Session ID + YAML utilities
+├── upsert.ts     # TodoUpsert gadget
+└── delete.ts     # TodoDelete gadget
+```
+
+## Implementation
+
+### storage.ts
+
+```typescript
+import fs from "node:fs";
+import path from "node:path";
+import { homedir } from "node:os";
+import YAML from "yaml";
+
+const SESSION_ID = new Date().toISOString().replace(/:/g, "-").split(".")[0];
+const TODOS_DIR = path.join(homedir(), ".llmist", "todos");
+const SESSION_FILE = path.join(TODOS_DIR, `${SESSION_ID}.yaml`);
+
+export type TodoStatus = "pending" | "in_progress" | "done";
+
+export interface Todo {
+  id: string;
+  content: string;
+  status: TodoStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function loadTodos(): Todo[] {
+  if (!fs.existsSync(SESSION_FILE)) return [];
+  return YAML.parse(fs.readFileSync(SESSION_FILE, "utf-8")) || [];
+}
+
+export function saveTodos(todos: Todo[]): void {
+  fs.mkdirSync(TODOS_DIR, { recursive: true });
+  fs.writeFileSync(SESSION_FILE, YAML.stringify(todos));
+}
+
+export function formatTodoList(todos: Todo[]): string {
+  if (todos.length === 0) return "📋 Todo list is empty.";
+
+  const icons = { pending: "⬜", in_progress: "🔄", done: "✅" };
+  const lines = todos.map((t) => `${icons[t.status]} #${t.id}: ${t.content}`);
+
+  return `📋 Session: ${SESSION_ID}\n\n${lines.join("\n")}`;
+}
+```
+
+### upsert.ts
+
+```typescript
+import { z } from "zod";
+import { createGadget } from "llmist";
+import { loadTodos, saveTodos, formatTodoList } from "./storage.js";
+
+export const todoUpsert = createGadget({
+  name: "TodoUpsert",
+  description: "Create or update a todo. Omit 'id' to create new.",
+  schema: z.object({
+    id: z.string().optional(),
+    content: z.string().min(1),
+    status: z.enum(["pending", "in_progress", "done"]).default("pending"),
+  }),
+  execute: async ({ id, content, status }) => {
+    const todos = loadTodos();
+    const now = new Date().toISOString();
+
+    if (id) {
+      const index = todos.findIndex((t) => t.id === id);
+      if (index === -1) return `❌ Todo #${id} not found.`;
+      todos[index] = { ...todos[index], content, status, updatedAt: now };
+      saveTodos(todos);
+      return `✏️ Updated #${id}.\n\n${formatTodoList(todos)}`;
+    }
+
+    const newId = String(Math.max(0, ...todos.map((t) => +t.id)) + 1);
+    todos.push({ id: newId, content, status, createdAt: now, updatedAt: now });
+    saveTodos(todos);
+    return `➕ Created #${newId}.\n\n${formatTodoList(todos)}`;
+  },
+});
+```
+
+### delete.ts
+
+```typescript
+import { z } from "zod";
+import { createGadget } from "llmist";
+import { loadTodos, saveTodos, formatTodoList } from "./storage.js";
+
+export const todoDelete = createGadget({
+  name: "TodoDelete",
+  description: "Delete a todo by ID.",
+  schema: z.object({ id: z.string() }),
+  execute: async ({ id }) => {
+    const todos = loadTodos();
+    const index = todos.findIndex((t) => t.id === id);
+    if (index === -1) return `❌ Todo #${id} not found.`;
+
+    const [deleted] = todos.splice(index, 1);
+    saveTodos(todos);
+    return `🗑️ Deleted #${id}: "${deleted.content}"`;
+  },
+});
+```
+
+## CLI Configuration
+
+```toml
+# ~/.llmist/cli.toml
+[research]
+inherits = "agent"
+gadget = ["~/.llmist/gadgets/todo/index.ts"]
+system = """
+Before research, create todos for your plan.
+Mark todos as in_progress, then done when complete.
+"""
+```
+
+## Usage
+
+```bash
+llmist research "Compare TOML and YAML"
+```
+
+## Example Output
+
+```
+📋 Session: 2024-11-29T16-44-09
+
+✅ #1: Research TOML syntax
+✅ #2: Research YAML syntax
+🔄 #3: Compare performance
+⬜ #4: Find adoption statistics
+```
+
+## Design Decisions
+
+- **Session isolation** - Each CLI run gets its own todo file
+- **Full list on every op** - Agents always see complete state
+- **YAML persistence** - Human-readable, inspectable files
+- **Status icons** - Quick visual scanning

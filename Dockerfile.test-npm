@@ -103,7 +103,8 @@ fi
 
 echo "📦 Package versions:"
 echo "   llmist CLI: $(llmist --version)"
-LIB_VERSION=$(node -e "const pkg = JSON.parse(require('fs').readFileSync(require.resolve('llmist/package.json'))); console.log(pkg.version);")
+# Get lib version by finding the package.json relative to the module
+LIB_VERSION=$(node -e "const p = require.resolve('llmist'); const fs = require('fs'); const path = require('path'); let dir = path.dirname(p); while (!fs.existsSync(path.join(dir, 'package.json')) && dir !== '/') dir = path.dirname(dir); console.log(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).version);")
 echo "   llmist lib: $LIB_VERSION"
 echo ""
 

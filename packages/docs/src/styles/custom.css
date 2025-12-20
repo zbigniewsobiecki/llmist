@@ -1,0 +1,60 @@
+/* llmist documentation custom styles */
+/* Color palette inspired by the potion bottle icon */
+
+:root {
+  /* Accent colors - emerald potion theme */
+  --sl-color-accent-low: #065f46;
+  --sl-color-accent: #10b981;
+  --sl-color-accent-high: #d1fae5;
+
+  /* Grayscale - with slight purple undertone to match icon outline */
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #f0f0f4;
+  --sl-color-gray-2: #c4c4cc;
+  --sl-color-gray-3: #8b8b9a;
+  --sl-color-gray-4: #585868;
+  --sl-color-gray-5: #3e3e4c;
+  --sl-color-gray-6: #262630;
+  --sl-color-black: #17171e;
+}
+
+/* Dark mode accent adjustments */
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #064e3b;
+  --sl-color-accent: #34d399;
+  --sl-color-accent-high: #065f46;
+}
+
+/* Code block styling */
+.expressive-code {
+  margin: 1.5rem 0;
+}
+
+/* API reference method signatures */
+.sl-markdown-content h3 code {
+  font-size: 0.9em;
+  background: var(--sl-color-gray-6);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+
+/* Tables - improve readability */
+.sl-markdown-content table {
+  display: table;
+  width: 100%;
+}
+
+.sl-markdown-content th {
+  background: var(--sl-color-gray-6);
+}
+
+/* Badge styling for version notes */
+.sl-markdown-content .badge {
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  font-size: 0.75em;
+  font-weight: 600;
+  border-radius: 4px;
+  background: var(--sl-color-accent);
+  color: var(--sl-color-white);
+}
