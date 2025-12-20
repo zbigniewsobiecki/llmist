@@ -3,16 +3,24 @@ title: CLI Reference
 description: Command-line interface for llmist
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Command-line interface for llmist.
 
 ## Installation
 
-```bash
-npm install -g llmist
-# or use directly
-bunx llmist
-npx llmist
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli
+    ```
+  </TabItem>
+</Tabs>
 
 ## Commands
 
@@ -20,17 +28,35 @@ npx llmist
 
 Create a starter configuration file at `~/.llmist/cli.toml`:
 
-```bash
-llmist init
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli init
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli init
+    ```
+  </TabItem>
+</Tabs>
 
 ### `complete` - Simple Completion
 
 Stream a single response without agent loop:
 
-```bash
-llmist complete "Explain TypeScript generics" --model haiku
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli complete "Explain TypeScript generics" --model haiku
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli complete "Explain TypeScript generics" --model haiku
+    ```
+  </TabItem>
+</Tabs>
 
 **Options:**
 
@@ -46,9 +72,18 @@ llmist complete "Explain TypeScript generics" --model haiku
 
 Run the full agent loop with tools:
 
-```bash
-llmist agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonnet
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonnet
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonnet
+    ```
+  </TabItem>
+</Tabs>
 
 **Options:**
 
@@ -72,11 +107,22 @@ llmist agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonn
 
 ### `gadget` - Test and Inspect Gadgets
 
-```bash
-llmist gadget run ./floppy.ts
-llmist gadget info ./floppy.ts
-llmist gadget validate ./floppy.ts
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli gadget run ./floppy.ts
+    bunx @llmist/cli gadget info ./floppy.ts
+    bunx @llmist/cli gadget validate ./floppy.ts
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli gadget run ./floppy.ts
+    npx @llmist/cli gadget info ./floppy.ts
+    npx @llmist/cli gadget validate ./floppy.ts
+    ```
+  </TabItem>
+</Tabs>
 
 ## Configuration File
 
@@ -158,19 +204,41 @@ export LLMIST_LOG_FILE="./app.log"
 
 Pipe content to llmist:
 
-```bash
-cat code.ts | llmist complete "Review this code"
-git diff | llmist complete "Summarize changes"
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    cat code.ts | bunx @llmist/cli complete "Review this code"
+    git diff | bunx @llmist/cli complete "Summarize changes"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    cat code.ts | npx @llmist/cli complete "Review this code"
+    git diff | npx @llmist/cli complete "Summarize changes"
+    ```
+  </TabItem>
+</Tabs>
 
 ## Model Shortcuts
 
-```bash
-llmist complete "Hello" --model haiku
-llmist complete "Hello" --model sonnet
-llmist complete "Hello" --model gpt4o
-llmist complete "Hello" --model flash
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli complete "Hello" --model haiku
+    bunx @llmist/cli complete "Hello" --model sonnet
+    bunx @llmist/cli complete "Hello" --model gpt4o
+    bunx @llmist/cli complete "Hello" --model flash
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli complete "Hello" --model haiku
+    npx @llmist/cli complete "Hello" --model sonnet
+    npx @llmist/cli complete "Hello" --model gpt4o
+    npx @llmist/cli complete "Hello" --model flash
+    ```
+  </TabItem>
+</Tabs>
 
 ## Interactive TUI
 

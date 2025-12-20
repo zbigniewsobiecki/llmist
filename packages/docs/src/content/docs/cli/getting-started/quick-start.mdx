@@ -13,9 +13,18 @@ Let's run your first AI agent with gadgets from the command line.
 
 The simplest way to use llmist is the `complete` command:
 
-```bash
-llmist complete "What is the capital of France?"
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli complete "What is the capital of France?"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli complete "What is the capital of France?"
+    ```
+  </TabItem>
+</Tabs>
 
 You'll get a streaming response:
 
@@ -27,9 +36,18 @@ The capital of France is Paris.
 
 The `agent` command runs an AI agent that can use tools (gadgets):
 
-```bash
-llmist agent "What time is it in Tokyo?"
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli agent "What time is it in Tokyo?"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli agent "What time is it in Tokyo?"
+    ```
+  </TabItem>
+</Tabs>
 
 When running in a terminal (both stdin and stdout are TTY), the agent automatically uses TUI mode with an interactive interface featuring expandable blocks, keyboard navigation, and live streaming.
 
@@ -91,10 +109,20 @@ Create a custom gadget for your agent:
 
 3. **Run the agent with your gadget**
 
-   ```bash
-   llmist agent --gadgets ./gadgets/arcade.ts \
-     "Check the high scores for Pac-Man"
-   ```
+   <Tabs>
+     <TabItem label="bun">
+       ```bash
+       bunx @llmist/cli agent --gadgets ./gadgets/arcade.ts \
+         "Check the high scores for Pac-Man"
+       ```
+     </TabItem>
+     <TabItem label="npm">
+       ```bash
+       npx @llmist/cli agent --gadgets ./gadgets/arcade.ts \
+         "Check the high scores for Pac-Man"
+       ```
+     </TabItem>
+   </Tabs>
 
 </Steps>
 
@@ -110,32 +138,65 @@ Your directory structure:
 
 The CLI integrates with Unix pipelines:
 
-```bash
-# Summarize a file
-cat README.md | llmist complete "Summarize this document"
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Summarize a file
+    cat README.md | bunx @llmist/cli complete "Summarize this document"
 
-# Code review
-cat src/main.ts | llmist complete "Review this code for bugs"
+    # Code review
+    cat src/main.ts | bunx @llmist/cli complete "Review this code for bugs"
 
-# Process multiple files
-find src -name "*.ts" -exec cat {} \; | \
-  llmist complete "Find potential security issues"
-```
+    # Process multiple files
+    find src -name "*.ts" -exec cat {} \; | \
+      bunx @llmist/cli complete "Find potential security issues"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Summarize a file
+    cat README.md | npx @llmist/cli complete "Summarize this document"
+
+    # Code review
+    cat src/main.ts | npx @llmist/cli complete "Review this code for bugs"
+
+    # Process multiple files
+    find src -name "*.ts" -exec cat {} \; | \
+      npx @llmist/cli complete "Find potential security issues"
+    ```
+  </TabItem>
+</Tabs>
 
 ## Choosing a Model
 
 Specify the model with `--model` or `-m`:
 
-```bash
-# Use Claude Sonnet
-llmist complete -m sonnet "Explain quantum computing"
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Use Claude Sonnet
+    bunx @llmist/cli complete -m sonnet "Explain quantum computing"
 
-# Use GPT-5
-llmist complete -m gpt5 "Write a haiku about coding"
+    # Use GPT-5
+    bunx @llmist/cli complete -m gpt5 "Write a haiku about coding"
 
-# Use Gemini Flash (fast and cheap)
-llmist complete -m flash "What is 2 + 2?"
-```
+    # Use Gemini Flash (fast and cheap)
+    bunx @llmist/cli complete -m flash "What is 2 + 2?"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Use Claude Sonnet
+    npx @llmist/cli complete -m sonnet "Explain quantum computing"
+
+    # Use GPT-5
+    npx @llmist/cli complete -m gpt5 "Write a haiku about coding"
+
+    # Use Gemini Flash (fast and cheap)
+    npx @llmist/cli complete -m flash "What is 2 + 2?"
+    ```
+  </TabItem>
+</Tabs>
 
 <Aside>
   Model aliases like `sonnet`, `gpt5`, and `flash` are shortcuts for full model names.
