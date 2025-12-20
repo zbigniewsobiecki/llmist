@@ -1,3 +1,8 @@
+## 9.3.0 (2025-12-20)
+
+* Merge pull request #244 from zbigniewsobiecki/dev ([9bdb920](https://github.com/zbigniewsobiecki/llmist/commit/9bdb920)), closes [#244](https://github.com/zbigniewsobiecki/llmist/issues/244)
+* feat(cli): add /GadgetName suffix support for gadget specifiers (#243) ([4d31169](https://github.com/zbigniewsobiecki/llmist/commit/4d31169)), closes [#243](https://github.com/zbigniewsobiecki/llmist/issues/243)
+
 ## 9.2.0 (2025-12-20)
 
 * Merge pull request #242 from zbigniewsobiecki/dev ([07cedda](https://github.com/zbigniewsobiecki/llmist/commit/07cedda)), closes [#242](https://github.com/zbigniewsobiecki/llmist/issues/242)
