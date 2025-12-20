@@ -1,3 +1,8 @@
+## <small>9.3.1 (2025-12-20)</small>
+
+* Merge pull request #246 from zbigniewsobiecki/dev ([b23bf02](https://github.com/zbigniewsobiecki/llmist/commit/b23bf02)), closes [#246](https://github.com/zbigniewsobiecki/llmist/issues/246)
+* fix(cli): skip factory pattern when loading subagents by name (#245) ([7a85545](https://github.com/zbigniewsobiecki/llmist/commit/7a85545)), closes [#245](https://github.com/zbigniewsobiecki/llmist/issues/245)
+
 ## 9.3.0 (2025-12-20)
 
 * Merge pull request #244 from zbigniewsobiecki/dev ([9bdb920](https://github.com/zbigniewsobiecki/llmist/commit/9bdb920)), closes [#244](https://github.com/zbigniewsobiecki/llmist/issues/244)
