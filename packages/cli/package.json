@@ -12,7 +12,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "bun test src",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "postinstall": "node scripts/postinstall.js"
   },
   "repository": {
     "type": "git",
@@ -23,7 +24,8 @@
     "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "scripts"
   ],
   "keywords": [
     "llmist",
