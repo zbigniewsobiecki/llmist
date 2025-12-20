@@ -26,6 +26,7 @@
     "test:e2e": "bun test src/e2e --timeout 60000 --bail 1",
     "clean": "rimraf dist"
   },
+  "homepage": "https://llmist.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/zbigniewsobiecki/llmist.git",
