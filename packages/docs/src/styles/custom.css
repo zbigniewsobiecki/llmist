@@ -7,6 +7,10 @@
   --sl-color-accent: #10b981;
   --sl-color-accent-high: #d1fae5;
 
+  /* Text colors - ensure contrast between accent text and inverted text */
+  --sl-color-text-accent: #059669; /* Darker emerald for links on light backgrounds */
+  --sl-color-text-invert: #ffffff; /* White for text on accent backgrounds */
+
   /* Grayscale - with slight purple undertone to match icon outline */
   --sl-color-white: #ffffff;
   --sl-color-gray-1: #f0f0f4;
@@ -23,6 +27,10 @@
   --sl-color-accent-low: #064e3b;
   --sl-color-accent: #34d399;
   --sl-color-accent-high: #065f46;
+
+  /* Text colors - brighter accent for dark backgrounds, dark text on accent */
+  --sl-color-text-accent: #6ee7b7; /* Brighter emerald for links on dark backgrounds */
+  --sl-color-text-invert: #17171e; /* Dark text for buttons/badges on accent backgrounds */
 }
 
 /* Code block styling */
