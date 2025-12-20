@@ -3,6 +3,8 @@ title: Todo Gadgets
 description: Build a todo list system for agent task planning
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Create gadgets that let agents plan and track work using a persistent todo list.
 
 ## Overview
@@ -139,9 +141,18 @@ Mark todos as in_progress, then done when complete.
 
 ## Usage
 
-```bash
-llmist research "Compare TOML and YAML"
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli research "Compare TOML and YAML"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli research "Compare TOML and YAML"
+    ```
+  </TabItem>
+</Tabs>
 
 ## Example Output
 

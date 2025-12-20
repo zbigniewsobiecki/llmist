@@ -3,16 +3,28 @@ title: CLI Configuration
 description: Configure the llmist CLI with TOML files and environment variables
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 The llmist CLI is configured through TOML files and environment variables.
 
 ## Configuration File
 
 The CLI loads configuration from `~/.llmist/cli.toml`:
 
-```bash
-# Initialize with default config
-llmist init
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Initialize with default config
+    bunx @llmist/cli init
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Initialize with default config
+    npx @llmist/cli init
+    ```
+  </TabItem>
+</Tabs>
 
 ### Basic Structure
 
@@ -58,9 +70,19 @@ gadget = ["~/gadgets/code-tools.ts"]
 ```
 
 Run with:
-```bash
-llmist code-review "Review my PR"
-```
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli code-review "Review my PR"
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli code-review "Review my PR"
+    ```
+  </TabItem>
+</Tabs>
 
 ### Prompt Templates
 

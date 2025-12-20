@@ -37,9 +37,18 @@ export class FloppyDisk extends Gadget({
 
 Use it:
 
-```bash
-llmist agent "How many floppies for DOOM.ZIP at 50MB?" --gadget ./floppy.ts
-```
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli agent "How many floppies for DOOM.ZIP at 50MB?" --gadget ./floppy.ts
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npx @llmist/cli agent "How many floppies for DOOM.ZIP at 50MB?" --gadget ./floppy.ts
+    ```
+  </TabItem>
+</Tabs>
 
 ## File Requirements
 
@@ -60,20 +69,26 @@ export default class ArcadeHighScore extends Gadget({ ... }) { ... }
 ## Loading Multiple Gadgets
 
 <Tabs>
-  <TabItem label="Multiple Files">
+  <TabItem label="bun">
     ```bash
-    llmist agent "Calculate floppies and connect to BBS" \
+    # Multiple files
+    bunx @llmist/cli agent "Calculate floppies and connect to BBS" \
       --gadget ./floppy.ts \
       --gadget ./dialup.ts
+
+    # Single file with multiple exports
+    bunx @llmist/cli agent "Calculate floppies and dial up" --gadget ./retro-tools.ts
     ```
   </TabItem>
-  <TabItem label="Single File">
-    ```typescript title="retro-tools.ts"
-    export class FloppyDisk extends Gadget({ ... }) { ... }
-    export class DialUpModem extends Gadget({ ... }) { ... }
-    ```
+  <TabItem label="npm">
     ```bash
-    llmist agent "Calculate floppies and dial up" --gadget ./retro-tools.ts
+    # Multiple files
+    npx @llmist/cli agent "Calculate floppies and connect to BBS" \
+      --gadget ./floppy.ts \
+      --gadget ./dialup.ts
+
+    # Single file with multiple exports
+    npx @llmist/cli agent "Calculate floppies and dial up" --gadget ./retro-tools.ts
     ```
   </TabItem>
 </Tabs>
@@ -82,22 +97,44 @@ export default class ArcadeHighScore extends Gadget({ ... }) { ... }
 
 Load gadgets from npm packages or git repositories:
 
-```bash
-# npm package (Dhalsim browser automation)
-llmist agent "Navigate to apple.com" -g dhalsim
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # npm package (Dhalsim browser automation)
+    bunx @llmist/cli agent "Navigate to apple.com" -g dhalsim
 
-# Use a preset
-llmist agent "Browse the web" -g dhalsim:minimal
+    # Use a preset
+    bunx @llmist/cli agent "Browse the web" -g dhalsim:minimal
 
-# git URL
-llmist agent "task" -g git+https://github.com/user/repo.git
+    # git URL
+    bunx @llmist/cli agent "task" -g git+https://github.com/user/repo.git
 
-# Combine sources
-llmist agent "Complex task" \
-  -g ./local-gadget.ts \
-  -g dhalsim:minimal \
-  -g builtin:ReadFile
-```
+    # Combine sources
+    bunx @llmist/cli agent "Complex task" \
+      -g ./local-gadget.ts \
+      -g dhalsim:minimal \
+      -g builtin:ReadFile
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # npm package (Dhalsim browser automation)
+    npx @llmist/cli agent "Navigate to apple.com" -g dhalsim
+
+    # Use a preset
+    npx @llmist/cli agent "Browse the web" -g dhalsim:minimal
+
+    # git URL
+    npx @llmist/cli agent "task" -g git+https://github.com/user/repo.git
+
+    # Combine sources
+    npx @llmist/cli agent "Complex task" \
+      -g ./local-gadget.ts \
+      -g dhalsim:minimal \
+      -g builtin:ReadFile
+    ```
+  </TabItem>
+</Tabs>
 
 See [Gadget Ecosystem](/cli/gadgets/external-gadgets/) for detailed documentation on Dhalsim, presets, and creating your own packages.
 
@@ -105,19 +142,38 @@ See [Gadget Ecosystem](/cli/gadgets/external-gadgets/) for detailed documentatio
 
 Use the `gadget` command to test in isolation:
 
-```bash
-# Run interactively
-llmist gadget run ./floppy.ts
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Run interactively
+    bunx @llmist/cli gadget run ./floppy.ts
 
-# View gadget info
-llmist gadget info ./floppy.ts
+    # View gadget info
+    bunx @llmist/cli gadget info ./floppy.ts
 
-# Validate structure
-llmist gadget validate ./floppy.ts
+    # Validate structure
+    bunx @llmist/cli gadget validate ./floppy.ts
 
-# Pipe JSON input
-echo '{"filename": "DOOM.ZIP", "megabytes": 50}' | llmist gadget run ./floppy.ts
-```
+    # Pipe JSON input
+    echo '{"filename": "DOOM.ZIP", "megabytes": 50}' | bunx @llmist/cli gadget run ./floppy.ts
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Run interactively
+    npx @llmist/cli gadget run ./floppy.ts
+
+    # View gadget info
+    npx @llmist/cli gadget info ./floppy.ts
+
+    # Validate structure
+    npx @llmist/cli gadget validate ./floppy.ts
+
+    # Pipe JSON input
+    echo '{"filename": "DOOM.ZIP", "megabytes": 50}' | npx @llmist/cli gadget run ./floppy.ts
+    ```
+  </TabItem>
+</Tabs>
 
 ## Creating External Packages
 
