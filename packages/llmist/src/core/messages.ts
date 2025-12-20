@@ -142,7 +142,11 @@ export class LLMMessageBuilder {
 
     for (const gadget of gadgets) {
       const gadgetName = gadget.name ?? gadget.constructor.name;
-      const instruction = gadget.getInstruction(this.argPrefix);
+      const instruction = gadget.getInstruction({
+        argPrefix: this.argPrefix,
+        startPrefix: this.startPrefix,
+        endPrefix: this.endPrefix,
+      });
 
       // Parse instruction to separate description and schema
       const schemaMarker = "\n\nInput Schema (BLOCK):";
