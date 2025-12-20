@@ -287,8 +287,14 @@ export type {
   TextOnlyHandler,
   TextOnlyStrategy,
 } from "./gadgets/types.js";
-// Media output helpers for gadgets
+// Response and media output helpers for gadgets
 export {
+  // Response formatting
+  gadgetError,
+  gadgetSuccess,
+  getErrorMessage,
+  withErrorHandling,
+  // Media output
   createMediaOutput,
   resultWithAudio,
   resultWithFile,
@@ -369,3 +375,58 @@ export { discoverProviderAdapters } from "./providers/discovery.js";
 export { createGeminiProviderFromEnv, GeminiGenerativeProvider } from "./providers/gemini.js";
 export { createOpenAIProviderFromEnv, OpenAIChatProvider } from "./providers/openai.js";
 export type { ProviderAdapter } from "./providers/provider.js";
+
+// ============================================================================
+// Formatting Utilities
+// ============================================================================
+export {
+  format,
+  formatBytes,
+  formatDate,
+  formatDuration,
+  truncate,
+} from "./utils/format.js";
+
+// ============================================================================
+// Timing Utilities
+// ============================================================================
+export type { RetryOptions } from "./utils/timing.js";
+export {
+  humanDelay,
+  randomDelay,
+  timing,
+  withRetry,
+  withTimeout,
+} from "./utils/timing.js";
+
+// ============================================================================
+// Session Management
+// ============================================================================
+export type { ISessionManager } from "./session/index.js";
+export { BaseSessionManager, SimpleSessionManager } from "./session/index.js";
+
+// ============================================================================
+// Subagent Helpers
+// ============================================================================
+export type { SubagentOptions } from "./agent/subagent.js";
+export { createSubagent, hasHostExports } from "./agent/subagent.js";
+
+// ============================================================================
+// Package Manifest Types
+// ============================================================================
+export type {
+  GadgetFactoryExports,
+  LLMistPackageManifest,
+  PresetDefinition,
+  SessionManifestEntry,
+  SubagentManifestEntry,
+} from "./package/index.js";
+export {
+  getPresetGadgets,
+  getSubagent,
+  hasPreset,
+  hasSubagents,
+  listPresets,
+  listSubagents,
+  parseManifest,
+} from "./package/index.js";

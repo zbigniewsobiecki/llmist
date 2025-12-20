@@ -21,8 +21,6 @@
 
 ---
 
-> **⚠️ EARLY WORK IN PROGRESS** - This library is under active development. APIs may change without notice.
-
 ## Installation
 
 ```bash

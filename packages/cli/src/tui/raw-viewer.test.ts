@@ -1,17 +1,39 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
+import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen } from "@unblessed/node";
 import { showRawViewer, type RawViewerMode } from "./raw-viewer.js";
 import type { LLMMessage } from "llmist";
 
+// TUI tests use mock streams - no real TTY needed
+
+// Mock streams to prevent terminal escape sequences from being written
+class MockOutputStream extends Writable {
+  _write(_chunk: Buffer | string, _encoding: string, callback: () => void): void {
+    callback();
+  }
+}
+
+class MockInputStream extends Readable {
+  _read(): void {
+    // No-op - never emit data
+  }
+}
+
 // Initialize unblessed for testing
 let screen: Screen;
+let mockOutput: MockOutputStream;
+let mockInput: MockInputStream;
 
 beforeAll(() => {
   setRuntime(new NodeRuntime());
+  mockOutput = new MockOutputStream();
+  mockInput = new MockInputStream();
   screen = new Screen({
     smartCSR: true,
     title: "test",
     fullUnicode: true,
+    input: mockInput,
+    output: mockOutput,
   });
 });
 

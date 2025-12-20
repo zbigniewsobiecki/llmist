@@ -124,56 +124,67 @@ function showManifestStructure() {
   console.log("=== Package Manifest (package.json) ===\n");
 
   console.log(`
-// External gadget packages use a "llmist" field in package.json:
-{
-  "name": "webasto",
-  "version": "2.0.0",
-  "llmist": {
-    // Entry point for all gadgets
-    "gadgets": "./dist/gadgets/index.js",
+// External gadget packages use a "llmist" field in package.json.
+// Import manifest types from llmist for type-safe development:
 
-    // Factory function for dependency injection
-    "factory": "./dist/factory.js",
+import type { LLMistPackageManifest, SubagentManifestEntry } from 'llmist';
+import { parseManifest, hasPreset, listSubagents, getSubagent } from 'llmist';
 
-    // Subagents (gadgets with internal agent loops)
-    "subagents": {
-      "BrowseWeb": {
-        "entryPoint": "./dist/subagents/browse-web.js",
-        "export": "BrowseWeb",
-        "description": "Browse websites autonomously",
-        "uses": ["Navigate", "Click", "Screenshot"],
-        "defaultModel": "sonnet",
-        "maxIterations": 15
-      }
-    },
+// Type-safe manifest definition:
+const manifest: LLMistPackageManifest = {
+  // Entry point for all gadgets
+  gadgets: "./dist/gadgets/index.js",
 
-    // Presets for common use cases
-    "presets": {
-      "all": "*",
-      "readonly": ["Navigate", "Screenshot", "GetFullPageContent"],
-      "minimal": ["Navigate", "Screenshot", "GetFullPageContent"],
-      "subagent": ["BrowseWeb"]
+  // Factory function for dependency injection
+  factory: "./dist/factory.js",
+
+  // Subagents (gadgets with internal agent loops)
+  subagents: {
+    BrowseWeb: {
+      entryPoint: "./dist/subagents/browse-web.js",
+      export: "BrowseWeb",
+      description: "Browse websites autonomously",
+      uses: ["Navigate", "Click", "Screenshot"],
+      defaultModel: "sonnet",
+      maxIterations: 15
     }
+  },
+
+  // Presets for common use cases
+  presets: {
+    all: "*",                                        // All gadgets
+    readonly: ["Navigate", "Screenshot", "GetFullPageContent"],
+    minimal: ["Navigate", "Screenshot"],
+    subagent: ["BrowseWeb"]
   }
+};
+
+// Parse manifest from package.json:
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
+const parsed = parseManifest(pkg);
+
+// Use parsing utilities:
+if (hasPreset(parsed, 'minimal')) {
+  console.log('Minimal preset available');
 }
+const subagents = listSubagents(parsed);  // ['BrowseWeb']
 `);
 }
 
 // =============================================================================
-// EXAMPLE 5: getHostExports for external gadget developers
+// EXAMPLE 5: createSubagent() helper (RECOMMENDED for external gadgets)
 // =============================================================================
 
-function showHostExportsPattern() {
-  console.log("=== getHostExports() Pattern (for external gadget developers) ===\n");
+function showCreateSubagentPattern() {
+  console.log("=== createSubagent() Helper (RECOMMENDED) ===\n");
 
   console.log(`
-External gadgets MUST use getHostExports() to access llmist classes.
-This ensures they use the same class instances as the host CLI,
-enabling proper ExecutionTree sharing and cost tracking.
+The createSubagent() helper is the recommended way to create subagents.
+It handles getHostExports(), model resolution, and tree sharing automatically.
 
-// In your external gadget package (e.g., webasto/src/gadgets/browse-web.ts):
+// In your external gadget package:
 
-import { getHostExports, Gadget, z } from 'llmist';
+import { createSubagent, Gadget, z } from 'llmist';
 import type { ExecutionContext, GadgetMediaOutput } from 'llmist';
 
 export class BrowseWeb extends Gadget({
@@ -182,6 +193,7 @@ export class BrowseWeb extends Gadget({
   schema: z.object({
     task: z.string().describe('The browsing task'),
     url: z.string().describe('Starting URL'),
+    model: z.string().optional().describe('Model override'),
   }),
   timeoutMs: 300000,
 }) {
@@ -189,39 +201,92 @@ export class BrowseWeb extends Gadget({
     params: this['params'],
     ctx?: ExecutionContext,
   ): Promise<{ result: string; media?: GadgetMediaOutput[] }> {
-    // CRITICAL: Use host's AgentBuilder, not your package's import!
-    const { AgentBuilder } = getHostExports(ctx!);
-
-    const agent = new AgentBuilder()
-      .withParentContext(ctx!)  // Shares parent's ExecutionTree
-      .withModel(ctx?.agentConfig?.model ?? 'haiku')
-      .withGadgets(Navigate, Click, Screenshot)
-      .ask(params.task);
+    // createSubagent() automatically handles:
+    // - getHostExports() for tree sharing
+    // - Model resolution with "inherit" support
+    // - Parent context for cost tracking
+    // - Logger forwarding
+    const agent = createSubagent(ctx!, {
+      name: 'BrowseWeb',
+      gadgets: [Navigate, Click, Screenshot],
+      model: params.model,       // Optional runtime override
+      defaultModel: 'sonnet',    // Fallback if not inherited
+      maxIterations: 15,
+      systemPrompt: BROWSER_SYSTEM_PROMPT,
+    }).ask(params.task);
 
     let result = '';
     for await (const event of agent.run()) {
-      if (event.type === 'text') {
-        result = event.content;
-      }
+      if (event.type === 'text') result = event.content;
     }
 
-    // Tree automatically tracks all costs - no manual aggregation needed!
-    const media = ctx?.tree?.getSubtreeMedia(ctx.nodeId!);
-
-    return { result, media };
+    // Tree automatically tracks all costs
+    return {
+      result,
+      media: ctx?.tree?.getSubtreeMedia(ctx.nodeId!)
+    };
   }
 }
 
-Why this matters:
-- Without getHostExports(), your AgentBuilder is from your node_modules/llmist
-- The CLI's AgentBuilder is from its own node_modules/llmist
+=== Manual Pattern (for full control) ===
+
+For advanced cases, use getHostExports() directly:
+
+import { getHostExports, Gadget, z } from 'llmist';
+import type { ExecutionContext } from 'llmist';
+
+export class BrowseWeb extends Gadget({ ... }) {
+  async execute(params: this['params'], ctx?: ExecutionContext) {
+    const { AgentBuilder, LLMist } = getHostExports(ctx!);
+    const client = new LLMist();
+
+    const agent = new AgentBuilder(client)
+      .withParentContext(ctx!)
+      .withModel(params.model ?? ctx?.agentConfig?.model ?? 'sonnet')
+      .withGadgets(Navigate, Click, Screenshot)
+      .ask(params.task);
+
+    // ... rest of implementation
+  }
+}
+
+Why getHostExports() matters:
+- Without it, your AgentBuilder is from YOUR node_modules/llmist
+- The CLI's AgentBuilder is from ITS node_modules/llmist
 - These are DIFFERENT class instances, so tree sharing breaks
 - getHostExports() gives you the CLI's actual classes
 `);
 }
 
 // =============================================================================
-// EXAMPLE 6: Using ctx.logger for consistent logging
+// EXAMPLE 6: hasHostExports() for conditional logic
+// =============================================================================
+
+function showHostExportsPattern() {
+  console.log("=== hasHostExports() for conditional logic ===\n");
+
+  console.log(`
+Use hasHostExports() when gadgets may run standalone or via agent:
+
+import { hasHostExports, createSubagent, Gadget, z } from 'llmist';
+import type { ExecutionContext } from 'llmist';
+
+export class BrowseWeb extends Gadget({ ... }) {
+  async execute(params: this['params'], ctx?: ExecutionContext) {
+    // Check if running via llmist agent
+    if (!hasHostExports(ctx)) {
+      return 'Error: This gadget requires running via llmist agent (llmist >= 6.2.0)';
+    }
+
+    const agent = createSubagent(ctx!, { ... });
+    // ...
+  }
+}
+`);
+}
+
+// =============================================================================
+// EXAMPLE 7: Using ctx.logger for consistent logging
 // =============================================================================
 
 function showCtxLoggerPattern() {
@@ -273,7 +338,7 @@ Why ctx.logger works better:
 }
 
 // =============================================================================
-// EXAMPLE 7: Cache structure
+// EXAMPLE 8: Cache structure
 // =============================================================================
 
 function showCacheStructure() {
@@ -309,6 +374,7 @@ async function main() {
   await programmaticLoading();
   showFactoryPattern();
   showManifestStructure();
+  showCreateSubagentPattern();
   showHostExportsPattern();
   showCtxLoggerPattern();
   showCacheStructure();

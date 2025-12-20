@@ -9,9 +9,12 @@ import {
   createGadget,
   type ExecutionContext,
   Gadget,
+  gadgetError,
+  gadgetSuccess,
   HookPresets,
   LLMist,
   ModelRegistry,
+  withErrorHandling,
 } from "llmist";
 import { z } from "zod";
 
@@ -90,6 +93,54 @@ class DelayedResponse extends Gadget({
     return `After ${delayMs}ms: ${message}`;
   }
 }
+
+// =============================================================================
+// RESPONSE FORMATTING HELPERS
+// =============================================================================
+
+// Using gadgetSuccess() and gadgetError() for consistent response formatting
+class DatabaseQuery extends Gadget({
+  description: "Query a database with proper response formatting",
+  schema: z.object({
+    table: z.string().describe("Table name to query"),
+    limit: z.number().default(10).describe("Maximum rows to return"),
+  }),
+}) {
+  async execute(params: this["params"]): Promise<string> {
+    try {
+      // Simulate database query
+      const rows = [
+        { id: 1, name: "Alice" },
+        { id: 2, name: "Bob" },
+      ];
+      return gadgetSuccess({
+        rowCount: rows.length,
+        data: rows.slice(0, params.limit),
+      });
+      // Returns: '{"success":true,"rowCount":2,"data":[...]}'
+    } catch (error) {
+      return gadgetError("Query failed", { table: params.table });
+      // Returns: '{"error":"Query failed","table":"users"}'
+    }
+  }
+}
+
+// Function-based with automatic error handling using withErrorHandling()
+const riskyOperation = createGadget({
+  name: "RiskyOperation",
+  description: "Operation that might fail - errors are automatically caught",
+  schema: z.object({
+    id: z.string().describe("Resource ID to process"),
+    shouldFail: z.boolean().default(false).describe("Set to true to simulate failure"),
+  }),
+  execute: withErrorHandling(async ({ id, shouldFail }) => {
+    if (shouldFail) {
+      throw new Error(`Failed to process resource: ${id}`);
+    }
+    return gadgetSuccess({ processed: id, timestamp: Date.now() });
+  }),
+  // If execute throws, automatically returns: '{"error":"Failed to process resource: xyz"}'
+});
 
 // =============================================================================
 // COMPLEX NESTED SCHEMA
@@ -342,6 +393,15 @@ async function main() {
 
   console.log(`   ${answer6}`);
   console.log(`   Total cost (outer LLM + inner LLM via ctx.llmist): $${totalCost6.toFixed(6)}\n`);
+
+  // Example 7: Response formatting helpers
+  console.log("7. Response formatting helpers (gadgetSuccess/gadgetError):");
+  const answer7 = await LLMist.createAgent()
+    .withModel("haiku")
+    .withGadgets(DatabaseQuery, riskyOperation)
+    .askAndCollect("Query the users table with limit 5, then process resource 'abc123'");
+
+  console.log(`   ${answer7}\n`);
 
   console.log("=== Done ===");
 }

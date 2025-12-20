@@ -1,18 +1,40 @@
 import { describe, expect, test, beforeAll, afterAll, mock } from "bun:test";
+import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen, Textbox, Box } from "@unblessed/node";
 import { InputHandler } from "./input-handler.js";
+
+// TUI tests use mock streams - no real TTY needed
+
+// Mock streams to prevent terminal escape sequences from being written
+class MockOutputStream extends Writable {
+  _write(_chunk: Buffer | string, _encoding: string, callback: () => void): void {
+    callback();
+  }
+}
+
+class MockInputStream extends Readable {
+  _read(): void {
+    // No-op - never emit data
+  }
+}
 
 // Initialize unblessed for testing
 let screen: Screen;
 let inputBar: Textbox;
 let body: Box;
+let mockOutput: MockOutputStream;
+let mockInput: MockInputStream;
 
 beforeAll(() => {
   setRuntime(new NodeRuntime());
+  mockOutput = new MockOutputStream();
+  mockInput = new MockInputStream();
   screen = new Screen({
     smartCSR: true,
     title: "test",
     fullUnicode: true,
+    input: mockInput,
+    output: mockOutput,
   });
 
   inputBar = new Textbox({

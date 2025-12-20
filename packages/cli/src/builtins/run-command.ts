@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createGadget } from "llmist";
+import { spawn } from "../spawn.js";
 
 /**
  * RunCommand gadget - Executes a command with arguments and returns its output.
@@ -92,7 +93,7 @@ export const runCommand = createGadget({
 
     try {
       // Spawn process directly without shell - arguments passed as-is
-      const proc = Bun.spawn(argv, {
+      const proc = spawn(argv, {
         cwd: workingDir,
         stdout: "pipe",
         stderr: "pipe",

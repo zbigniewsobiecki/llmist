@@ -19,7 +19,7 @@
     },
     "packages/cli": {
       "name": "@llmist/cli",
-      "version": "8.1.4",
+      "version": "9.1.2",
       "bin": {
         "llmist": "dist/cli.js",
       },
@@ -31,13 +31,13 @@
         "eta": "^4.4.1",
         "js-toml": "^1.0.2",
         "js-yaml": "^4.1.0",
-        "llmist": "workspace:*",
+        "llmist": "^9.1.0",
         "marked": "^15.0.12",
         "marked-terminal": "^7.3.0",
         "zod": "^4.1.12",
       },
       "devDependencies": {
-        "@llmist/testing": "workspace:*",
+        "@llmist/testing": "^9.1.0",
         "@types/diff": "^8.0.0",
         "@types/js-yaml": "^4.0.9",
         "@types/marked-terminal": "^6.1.1",
@@ -67,7 +67,7 @@
     },
     "packages/llmist": {
       "name": "llmist",
-      "version": "8.1.4",
+      "version": "9.1.2",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.69.0",
         "@google/genai": "^1.27.0",
@@ -99,11 +99,11 @@
     },
     "packages/testing": {
       "name": "@llmist/testing",
-      "version": "8.1.4",
+      "version": "9.1.2",
       "devDependencies": {
         "@types/node": "^20.12.7",
         "bun-types": "^1.3.2",
-        "llmist": "workspace:*",
+        "llmist": "^9.1.0",
         "rimraf": "^5.0.5",
         "tslog": "^4.10.2",
         "tsup": "^8.3.5",
@@ -111,7 +111,7 @@
         "zod": "^4.1.12",
       },
       "peerDependencies": {
-        "llmist": "^7.0.0",
+        "llmist": "^9.0.0",
       },
     },
   },

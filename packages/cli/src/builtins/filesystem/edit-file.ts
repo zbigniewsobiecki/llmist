@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createGadget } from "llmist";
+import { spawn } from "../../spawn.js";
 import { validatePathIsWithinCwd } from "./utils.js";
 
 /**
@@ -70,13 +71,16 @@ q`,
     const safeCommands = filterDangerousCommands(commands);
 
     try {
-      const proc = Bun.spawn(["ed", validatedPath], {
+      const proc = spawn(["ed", validatedPath], {
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
       });
 
       // Write commands to ed's stdin
+      if (!proc.stdin) {
+        return `path=${filePath}\n\nerror: Failed to open stdin for ed process`;
+      }
       proc.stdin.write(`${safeCommands}\n`);
       proc.stdin.end();
 
