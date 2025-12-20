@@ -1,3 +1,48 @@
+## 9.0.0 (2025-12-20)
+
+* Merge pull request #229 from zbigniewsobiecki/docs/comprehensive-documentation-overhaul ([e8b32d4](https://github.com/zbigniewsobiecki/llmist/commit/e8b32d4)), closes [#229](https://github.com/zbigniewsobiecki/llmist/issues/229)
+* Merge pull request #231 from zbigniewsobiecki/dev ([ba5013c](https://github.com/zbigniewsobiecki/llmist/commit/ba5013c)), closes [#231](https://github.com/zbigniewsobiecki/llmist/issues/231)
+* chore: update model definitions and documentation (#230) ([ce17423](https://github.com/zbigniewsobiecki/llmist/commit/ce17423)), closes [#230](https://github.com/zbigniewsobiecki/llmist/issues/230)
+* chore(ci): remove deploy-docs job (use Cloudflare GitHub App instead) (#227) ([f7d37e8](https://github.com/zbigniewsobiecki/llmist/commit/f7d37e8)), closes [#227](https://github.com/zbigniewsobiecki/llmist/issues/227)
+* chore(ci): remove deploy-docs job (use Cloudflare GitHub App instead) (#227) (#228) ([604e827](https://github.com/zbigniewsobiecki/llmist/commit/604e827)), closes [#227](https://github.com/zbigniewsobiecki/llmist/issues/227) [#228](https://github.com/zbigniewsobiecki/llmist/issues/228)
+* docs: add Reference section and consolidate documentation ([61bc3f8](https://github.com/zbigniewsobiecki/llmist/commit/61bc3f8))
+* docs: comprehensive documentation overhaul with persona-based navigation ([37dfa56](https://github.com/zbigniewsobiecki/llmist/commit/37dfa56))
+
+
+### BREAKING CHANGE
+
+* Documentation URLs have changed
+
+## What's New
+
+### Persona-Based Navigation
+- Dedicated onboarding paths for Library, CLI, and Testing users
+- Homepage with persona selection cards
+- New "Why llmist?" value proposition page
+
+### TypeDoc API Reference
+- Enabled auto-generated API reference from TypeScript source
+- Updated Starlight to v0.37.1 and starlight-typedoc to v0.21.5
+- Excludes external dependencies (Zod) for cleaner output
+
+### New Documentation
+- CLI Getting Started: introduction, installation, quick-start
+- Testing Getting Started: introduction, installation, quick-start
+- Provider Guides: OpenAI, Anthropic, Gemini
+
+### Starlight Components
+- Cards, LinkCards, Tabs, Steps, Asides, Badges
+
+### Structure Changes
+- Moved library docs to /library/* subdirectory
+- Reorganized CLI docs into commands/, configuration/, gadgets/
+- Reorganized Testing docs into mocking/, gadgets/
+- Added .gitignore for generated API docs
+
+🤖 Generated with Claude Code
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## <small>8.1.4 (2025-12-20)</small>
 
 * Merge pull request #224 from zbigniewsobiecki/dev ([7afe15c](https://github.com/zbigniewsobiecki/llmist/commit/7afe15c)), closes [#224](https://github.com/zbigniewsobiecki/llmist/issues/224)
