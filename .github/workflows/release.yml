@@ -88,6 +88,15 @@ jobs:
           else
             echo "🚀 Force publishing @llmist/cli@$VERSION..."
             cd packages/cli && npm publish --access public
+            cd ../..
+          fi
+
+          # Check if @llmist/testing@VERSION is already published
+          if npm view @llmist/testing@$VERSION version 2>/dev/null; then
+            echo "⏭️  @llmist/testing@$VERSION already published, skipping..."
+          else
+            echo "🚀 Force publishing @llmist/testing@$VERSION..."
+            cd packages/testing && npm publish --access public
           fi
 
           echo "✅ Force publish complete!"
@@ -131,6 +140,17 @@ jobs:
           echo "Publishing @llmist/cli@${{ steps.semantic.outputs.version }}..."
           # Rebuild CLI to include correct version (was built before version sync)
           cd packages/cli
+          bun run build
+          npm publish --access public
+
+      - name: Publish @llmist/testing to npm
+        if: ${{ steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' && github.event.inputs.force_publish != 'true' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "Publishing @llmist/testing@${{ steps.semantic.outputs.version }}..."
+          # Rebuild testing to include correct version (was built before version sync)
+          cd packages/testing
           bun run build
           npm publish --access public
 
