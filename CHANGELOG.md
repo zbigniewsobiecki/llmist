@@ -1,3 +1,8 @@
+## <small>9.1.1 (2025-12-20)</small>
+
+* Merge pull request #233 from zbigniewsobiecki/dev ([8eeb78c](https://github.com/zbigniewsobiecki/llmist/commit/8eeb78c)), closes [#233](https://github.com/zbigniewsobiecki/llmist/issues/233)
+* docs: fix CLI quick-start inaccuracies and add advanced docs (#232) ([02103a1](https://github.com/zbigniewsobiecki/llmist/commit/02103a1)), closes [#232](https://github.com/zbigniewsobiecki/llmist/issues/232)
+
 ## 9.1.0 (2025-12-20)
 
 * fix: use workspace protocol for internal dependencies ([7449762](https://github.com/zbigniewsobiecki/llmist/commit/7449762))
