@@ -10,12 +10,12 @@
     "typecheck": "astro check"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.31.0",
-    "astro": "^5.1.0",
+    "@astrojs/starlight": "^0.37.1",
+    "astro": "^5.16.6",
     "sharp": "^0.33.0",
-    "starlight-typedoc": "^0.17.0",
-    "typedoc": "^0.27.0",
-    "typedoc-plugin-markdown": "^4.4.0",
+    "starlight-typedoc": "^0.21.5",
+    "typedoc": "^0.28.15",
+    "typedoc-plugin-markdown": "^4.9.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

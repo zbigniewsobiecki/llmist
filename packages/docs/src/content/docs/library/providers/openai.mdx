@@ -1,0 +1,150 @@
+---
+title: OpenAI Provider
+description: Using OpenAI models with llmist
+sidebar:
+  order: 2
+---
+
+import { Aside, Badge, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Setup
+
+Set your OpenAI API key:
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+llmist will automatically discover and use OpenAI.
+
+## Available Models
+
+### Text Models
+
+| Model | Alias | Best For |
+|-------|-------|----------|
+| `gpt-5` | `gpt5` | Complex reasoning, coding |
+| `gpt-5-mini` | `gpt5-mini` | Fast, cost-effective tasks |
+| `gpt-4-turbo` | `gpt4-turbo` | Balanced performance |
+| `gpt-4o` | `gpt4o` | Multimodal tasks |
+| `o3-mini` | `o3-mini` | Reasoning tasks |
+
+### Image Models
+
+| Model | Description |
+|-------|-------------|
+| `dall-e-3` | High-quality image generation |
+| `dall-e-2` | Faster, lower cost |
+
+### Speech Models
+
+| Model | Description |
+|-------|-------------|
+| `tts-1` | Text-to-speech, standard quality |
+| `tts-1-hd` | Text-to-speech, high quality |
+
+## Usage Examples
+
+<Tabs>
+  <TabItem label="Text Generation">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const answer = await LLMist.createAgent()
+      .withModel('gpt5')
+      .askAndCollect('Explain quantum computing');
+    ```
+  </TabItem>
+  <TabItem label="Image Generation">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const client = new LLMist();
+    const result = await client.image.generate({
+      prompt: 'A sunset over mountains',
+      model: 'dall-e-3',
+      size: '1024x1024',
+    });
+
+    console.log(result.url);
+    ```
+  </TabItem>
+  <TabItem label="Speech Generation">
+    ```typescript
+    import { LLMist } from 'llmist';
+    import { writeFileSync } from 'fs';
+
+    const client = new LLMist();
+    const result = await client.speech.generate({
+      text: 'Hello, world!',
+      model: 'tts-1',
+      voice: 'nova',
+    });
+
+    writeFileSync('speech.mp3', result.audio);
+    ```
+  </TabItem>
+</Tabs>
+
+## Vision (Image Input)
+
+GPT-4o and GPT-4 Turbo support image input:
+
+```typescript
+import { LLMist, imageFromUrl } from 'llmist';
+
+const answer = await LLMist.createAgent()
+  .withModel('gpt4o')
+  .askWithImage(
+    'What is in this image?',
+    imageFromUrl('https://example.com/photo.jpg')
+  )
+  .askAndCollect();
+```
+
+## Configuration Options
+
+```typescript
+import { LLMist, OpenAIChatProvider } from 'llmist';
+
+const client = new LLMist({
+  autoDiscoverProviders: false,
+  adapters: [
+    new OpenAIChatProvider({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseUrl: 'https://api.openai.com/v1', // Custom endpoint
+      organization: 'org-xxx',              // Optional org ID
+    }),
+  ],
+});
+```
+
+<Aside type="tip" title="Azure OpenAI">
+  For Azure OpenAI, set a custom `baseUrl` pointing to your Azure endpoint and use the deployment name as the model.
+</Aside>
+
+## Cost Tracking
+
+llmist automatically tracks token usage and costs:
+
+```typescript
+for await (const event of agent.run()) {
+  if (event.type === 'llm_call_complete') {
+    console.log('Tokens:', event.usage);
+    console.log('Cost:', event.cost);
+  }
+}
+```
+
+## Rate Limiting
+
+OpenAI has rate limits. Use retry configuration for resilience:
+
+```typescript
+const agent = LLMist.createAgent()
+  .withModel('gpt5')
+  .withRetry({
+    maxAttempts: 3,
+    retryOn: ['rate_limit', 'server_error'],
+  });
+```

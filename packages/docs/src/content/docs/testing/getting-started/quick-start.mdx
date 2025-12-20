@@ -1,0 +1,235 @@
+---
+title: Testing Quick Start
+description: Write your first mock test for an AI agent
+sidebar:
+  order: 3
+---
+
+import { Aside, Code, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Let's write a complete test for an AI agent with gadgets.
+
+## Testing a Simple Agent
+
+Here's a basic test that mocks an LLM response:
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
+
+describe('Greeting Agent', () => {
+  beforeEach(() => {
+    getMockManager().clear();
+  });
+
+  it('should respond to greetings', async () => {
+    // 1. Set up the mock
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('hello')
+      .returns('Hello! How can I assist you today?')
+      .register();
+
+    // 2. Create client with mock provider
+    const client = createMockClient();
+
+    // 3. Run the agent
+    const response = await client.createAgent()
+      .withModel('sonnet')
+      .askAndCollect('hello there!');
+
+    // 4. Assert
+    expect(response).toContain('Hello');
+    expect(response).toContain('assist');
+  });
+});
+```
+
+## Testing Gadget Calls
+
+When your agent uses gadgets, mock the LLM to return gadget calls:
+
+```typescript
+import { Gadget, z } from 'llmist';
+import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
+
+// Define a gadget
+class Calculator extends Gadget({
+  description: 'Performs arithmetic',
+  schema: z.object({
+    a: z.number(),
+    b: z.number(),
+    op: z.enum(['add', 'multiply']),
+  }),
+}) {
+  execute({ a, b, op }) {
+    return op === 'add' ? String(a + b) : String(a * b);
+  }
+}
+
+describe('Calculator Agent', () => {
+  beforeEach(() => {
+    getMockManager().clear();
+  });
+
+  it('should use calculator for math', async () => {
+    // Mock LLM to call the gadget, then respond
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('multiply')
+      .returns(`I'll calculate that for you.
+
+!!!GADGET_START[Calculator]
+!!!ARG[a] 15
+!!!ARG[b] 23
+!!!ARG[op] multiply
+!!!GADGET_END
+
+The result is 345.`)
+      .register();
+
+    const client = createMockClient();
+    const response = await client.createAgent()
+      .withModel('sonnet')
+      .withGadgets(Calculator)
+      .askAndCollect('What is 15 times 23?');
+
+    expect(response).toContain('345');
+  });
+});
+```
+
+<Aside type="tip">
+  The gadget call format (`!!!GADGET_START[...]`) is llmist's block format. The LLM learns this from the system prompt.
+</Aside>
+
+## Testing Gadgets in Isolation
+
+Use `testGadget()` to test gadget logic without an agent:
+
+```typescript
+import { testGadget } from '@llmist/testing';
+import { Calculator } from './gadgets/calculator';
+
+describe('Calculator Gadget', () => {
+  it('should add numbers', async () => {
+    const result = await testGadget(Calculator, {
+      a: 10,
+      b: 5,
+      op: 'add',
+    });
+
+    expect(result).toBe('15');
+  });
+
+  it('should multiply numbers', async () => {
+    const result = await testGadget(Calculator, {
+      a: 7,
+      b: 8,
+      op: 'multiply',
+    });
+
+    expect(result).toBe('56');
+  });
+});
+```
+
+## Testing Multi-Turn Conversations
+
+Mock multiple responses for back-and-forth conversations:
+
+```typescript
+describe('Multi-turn Conversation', () => {
+  it('should handle follow-up questions', async () => {
+    // First response
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('weather')
+      .returns('The weather in Paris is sunny, 72°F.')
+      .times(1)
+      .register();
+
+    // Follow-up response
+    mockLLM()
+      .forAnyModel()
+      .whenMessageContains('tomorrow')
+      .returns('Tomorrow will be cloudy with a chance of rain.')
+      .times(1)
+      .register();
+
+    const client = createMockClient();
+    const agent = client.createAgent().withModel('sonnet');
+
+    const response1 = await agent.askAndCollect("What's the weather in Paris?");
+    expect(response1).toContain('sunny');
+
+    const response2 = await agent.askAndCollect('What about tomorrow?');
+    expect(response2).toContain('cloudy');
+  });
+});
+```
+
+## Verifying Gadget Calls
+
+Use `createMockGadget()` to spy on gadget calls:
+
+```typescript
+import { createMockGadget, mockLLM, createMockClient } from '@llmist/testing';
+import { z } from 'llmist';
+
+describe('Gadget Call Verification', () => {
+  it('should call the weather gadget with correct params', async () => {
+    const mockWeather = createMockGadget({
+      name: 'Weather',
+      description: 'Get weather for a city',
+      schema: z.object({ city: z.string() }),
+      result: 'Sunny, 75°F',
+    });
+
+    mockLLM()
+      .forAnyModel()
+      .returns(`!!!GADGET_START[Weather]
+!!!ARG[city] San Francisco
+!!!GADGET_END
+
+The weather looks great!`)
+      .register();
+
+    const client = createMockClient();
+    await client.createAgent()
+      .withGadgets(mockWeather)
+      .askAndCollect('Weather in SF?');
+
+    // Verify the gadget was called
+    expect(mockWeather.getCallCount()).toBe(1);
+    expect(mockWeather.wasCalledWith({ city: 'San Francisco' })).toBe(true);
+  });
+});
+```
+
+## Testing Error Handling
+
+```typescript
+describe('Error Handling', () => {
+  it('should handle LLM errors gracefully', async () => {
+    mockLLM()
+      .forAnyModel()
+      .throwsError(new Error('Rate limit exceeded'))
+      .register();
+
+    const client = createMockClient();
+
+    await expect(
+      client.createAgent()
+        .withModel('sonnet')
+        .askAndCollect('Hello')
+    ).rejects.toThrow('Rate limit exceeded');
+  });
+});
+```
+
+## Next Steps
+
+- [MockBuilder API](/testing/mocking/mock-builder/) - Advanced mocking patterns
+- [Testing Gadgets](/testing/gadgets/test-gadget/) - In-depth gadget testing
+- [Testing Agents](/testing/agents/multi-turn/) - Complex agent scenarios

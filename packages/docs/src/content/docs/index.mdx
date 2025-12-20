@@ -8,7 +8,7 @@ hero:
     file: ../../assets/logo.svg
   actions:
     - text: Get Started
-      link: /getting-started/introduction/
+      link: /library/getting-started/introduction/
       icon: right-arrow
     - text: View on GitHub
       link: https://github.com/zbigniewsobiecki/llmist
@@ -16,7 +16,27 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Choose Your Path
+
+<CardGrid>
+  <LinkCard
+    title="Library"
+    description="Integrate llmist as a TypeScript library into your applications"
+    href="/library/getting-started/introduction/"
+  />
+  <LinkCard
+    title="CLI"
+    description="Run AI agents from the command line with powerful workflows"
+    href="/cli/getting-started/introduction/"
+  />
+  <LinkCard
+    title="Testing"
+    description="Mock LLM responses for deterministic, fast tests"
+    href="/testing/getting-started/introduction/"
+  />
+</CardGrid>
 
 ## Why llmist?
 

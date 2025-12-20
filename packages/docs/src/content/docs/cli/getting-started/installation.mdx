@@ -1,0 +1,116 @@
+---
+title: CLI Installation
+description: Install and configure the llmist CLI
+sidebar:
+  order: 2
+---
+
+import { Aside, Code, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install -g @llmist/cli
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    bun add -g @llmist/cli
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add -g @llmist/cli
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn global add @llmist/cli
+    ```
+  </TabItem>
+</Tabs>
+
+Verify the installation:
+
+```bash
+llmist --version
+```
+
+## Configuration
+
+<Steps>
+
+1. **Set up API keys**
+
+   Set at least one provider API key:
+
+   ```bash
+   # OpenAI
+   export OPENAI_API_KEY=sk-...
+
+   # Anthropic
+   export ANTHROPIC_API_KEY=sk-ant-...
+
+   # Google Gemini
+   export GEMINI_API_KEY=...
+   ```
+
+2. **Initialize configuration (optional)**
+
+   Create a configuration file for custom commands:
+
+   ```bash
+   llmist init
+   ```
+
+   This creates `~/.llmist/cli.toml` with default settings.
+
+3. **Verify setup**
+
+   Test with a simple completion:
+
+   ```bash
+   llmist complete "Hello, world!"
+   ```
+
+</Steps>
+
+<Aside type="tip" title="Multiple Providers">
+  You can set multiple API keys. The CLI will use the appropriate provider based on the model you request.
+</Aside>
+
+## Configuration File
+
+The configuration file at `~/.llmist/cli.toml` supports:
+
+- **Default model and options** for each command
+- **Custom commands** with pre-defined prompts
+- **Prompt templates** for reusable content
+- **Gadget approval rules** for security
+
+Example:
+
+```toml title="~/.llmist/cli.toml"
+[global]
+log-level = "warn"
+
+[complete]
+model = "sonnet"
+temperature = 0.7
+
+[agent]
+model = "gpt-5"
+max-iterations = 10
+tui = true
+
+# Custom command
+[code-review]
+inherit = "agent"
+system = "You are a code reviewer. Analyze the provided code for bugs, security issues, and best practices."
+```
+
+## Next Steps
+
+Now that you have the CLI installed, try the [Quick Start](/cli/getting-started/quick-start/) to run your first agent!
