@@ -93,6 +93,41 @@ export default class ArcadeHighScore extends Gadget({ ... }) { ... }
   </TabItem>
 </Tabs>
 
+## Loading Specific Gadgets
+
+Use the `/GadgetName` suffix to load a specific gadget from a file or package:
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # Load only FloppyDisk from a file with multiple exports
+    bunx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts/FloppyDisk
+
+    # Load BrowseWeb subagent from Dhalsim package
+    bunx @llmist/cli agent "Browse apple.com" -g dhalsim/BrowseWeb
+
+    # Load from git URL
+    bunx @llmist/cli agent "task" -g git+https://github.com/user/repo#main/MyGadget
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Load only FloppyDisk from a file with multiple exports
+    npx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts/FloppyDisk
+
+    # Load BrowseWeb subagent from Dhalsim package
+    npx @llmist/cli agent "Browse apple.com" -g dhalsim/BrowseWeb
+
+    # Load from git URL
+    npx @llmist/cli agent "task" -g git+https://github.com/user/repo#main/MyGadget
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="note">
+  The gadget name must be PascalCase (e.g., `MyGadget`, `BrowseWeb`). This matches the class name of the gadget.
+</Aside>
+
 ## External Gadgets
 
 Load gadgets from npm packages or git repositories:
@@ -106,13 +141,19 @@ Load gadgets from npm packages or git repositories:
     # Use a preset
     bunx @llmist/cli agent "Browse the web" -g dhalsim:minimal
 
+    # Load specific gadget from package
+    bunx @llmist/cli agent "Browse the web" -g dhalsim/BrowseWeb
+
     # git URL
     bunx @llmist/cli agent "task" -g git+https://github.com/user/repo.git
+
+    # git URL with specific gadget
+    bunx @llmist/cli agent "task" -g git+https://github.com/user/repo.git#main/MyGadget
 
     # Combine sources
     bunx @llmist/cli agent "Complex task" \
       -g ./local-gadget.ts \
-      -g dhalsim:minimal \
+      -g dhalsim/BrowseWeb \
       -g builtin:ReadFile
     ```
   </TabItem>
@@ -124,13 +165,19 @@ Load gadgets from npm packages or git repositories:
     # Use a preset
     npx @llmist/cli agent "Browse the web" -g dhalsim:minimal
 
+    # Load specific gadget from package
+    npx @llmist/cli agent "Browse the web" -g dhalsim/BrowseWeb
+
     # git URL
     npx @llmist/cli agent "task" -g git+https://github.com/user/repo.git
+
+    # git URL with specific gadget
+    npx @llmist/cli agent "task" -g git+https://github.com/user/repo.git#main/MyGadget
 
     # Combine sources
     npx @llmist/cli agent "Complex task" \
       -g ./local-gadget.ts \
-      -g dhalsim:minimal \
+      -g dhalsim/BrowseWeb \
       -g builtin:ReadFile
     ```
   </TabItem>
