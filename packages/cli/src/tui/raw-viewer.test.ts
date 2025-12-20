@@ -4,8 +4,7 @@ import { setRuntime, NodeRuntime, Screen } from "@unblessed/node";
 import { showRawViewer, type RawViewerMode } from "./raw-viewer.js";
 import type { LLMMessage } from "llmist";
 
-// Skip TUI tests when not in a TTY (e.g., in CI/Turborepo)
-const isTTY = process.stdout.isTTY && process.stdin.isTTY;
+// TUI tests use mock streams - no real TTY needed
 
 // Mock streams to prevent terminal escape sequences from being written
 class MockOutputStream extends Writable {
@@ -26,7 +25,6 @@ let mockOutput: MockOutputStream;
 let mockInput: MockInputStream;
 
 beforeAll(() => {
-  if (!isTTY) return;
   setRuntime(new NodeRuntime());
   mockOutput = new MockOutputStream();
   mockInput = new MockInputStream();
@@ -45,7 +43,7 @@ afterAll(() => {
   }
 });
 
-describe.skipIf(!isTTY)("Raw Viewer", () => {
+describe("Raw Viewer", () => {
   describe("showRawViewer", () => {
     test("returns handle with closed promise and close function", () => {
       const handle = showRawViewer({

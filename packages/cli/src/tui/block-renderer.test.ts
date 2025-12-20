@@ -4,8 +4,7 @@ import { setRuntime, NodeRuntime, ScrollableBox, Screen } from "@unblessed/node"
 import { BlockRenderer } from "./block-renderer.js";
 import { ExecutionTree } from "llmist";
 
-// Skip TUI tests when not in a TTY (e.g., in CI/Turborepo)
-const isTTY = process.stdout.isTTY && process.stdin.isTTY;
+// TUI tests use mock streams - no real TTY needed
 
 // Mock streams to prevent terminal escape sequences from being written
 class MockOutputStream extends Writable {
@@ -26,7 +25,6 @@ let mockOutput: MockOutputStream;
 let mockInput: MockInputStream;
 
 beforeAll(() => {
-  if (!isTTY) return;
   setRuntime(new NodeRuntime());
   mockOutput = new MockOutputStream();
   mockInput = new MockInputStream();
@@ -60,7 +58,7 @@ function createMockContainer() {
   });
 }
 
-describe.skipIf(!isTTY)("BlockRenderer", () => {
+describe("BlockRenderer", () => {
   describe("addLLMCall deduplication", () => {
     test("creates unique block for first call with iteration", () => {
       const container = createMockContainer();
