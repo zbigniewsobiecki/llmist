@@ -63,17 +63,17 @@ export function isExternalPackageSpecifier(specifier: string): boolean {
  * Parse a gadget specifier into its components.
  *
  * Supported formats:
- * - `webasto` - npm package, all gadgets
- * - `webasto@2.0.0` - npm package with version
- * - `webasto:minimal` - npm package with preset
- * - `webasto/Navigate` - npm package with specific gadget
- * - `webasto@2.0.0:minimal` - all combined
+ * - `dhalsim` - npm package, all gadgets
+ * - `dhalsim@2.0.0` - npm package with version
+ * - `dhalsim:minimal` - npm package with preset
+ * - `dhalsim/Navigate` - npm package with specific gadget
+ * - `dhalsim@2.0.0:minimal` - all combined
  * - `git+https://github.com/user/repo` - git URL
  * - `git+https://github.com/user/repo#v1.0.0` - git URL with ref
  * - `git+https://github.com/user/repo#v1.0.0:minimal` - git URL with ref and preset
- * - `git+https://github.com/user/repo:minimal` - git URL with preset (no ref)
+ * - `git+https://github.com/user/repo.git:minimal` - git URL with preset (requires .git extension)
  * - `git+https://github.com/user/repo#dev/BrowseWeb` - git URL with ref and specific gadget
- * - `git+https://github.com/user/repo.git/BrowseWeb` - git URL with specific gadget (no ref)
+ * - `git+https://github.com/user/repo.git/BrowseWeb` - git URL with specific gadget (requires .git)
  */
 export function parseGadgetSpecifier(specifier: string): GadgetSpecifier | null {
   // Git URL: git+URL[#ref][:preset][/gadgetName]

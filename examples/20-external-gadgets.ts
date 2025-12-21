@@ -19,11 +19,11 @@ import { loadGadgets } from "../src/cli/gadgets.js";
 // The CLI and loadGadgets() function support these specifier formats:
 //
 // npm packages (auto-installed):
-//   webasto              - all gadgets from package
-//   webasto@2.0.0        - specific version
-//   webasto:minimal      - preset (subset of gadgets)
-//   webasto/Navigate     - single gadget
-//   webasto@2.0.0:readonly - version + preset
+//   dhalsim              - all gadgets from package
+//   dhalsim@2.0.0        - specific version
+//   dhalsim:minimal      - preset (subset of gadgets)
+//   dhalsim/Navigate     - single gadget
+//   dhalsim@2.0.0:readonly - version + preset
 //
 // git URLs (cloned and cached):
 //   git+https://github.com/user/repo.git
@@ -36,21 +36,21 @@ import { loadGadgets } from "../src/cli/gadgets.js";
 function showCliExamples() {
   console.log("=== CLI External Gadget Examples ===\n");
   console.log("# Load all gadgets from npm package:");
-  console.log("llmist agent 'Navigate to example.com' -g webasto\n");
+  console.log("llmist agent 'Navigate to example.com' -g dhalsim\n");
 
   console.log("# Load with specific preset:");
-  console.log("llmist agent 'Screenshot google.com' -g webasto:readonly\n");
+  console.log("llmist agent 'Screenshot google.com' -g dhalsim:readonly\n");
 
   console.log("# Load single gadget:");
-  console.log("llmist agent 'Go to apple.com' -g webasto/Navigate\n");
+  console.log("llmist agent 'Go to apple.com' -g dhalsim/Navigate\n");
 
   console.log("# Load from git URL:");
   console.log(
-    "llmist agent 'Browse the web' -g git+https://github.com/zbigniewsobiecki/webasto.git\n",
+    "llmist agent 'Browse the web' -g git+https://github.com/anthropics/dhalsim.git\n",
   );
 
   console.log("# Combine multiple sources:");
-  console.log("llmist agent 'task' -g ./local.ts -g webasto:minimal -g builtin:ReadFile\n");
+  console.log("llmist agent 'task' -g ./local.ts -g dhalsim:minimal -g builtin:ReadFile\n");
 }
 
 // =============================================================================
@@ -69,7 +69,7 @@ async function programmaticLoading() {
     console.log(`Loaded ${builtins.length} builtin gadgets: ${builtins.map((g) => g.name).join(", ")}\n`);
 
     // Note: npm/git loading would work the same way:
-    // const webasto = await loadGadgets(['webasto:minimal'], process.cwd());
+    // const dhalsim = await loadGadgets(['dhalsim:minimal'], process.cwd());
     // const gitGadgets = await loadGadgets(['git+https://github.com/user/repo.git'], process.cwd());
   } catch (error) {
     console.log("Skipping external package loading in example (requires network)\n");
@@ -88,7 +88,7 @@ function showFactoryPattern() {
 
   console.log(`
 // In your application code:
-import { createWebastoGadgets, BrowseWeb } from 'webasto';
+import { createDhalsimGadgets, BrowseWeb } from 'dhalsim';
 
 // Option A: Use the high-level BrowseWeb subagent (recommended)
 // This runs its own agent loop internally
@@ -100,7 +100,7 @@ const agent = LLMist.createAgent()
 
 // Option B: Use individual gadgets with custom session manager
 const mySessionManager = createCustomSessionManager();
-const gadgets = createWebastoGadgets({
+const gadgets = createDhalsimGadgets({
   sessionManager: mySessionManager,
 });
 
@@ -349,14 +349,14 @@ External packages are auto-installed to ~/.llmist/gadget-cache/:
 
 ~/.llmist/gadget-cache/
 ├── npm/
-│   ├── webasto@latest/
+│   ├── dhalsim@latest/
 │   │   ├── package.json
 │   │   └── node_modules/
-│   │       └── webasto/
-│   └── webasto@2.0.0/
+│   │       └── dhalsim/
+│   └── dhalsim@2.0.0/
 │       └── ...
 └── git/
-    └── github.com-zbigniewsobiecki-webasto-v1.0.0/
+    └── github.com-anthropics-dhalsim-v1.0.0/
         ├── package.json
         ├── node_modules/
         └── dist/
