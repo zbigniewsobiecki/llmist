@@ -19,6 +19,33 @@ import type { AbstractGadget, LLMistPackageManifest } from "llmist";
 import { extractGadgetsFromModule } from "./gadgets.js";
 
 /**
+ * Detect which package manager is available.
+ * Tries bun first (faster), then falls back to npm (universal with Node.js).
+ */
+function detectPackageManager(): "bun" | "npm" {
+  try {
+    execSync("bun --version", { stdio: "pipe" });
+    return "bun";
+  } catch {
+    // bun not available, fall back to npm
+    return "npm";
+  }
+}
+
+/** Cached package manager to avoid repeated detection */
+let cachedPackageManager: "bun" | "npm" | null = null;
+
+/**
+ * Get the available package manager (cached).
+ */
+function getPackageManager(): "bun" | "npm" {
+  if (!cachedPackageManager) {
+    cachedPackageManager = detectPackageManager();
+  }
+  return cachedPackageManager;
+}
+
+/**
  * Cache directory for external gadget packages.
  */
 const CACHE_DIR = path.join(os.homedir(), ".llmist", "gadget-cache");
@@ -231,18 +258,19 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
   };
   fs.writeFileSync(path.join(cacheDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
-  // Install the package
+  // Install the package using available package manager
   const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
+  const pm = getPackageManager();
+  const installCmd = pm === "bun" ? `bun add "${packageSpec}"` : `npm install "${packageSpec}"`;
 
   try {
-    // Use bun add for isolated install (works in Docker containers that only have bun)
-    execSync(`bun add "${packageSpec}"`, {
+    execSync(installCmd, {
       stdio: "pipe",
       cwd: cacheDir,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to install npm package '${packageSpec}': ${message}`);
+    throw new Error(`Failed to install npm package '${packageSpec}' using ${pm}: ${message}`);
   }
 }
 
@@ -277,20 +305,24 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
       throw new Error(`Failed to clone git repository '${spec.package}': ${message}`);
     }
 
-    // Install dependencies and build
+    // Install dependencies and build using available package manager
     if (fs.existsSync(path.join(cacheDir, "package.json"))) {
+      const pm = getPackageManager();
+      const installCmd = pm === "bun" ? "bun install" : "npm install";
+      const runCmd = pm === "bun" ? "bun run" : "npm run";
+
       try {
-        execSync("bun install", { cwd: cacheDir, stdio: "inherit" });
+        execSync(installCmd, { cwd: cacheDir, stdio: "inherit" });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to install dependencies for '${spec.package}': ${message}`);
+        throw new Error(`Failed to install dependencies for '${spec.package}' using ${pm}: ${message}`);
       }
 
       // Run build if available (git packages need to be built)
       const packageJson = JSON.parse(fs.readFileSync(path.join(cacheDir, "package.json"), "utf-8"));
       if (packageJson.scripts?.build) {
         try {
-          execSync("bun run build", { cwd: cacheDir, stdio: "inherit" });
+          execSync(`${runCmd} build`, { cwd: cacheDir, stdio: "inherit" });
         } catch (error) {
           // Build may fail (e.g., TypeScript errors in test files) but the main bundle
           // may still be created. Check if the entry point exists before failing.
