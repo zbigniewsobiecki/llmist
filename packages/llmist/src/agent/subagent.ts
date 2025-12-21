@@ -132,6 +132,7 @@ function getHostExports(ctx: ExecutionContext): HostExports {
  * - Resolves model with "inherit" support from CLI config
  * - Shares the parent's execution tree for cost tracking
  * - Forwards the abort signal for proper cancellation
+ * - Inherits human input handler (for 2FA, CAPTCHAs, etc.)
  *
  * @param ctx - ExecutionContext passed to gadget's execute()
  * @param options - Subagent configuration options
@@ -163,6 +164,10 @@ function getHostExports(ctx: ExecutionContext): HostExports {
  * for await (const event of agent.run()) {
  *   // Events flow through shared tree automatically
  * }
+ *
+ * // Human input bubbles up automatically:
+ * // If a gadget throws HumanInputRequiredException,
+ * // the parent's onHumanInput handler will be called
  * ```
  */
 export function createSubagent(
@@ -203,6 +208,12 @@ export function createSubagent(
     .withGadgets(...gadgets)
     .withMaxIterations(maxIterations)
     .withParentContext(ctx); // Share tree, forward signal
+
+  // Inherit human input capability from parent context
+  // This allows subagents to bubble up input requests (e.g., 2FA codes)
+  if (ctx.requestHumanInput) {
+    builder = builder.onHumanInput(ctx.requestHumanInput);
+  }
 
   // Apply optional configuration
   if (systemPrompt) {

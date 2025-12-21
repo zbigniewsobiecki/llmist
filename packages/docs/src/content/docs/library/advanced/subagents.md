@@ -194,6 +194,52 @@ With `withParentContext(ctx)`, subagents share the parent's tree:
 const totalCost = ctx?.tree?.getSubtreeCost(ctx.nodeId!);
 ```
 
+## Human Input Inheritance
+
+Subagents created with `createSubagent()` automatically inherit the parent's human input handler. This enables nested agents to request user input (e.g., 2FA codes, CAPTCHAs) that bubbles up to the CLI.
+
+When the parent agent has `.onHumanInput()` configured, subagents can use gadgets that throw `HumanInputRequiredException` and the prompt will appear in the TUI:
+
+```typescript
+// In your subagent gadget (e.g., RequestUserInput)
+import { Gadget, z, HumanInputRequiredException } from 'llmist';
+
+class RequestUserAssistance extends Gadget({
+  name: 'RequestUserAssistance',
+  description: 'Ask user for 2FA code, CAPTCHA solution, etc.',
+  schema: z.object({
+    reason: z.enum(['captcha', '2fa_code', 'sms_code', 'other']),
+    message: z.string(),
+  }),
+}) {
+  execute(params: this['params']): string {
+    // This bubbles up to the parent's TUI input handler
+    throw new HumanInputRequiredException(
+      `[${params.reason.toUpperCase()}] ${params.message}`
+    );
+  }
+}
+```
+
+The flow works automatically:
+
+1. Parent CLI sets `.onHumanInput()` → TUI input handler
+2. `createSubagent()` sees `ctx.requestHumanInput` → calls `.onHumanInput()`
+3. Nested gadget throws `HumanInputRequiredException`
+4. Subagent's executor calls the inherited callback
+5. User sees prompt in TUI, enters input
+6. Answer returned to subagent, which continues execution
+
+:::note
+If you use the manual pattern with `getHostExports()`, you need to wire up human input explicitly:
+
+```typescript
+if (ctx?.requestHumanInput) {
+  builder.onHumanInput(ctx.requestHumanInput);
+}
+```
+:::
+
 ## See Also
 
 - [Execution Tree](/library/advanced/execution-tree/) - Cost and hierarchy tracking

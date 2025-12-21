@@ -655,6 +655,37 @@ describe("GadgetExecutor", () => {
       expect(elapsed).toBeGreaterThanOrEqual(45);
       expect(result.executionTimeMs).toBeGreaterThanOrEqual(45);
     });
+
+    it("passes requestHumanInput callback to ExecutionContext", async () => {
+      // Create a gadget that captures its context
+      let capturedCtx: unknown = null;
+      class ContextCapture extends Gadget({
+        name: "ContextCapture",
+        description: "Captures execution context for testing",
+        schema: z.object({}),
+      }) {
+        execute(_params: this["params"], ctx?: unknown): string {
+          capturedCtx = ctx;
+          return "captured";
+        }
+      }
+
+      const mockCallback = async (q: string): Promise<string> => `answer to ${q}`;
+      const executorWithCallback = new GadgetExecutor(registry, mockCallback);
+      registry.registerByClass(new ContextCapture());
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "ContextCapture",
+        invocationId: "ctx-1",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      await executorWithCallback.execute(call);
+
+      expect(capturedCtx).toBeDefined();
+      expect((capturedCtx as { requestHumanInput?: unknown }).requestHumanInput).toBe(mockCallback);
+    });
   });
 
   describe("timeout handling", () => {

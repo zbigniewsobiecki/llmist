@@ -176,6 +176,41 @@ Control behavior when LLM responds without calling gadgets:
 })
 ```
 
+## Human Input in Subagents
+
+When building subagent gadgets (like browser automation), you may need to request user input from within nested agents. The `requestHumanInput` callback is automatically inherited through `createSubagent()`:
+
+- Parent's `.onHumanInput()` handler is passed via `ExecutionContext`
+- Subagents get the callback via `createSubagent(ctx, {...})`
+- Any `HumanInputRequiredException` in nested gadgets bubbles up to parent
+
+This is useful for scenarios like:
+- **2FA/SMS codes** - Browser automation encounters login with 2FA
+- **CAPTCHAs** - Automated flow needs human to solve CAPTCHA
+- **Confirmations** - Nested agent needs user approval for sensitive actions
+
+```typescript
+// In a browser automation subagent
+class RequestUserAssistance extends Gadget({
+  name: 'RequestUserAssistance',
+  schema: z.object({
+    reason: z.enum(['captcha', '2fa_code', 'sms_code']),
+    message: z.string(),
+  }),
+}) {
+  execute(params: this['params']): string {
+    // This bubbles up to the CLI's TUI
+    throw new HumanInputRequiredException(
+      `[${params.reason}] ${params.message}`
+    );
+  }
+}
+
+// Parent agent's onHumanInput handler receives the question
+```
+
+See [Subagents](/library/advanced/subagents/#human-input-inheritance) for implementation details.
+
 ## See Also
 
 - [Gadgets Guide](/library/guides/gadgets/) - Creating custom gadgets

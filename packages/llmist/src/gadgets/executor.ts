@@ -289,6 +289,8 @@ export class GadgetExecutor {
         hostExports: getHostExportsInternal(),
         // Logger for structured logging (respects CLI's log level/file config)
         logger: this.logger,
+        // Human input callback for subagents to bubble up input requests
+        requestHumanInput: this.requestHumanInput,
       };
 
       // Execute gadget (handle both sync and async)
