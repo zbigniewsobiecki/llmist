@@ -1,3 +1,8 @@
+## <small>9.3.2 (2025-12-21)</small>
+
+* Merge pull request #248 from zbigniewsobiecki/dev ([94cc383](https://github.com/zbigniewsobiecki/llmist/commit/94cc383)), closes [#248](https://github.com/zbigniewsobiecki/llmist/issues/248)
+* fix(test): run tests directly to avoid Turborepo TTY issues (#247) ([02a75dd](https://github.com/zbigniewsobiecki/llmist/commit/02a75dd)), closes [#247](https://github.com/zbigniewsobiecki/llmist/issues/247) [#ref](https://github.com/zbigniewsobiecki/llmist/issues/ref)
+
 ## <small>9.3.1 (2025-12-20)</small>
 
 * Merge pull request #246 from zbigniewsobiecki/dev ([b23bf02](https://github.com/zbigniewsobiecki/llmist/commit/b23bf02)), closes [#246](https://github.com/zbigniewsobiecki/llmist/issues/246)
