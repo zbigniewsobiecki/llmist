@@ -71,9 +71,9 @@ export function isExternalPackageSpecifier(specifier: string): boolean {
  * - `git+https://github.com/user/repo` - git URL
  * - `git+https://github.com/user/repo#v1.0.0` - git URL with ref
  * - `git+https://github.com/user/repo#v1.0.0:minimal` - git URL with ref and preset
- * - `git+https://github.com/user/repo:minimal` - git URL with preset (no ref)
+ * - `git+https://github.com/user/repo.git:minimal` - git URL with preset (requires .git extension)
  * - `git+https://github.com/user/repo#dev/BrowseWeb` - git URL with ref and specific gadget
- * - `git+https://github.com/user/repo.git/BrowseWeb` - git URL with specific gadget (no ref)
+ * - `git+https://github.com/user/repo.git/BrowseWeb` - git URL with specific gadget (requires .git)
  */
 export function parseGadgetSpecifier(specifier: string): GadgetSpecifier | null {
   // Git URL: git+URL[#ref][:preset][/gadgetName]
