@@ -1,3 +1,8 @@
+## 9.4.0 (2025-12-21)
+
+* Merge pull request #250 from zbigniewsobiecki/dev ([cde3667](https://github.com/zbigniewsobiecki/llmist/commit/cde3667)), closes [#250](https://github.com/zbigniewsobiecki/llmist/issues/250)
+* feat(agent): enable human input bubbling in subagents (#249) ([1410f1d](https://github.com/zbigniewsobiecki/llmist/commit/1410f1d)), closes [#249](https://github.com/zbigniewsobiecki/llmist/issues/249)
+
 ## <small>9.3.2 (2025-12-21)</small>
 
 * Merge pull request #248 from zbigniewsobiecki/dev ([94cc383](https://github.com/zbigniewsobiecki/llmist/commit/94cc383)), closes [#248](https://github.com/zbigniewsobiecki/llmist/issues/248)
