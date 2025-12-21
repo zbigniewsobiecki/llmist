@@ -848,6 +848,41 @@ export interface ExecutionContext {
    * ```
    */
   logger?: Logger<ILogObj>;
+
+  // ==========================================================================
+  // Human Input
+  // ==========================================================================
+
+  /**
+   * Request human input during gadget execution.
+   *
+   * When available, gadgets can use this callback to ask the user questions
+   * and receive their answers. This is used internally by gadgets that throw
+   * `HumanInputRequiredException` - the executor catches the exception and
+   * calls this callback if provided.
+   *
+   * Subagents created via `createSubagent()` will automatically inherit this
+   * capability from their parent context, enabling nested agents to bubble up
+   * human input requests to the CLI's TUI.
+   *
+   * This is optional - it will be `undefined` for:
+   * - Gadgets executed via CLI `gadget run` command
+   * - Non-interactive (piped) execution
+   * - Direct gadget testing without agent context
+   *
+   * @example
+   * ```typescript
+   * // Subagents automatically inherit human input capability:
+   * const agent = createSubagent(ctx, {
+   *   name: "BrowseWeb",
+   *   gadgets: [Navigate, Click, AskUser],
+   * }).ask("Log in to example.com");
+   *
+   * // The AskUser gadget inside BrowseWeb can now prompt the user
+   * // and the input request will bubble up to the CLI's TUI
+   * ```
+   */
+  requestHumanInput?: (question: string) => Promise<string>;
 }
 
 /**
