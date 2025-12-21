@@ -6,7 +6,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "turbo run build",
-    "test": "turbo run test",
+    "test": "bun test packages/llmist/src --ignore-pattern='**/e2e/**' && bun test packages/testing/src && bun test packages/cli/src",
     "test:e2e": "turbo run test:e2e --filter=llmist",
     "typecheck": "turbo run typecheck",
     "lint": "biome lint .",

@@ -19,14 +19,14 @@ Subagents encapsulate complexity. The parent agent doesn't need to understand br
 ### From CLI
 
 ```bash
-llmist agent "Find iPhone 16 Pro price on apple.com" -g webasto/BrowseWeb
+llmist agent "Find iPhone 16 Pro price on apple.com" -g dhalsim/BrowseWeb
 ```
 
 ### From Code
 
 ```typescript
 import { LLMist } from 'llmist';
-import { BrowseWeb } from 'webasto';
+import { BrowseWeb } from 'dhalsim';
 
 const result = await LLMist.createAgent()
   .withModel('sonnet')
@@ -40,7 +40,7 @@ By default, subagents **inherit the parent agent's model**:
 
 ```bash
 # Parent uses gemini-2.5-flash → BrowseWeb also uses it
-llmist agent "Find pricing" -m gemini-2.5-flash -g webasto/BrowseWeb
+llmist agent "Find pricing" -m gemini-2.5-flash -g dhalsim/BrowseWeb
 ```
 
 ## Configuration
