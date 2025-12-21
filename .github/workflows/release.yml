@@ -31,6 +31,9 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+    outputs:
+      released: ${{ steps.semantic.outputs.released == 'true' || steps.force_publish.outputs.version != '' }}
+      version: ${{ steps.semantic.outputs.version || steps.force_publish.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -154,25 +157,38 @@ jobs:
           bun run build
           npm publish --access public
 
-      - name: Sync dev branch
-        if: ${{ always() && steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' }}
-        continue-on-error: true
+  # Sync dev branch after release - failures are visible in GitHub Actions UI
+  sync-dev:
+    name: Sync dev branch
+    runs-on: ubuntu-latest
+    needs: release
+    if: |
+      always() &&
+      needs.release.result == 'success' &&
+      github.event.inputs.dry_run != 'true' &&
+      needs.release.outputs.released == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Sync dev with main
         run: |
-          # Fetch latest changes from remote
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git fetch origin
+          git checkout dev
 
-          # Check out dev branch
-          git checkout dev || git checkout -b dev origin/dev
-
-          # Fast-forward dev to match main (no merge commits)
-          # This works because all changes flow through feature branches -> dev -> main
-          # After a release, dev should always be able to fast-forward to main
-          git merge origin/main --ff-only --no-edit -m "chore: sync dev with main after release [skip ci]" || {
-            echo "⚠️  Warning: Could not fast-forward dev to main. Dev has diverged."
-            echo "This usually means there are commits on dev that aren't on main."
-            echo "Falling back to regular merge to keep branches in sync."
+          # Fast-forward if possible, otherwise merge
+          if git merge origin/main --ff-only; then
+            echo "✅ Fast-forwarded dev to main"
+          else
+            echo "⚠️ Cannot fast-forward, creating merge commit..."
             git merge origin/main --no-edit -m "chore: sync dev with main after release [skip ci]"
-          }
+          fi
 
-          # Push changes
           git push origin dev
+          echo "✅ Sync complete"

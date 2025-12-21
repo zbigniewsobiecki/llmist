@@ -42,6 +42,19 @@ gh pr create --base dev
 gh pr create --base main --head dev --title "chore(release): merge dev to main"
 ```
 
+### Branch Sync & Recovery
+
+After each release, `main` is automatically synced to `dev`. If sync fails, the workflow shows a failure in GitHub Actions (you'll get an email notification).
+
+**Manual recovery if branches desync:**
+```bash
+git fetch origin
+git checkout dev
+git merge origin/main
+# Resolve any conflicts
+git push origin dev
+```
+
 ## Commands
 
 ### Build & Test
