@@ -1,6 +1,6 @@
 {
   "name": "@llmist/testing",
-  "version": "9.4.0",
+  "version": "9.5.0",
   "description": "Testing utilities for llmist - mock LLM responses and test agents",
   "type": "module",
   "main": "dist/index.cjs",

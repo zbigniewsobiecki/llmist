@@ -1,3 +1,13 @@
+## 9.5.0 (2025-12-21)
+
+* Merge pull request #252 from zbigniewsobiecki/chore/add-branch-rulesets ([ed84c15](https://github.com/zbigniewsobiecki/llmist/commit/ed84c15)), closes [#252](https://github.com/zbigniewsobiecki/llmist/issues/252)
+* Merge pull request #253 from zbigniewsobiecki/feat/release-after-ci ([8b8fdc7](https://github.com/zbigniewsobiecki/llmist/commit/8b8fdc7)), closes [#253](https://github.com/zbigniewsobiecki/llmist/issues/253)
+* Merge pull request #255 from zbigniewsobiecki/dev ([0ccb654](https://github.com/zbigniewsobiecki/llmist/commit/0ccb654)), closes [#255](https://github.com/zbigniewsobiecki/llmist/issues/255)
+* fix(ci): improve branch sync reliability after releases (#251) ([1c488d2](https://github.com/zbigniewsobiecki/llmist/commit/1c488d2)), closes [#251](https://github.com/zbigniewsobiecki/llmist/issues/251)
+* fix(cli): fall back to npm when bun is unavailable for external gadgets (#254) ([7cf70d9](https://github.com/zbigniewsobiecki/llmist/commit/7cf70d9)), closes [#254](https://github.com/zbigniewsobiecki/llmist/issues/254)
+* feat(ci): trigger release only after CI passes on main ([377f669](https://github.com/zbigniewsobiecki/llmist/commit/377f669))
+* chore: add branch protection rulesets ([943d516](https://github.com/zbigniewsobiecki/llmist/commit/943d516))
+
 ## 9.4.0 (2025-12-21)
 
 * Merge pull request #250 from zbigniewsobiecki/dev ([cde3667](https://github.com/zbigniewsobiecki/llmist/commit/cde3667)), closes [#250](https://github.com/zbigniewsobiecki/llmist/issues/250)
