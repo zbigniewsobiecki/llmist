@@ -63,11 +63,11 @@ export function isExternalPackageSpecifier(specifier: string): boolean {
  * Parse a gadget specifier into its components.
  *
  * Supported formats:
- * - `webasto` - npm package, all gadgets
- * - `webasto@2.0.0` - npm package with version
- * - `webasto:minimal` - npm package with preset
- * - `webasto/Navigate` - npm package with specific gadget
- * - `webasto@2.0.0:minimal` - all combined
+ * - `dhalsim` - npm package, all gadgets
+ * - `dhalsim@2.0.0` - npm package with version
+ * - `dhalsim:minimal` - npm package with preset
+ * - `dhalsim/Navigate` - npm package with specific gadget
+ * - `dhalsim@2.0.0:minimal` - all combined
  * - `git+https://github.com/user/repo` - git URL
  * - `git+https://github.com/user/repo#v1.0.0` - git URL with ref
  * - `git+https://github.com/user/repo#v1.0.0:minimal` - git URL with ref and preset

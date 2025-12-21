@@ -241,10 +241,10 @@ export function extractGadgetsFromModule(moduleExports: unknown): AbstractGadget
  * 1. "builtin:Name" - explicit built-in lookup (error if not found)
  * 2. Bare "Name" without path chars - check built-in registry first
  * 3. External packages (npm/git) - auto-install and load from cache
- *    - "webasto" - npm package, all gadgets
- *    - "webasto@2.0.0" - npm package with version
- *    - "webasto:minimal" - npm package with preset
- *    - "webasto/Navigate" - npm package with specific gadget
+ *    - "dhalsim" - npm package, all gadgets
+ *    - "dhalsim@2.0.0" - npm package with version
+ *    - "dhalsim:minimal" - npm package with preset
+ *    - "dhalsim/Navigate" - npm package with specific gadget
  *    - "git+https://..." - git URL
  *    - "git+https://...#ref/GadgetName" - git URL with specific gadget
  * 4. File paths (starting with ., /, ~) - resolve and import
