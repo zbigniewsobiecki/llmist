@@ -76,7 +76,7 @@ llmist will automatically discover and use OpenAI.
 
     const client = new LLMist();
     const result = await client.speech.generate({
-      text: 'Hello, world!',
+      input: 'Hello, world!',
       model: 'tts-1',
       voice: 'nova',
     });
@@ -88,7 +88,7 @@ llmist will automatically discover and use OpenAI.
 
 ## Vision (Image Input)
 
-GPT-4o and GPT-4 Turbo support image input:
+GPT-4o and GPT-5 models support image input:
 
 ```typescript
 import { LLMist, imageFromUrl } from 'llmist';
