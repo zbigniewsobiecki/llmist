@@ -1,3 +1,7 @@
+## 9.6.0 (2025-12-22)
+
+* feat(cli): add bun fallback when npm unavailable for gadget installation (#263) ([75527c4](https://github.com/zbigniewsobiecki/llmist/commit/75527c4)), closes [#263](https://github.com/zbigniewsobiecki/llmist/issues/263)
+
 ## <small>9.5.4 (2025-12-22)</small>
 
 * fix(cli): show postinstall script output with --foreground-scripts (#262) ([8760753](https://github.com/zbigniewsobiecki/llmist/commit/8760753)), closes [#262](https://github.com/zbigniewsobiecki/llmist/issues/262)
