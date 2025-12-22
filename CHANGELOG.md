@@ -1,3 +1,8 @@
+## <small>9.5.2 (2025-12-22)</small>
+
+* Merge pull request #259 from zbigniewsobiecki/dev ([19f2e99](https://github.com/zbigniewsobiecki/llmist/commit/19f2e99)), closes [#259](https://github.com/zbigniewsobiecki/llmist/issues/259)
+* fix(cli): use npm instead of bun for external gadgets to run postinstall scripts (#258) ([17ed5ac](https://github.com/zbigniewsobiecki/llmist/commit/17ed5ac)), closes [#258](https://github.com/zbigniewsobiecki/llmist/issues/258)
+
 ## <small>9.5.1 (2025-12-22)</small>
 
 * Merge pull request #257 from zbigniewsobiecki/dev ([3b3a7df](https://github.com/zbigniewsobiecki/llmist/commit/3b3a7df)), closes [#257](https://github.com/zbigniewsobiecki/llmist/issues/257)
