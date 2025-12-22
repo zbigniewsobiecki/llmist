@@ -1,3 +1,7 @@
+## <small>9.5.4 (2025-12-22)</small>
+
+* fix(cli): show postinstall script output with --foreground-scripts (#262) ([8760753](https://github.com/zbigniewsobiecki/llmist/commit/8760753)), closes [#262](https://github.com/zbigniewsobiecki/llmist/issues/262)
+
 ## <small>9.5.3 (2025-12-22)</small>
 
 * Merge pull request #261 from zbigniewsobiecki/dev ([716bd56](https://github.com/zbigniewsobiecki/llmist/commit/716bd56)), closes [#261](https://github.com/zbigniewsobiecki/llmist/issues/261)
