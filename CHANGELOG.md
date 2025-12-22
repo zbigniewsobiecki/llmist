@@ -1,3 +1,8 @@
+## <small>9.5.1 (2025-12-22)</small>
+
+* Merge pull request #257 from zbigniewsobiecki/dev ([3b3a7df](https://github.com/zbigniewsobiecki/llmist/commit/3b3a7df)), closes [#257](https://github.com/zbigniewsobiecki/llmist/issues/257)
+* fix(cli): show npm install output to allow post-install scripts to run (#256) ([699cff8](https://github.com/zbigniewsobiecki/llmist/commit/699cff8)), closes [#256](https://github.com/zbigniewsobiecki/llmist/issues/256)
+
 ## 9.5.0 (2025-12-21)
 
 * Merge pull request #252 from zbigniewsobiecki/chore/add-branch-rulesets ([ed84c15](https://github.com/zbigniewsobiecki/llmist/commit/ed84c15)), closes [#252](https://github.com/zbigniewsobiecki/llmist/issues/252)
