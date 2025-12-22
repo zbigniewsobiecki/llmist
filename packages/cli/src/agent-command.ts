@@ -75,15 +75,16 @@ export async function executeAgent(
   const registry = new GadgetRegistry();
 
   // Register built-in gadgets for basic agent interaction
-  // AskUser is auto-excluded when stdin is not interactive (piped input)
+  // AskUser is auto-excluded when stdin/stdout is not interactive (piped input/output)
   if (options.builtins !== false) {
     for (const gadget of builtinGadgets) {
       // Skip AskUser if:
       // 1. --no-builtin-interaction is set, OR
-      // 2. stdin is not interactive (piped input) - AskUser can't work anyway
+      // 2. stdin is not interactive (piped input), OR
+      // 3. stdout is not a TTY (piped output) - can't display questions or collect answers
       if (
         gadget.name === "AskUser" &&
-        (options.builtinInteraction === false || !stdinIsInteractive)
+        (options.builtinInteraction === false || !stdinIsInteractive || !stdoutTTY)
       ) {
         continue;
       }
