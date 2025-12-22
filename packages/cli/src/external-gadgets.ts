@@ -258,21 +258,22 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
   };
   fs.writeFileSync(path.join(cacheDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
-  // Install the package using available package manager
+  // Always use npm for external gadgets (not bun) because:
+  // - npm runs all postinstall scripts by default
+  // - bun blocks postinstall scripts and its --trust flag only trusts direct deps, not subdeps
+  // - Packages like dhalsim depend on camoufox which needs postinstall to download browsers
   const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
-  const pm = getPackageManager();
-  const installCmd = pm === "bun" ? `bun add "${packageSpec}"` : `npm install "${packageSpec}"`;
+  const installCmd = `npm install "${packageSpec}"`;
 
   try {
-    // Use stdio: "inherit" to allow post-install scripts to run properly
-    // and show their output (e.g., camoufox downloads browser binaries)
+    // Use stdio: "inherit" to show installation progress and postinstall script output
     execSync(installCmd, {
       stdio: "inherit",
       cwd: cacheDir,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to install npm package '${packageSpec}' using ${pm}: ${message}`);
+    throw new Error(`Failed to install npm package '${packageSpec}': ${message}`);
   }
 }
 
