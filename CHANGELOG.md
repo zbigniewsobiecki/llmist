@@ -1,3 +1,8 @@
+## <small>9.5.3 (2025-12-22)</small>
+
+* Merge pull request #261 from zbigniewsobiecki/dev ([716bd56](https://github.com/zbigniewsobiecki/llmist/commit/716bd56)), closes [#261](https://github.com/zbigniewsobiecki/llmist/issues/261)
+* fix(cli): disable AskUser gadget when stdout is piped (#260) ([ebc7914](https://github.com/zbigniewsobiecki/llmist/commit/ebc7914)), closes [#260](https://github.com/zbigniewsobiecki/llmist/issues/260)
+
 ## <small>9.5.2 (2025-12-22)</small>
 
 * Merge pull request #259 from zbigniewsobiecki/dev ([19f2e99](https://github.com/zbigniewsobiecki/llmist/commit/19f2e99)), closes [#259](https://github.com/zbigniewsobiecki/llmist/issues/259)
