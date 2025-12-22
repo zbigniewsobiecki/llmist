@@ -259,14 +259,13 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
   fs.writeFileSync(path.join(cacheDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
   // Always use npm for external gadgets (not bun) because:
-  // - npm runs all postinstall scripts by default
   // - bun blocks postinstall scripts and its --trust flag only trusts direct deps, not subdeps
   // - Packages like dhalsim depend on camoufox which needs postinstall to download browsers
+  // Use --foreground-scripts so postinstall output (e.g. download progress) is visible
   const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
-  const installCmd = `npm install "${packageSpec}"`;
+  const installCmd = `npm install --foreground-scripts "${packageSpec}"`;
 
   try {
-    // Use stdio: "inherit" to show installation progress and postinstall script output
     execSync(installCmd, {
       stdio: "inherit",
       cwd: cacheDir,
@@ -311,7 +310,7 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
     // Install dependencies and build using available package manager
     if (fs.existsSync(path.join(cacheDir, "package.json"))) {
       const pm = getPackageManager();
-      const installCmd = pm === "bun" ? "bun install" : "npm install";
+      const installCmd = pm === "bun" ? "bun install" : "npm install --foreground-scripts";
       const runCmd = pm === "bun" ? "bun run" : "npm run";
 
       try {
