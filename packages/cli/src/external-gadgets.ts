@@ -264,8 +264,10 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
   const installCmd = pm === "bun" ? `bun add "${packageSpec}"` : `npm install "${packageSpec}"`;
 
   try {
+    // Use stdio: "inherit" to allow post-install scripts to run properly
+    // and show their output (e.g., camoufox downloads browser binaries)
     execSync(installCmd, {
-      stdio: "pipe",
+      stdio: "inherit",
       cwd: cacheDir,
     });
   } catch (error) {
