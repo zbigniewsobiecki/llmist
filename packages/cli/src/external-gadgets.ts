@@ -19,17 +19,29 @@ import type { AbstractGadget, LLMistPackageManifest } from "llmist";
 import { extractGadgetsFromModule } from "./gadgets.js";
 
 /**
+ * Check if a command is available in the system PATH.
+ */
+function isCommandAvailable(cmd: string): boolean {
+  try {
+    // Use 'where' on Windows, 'which' on Unix
+    const checkCmd = process.platform === "win32" ? "where" : "which";
+    execSync(`${checkCmd} ${cmd}`, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Detect which package manager is available.
  * Tries bun first (faster), then falls back to npm (universal with Node.js).
  */
 function detectPackageManager(): "bun" | "npm" {
-  try {
-    execSync("bun --version", { stdio: "pipe" });
+  if (isCommandAvailable("bun")) {
     return "bun";
-  } catch {
-    // bun not available, fall back to npm
-    return "npm";
   }
+  // Fall back to npm (assumed available with Node.js)
+  return "npm";
 }
 
 /** Cached package manager to avoid repeated detection */
@@ -245,6 +257,7 @@ function isCached(cacheDir: string): boolean {
 
 /**
  * Install an npm package to the cache directory.
+ * Prefers npm for reliable postinstall execution, falls back to bun if npm unavailable.
  */
 async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promise<void> {
   // Create cache directory
@@ -258,22 +271,48 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
   };
   fs.writeFileSync(path.join(cacheDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
-  // Always use npm for external gadgets (not bun) because:
-  // - bun blocks postinstall scripts and its --trust flag only trusts direct deps, not subdeps
+  const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
+
+  // Prefer npm for external gadgets because:
+  // - npm runs all postinstall scripts reliably (including subdependencies)
   // - Packages like dhalsim depend on camoufox which needs postinstall to download browsers
   // Use --foreground-scripts so postinstall output (e.g. download progress) is visible
-  const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
-  const installCmd = `npm install --foreground-scripts "${packageSpec}"`;
-
-  try {
-    execSync(installCmd, {
-      stdio: "inherit",
-      cwd: cacheDir,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to install npm package '${packageSpec}': ${message}`);
+  if (isCommandAvailable("npm")) {
+    const installCmd = `npm install --foreground-scripts "${packageSpec}"`;
+    try {
+      execSync(installCmd, { stdio: "inherit", cwd: cacheDir });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to install npm package '${packageSpec}': ${message}`);
+    }
   }
+
+  // Fallback to bun with --trust for postinstall scripts
+  // Note: bun's --trust only applies to direct dependencies, not subdependencies
+  if (isCommandAvailable("bun")) {
+    console.warn(
+      "⚠️  npm not found, using bun. Postinstall scripts for subdependencies may not run.\n" +
+        "   For best results, install npm: https://nodejs.org/"
+    );
+    const installCmd = `bun add --trust "${packageSpec}"`;
+    try {
+      execSync(installCmd, { stdio: "inherit", cwd: cacheDir });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to install package '${packageSpec}' with bun: ${message}`);
+    }
+  }
+
+  // Neither npm nor bun available
+  throw new Error(
+    `No package manager available to install '${packageSpec}'.\n` +
+      "Please install npm (recommended) or bun:\n" +
+      "  - npm: https://nodejs.org/\n" +
+      "  - bun: https://bun.sh/\n" +
+      "npm is preferred because it runs all postinstall scripts reliably."
+  );
 }
 
 /**
@@ -309,15 +348,30 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
 
     // Install dependencies and build using available package manager
     if (fs.existsSync(path.join(cacheDir, "package.json"))) {
-      const pm = getPackageManager();
-      const installCmd = pm === "bun" ? "bun install" : "npm install --foreground-scripts";
-      const runCmd = pm === "bun" ? "bun run" : "npm run";
+      // Determine which package manager to use
+      const hasNpm = isCommandAvailable("npm");
+      const hasBun = isCommandAvailable("bun");
+
+      if (!hasNpm && !hasBun) {
+        throw new Error(
+          `No package manager available to install dependencies for '${spec.package}'.\n` +
+            "Please install npm or bun:\n" +
+            "  - npm: https://nodejs.org/\n" +
+            "  - bun: https://bun.sh/"
+        );
+      }
+
+      // Use bun if available (faster), otherwise npm
+      const useBun = hasBun;
+      const installCmd = useBun ? "bun install" : "npm install --foreground-scripts";
+      const runCmd = useBun ? "bun run" : "npm run";
+      const pmName = useBun ? "bun" : "npm";
 
       try {
         execSync(installCmd, { cwd: cacheDir, stdio: "inherit" });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to install dependencies for '${spec.package}' using ${pm}: ${message}`);
+        throw new Error(`Failed to install dependencies for '${spec.package}' using ${pmName}: ${message}`);
       }
 
       // Run build if available (git packages need to be built)
