@@ -1,3 +1,33 @@
+## 10.0.0 (2025-12-23)
+
+* feat(agent): inherit logger in withParentContext (#269) ([d27d618](https://github.com/zbigniewsobiecki/llmist/commit/d27d618)), closes [#269](https://github.com/zbigniewsobiecki/llmist/issues/269)
+* feat(cli): add includeFile() for templates and config command (#266) ([e3aad2b](https://github.com/zbigniewsobiecki/llmist/commit/e3aad2b)), closes [#266](https://github.com/zbigniewsobiecki/llmist/issues/266)
+* feat(cli): implement session-based logging with memorable names (#268) ([6e37752](https://github.com/zbigniewsobiecki/llmist/commit/6e37752)), closes [#268](https://github.com/zbigniewsobiecki/llmist/issues/268)
+* feat(gadgets): add configurable timeoutMs for subagents via CLI config (#264) ([768c4d1](https://github.com/zbigniewsobiecki/llmist/commit/768c4d1)), closes [#264](https://github.com/zbigniewsobiecki/llmist/issues/264)
+* fix(cli): expand tilde (~) in config file paths (#267) ([41df264](https://github.com/zbigniewsobiecki/llmist/commit/41df264)), closes [#267](https://github.com/zbigniewsobiecki/llmist/issues/267)
+* Merge remote-tracking branch 'origin/main' into dev ([b574fa6](https://github.com/zbigniewsobiecki/llmist/commit/b574fa6))
+
+
+### BREAKING CHANGE
+
+* The --log-file, --log-reset CLI flags and their
+corresponding config options (log-file, log-reset) have been removed.
+Session logs are now automatically created per-session.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* refactor(cli): only add number suffix on session name collision
+
+- Generate cleaner names like "sunny-falcon" instead of "sunny-falcon-42"
+- Numbers only appended when directory already exists (e.g., "sunny-falcon-2")
+- Update tests and documentation to reflect new format
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 9.7.0 (2025-12-23)
 
 * feat(gadgets): add configurable timeoutMs for subagents via CLI config (#264) (#265) ([8a610ef](https://github.com/zbigniewsobiecki/llmist/commit/8a610ef)), closes [#264](https://github.com/zbigniewsobiecki/llmist/issues/264) [#265](https://github.com/zbigniewsobiecki/llmist/issues/265)
