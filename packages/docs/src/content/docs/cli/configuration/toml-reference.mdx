@@ -232,7 +232,7 @@ export LLMIST_LOG_LEVEL="debug"   # silly, trace, debug, info, warn, error, fata
 ```
 
 :::note[Session-Based Logging]
-Each CLI session automatically creates its own log directory at `~/.llmist/logs/<session-name>/` with a memorable name like `sunny-falcon-42`. Session logs are stored in `session.log.jsonl` within that directory.
+Each CLI session automatically creates its own log directory at `~/.llmist/logs/<session-name>/` with a memorable name like `sunny-falcon`. Numbers are only appended when there's a name collision (e.g., `sunny-falcon-2`). Session logs are stored in `session.log.jsonl` within that directory.
 :::
 
 ### Global CLI Flags

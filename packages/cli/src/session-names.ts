@@ -130,14 +130,14 @@ const NOUNS = [
 ] as const;
 
 /**
- * Generates a memorable session name in the format: adjective-noun-number
- * Examples: "sunny-falcon-42", "calm-river-17", "bright-star-88"
+ * Generates a base session name in the format: adjective-noun
+ * Examples: "sunny-falcon", "calm-river", "bright-star"
  *
- * With ~56 adjectives, ~64 nouns, and 100 numbers, there are ~358,400 possible combinations.
+ * With ~56 adjectives and ~64 nouns, there are ~3,584 base combinations.
+ * Numbers are appended by the session module only when needed to avoid collisions.
  */
 export function generateSessionName(): string {
   const adjective = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
   const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  const number = Math.floor(Math.random() * 100);
-  return `${adjective}-${noun}-${number}`;
+  return `${adjective}-${noun}`;
 }

@@ -38,7 +38,8 @@ describe("session", () => {
       const session = await initSession();
       createdLogDirs.push(session.logDir);
 
-      expect(session.name).toMatch(/^[a-z]+-[a-z]+-\d{1,2}$/);
+      // Format: adjective-noun or adjective-noun-N (when collision)
+      expect(session.name).toMatch(/^[a-z]+-[a-z]+(-\d+)?$/);
       expect(session.logDir).toBe(join(SESSION_LOGS_BASE, session.name));
     });
 
