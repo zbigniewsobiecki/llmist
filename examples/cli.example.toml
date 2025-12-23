@@ -24,11 +24,10 @@
 #──────────────────────────────────────────────────────────────────────────────
 # GLOBAL OPTIONS
 # These apply to all commands and override environment variables.
-# CLI flags (--log-level, --log-file) still take priority over these.
+# CLI flags (--log-level) still take priority over these.
 #──────────────────────────────────────────────────────────────────────────────
 [global]
 # log-level = "info"                     # silly, trace, debug, info, warn, error, fatal
-# log-file = "~/.llmist/logs/llmist.log" # Log file path (~ expanded, enables JSON logging)
 
 #──────────────────────────────────────────────────────────────────────────────
 # COMPLETE COMMAND DEFAULTS

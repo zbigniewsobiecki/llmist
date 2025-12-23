@@ -33,9 +33,7 @@ export const OPTION_FLAGS = {
   maxIterations: "-i, --max-iterations <count>",
   gadgetModule: "-g, --gadget <module>",
   logLevel: "--log-level <level>",
-  logFile: "--log-file <path>",
-  logReset: "--log-reset",
-  logLlmRequests: "--log-llm-requests [dir]",
+  logLlmRequests: "--log-llm-requests",
   noBuiltins: "--no-builtins",
   noBuiltinInteraction: "--no-builtin-interaction",
   quiet: "-q, --quiet",
@@ -64,10 +62,7 @@ export const OPTION_DESCRIPTIONS = {
   gadgetModule:
     "Path or module specifier for a gadget export. Repeat to register multiple gadgets.",
   logLevel: "Log level: silly, trace, debug, info, warn, error, fatal.",
-  logFile: "Path to log file. When set, logs are written to file instead of stderr.",
-  logReset: "Reset (truncate) the log file at session start instead of appending.",
-  logLlmRequests:
-    "Save LLM requests/responses to session directories. Optional dir, defaults to ~/.llmist/logs/requests/",
+  logLlmRequests: "Save LLM requests/responses to the session log directory.",
   noBuiltins: "Disable built-in gadgets (AskUser, TellUser).",
   noBuiltinInteraction: "Disable interactive gadgets (AskUser) while keeping TellUser.",
   quiet: "Suppress all output except content (text and TellUser messages).",

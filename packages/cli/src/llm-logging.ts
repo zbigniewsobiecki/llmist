@@ -1,32 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { extractMessageText, type LLMMessage } from "llmist";
-
-/**
- * Default directory for LLM debug logs.
- */
-export const DEFAULT_LLM_LOG_DIR = join(homedir(), ".llmist", "logs");
-
-/**
- * Resolves the log directory from a boolean or string option.
- * - true: use default directory with subdir
- * - string: use the provided path
- * - undefined/false: disabled
- */
-export function resolveLogDir(
-  option: string | boolean | undefined,
-  subdir: string,
-): string | undefined {
-  if (option === true) {
-    return join(DEFAULT_LLM_LOG_DIR, subdir);
-  }
-  if (typeof option === "string") {
-    return option;
-  }
-  return undefined;
-}
 
 /**
  * Formats LLM messages as plain text for debugging.
@@ -48,37 +23,6 @@ export function formatLlmRequest(messages: LLMMessage[]): string {
 export async function writeLogFile(dir: string, filename: string, content: string): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, filename), content, "utf-8");
-}
-
-/**
- * Formats a timestamp for session directory naming.
- * Returns format: "YYYY-MM-DD_HH-MM-SS" (e.g., "2025-12-09_14-30-45")
- */
-export function formatSessionTimestamp(date: Date = new Date()): string {
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  const seconds = pad(date.getSeconds());
-  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
-}
-
-/**
- * Creates a session directory with a timestamped name.
- * Returns the full path to the created directory, or undefined if creation fails.
- */
-export async function createSessionDir(baseDir: string): Promise<string | undefined> {
-  const timestamp = formatSessionTimestamp();
-  const sessionDir = join(baseDir, timestamp);
-  try {
-    await mkdir(sessionDir, { recursive: true });
-    return sessionDir;
-  } catch (error) {
-    console.warn(`[llmist] Failed to create log session directory: ${sessionDir}`, error);
-    return undefined;
-  }
 }
 
 /**

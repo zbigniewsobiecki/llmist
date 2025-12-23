@@ -1,7 +1,9 @@
+import { join } from "node:path";
 import readline from "node:readline";
 import chalk from "chalk";
 import type { ILogObj, Logger, LoggerOptions } from "llmist";
 import { LLMist, createLogger } from "llmist";
+import type { Session } from "./session.js";
 
 /**
  * Stream type that may have TTY detection capability.
@@ -13,8 +15,6 @@ export type TTYAwareStream = NodeJS.ReadableStream & { isTTY?: boolean };
  */
 export interface CLILoggerConfig {
   logLevel?: string;
-  logFile?: string;
-  logReset?: boolean;
 }
 
 /**
@@ -34,6 +34,8 @@ export interface CLIEnvironment {
   isTTY: boolean;
   /** Prompt the user for input (only works when isTTY is true) */
   prompt: (question: string) => Promise<string>;
+  /** Current session with logging directory */
+  session?: Session;
 }
 
 const LOG_LEVEL_MAP: Record<string, number> = {
@@ -49,8 +51,14 @@ const LOG_LEVEL_MAP: Record<string, number> = {
 /**
  * Creates a logger factory based on CLI configuration.
  * Priority: CLI options > environment variables > defaults
+ *
+ * @param config - Logger configuration (log level)
+ * @param sessionLogDir - Session log directory for automatic log file
  */
-export function createLoggerFactory(config?: CLILoggerConfig): (name: string) => Logger<ILogObj> {
+export function createLoggerFactory(
+  config?: CLILoggerConfig,
+  sessionLogDir?: string,
+): (name: string) => Logger<ILogObj> {
   return (name: string) => {
     const options: LoggerOptions = { name };
 
@@ -62,17 +70,11 @@ export function createLoggerFactory(config?: CLILoggerConfig): (name: string) =>
       }
     }
 
-    // CLI --log-reset takes priority over LLMIST_LOG_RESET env var
-    if (config?.logReset !== undefined) {
-      options.logReset = config.logReset;
-    }
-
-    // CLI --log-file takes priority over LLMIST_LOG_FILE env var
-    // When log file is set via CLI, we temporarily set the env var
-    // so createLogger picks it up
-    if (config?.logFile) {
+    // Auto-set log file to session directory if session exists
+    if (sessionLogDir) {
+      const logFile = join(sessionLogDir, "session.log.jsonl");
       const originalLogFile = process.env.LLMIST_LOG_FILE;
-      process.env.LLMIST_LOG_FILE = config.logFile;
+      process.env.LLMIST_LOG_FILE = logFile;
       const logger = createLogger(options);
       // Restore original (or delete if it wasn't set)
       if (originalLogFile === undefined) {
@@ -124,9 +126,13 @@ function createPromptFunction(
  * Uses process.argv, process.stdin/stdout/stderr, and creates a new LLMist client.
  *
  * @param loggerConfig - Optional logger configuration from CLI options
+ * @param sessionLogDir - Optional session log directory for automatic log file
  * @returns Default CLI environment
  */
-export function createDefaultEnvironment(loggerConfig?: CLILoggerConfig): CLIEnvironment {
+export function createDefaultEnvironment(
+  loggerConfig?: CLILoggerConfig,
+  sessionLogDir?: string,
+): CLIEnvironment {
   const isTTY = Boolean(process.stdin.isTTY);
 
   return {
@@ -139,7 +145,7 @@ export function createDefaultEnvironment(loggerConfig?: CLILoggerConfig): CLIEnv
       process.exitCode = code;
     },
     loggerConfig,
-    createLogger: createLoggerFactory(loggerConfig),
+    createLogger: createLoggerFactory(loggerConfig, sessionLogDir),
     isTTY,
     prompt: isTTY
       ? createPromptFunction(process.stdin, process.stdout)

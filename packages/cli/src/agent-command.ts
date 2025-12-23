@@ -17,13 +17,7 @@ import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
-import {
-  createSessionDir,
-  formatCallNumber,
-  formatLlmRequest,
-  resolveLogDir,
-  writeLogFile,
-} from "./llm-logging.js";
+import { formatCallNumber, formatLlmRequest, writeLogFile } from "./llm-logging.js";
 import { type CLIAgentOptions, addAgentOptions } from "./option-helpers.js";
 import { TUIApp, StatusBar } from "./tui/index.js";
 import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
@@ -170,9 +164,9 @@ export async function executeAgent(
   let usage: TokenUsage | undefined;
   let iterations = 0;
 
-  // Resolve LLM debug log directory (if enabled)
-  const llmLogsBaseDir = resolveLogDir(options.logLlmRequests, "requests");
-  let llmSessionDir: string | undefined;
+  // LLM request logging: use session directory if enabled
+  const llmLogsEnabled = options.logLlmRequests === true;
+  const llmLogDir = llmLogsEnabled ? env.session?.logDir : undefined;
   let llmCallCounter = 0;
 
   // Count tokens accurately using provider-specific methods
@@ -255,15 +249,10 @@ export async function executeAgent(
             tui.setLLMCallRequest(context.options.messages);
           }
 
-          if (llmLogsBaseDir) {
-            if (!llmSessionDir) {
-              llmSessionDir = await createSessionDir(llmLogsBaseDir);
-            }
-            if (llmSessionDir) {
-              const filename = `${formatCallNumber(llmCallCounter)}.request`;
-              const content = formatLlmRequest(context.options.messages);
-              await writeLogFile(llmSessionDir, filename, content);
-            }
+          if (llmLogDir) {
+            const filename = `${formatCallNumber(llmCallCounter)}.request`;
+            const content = formatLlmRequest(context.options.messages);
+            await writeLogFile(llmLogDir, filename, content);
           }
         },
 
@@ -320,9 +309,9 @@ export async function executeAgent(
           }
 
           // Write LLM response to debug log if enabled
-          if (llmSessionDir) {
+          if (llmLogDir) {
             const filename = `${formatCallNumber(llmCallCounter)}.response`;
-            await writeLogFile(llmSessionDir, filename, context.rawResponse);
+            await writeLogFile(llmLogDir, filename, context.rawResponse);
           }
         },
       },

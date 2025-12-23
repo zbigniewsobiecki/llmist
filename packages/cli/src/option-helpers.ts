@@ -19,7 +19,7 @@ export interface CLICompleteOptions {
   temperature?: number;
   maxTokens?: number;
   quiet?: boolean;
-  logLlmRequests?: string | boolean;
+  logLlmRequests?: boolean;
   /** Path to image file to include with the prompt */
   image?: string;
   /** Path to audio file to include with the prompt */
@@ -42,7 +42,7 @@ export interface CLIAgentOptions {
   gadgetArgPrefix?: string;
   gadgetApproval?: GadgetPermissionPolicy;
   quiet?: boolean;
-  logLlmRequests?: string | boolean;
+  logLlmRequests?: boolean;
   /** Path to image file to include with the initial prompt */
   image?: string;
   /** Path to audio file to include with the initial prompt */

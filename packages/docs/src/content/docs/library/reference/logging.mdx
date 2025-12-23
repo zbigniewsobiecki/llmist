@@ -24,12 +24,6 @@ llmist uses structured logging for debugging and monitoring.
 ```bash
 # Set log level
 export LLMIST_LOG_LEVEL="debug"
-
-# Log to file
-export LLMIST_LOG_FILE="./llmist.log"
-
-# Clear log file on start
-export LLMIST_LOG_RESET="true"
 ```
 
 ### Variable Reference
@@ -37,8 +31,10 @@ export LLMIST_LOG_RESET="true"
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LLMIST_LOG_LEVEL` | Minimum log level | `warn` |
-| `LLMIST_LOG_FILE` | Path to log file | none (console only) |
-| `LLMIST_LOG_RESET` | Clear log file on start | `false` |
+
+:::note[Session-Based Logging]
+Each CLI session automatically creates its own log directory at `~/.llmist/logs/<session-name>/` with a memorable name like `sunny-falcon-42`. Session logs are stored in `session.log.jsonl` within that directory.
+:::
 
 ## CLI Logging
 
@@ -50,11 +46,8 @@ Use command-line flags:
     # Set log level
     bunx @llmist/cli agent "task" --log-level debug
 
-    # Log to file
-    bunx @llmist/cli agent "task" --log-file ./debug.log
-
-    # Combine options
-    bunx @llmist/cli agent "task" --log-level trace --log-file ./trace.log
+    # Enable trace for maximum verbosity
+    bunx @llmist/cli agent "task" --log-level trace
     ```
   </TabItem>
   <TabItem label="npm">
@@ -62,11 +55,8 @@ Use command-line flags:
     # Set log level
     npx @llmist/cli agent "task" --log-level debug
 
-    # Log to file
-    npx @llmist/cli agent "task" --log-file ./debug.log
-
-    # Combine options
-    npx @llmist/cli agent "task" --log-level trace --log-file ./trace.log
+    # Enable trace for maximum verbosity
+    npx @llmist/cli agent "task" --log-level trace
     ```
   </TabItem>
 </Tabs>
@@ -76,7 +66,6 @@ Or configure in `~/.llmist/cli.toml`:
 ```toml
 [agent]
 log-level = "debug"
-log-file = "~/.llmist/logs/agent.log"
 ```
 
 ## Programmatic Configuration

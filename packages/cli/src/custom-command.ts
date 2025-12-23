@@ -22,10 +22,7 @@ function createCommandEnvironment(
   config: CustomCommandConfig,
 ): CLIEnvironment {
   // Check if command has any logging overrides
-  const hasLoggingConfig =
-    config["log-level"] !== undefined ||
-    config["log-file"] !== undefined ||
-    config["log-reset"] !== undefined;
+  const hasLoggingConfig = config["log-level"] !== undefined;
 
   if (!hasLoggingConfig) {
     return baseEnv;
@@ -34,15 +31,13 @@ function createCommandEnvironment(
   // Merge per-command logging config with base environment's config
   const loggerConfig: CLILoggerConfig = {
     logLevel: config["log-level"] ?? baseEnv.loggerConfig?.logLevel,
-    logFile: config["log-file"] ?? baseEnv.loggerConfig?.logFile,
-    logReset: config["log-reset"] ?? baseEnv.loggerConfig?.logReset,
   };
 
   // Preserve all baseEnv properties, only override logging config
   return {
     ...baseEnv,
     loggerConfig,
-    createLogger: createLoggerFactory(loggerConfig),
+    createLogger: createLoggerFactory(loggerConfig, baseEnv.session?.logDir),
   };
 }
 
