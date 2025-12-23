@@ -229,9 +229,11 @@ export GEMINI_API_KEY="..."
 
 ```bash
 export LLMIST_LOG_LEVEL="debug"   # silly, trace, debug, info, warn, error, fatal
-export LLMIST_LOG_FILE="./app.log"
-export LLMIST_LOG_RESET="true"    # Clear log file on start
 ```
+
+:::note[Session-Based Logging]
+Each CLI session automatically creates its own log directory at `~/.llmist/logs/<session-name>/` with a memorable name like `sunny-falcon`. Numbers are only appended when there's a name collision (e.g., `sunny-falcon-2`). Session logs are stored in `session.log.jsonl` within that directory.
+:::
 
 ### Global CLI Flags
 
@@ -240,7 +242,6 @@ These flags work with any command:
 | Flag | Description |
 |------|-------------|
 | `--log-level <level>` | Set log level |
-| `--log-file <path>` | Path to log file |
 | `--version` | Show version number |
 | `--help` | Show help |
 

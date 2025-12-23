@@ -26,6 +26,7 @@ import { createDefaultEnvironment } from "./environment.js";
 import { registerGadgetCommand } from "./gadget-command.js";
 import { registerImageCommand } from "./image-command.js";
 import { registerModelsCommand } from "./models-command.js";
+import { initSession } from "./session.js";
 import { registerSpeechCommand } from "./speech-command.js";
 import { registerVisionCommand } from "./vision-command.js";
 
@@ -45,8 +46,6 @@ function parseLogLevel(value: string): CLILogLevel {
  */
 interface GlobalOptions {
   logLevel?: CLILogLevel;
-  logFile?: string;
-  logReset?: boolean;
 }
 
 /**
@@ -64,8 +63,6 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
     .description(CLI_DESCRIPTION)
     .version(packageJson.version)
     .option(OPTION_FLAGS.logLevel, OPTION_DESCRIPTIONS.logLevel, parseLogLevel)
-    .option(OPTION_FLAGS.logFile, OPTION_DESCRIPTIONS.logFile)
-    .option(OPTION_FLAGS.logReset, OPTION_DESCRIPTIONS.logReset)
     .configureOutput({
       writeOut: (str) => env.stdout.write(str),
       writeErr: (str) => env.stderr.write(str),
@@ -124,12 +121,13 @@ export async function runCLI(
   const config = opts.config !== undefined ? opts.config : loadConfig();
   const envOverrides = opts.env ?? {};
 
+  // Initialize session with memorable name (creates log directory)
+  const session = await initSession();
+
   // First pass: parse global options only (skip if help requested)
   const preParser = new Command();
   preParser
     .option(OPTION_FLAGS.logLevel, OPTION_DESCRIPTIONS.logLevel, parseLogLevel)
-    .option(OPTION_FLAGS.logFile, OPTION_DESCRIPTIONS.logFile)
-    .option(OPTION_FLAGS.logReset, OPTION_DESCRIPTIONS.logReset)
     .allowUnknownOption()
     .allowExcessArguments()
     .helpOption(false); // Don't intercept --help
@@ -141,14 +139,13 @@ export async function runCLI(
   // Priority: CLI flags > config file > defaults
   const loggerConfig: CLILoggerConfig = {
     logLevel: globalOpts.logLevel ?? config.global?.["log-level"],
-    logFile: globalOpts.logFile ?? config.global?.["log-file"],
-    logReset: globalOpts.logReset ?? config.global?.["log-reset"],
   };
 
-  const defaultEnv = createDefaultEnvironment(loggerConfig);
+  const defaultEnv = createDefaultEnvironment(loggerConfig, session.logDir);
   const env: CLIEnvironment = {
     ...defaultEnv,
     ...envOverrides,
+    session,
   };
   const program = createProgram(env, config);
   await program.parseAsync(env.argv);

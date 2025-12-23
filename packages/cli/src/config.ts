@@ -52,8 +52,6 @@ export type GadgetPermissionPolicy = Record<string, GadgetPermissionLevel>;
  */
 export interface GlobalConfig {
   "log-level"?: LogLevel;
-  "log-file"?: string;
-  "log-reset"?: boolean;
 }
 
 /**
@@ -73,9 +71,7 @@ export interface CompleteConfig extends SharedCommandConfig {
   "max-tokens"?: number;
   quiet?: boolean;
   "log-level"?: LogLevel;
-  "log-file"?: string;
-  "log-reset"?: boolean;
-  "log-llm-requests"?: string | boolean;
+  "log-llm-requests"?: boolean;
 }
 
 /**
@@ -121,9 +117,7 @@ export interface AgentConfig extends SharedCommandConfig {
   subagents?: SubagentConfigMap;
   quiet?: boolean;
   "log-level"?: LogLevel;
-  "log-file"?: string;
-  "log-reset"?: boolean;
-  "log-llm-requests"?: string | boolean;
+  "log-llm-requests"?: boolean;
 }
 
 /**
@@ -165,7 +159,7 @@ export interface CLIConfig {
 }
 
 /** Valid keys for global config */
-const GLOBAL_CONFIG_KEYS = new Set(["log-level", "log-file", "log-reset"]);
+const GLOBAL_CONFIG_KEYS = new Set(["log-level"]);
 
 /** Valid log levels */
 const VALID_LOG_LEVELS: LogLevel[] = ["silly", "trace", "debug", "info", "warn", "error", "fatal"];
@@ -179,8 +173,6 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "quiet",
   "inherits",
   "log-level",
-  "log-file",
-  "log-reset",
   "log-llm-requests",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
@@ -205,8 +197,6 @@ const AGENT_CONFIG_KEYS = new Set([
   "quiet",
   "inherits",
   "log-level",
-  "log-file",
-  "log-reset",
   "log-llm-requests",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
@@ -452,8 +442,8 @@ function validateGadgetApproval(value: unknown, section: string): GadgetPermissi
 function validateLoggingConfig(
   raw: Record<string, unknown>,
   section: string,
-): { "log-level"?: LogLevel; "log-file"?: string; "log-reset"?: boolean } {
-  const result: { "log-level"?: LogLevel; "log-file"?: string; "log-reset"?: boolean } = {};
+): { "log-level"?: LogLevel } {
+  const result: { "log-level"?: LogLevel } = {};
 
   if ("log-level" in raw) {
     const level = validateString(raw["log-level"], "log-level", section);
@@ -463,12 +453,6 @@ function validateLoggingConfig(
       );
     }
     result["log-level"] = level as LogLevel;
-  }
-  if ("log-file" in raw) {
-    result["log-file"] = validatePathString(raw["log-file"], "log-file", section);
-  }
-  if ("log-reset" in raw) {
-    result["log-reset"] = validateBoolean(raw["log-reset"], "log-reset", section);
   }
 
   return result;
@@ -554,11 +538,7 @@ function validateCompleteConfig(raw: unknown, section: string): CompleteConfig {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
   if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateStringOrBoolean(
-      rawObj["log-llm-requests"],
-      "log-llm-requests",
-      section,
-    );
+    result["log-llm-requests"] = validateBoolean(rawObj["log-llm-requests"], "log-llm-requests", section);
   }
 
   return result;
@@ -651,11 +631,7 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
   if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateStringOrBoolean(
-      rawObj["log-llm-requests"],
-      "log-llm-requests",
-      section,
-    );
+    result["log-llm-requests"] = validateBoolean(rawObj["log-llm-requests"], "log-llm-requests", section);
   }
 
   return result;
@@ -748,20 +724,6 @@ function validateSpeechConfig(raw: unknown, section: string): SpeechConfig {
   }
 
   return result;
-}
-
-/**
- * Validates a value is either a string path or boolean.
- * If string, expands tilde (~) to the user's home directory.
- */
-function validateStringOrBoolean(value: unknown, field: string, section: string): string | boolean {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "string") {
-    return expandTildePath(value);
-  }
-  throw new ConfigError(`[${section}].${field} must be a string or boolean`);
 }
 
 /**
@@ -875,6 +837,9 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
   // Shared fields
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
+  }
+  if ("log-llm-requests" in rawObj) {
+    result["log-llm-requests"] = validateBoolean(rawObj["log-llm-requests"], "log-llm-requests", section);
   }
 
   // Logging options

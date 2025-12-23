@@ -47,20 +47,16 @@ const agent = LLMist.createAgent()
 | Variable | Description | Values |
 |----------|-------------|--------|
 | `LLMIST_LOG_LEVEL` | Logging verbosity | `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
-| `LLMIST_LOG_FILE` | Path to log file | Any valid file path |
-| `LLMIST_LOG_RESET` | Clear log on start | `true`, `false` |
 
 ### Example Logging Setup
 
 ```bash
-# Enable debug logging to file
+# Enable debug logging
 export LLMIST_LOG_LEVEL="debug"
-export LLMIST_LOG_FILE="./llmist.log"
-export LLMIST_LOG_RESET="true"
 ```
 
 <Aside type="note">
-  When `LLMIST_LOG_RESET` is `true`, the log file is cleared each time the application starts.
+  Each CLI session automatically creates a log directory at `~/.llmist/logs/<session-name>/` with a memorable name like `sunny-falcon`. Numbers are only appended when there's a name collision (e.g., `sunny-falcon-2`). Logs are stored in `session.log.jsonl` within that directory.
 </Aside>
 
 ## CLI-Specific Flags
@@ -70,25 +66,24 @@ These can also be set via command-line flags:
 | Flag | Environment Variable | Description |
 |------|---------------------|-------------|
 | `--log-level` | `LLMIST_LOG_LEVEL` | Set log level |
-| `--log-file` | `LLMIST_LOG_FILE` | Set log file path |
 
 <Tabs>
   <TabItem label="bun">
     ```bash
     # Via flag
-    bunx @llmist/cli agent "Hello" --log-level debug --log-file ./debug.log
+    bunx @llmist/cli agent "Hello" --log-level debug
 
     # Via environment
-    LLMIST_LOG_LEVEL=debug LLMIST_LOG_FILE=./debug.log bunx @llmist/cli agent "Hello"
+    LLMIST_LOG_LEVEL=debug bunx @llmist/cli agent "Hello"
     ```
   </TabItem>
   <TabItem label="npm">
     ```bash
     # Via flag
-    npx @llmist/cli agent "Hello" --log-level debug --log-file ./debug.log
+    npx @llmist/cli agent "Hello" --log-level debug
 
     # Via environment
-    LLMIST_LOG_LEVEL=debug LLMIST_LOG_FILE=./debug.log npx @llmist/cli agent "Hello"
+    LLMIST_LOG_LEVEL=debug npx @llmist/cli agent "Hello"
     ```
   </TabItem>
 </Tabs>

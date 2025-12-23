@@ -10,7 +10,7 @@ import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
-import { createSessionDir, formatLlmRequest, resolveLogDir, writeLogFile } from "./llm-logging.js";
+import { formatLlmRequest, writeLogFile } from "./llm-logging.js";
 import { addCompleteOptions, type CLICompleteOptions } from "./option-helpers.js";
 import {
   executeAction,
@@ -60,18 +60,15 @@ export async function executeComplete(
 
   const messages = builder.build();
 
-  // Resolve LLM debug log directory (if enabled)
-  const llmLogsBaseDir = resolveLogDir(options.logLlmRequests, "requests");
-  let llmSessionDir: string | undefined;
+  // LLM request logging: use session directory if enabled
+  const llmLogsEnabled = options.logLlmRequests === true;
+  const llmLogDir = llmLogsEnabled ? env.session?.logDir : undefined;
 
   // Log request before streaming
-  if (llmLogsBaseDir) {
-    llmSessionDir = await createSessionDir(llmLogsBaseDir);
-    if (llmSessionDir) {
-      const filename = "0001.request";
-      const content = formatLlmRequest(messages);
-      await writeLogFile(llmSessionDir, filename, content);
-    }
+  if (llmLogDir) {
+    const filename = "0001.request";
+    const content = formatLlmRequest(messages);
+    await writeLogFile(llmLogDir, filename, content);
   }
 
   const stream = client.stream({
@@ -120,9 +117,9 @@ export async function executeComplete(
   printer.ensureNewline();
 
   // Log response after streaming
-  if (llmSessionDir) {
+  if (llmLogDir) {
     const filename = "0001.response";
-    await writeLogFile(llmSessionDir, filename, accumulatedResponse);
+    await writeLogFile(llmLogDir, filename, accumulatedResponse);
   }
 
   // Only show summary if stderr is a TTY (not redirected) and not in quiet mode

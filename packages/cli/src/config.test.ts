@@ -20,8 +20,6 @@ describe("config", () => {
       const raw = {
         global: {
           "log-level": "debug",
-          "log-file": "/tmp/test.log",
-          "log-reset": true,
         },
       };
 
@@ -29,29 +27,23 @@ describe("config", () => {
 
       expect(result.global).toBeDefined();
       expect(result.global?.["log-level"]).toBe("debug");
-      expect(result.global?.["log-file"]).toBe("/tmp/test.log");
-      expect(result.global?.["log-reset"]).toBe(true);
     });
 
     it("should expand tilde in path fields", () => {
       const raw = {
-        global: {
-          "log-file": "~/.llmist/logs/test.log",
-        },
-        agent: {
-          "log-llm-requests": "~/llm-requests",
-        },
         image: {
           output: "~/images/output.png",
+        },
+        speech: {
+          output: "~/audio/output.mp3",
         },
       };
 
       const result = validateConfig(raw);
       const home = homedir();
 
-      expect(result.global?.["log-file"]).toBe(`${home}/.llmist/logs/test.log`);
-      expect(result.agent?.["log-llm-requests"]).toBe(`${home}/llm-requests`);
       expect(result.image?.output).toBe(`${home}/images/output.png`);
+      expect(result.speech?.output).toBe(`${home}/audio/output.mp3`);
     });
 
     it("should validate complete section", () => {
@@ -136,8 +128,7 @@ describe("config", () => {
           type: "agent",
           model: "openai:gpt-4o",
           "log-level": "silly",
-          "log-file": "/tmp/develop.log",
-          "log-reset": true,
+          "log-llm-requests": true,
         },
       };
 
@@ -146,12 +137,10 @@ describe("config", () => {
       expect(result.develop).toBeDefined();
       const cmd = result.develop as {
         "log-level"?: string;
-        "log-file"?: string;
-        "log-reset"?: boolean;
+        "log-llm-requests"?: boolean;
       };
       expect(cmd?.["log-level"]).toBe("silly");
-      expect(cmd?.["log-file"]).toBe("/tmp/develop.log");
-      expect(cmd?.["log-reset"]).toBe(true);
+      expect(cmd?.["log-llm-requests"]).toBe(true);
     });
 
     it("should default custom command type to agent", () => {
@@ -309,28 +298,6 @@ describe("config", () => {
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
         expect(() => validateConfig(raw)).toThrow("[agent].builtins must be a boolean");
-      });
-
-      it("should reject invalid log-reset type in global", () => {
-        const raw = {
-          global: {
-            "log-reset": "yes",
-          },
-        };
-
-        expect(() => validateConfig(raw)).toThrow(ConfigError);
-        expect(() => validateConfig(raw)).toThrow("[global].log-reset must be a boolean");
-      });
-
-      it("should reject invalid log-reset type in custom command", () => {
-        const raw = {
-          "my-command": {
-            "log-reset": "true",
-          },
-        };
-
-        expect(() => validateConfig(raw)).toThrow(ConfigError);
-        expect(() => validateConfig(raw)).toThrow("[my-command].log-reset must be a boolean");
       });
 
       it("should reject invalid log-level in custom command", () => {
@@ -755,7 +722,7 @@ describe("config", () => {
 
     it("should allow inheritance from global for logging settings", () => {
       const config: CLIConfig = {
-        global: { "log-level": "debug", "log-file": "/tmp/test.log" },
+        global: { "log-level": "debug" },
         "my-command": { inherits: "global", model: "test-model" },
       };
 
@@ -763,7 +730,6 @@ describe("config", () => {
       const cmd = result["my-command"] as Record<string, unknown>;
 
       expect(cmd["log-level"]).toBe("debug");
-      expect(cmd["log-file"]).toBe("/tmp/test.log");
       expect(cmd.model).toBe("test-model");
     });
 
