@@ -41,6 +41,37 @@ Create a starter configuration file at `~/.llmist/cli.toml`:
   </TabItem>
 </Tabs>
 
+### `config` - Inspect Configuration
+
+Display resolved configuration for profiles, including fully rendered system prompts:
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    # List all available profiles
+    bunx @llmist/cli config
+
+    # Show resolved config for a specific profile
+    bunx @llmist/cli config code-review
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # List all available profiles
+    npx @llmist/cli config
+
+    # Show resolved config for a specific profile
+    npx @llmist/cli config code-review
+    ```
+  </TabItem>
+</Tabs>
+
+Shows:
+- Inheritance chain
+- Model, temperature, max-iterations
+- Gadgets and approval settings
+- Fully rendered system prompt (with all includes resolved)
+
 ### `complete` - Simple Completion
 
 Stream a single response without agent loop:

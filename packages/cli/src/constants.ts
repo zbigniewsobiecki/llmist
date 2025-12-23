@@ -14,6 +14,7 @@ export const COMMANDS = {
   speech: "speech",
   vision: "vision",
   init: "init",
+  config: "config",
 } as const;
 
 /** Valid log level names */

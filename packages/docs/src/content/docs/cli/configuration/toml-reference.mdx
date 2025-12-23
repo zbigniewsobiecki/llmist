@@ -100,6 +100,31 @@ You are also an expert in <%= it.field %>.
 system = '<%~ include("@expert", {field: "TypeScript"}) %>'
 ```
 
+### File Includes
+
+Load prompt content from external files with `includeFile()`:
+
+```toml
+[prompts]
+# Load entire prompt from file
+from-file = '<%~ includeFile("~/.llmist/prompts/custom.md") %>'
+
+# Mix file content with inline content
+hybrid = """
+<%~ include("@base-assistant") %>
+<%~ includeFile("./prompts/project-rules.txt") %>
+"""
+
+[code-review]
+system = '<%~ includeFile("~/.llmist/prompts/code-review.md") %>'
+```
+
+**Path resolution:**
+- `~` expands to home directory
+- Relative paths resolve from config file location
+- Included files can themselves use `includeFile()` and `include()`
+- Circular includes are detected and prevented
+
 ## Gadget Approval
 
 The gadget approval system provides a safety layer for potentially dangerous gadget executions.

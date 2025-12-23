@@ -1,7 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   createTemplateEngine,
   hasTemplateSyntax,
+  MAX_PROMPT_FILE_SIZE,
   resolveTemplate,
   TemplateError,
   validateEnvVars,
@@ -326,6 +331,174 @@ describe("templates", () => {
     it("has correct error name", () => {
       const error = new TemplateError("Error");
       expect(error.name).toBe("TemplateError");
+    });
+  });
+
+  describe("includeFile", () => {
+    const testDir = join(tmpdir(), `llmist-templates-test-${Date.now()}`);
+    const configPath = join(testDir, "cli.toml");
+
+    beforeAll(async () => {
+      await mkdir(testDir, { recursive: true });
+      await mkdir(join(testDir, "prompts"), { recursive: true });
+
+      // Create test files
+      await writeFile(join(testDir, "greeting.txt"), "Hello from file!");
+      await writeFile(
+        join(testDir, "prompts", "rules.txt"),
+        "Rule 1: Be helpful.\nRule 2: Be concise.",
+      );
+      await writeFile(
+        join(testDir, "with-vars.txt"),
+        "Value: <%= it.name %>",
+      );
+    });
+
+    afterAll(async () => {
+      await rm(testDir, { recursive: true, force: true });
+    });
+
+    it("includes file contents in template", () => {
+      const eta = createTemplateEngine(
+        {
+          test: `<%~ includeFile("${join(testDir, "greeting.txt")}") %>`,
+        },
+        configPath,
+      );
+      const result = resolveTemplate(eta, '<%~ include("@test") %>');
+      expect(result).toBe("Hello from file!");
+    });
+
+    it("mixes file content with inline text", () => {
+      const eta = createTemplateEngine(
+        {
+          test: `Before. <%~ includeFile("${join(testDir, "greeting.txt")}") %> After.`,
+        },
+        configPath,
+      );
+      const result = resolveTemplate(eta, '<%~ include("@test") %>');
+      expect(result).toBe("Before. Hello from file! After.");
+    });
+
+    it("resolves relative paths from config directory", () => {
+      const eta = createTemplateEngine(
+        {
+          test: '<%~ includeFile("./greeting.txt") %>',
+        },
+        configPath,
+      );
+      const result = resolveTemplate(eta, '<%~ include("@test") %>');
+      expect(result).toBe("Hello from file!");
+    });
+
+    it("resolves paths in subdirectories", () => {
+      const eta = createTemplateEngine(
+        {
+          test: '<%~ includeFile("./prompts/rules.txt") %>',
+        },
+        configPath,
+      );
+      const result = resolveTemplate(eta, '<%~ include("@test") %>');
+      expect(result).toBe("Rule 1: Be helpful.\nRule 2: Be concise.");
+    });
+
+    it("includes file in system prompt directly", () => {
+      const eta = createTemplateEngine({}, configPath);
+      const result = resolveTemplate(
+        eta,
+        `System: <%~ includeFile("${join(testDir, "greeting.txt")}") %>`,
+      );
+      expect(result).toBe("System: Hello from file!");
+    });
+
+    it("combines with other template features", () => {
+      const eta = createTemplateEngine(
+        {
+          base: "I am base.",
+          combined: `<%~ include("@base") %> <%~ includeFile("${join(testDir, "greeting.txt")}") %>`,
+        },
+        configPath,
+      );
+      const result = resolveTemplate(eta, '<%~ include("@combined") %>');
+      expect(result).toBe("I am base. Hello from file!");
+    });
+
+    it("throws error on missing file", () => {
+      const eta = createTemplateEngine(
+        {
+          test: '<%~ includeFile("./nonexistent.txt") %>',
+        },
+        configPath,
+      );
+      expect(() => resolveTemplate(eta, '<%~ include("@test") %>')).toThrow("File not found");
+    });
+
+    it("includes file path in error message", () => {
+      const eta = createTemplateEngine(
+        {
+          test: '<%~ includeFile("./missing-file.txt") %>',
+        },
+        configPath,
+      );
+      try {
+        resolveTemplate(eta, '<%~ include("@test") %>');
+        expect.fail("Should have thrown");
+      } catch (error) {
+        expect((error as Error).message).toContain("missing-file.txt");
+      }
+    });
+
+    it("handles absolute paths", () => {
+      const eta = createTemplateEngine(
+        {
+          test: `<%~ includeFile("${join(testDir, "greeting.txt")}") %>`,
+        },
+        configPath,
+      );
+      const result = resolveTemplate(eta, '<%~ include("@test") %>');
+      expect(result).toBe("Hello from file!");
+    });
+
+    it("handles tilde paths", async () => {
+      // Create a test file in home directory
+      const homeTestFile = join(homedir(), ".llmist-test-temp.txt");
+      await writeFile(homeTestFile, "Home content!");
+
+      try {
+        const eta = createTemplateEngine(
+          {
+            test: '<%~ includeFile("~/.llmist-test-temp.txt") %>',
+          },
+          configPath,
+        );
+        const result = resolveTemplate(eta, '<%~ include("@test") %>');
+        expect(result).toBe("Home content!");
+      } finally {
+        await rm(homeTestFile, { force: true });
+      }
+    });
+
+    it("validates templates with includeFile during validatePrompts", () => {
+      // Valid includeFile should pass validation
+      expect(() =>
+        validatePrompts(
+          {
+            test: `<%~ includeFile("${join(testDir, "greeting.txt")}") %>`,
+          },
+          configPath,
+        ),
+      ).not.toThrow();
+    });
+
+    it("catches missing files during validatePrompts", () => {
+      expect(() =>
+        validatePrompts(
+          {
+            test: '<%~ includeFile("./does-not-exist.txt") %>',
+          },
+          configPath,
+        ),
+      ).toThrow(TemplateError);
     });
   });
 });

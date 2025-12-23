@@ -4,6 +4,7 @@ import packageJson from "../package.json";
 
 import { registerAgentCommand } from "./agent-command.js";
 import { registerCompleteCommand } from "./complete-command.js";
+import { registerConfigCommand } from "./config-command.js";
 import { registerInitCommand } from "./init-command.js";
 import {
   type CLIConfig,
@@ -79,6 +80,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
   registerModelsCommand(program, env);
   registerGadgetCommand(program, env);
   registerInitCommand(program, env);
+  registerConfigCommand(program, env, config);
 
   // Register custom commands from config
   if (config) {
