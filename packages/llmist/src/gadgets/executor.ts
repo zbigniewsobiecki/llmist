@@ -246,8 +246,9 @@ export class GadgetExecutor {
       }
 
       // Determine the timeout for this gadget
-      // Priority: gadget's own timeoutMs > defaultGadgetTimeoutMs > no timeout
-      const timeoutMs = gadget.timeoutMs ?? this.defaultGadgetTimeoutMs;
+      // Priority: subagentConfig[name].timeoutMs > gadget.timeoutMs > defaultGadgetTimeoutMs > no timeout
+      const subagentTimeout = this.subagentConfig?.[call.gadgetName]?.timeoutMs;
+      const timeoutMs = subagentTimeout ?? gadget.timeoutMs ?? this.defaultGadgetTimeoutMs;
 
       // Create AbortController for cancellation support
       // Signal is always provided to gadgets, even without timeout

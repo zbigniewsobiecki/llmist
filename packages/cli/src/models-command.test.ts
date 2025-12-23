@@ -153,7 +153,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -185,7 +185,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -214,7 +214,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -240,7 +240,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -269,7 +269,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -300,7 +300,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -330,7 +330,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const json = JSON.parse(stdout.read());
       const firstModel = json.textModels[0];
@@ -363,7 +363,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const json = JSON.parse(stdout.read());
 
@@ -386,7 +386,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -411,7 +411,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -435,7 +435,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -455,7 +455,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -533,7 +533,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -559,7 +559,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -585,7 +585,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -612,7 +612,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
@@ -637,7 +637,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const json = JSON.parse(stdout.read());
 
@@ -662,7 +662,7 @@ describe("models command", () => {
         createClient: () => client,
       });
 
-      await runCLI(env);
+      await runCLI({ config: {}, env });
 
       const output = stdout.read();
 
