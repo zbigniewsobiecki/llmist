@@ -12,6 +12,7 @@ import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
 import type { ApprovalConfig } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
+import { loadConfig, getCustomCommandNames } from "./config.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
@@ -103,6 +104,18 @@ export async function executeAgent(
       stdin: env.stdin as NodeJS.ReadStream,
       stdout: env.stdout as NodeJS.WriteStream,
     });
+
+    // Load available profiles for Ctrl+P cycling
+    // Profiles allow users to switch between agent configurations between sessions
+    try {
+      const fullConfig = loadConfig();
+      const customProfiles = getCustomCommandNames(fullConfig);
+      // "agent" is the default profile, custom profiles come from cli.toml sections
+      const profiles = ["agent", ...customProfiles];
+      tui.setProfiles(profiles);
+    } catch {
+      // Config loading may fail (e.g., no config file) - profiles are optional
+    }
   }
 
   // Set up cancellation support

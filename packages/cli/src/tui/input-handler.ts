@@ -183,6 +183,14 @@ export class InputHandler {
   }
 
   /**
+   * Check if we're waiting for a REPL prompt.
+   * Used by TUIApp to determine if Ctrl+P (profile cycling) should be active.
+   */
+  isWaitingForREPLPrompt(): boolean {
+    return this.isPendingREPLPrompt;
+  }
+
+  /**
    * Cancel any pending input request.
    */
   cancelPending(): void {

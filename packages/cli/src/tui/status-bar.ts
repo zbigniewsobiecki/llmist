@@ -51,6 +51,15 @@ export class StatusBar {
   /** Current focus mode */
   private focusMode: FocusMode = "browse";
 
+  /** Available agent profiles (from config) */
+  private profiles: string[] = [];
+
+  /** Currently selected profile index */
+  private currentProfileIndex = 0;
+
+  /** Selection debug info callback */
+  private selectionDebugCallback: (() => { index: number; total: number; nodeType?: string; nodeId?: string }) | null = null;
+
   /** Track tree node IDs to display labels for LLM calls */
   private nodeIdToLabel = new Map<NodeId, string>();
 
@@ -362,6 +371,43 @@ export class StatusBar {
   }
 
   /**
+   * Set a callback to get selection debug info from BlockRenderer.
+   */
+  setSelectionDebugCallback(callback: () => { index: number; total: number; nodeType?: string; nodeId?: string }): void {
+    this.selectionDebugCallback = callback;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Profile Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Set available profiles for cycling.
+   */
+  setProfiles(profiles: string[]): void {
+    this.profiles = profiles;
+    this.currentProfileIndex = 0;
+    this.render();
+  }
+
+  /**
+   * Cycle to the next profile (Ctrl+P).
+   */
+  cycleProfile(): void {
+    if (this.profiles.length > 1) {
+      this.currentProfileIndex = (this.currentProfileIndex + 1) % this.profiles.length;
+      this.render(true);
+    }
+  }
+
+  /**
+   * Get the currently selected profile name.
+   */
+  getCurrentProfile(): string | null {
+    return this.profiles[this.currentProfileIndex] ?? null;
+  }
+
+  /**
    * Shorten model name for display.
    * "gemini:gemini-2.5-flash" → "2.5-flash"
    */
@@ -425,6 +471,13 @@ export class StatusBar {
       parts.push(`${BG_GREEN}${BLACK} INPUT ${RESET}`);
     }
 
+    // Profile indicator (if profiles are set)
+    if (this.profiles.length > 0) {
+      const profile = this.profiles[this.currentProfileIndex];
+      const display = profile.length > 12 ? `${profile.slice(0, 11)}…` : profile;
+      parts.push(`${YELLOW}${display}${RESET}`);
+    }
+
     // Input tokens (yellow) - show ~ prefix during streaming to indicate estimate
     const inputPrefix = this.isStreaming && this.streamingInputTokens > 0 ? "~" : "";
     parts.push(`${YELLOW}↑ ${inputPrefix}${formatTokens(displayInputTokens)}${RESET}`);
@@ -443,6 +496,14 @@ export class StatusBar {
 
     // Cost (cyan)
     parts.push(`${CYAN}$${formatCost(this.metrics.cost)}${RESET}`);
+
+    // Selection debug info (if callback is set)
+    if (this.selectionDebugCallback) {
+      const debug = this.selectionDebugCallback();
+      const debugStr = `sel:${debug.index}/${debug.total}`;
+      const typeStr = debug.nodeType ? ` [${debug.nodeType}]` : "";
+      parts.push(`${GRAY}${debugStr}${typeStr}${RESET}`);
+    }
 
     // Activity section at the end (if anything is running)
     if (this.activeLLMCalls.size > 0 || this.activeGadgets.size > 0) {
