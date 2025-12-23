@@ -28,7 +28,7 @@
 #──────────────────────────────────────────────────────────────────────────────
 [global]
 # log-level = "info"                     # silly, trace, debug, info, warn, error, fatal
-# log-file = "/tmp/llmist.log"           # Log file path (enables JSON logging)
+# log-file = "~/.llmist/logs/llmist.log" # Log file path (~ expanded, enables JSON logging)
 
 #──────────────────────────────────────────────────────────────────────────────
 # COMPLETE COMMAND DEFAULTS
@@ -50,7 +50,7 @@ model = "dall-e-3"                          # Image generation model
 # size = "1024x1024"                        # Image size (model dependent)
 # quality = "standard"                      # Image quality: standard, hd
 # count = 1                                 # Number of images to generate
-# output = "output.png"                     # Output file path (default: stdout URL)
+# output = "~/images/output.png"            # Output file path (~ expanded)
 # quiet = false                             # Suppress progress messages
 
 #──────────────────────────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ model = "tts-1"                             # Speech generation model
 voice = "nova"                              # Voice name
 # format = "mp3"                            # Audio format: mp3, opus, aac, flac, wav, pcm
 # speed = 1.0                               # Speed multiplier (0.25 to 4.0)
-# output = "speech.mp3"                     # Output file path (default: stdout)
+# output = "~/audio/speech.mp3"             # Output file path (~ expanded)
 # quiet = false                             # Suppress progress messages
 
 #──────────────────────────────────────────────────────────────────────────────

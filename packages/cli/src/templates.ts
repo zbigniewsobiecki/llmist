@@ -1,7 +1,7 @@
 import { Eta } from "eta";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { expandTildePath } from "./paths.js";
 
 /** Maximum file size for prompt files (1MB) */
 export const MAX_PROMPT_FILE_SIZE = 1024 * 1024;
@@ -22,16 +22,6 @@ interface EtaWithFileSupport extends Eta {
 }
 
 /**
- * Expands ~ to the user's home directory.
- */
-function expandHomePath(input: string): string {
-  if (!input.startsWith("~")) {
-    return input;
-  }
-  return input.replace("~", homedir());
-}
-
-/**
  * Resolves a file path relative to the config file directory.
  *
  * @param filePath - The file path from the template
@@ -39,7 +29,7 @@ function expandHomePath(input: string): string {
  * @returns Absolute path to the file
  */
 function resolvePromptFilePath(filePath: string, configDir?: string): string {
-  const expanded = expandHomePath(filePath);
+  const expanded = expandTildePath(filePath);
   if (expanded.startsWith("/")) {
     return expanded;
   }

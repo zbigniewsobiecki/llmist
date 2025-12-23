@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { homedir } from "node:os";
 import {
   type CLIConfig,
   ConfigError,
@@ -30,6 +31,27 @@ describe("config", () => {
       expect(result.global?.["log-level"]).toBe("debug");
       expect(result.global?.["log-file"]).toBe("/tmp/test.log");
       expect(result.global?.["log-reset"]).toBe(true);
+    });
+
+    it("should expand tilde in path fields", () => {
+      const raw = {
+        global: {
+          "log-file": "~/.llmist/logs/test.log",
+        },
+        agent: {
+          "log-llm-requests": "~/llm-requests",
+        },
+        image: {
+          output: "~/images/output.png",
+        },
+      };
+
+      const result = validateConfig(raw);
+      const home = homedir();
+
+      expect(result.global?.["log-file"]).toBe(`${home}/.llmist/logs/test.log`);
+      expect(result.agent?.["log-llm-requests"]).toBe(`${home}/llm-requests`);
+      expect(result.image?.output).toBe(`${home}/images/output.png`);
     });
 
     it("should validate complete section", () => {
