@@ -358,6 +358,13 @@ function validateSingleSubagentConfig(
         );
       }
       result.timeoutMs = val;
+    } else if (key === "maxConcurrent") {
+      if (typeof val !== "number" || !Number.isInteger(val) || val < 0) {
+        throw new ConfigError(
+          `[${section}].${subagentName}.maxConcurrent must be a non-negative integer`,
+        );
+      }
+      result.maxConcurrent = val;
     } else {
       // Allow arbitrary additional options (headless, etc.)
       result[key] = val;

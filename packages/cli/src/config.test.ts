@@ -414,6 +414,78 @@ describe("config", () => {
             "[subagents].BrowseWeb.timeoutMs must be a non-negative integer",
           );
         });
+
+        it("should accept valid subagent maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                model: "inherit",
+                maxConcurrent: 2,
+              },
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.subagents?.BrowseWeb?.maxConcurrent).toBe(2);
+        });
+
+        it("should accept maxConcurrent of 0 (unlimited)", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: 0,
+              },
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.subagents?.BrowseWeb?.maxConcurrent).toBe(0);
+        });
+
+        it("should reject negative maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: -1,
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.maxConcurrent must be a non-negative integer",
+          );
+        });
+
+        it("should reject non-integer maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: 2.5,
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.maxConcurrent must be a non-negative integer",
+          );
+        });
+
+        it("should reject string maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: "2",
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.maxConcurrent must be a non-negative integer",
+          );
+        });
       });
     });
   });
