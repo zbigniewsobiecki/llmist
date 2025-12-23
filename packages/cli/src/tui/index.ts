@@ -232,6 +232,13 @@ export class TUIApp {
     screen.key(["C-b"], () => {
       this.toggleFocusMode();
     });
+
+    // Ctrl+P to cycle through profiles (only when waiting for REPL prompt)
+    screen.key(["C-p"], () => {
+      if (this.inputHandler.isWaitingForREPLPrompt()) {
+        this.statusBar.cycleProfile();
+      }
+    });
   }
 
   /**
@@ -779,6 +786,31 @@ export class TUIApp {
    */
   getMetrics() {
     return this.statusBar.getMetrics();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Profile Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Set available profiles for cycling.
+   * Profiles appear next to BROWSE/INPUT in the status bar.
+   * Users can cycle through profiles with Ctrl+P when a session ends.
+   *
+   * @param profiles - Array of profile names from config
+   */
+  setProfiles(profiles: string[]): void {
+    this.statusBar.setProfiles(profiles);
+  }
+
+  /**
+   * Get the currently selected profile name.
+   * Used by agent-command to apply profile-specific settings.
+   *
+   * @returns Current profile name, or null if no profiles are set
+   */
+  getCurrentProfile(): string | null {
+    return this.statusBar.getCurrentProfile();
   }
 
   /**

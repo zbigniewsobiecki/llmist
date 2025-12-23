@@ -68,6 +68,7 @@ function ensureMarkedConfigured(): void {
         // Headings
         heading: chalk.green.bold,
         firstHeading: chalk.magenta.underline.bold,
+        showSectionPrefix: false, // Hide "###" prefix, use styling instead
 
         // Links
         link: chalk.blue,
