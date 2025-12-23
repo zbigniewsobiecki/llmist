@@ -1649,6 +1649,96 @@ test value
       );
       expect(errorResult?.type === "gadget_result" && errorResult.result.error).toBe("Test error");
     });
+
+    it("respects maxConcurrent limit and queues excess gadgets", async () => {
+      const DELAY_MS = 50;
+
+      // Create a gadget that will be called multiple times
+      const slowGadget = createMockGadget({
+        name: "SlowGadget",
+        result: "done",
+        delayMs: DELAY_MS,
+      });
+
+      registry.registerByClass(slowGadget);
+
+      // Set maxConcurrent = 1 - only one instance can run at a time
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        subagentConfig: {
+          SlowGadget: { maxConcurrent: 1 },
+        },
+      });
+
+      // Three calls to the same gadget - without limit they'd run in parallel
+      const gadgetCalls = [
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s1" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s2" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s3" }),
+      ].join("\n");
+
+      const startTime = Date.now();
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+      const totalTime = Date.now() - startTime;
+
+      // All gadgets should complete
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(3);
+
+      // With maxConcurrent=1, each runs sequentially (one at a time)
+      // Total time should be ~150ms (3 × 50ms), not ~50ms (parallel)
+      expect(totalTime).toBeGreaterThanOrEqual(140); // At least 3 sequential runs
+    });
+
+    it("allows specified concurrency level with maxConcurrent > 1", async () => {
+      const DELAY_MS = 50;
+
+      // Create 4 identical gadgets
+      const gadgets = [1, 2, 3, 4].map((i) =>
+        createMockGadget({
+          name: "SlowGadget",
+          result: `result_${i}`,
+          delayMs: DELAY_MS,
+        }),
+      );
+
+      // Register just one class (all calls will use this gadget)
+      registry.registerByClass(gadgets[0]);
+
+      // Set maxConcurrent = 2 for SlowGadget
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        subagentConfig: {
+          SlowGadget: { maxConcurrent: 2 },
+        },
+      });
+
+      // Four calls to the same gadget type
+      const gadgetCalls = [
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s1" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s2" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s3" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s4" }),
+      ].join("\n");
+
+      const startTime = Date.now();
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+      const totalTime = Date.now() - startTime;
+
+      // All should complete
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(4);
+
+      // With maxConcurrent=2: 2 batches of 2 parallel = ~100ms total
+      // Without limit (4 parallel): ~50ms
+      // Sequential (maxConcurrent=1): ~200ms
+      expect(totalTime).toBeGreaterThanOrEqual(90); // At least 2 waves
+      expect(totalTime).toBeLessThan(180); // Less than 4 sequential
+    });
   });
 
   describe("Cross-Iteration Dependency Resolution", () => {
