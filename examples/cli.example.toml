@@ -16,6 +16,9 @@
 # - Prompts can include other prompts for composition
 # - Access environment variables with <%= it.env.VAR_NAME %>
 # - Access current date with <%= it.date %> (ISO format: YYYY-MM-DD)
+# - Include file contents with <%~ includeFile("path") %>
+#   - Paths: ~ expands to home, relative paths resolve from config file location
+#   - Example: <%~ includeFile("~/.llmist/prompts/code-review.txt") %>
 # - Templates are resolved at config load time
 
 #──────────────────────────────────────────────────────────────────────────────
@@ -106,6 +109,7 @@ max-iterations = 15                      # Max agent loop iterations
 # PROMPT TEMPLATES
 # Define reusable prompt snippets that can be composed together.
 # Use <%~ include("@name") %> to include, <%= it.var %> for variables.
+# Use <%~ includeFile("path") %> to include contents from external files.
 # Reserved section - cannot be used as a custom command name.
 #──────────────────────────────────────────────────────────────────────────────
 [prompts]
@@ -150,6 +154,16 @@ date-aware = """
 Today's date is <%= it.date %>.
 Use this for time-sensitive responses.
 """
+
+# Load prompt content from an external file
+# Paths: ~ expands to home, relative paths resolve from this config file
+# from-file = '<%~ includeFile("~/.llmist/prompts/custom.txt") %>'
+
+# Mix file content with inline content
+# hybrid = """
+# <%~ include("@base-assistant") %>
+# <%~ includeFile("./prompts/project-rules.txt") %>
+# """
 
 # Using environment variables (must be set or config load will fail)
 # team-context = """
