@@ -1,3 +1,11 @@
+## 9.7.0 (2025-12-23)
+
+* feat(gadgets): add configurable timeoutMs for subagents via CLI config (#264) (#265) ([8a610ef](https://github.com/zbigniewsobiecki/llmist/commit/8a610ef)), closes [#264](https://github.com/zbigniewsobiecki/llmist/issues/264) [#265](https://github.com/zbigniewsobiecki/llmist/issues/265)
+
+## 9.6.0 (2025-12-22)
+
+* feat(cli): add bun fallback when npm unavailable for gadget installation (#263) ([75527c4](https://github.com/zbigniewsobiecki/llmist/commit/75527c4)), closes [#263](https://github.com/zbigniewsobiecki/llmist/issues/263)
+
 ## <small>9.5.4 (2025-12-22)</small>
 
 * fix(cli): show postinstall script output with --foreground-scripts (#262) ([8760753](https://github.com/zbigniewsobiecki/llmist/commit/8760753)), closes [#262](https://github.com/zbigniewsobiecki/llmist/issues/262)
