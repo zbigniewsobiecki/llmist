@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { AbstractGadget } from "llmist";
 import { getBuiltinGadget, isBuiltinGadgetName } from "./builtins/index.js";
 import { isExternalPackageSpecifier, loadExternalGadgets } from "./external-gadgets.js";
+import { expandTildePath } from "./paths.js";
 
 /**
  * Function type for importing modules dynamically.
@@ -63,25 +64,6 @@ function isGadgetConstructor(value: unknown): value is new () => AbstractGadget 
 
   // Also check if prototype looks like a gadget (for edge cases)
   return isGadgetLike(prototype);
-}
-
-/**
- * Expands ~ to the user's home directory.
- *
- * @param input - Path that may start with ~
- * @returns Expanded path with HOME directory
- */
-function expandHomePath(input: string): string {
-  if (!input.startsWith("~")) {
-    return input;
-  }
-
-  const home = process.env.HOME;
-  if (!home) {
-    return input;
-  }
-
-  return path.join(home, input.slice(1));
 }
 
 /**
@@ -174,7 +156,7 @@ export function resolveGadgetSpecifier(specifier: string, cwd: string): string {
     return specifier;
   }
 
-  const expanded = expandHomePath(specifier);
+  const expanded = expandTildePath(specifier);
   const resolvedPath = path.resolve(cwd, expanded);
   if (!fs.existsSync(resolvedPath)) {
     throw new Error(`Gadget module not found at ${resolvedPath}`);

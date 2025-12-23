@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { load as parseToml } from "js-toml";
 import type { SubagentConfig, SubagentConfigMap } from "llmist";
+import { expandTildePath } from "./paths.js";
 import type { GlobalSubagentConfig } from "./subagent-config.js";
 
 // Re-export subagent config types for consumers
@@ -255,6 +256,14 @@ function validateString(value: unknown, key: string, section: string): string {
 }
 
 /**
+ * Validates that a value is a string representing a file path.
+ * Expands tilde (~) to the user's home directory.
+ */
+function validatePathString(value: unknown, key: string, section: string): string {
+  return expandTildePath(validateString(value, key, section));
+}
+
+/**
  * Validates that a value is a number within optional bounds.
  */
 function validateNumber(
@@ -456,7 +465,7 @@ function validateLoggingConfig(
     result["log-level"] = level as LogLevel;
   }
   if ("log-file" in raw) {
-    result["log-file"] = validateString(raw["log-file"], "log-file", section);
+    result["log-file"] = validatePathString(raw["log-file"], "log-file", section);
   }
   if ("log-reset" in raw) {
     result["log-reset"] = validateBoolean(raw["log-reset"], "log-reset", section);
@@ -688,7 +697,7 @@ function validateImageConfig(raw: unknown, section: string): ImageConfig {
     });
   }
   if ("output" in rawObj) {
-    result.output = validateString(rawObj.output, "output", section);
+    result.output = validatePathString(rawObj.output, "output", section);
   }
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
@@ -732,7 +741,7 @@ function validateSpeechConfig(raw: unknown, section: string): SpeechConfig {
     });
   }
   if ("output" in rawObj) {
-    result.output = validateString(rawObj.output, "output", section);
+    result.output = validatePathString(rawObj.output, "output", section);
   }
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
@@ -742,11 +751,15 @@ function validateSpeechConfig(raw: unknown, section: string): SpeechConfig {
 }
 
 /**
- * Validates a value is either a string or boolean.
+ * Validates a value is either a string path or boolean.
+ * If string, expands tilde (~) to the user's home directory.
  */
 function validateStringOrBoolean(value: unknown, field: string, section: string): string | boolean {
-  if (typeof value === "string" || typeof value === "boolean") {
+  if (typeof value === "boolean") {
     return value;
+  }
+  if (typeof value === "string") {
+    return expandTildePath(value);
   }
   throw new ConfigError(`[${section}].${field} must be a string or boolean`);
 }
