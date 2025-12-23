@@ -198,11 +198,13 @@ async execute(params: this['params'], ctx?: ExecutionContext) {
 
 ## ExecutionTree Integration
 
-With `withParentContext(ctx)`, subagents share the parent's tree:
+With `withParentContext(ctx)`, subagents inherit from the parent:
 
 - **Automatic cost aggregation** - No manual `reportCost()` needed
 - **Unified progress tracking** - Parent's TUI shows nested activity
 - **Media collection** - Screenshots bubble up automatically
+- **Logger inheritance** - Subagent uses parent's logger for consistent structured logging
+- **Signal forwarding** - Abort signals propagate to nested agents
 
 ```typescript
 // After subagent, get total cost

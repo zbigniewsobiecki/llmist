@@ -731,6 +731,9 @@ export class AgentBuilder {
    * **Signal Forwarding** - When parent context includes a signal, it's automatically
    * forwarded to the subagent for proper cancellation propagation.
    *
+   * **Logger Inheritance** - When parent context includes a logger, it's inherited
+   * by the subagent for consistent structured logging.
+   *
    * @param ctx - ExecutionContext passed to the gadget's execute() method
    * @param depth - Nesting depth (default: 1 for direct child)
    * @returns This builder for chaining
@@ -774,6 +777,11 @@ export class AgentBuilder {
     // Auto-forward abort signal from parent for proper cancellation propagation
     if (ctx.signal && !this.signal) {
       this.signal = ctx.signal;
+    }
+
+    // Inherit logger from parent context for consistent logging across subagents
+    if (ctx.logger && !this.logger) {
+      this.logger = ctx.logger;
     }
 
     return this;
