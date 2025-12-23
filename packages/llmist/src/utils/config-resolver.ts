@@ -175,3 +175,35 @@ export function resolveSubagentModel(
     handleInherit: true,
   });
 }
+
+/**
+ * Convenience function for resolving subagent timeout.
+ *
+ * Resolves timeout from the configuration priority chain:
+ * - Use runtime timeout if provided
+ * - Check subagent config for timeout override
+ * - Fall back to default
+ *
+ * @param ctx - ExecutionContext from gadget execution
+ * @param gadgetName - Name of the subagent gadget
+ * @param runtimeTimeout - Timeout from gadget parameters
+ * @param defaultTimeout - Default timeout if nothing else specified
+ * @returns Resolved timeout in milliseconds
+ *
+ * @example
+ * ```typescript
+ * const timeoutMs = resolveSubagentTimeout(ctx, "BrowseWeb", params.timeoutMs, 300000);
+ * ```
+ */
+export function resolveSubagentTimeout(
+  ctx: ExecutionContext,
+  gadgetName: string,
+  runtimeTimeout: number | undefined,
+  defaultTimeout: number,
+): number {
+  return resolveValue(ctx, gadgetName, {
+    runtime: runtimeTimeout,
+    subagentKey: "timeoutMs",
+    defaultValue: defaultTimeout,
+  });
+}

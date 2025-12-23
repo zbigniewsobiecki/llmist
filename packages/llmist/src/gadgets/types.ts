@@ -943,6 +943,12 @@ export interface SubagentConfig {
   model?: string;
   /** Maximum iterations for the subagent loop */
   maxIterations?: number;
+  /**
+   * Timeout for the subagent gadget execution in milliseconds.
+   * Overrides the gadget's hardcoded timeoutMs when set.
+   * Set to 0 to disable timeout for this gadget.
+   */
+  timeoutMs?: number;
   /** Additional subagent-specific options */
   [key: string]: unknown;
 }

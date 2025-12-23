@@ -5,7 +5,12 @@
 
 import { describe, expect, test } from "bun:test";
 import type { ExecutionContext } from "../gadgets/types.js";
-import { resolveConfig, resolveSubagentModel, resolveValue } from "./config-resolver.js";
+import {
+  resolveConfig,
+  resolveSubagentModel,
+  resolveSubagentTimeout,
+  resolveValue,
+} from "./config-resolver.js";
 
 // Helper to create a minimal ExecutionContext for testing
 function createTestContext(
@@ -360,6 +365,60 @@ describe("config-resolver", () => {
       // Even with subagent config, 'inherit' should fall through to parent
       const model = resolveSubagentModel(ctx, "BrowseWeb", "inherit", "sonnet");
       expect(model).toBe("haiku"); // Falls to subagent config first
+    });
+  });
+
+  describe("resolveSubagentTimeout", () => {
+    test("returns runtime timeout when provided (highest priority)", () => {
+      const ctx = createTestContext({
+        subagentConfig: { BrowseWeb: { timeoutMs: 60000 } },
+      });
+
+      const timeout = resolveSubagentTimeout(ctx, "BrowseWeb", 120000, 30000);
+      expect(timeout).toBe(120000); // Runtime takes precedence
+    });
+
+    test("returns subagent config timeout when no runtime", () => {
+      const ctx = createTestContext({
+        subagentConfig: { BrowseWeb: { timeoutMs: 600000 } },
+      });
+
+      const timeout = resolveSubagentTimeout(ctx, "BrowseWeb", undefined, 300000);
+      expect(timeout).toBe(600000); // From subagent config
+    });
+
+    test("returns default when no subagent config timeout", () => {
+      const ctx = createTestContext({
+        subagentConfig: { BrowseWeb: { model: "haiku" } }, // No timeoutMs
+      });
+
+      const timeout = resolveSubagentTimeout(ctx, "BrowseWeb", undefined, 300000);
+      expect(timeout).toBe(300000); // Default value
+    });
+
+    test("returns default when no context config at all", () => {
+      const ctx = createTestContext();
+
+      const timeout = resolveSubagentTimeout(ctx, "BrowseWeb", undefined, 300000);
+      expect(timeout).toBe(300000); // Default value
+    });
+
+    test("allows timeout of 0 to disable timeout", () => {
+      const ctx = createTestContext({
+        subagentConfig: { BrowseWeb: { timeoutMs: 0 } },
+      });
+
+      const timeout = resolveSubagentTimeout(ctx, "BrowseWeb", undefined, 300000);
+      expect(timeout).toBe(0); // Explicitly disabled
+    });
+
+    test("runtime timeout of 0 takes precedence", () => {
+      const ctx = createTestContext({
+        subagentConfig: { BrowseWeb: { timeoutMs: 600000 } },
+      });
+
+      const timeout = resolveSubagentTimeout(ctx, "BrowseWeb", 0, 300000);
+      expect(timeout).toBe(0); // Runtime 0 overrides subagent config
     });
   });
 

@@ -85,6 +85,24 @@ max-iterations = 15                      # Max agent loop iterations
 # gadget-arg-prefix = "!!!ARG:"
 
 #──────────────────────────────────────────────────────────────────────────────
+# SUBAGENT CONFIGURATION
+# Configure timeout, model, and other options for subagent gadgets like BrowseWeb.
+# These settings override the gadget's hardcoded defaults.
+#──────────────────────────────────────────────────────────────────────────────
+[subagents]
+# default-model = "inherit"              # Default model for all subagents
+
+[subagents.BrowseWeb]
+# model = "inherit"                      # Use parent agent's model
+# maxIterations = 15                     # Max browsing iterations
+# timeoutMs = 300000                     # 5 minute timeout (default)
+# headless = true                        # Run browser without UI
+
+# Example: extend timeout for long browsing tasks
+# [subagents.BrowseWeb]
+# timeoutMs = 600000                     # 10 minutes for complex browsing
+
+#──────────────────────────────────────────────────────────────────────────────
 # PROMPT TEMPLATES
 # Define reusable prompt snippets that can be composed together.
 # Use <%~ include("@name") %> to include, <%= it.var %> for variables.

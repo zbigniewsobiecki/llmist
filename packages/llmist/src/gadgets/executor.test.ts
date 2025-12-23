@@ -892,6 +892,147 @@ describe("GadgetExecutor", () => {
       expect(result.error).toContain("Invalid parameters");
       expect(result.error).not.toContain("timeout");
     });
+
+    it("subagentConfig timeout overrides gadget's hardcoded timeoutMs", async () => {
+      // Create gadget with short timeout that would fail
+      const slowGadget = new SlowGadget();
+      slowGadget.timeoutMs = 30; // Would timeout
+      registry.registerByClass(slowGadget);
+
+      // Create executor with subagentConfig that provides a longer timeout
+      const executorWithSubagentConfig = new GadgetExecutor(
+        registry,
+        undefined, // requestHumanInput
+        undefined, // logger
+        undefined, // defaultGadgetTimeoutMs
+        undefined, // errorFormatterOptions
+        undefined, // client
+        undefined, // mediaStore
+        undefined, // agentConfig
+        { SlowGadget: { timeoutMs: 500 } }, // subagentConfig - long enough to complete
+      );
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SlowGadget",
+        invocationId: "subagent-1",
+        parametersRaw: '{"delay": 100}',
+        parameters: { delay: 100 },
+      };
+
+      const result = await executorWithSubagentConfig.execute(call);
+
+      // Should succeed because subagentConfig timeout (500ms) overrides gadget's 30ms
+      expect(result).toMatchObject({
+        gadgetName: "SlowGadget",
+        invocationId: "subagent-1",
+        result: "Completed after 100ms",
+      });
+      expect(result.error).toBeUndefined();
+    });
+
+    it("subagentConfig timeout overrides defaultGadgetTimeoutMs", async () => {
+      registry.registerByClass(new SlowGadget());
+
+      // Create executor with short default timeout but longer subagentConfig timeout
+      const executorWithSubagentConfig = new GadgetExecutor(
+        registry,
+        undefined, // requestHumanInput
+        undefined, // logger
+        30, // defaultGadgetTimeoutMs - would timeout
+        undefined, // errorFormatterOptions
+        undefined, // client
+        undefined, // mediaStore
+        undefined, // agentConfig
+        { SlowGadget: { timeoutMs: 500 } }, // subagentConfig - long enough to complete
+      );
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SlowGadget",
+        invocationId: "subagent-2",
+        parametersRaw: '{"delay": 100}',
+        parameters: { delay: 100 },
+      };
+
+      const result = await executorWithSubagentConfig.execute(call);
+
+      // Should succeed because subagentConfig timeout overrides default
+      expect(result).toMatchObject({
+        gadgetName: "SlowGadget",
+        invocationId: "subagent-2",
+        result: "Completed after 100ms",
+      });
+      expect(result.error).toBeUndefined();
+    });
+
+    it("falls back to gadget.timeoutMs when subagentConfig has no timeout", async () => {
+      // Create gadget with short timeout
+      const slowGadget = new SlowGadget();
+      slowGadget.timeoutMs = 50;
+      registry.registerByClass(slowGadget);
+
+      // Create executor with subagentConfig that has other options but no timeout
+      const executorWithSubagentConfig = new GadgetExecutor(
+        registry,
+        undefined, // requestHumanInput
+        undefined, // logger
+        undefined, // defaultGadgetTimeoutMs
+        undefined, // errorFormatterOptions
+        undefined, // client
+        undefined, // mediaStore
+        undefined, // agentConfig
+        { SlowGadget: { model: "sonnet" } }, // subagentConfig without timeout
+      );
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SlowGadget",
+        invocationId: "subagent-3",
+        parametersRaw: '{"delay": 200}',
+        parameters: { delay: 200 },
+      };
+
+      const result = await executorWithSubagentConfig.execute(call);
+
+      // Should timeout using gadget's timeoutMs (50ms) since subagentConfig has no timeout
+      expect(result.error).toContain("timeout");
+      expect(result.error).toContain("50ms");
+    });
+
+    it("subagentConfig with timeoutMs=0 disables timeout", async () => {
+      // Create gadget with timeout that would fail
+      const slowGadget = new SlowGadget();
+      slowGadget.timeoutMs = 30;
+      registry.registerByClass(slowGadget);
+
+      // Create executor with subagentConfig that disables timeout
+      const executorWithSubagentConfig = new GadgetExecutor(
+        registry,
+        undefined, // requestHumanInput
+        undefined, // logger
+        30, // defaultGadgetTimeoutMs - would timeout
+        undefined, // errorFormatterOptions
+        undefined, // client
+        undefined, // mediaStore
+        undefined, // agentConfig
+        { SlowGadget: { timeoutMs: 0 } }, // subagentConfig - disable timeout
+      );
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "SlowGadget",
+        invocationId: "subagent-4",
+        parametersRaw: '{"delay": 100}',
+        parameters: { delay: 100 },
+      };
+
+      const result = await executorWithSubagentConfig.execute(call);
+
+      // Should succeed because timeout is disabled via timeoutMs=0
+      expect(result).toMatchObject({
+        gadgetName: "SlowGadget",
+        invocationId: "subagent-4",
+        result: "Completed after 100ms",
+      });
+      expect(result.error).toBeUndefined();
+    });
   });
 
   describe("abort signal support", () => {

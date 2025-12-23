@@ -352,6 +352,80 @@ describe("config", () => {
           expect((error as ConfigError).message).toContain("/path/to/config.toml");
         }
       });
+
+      describe("subagent config validation", () => {
+        it("should accept valid subagent timeoutMs", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                model: "inherit",
+                timeoutMs: 600000,
+              },
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.subagents?.BrowseWeb?.timeoutMs).toBe(600000);
+        });
+
+        it("should accept timeoutMs of 0 (disable timeout)", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                timeoutMs: 0,
+              },
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.subagents?.BrowseWeb?.timeoutMs).toBe(0);
+        });
+
+        it("should reject negative timeoutMs", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                timeoutMs: -1,
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.timeoutMs must be a non-negative integer",
+          );
+        });
+
+        it("should reject non-integer timeoutMs", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                timeoutMs: 5000.5,
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.timeoutMs must be a non-negative integer",
+          );
+        });
+
+        it("should reject string timeoutMs", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                timeoutMs: "5000",
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.timeoutMs must be a non-negative integer",
+          );
+        });
+      });
     });
   });
 

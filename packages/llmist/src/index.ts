@@ -366,7 +366,12 @@ export type { ILogObj, Logger } from "tslog";
 
 // Utility functions for subagent gadgets
 export type { ResolveValueOptions } from "./utils/config-resolver.js";
-export { resolveConfig, resolveSubagentModel, resolveValue } from "./utils/config-resolver.js";
+export {
+  resolveConfig,
+  resolveSubagentModel,
+  resolveSubagentTimeout,
+  resolveValue,
+} from "./utils/config-resolver.js";
 export {
   AnthropicMessagesProvider,
   createAnthropicProviderFromEnv,

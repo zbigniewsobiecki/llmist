@@ -51,11 +51,22 @@ Configure in `~/.llmist/cli.toml`:
 [subagents.BrowseWeb]
 model = "inherit"       # Use parent's model
 maxIterations = 20
+timeoutMs = 600000      # 10 minute timeout (overrides gadget's default)
 
 [develop.subagents.BrowseWeb]
 model = "haiku"         # Override for dev
 headless = false        # Show browser
+timeoutMs = 0           # Disable timeout for debugging
 ```
+
+### Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `model` | string | Model to use: `"inherit"` (parent's model), or a specific model ID |
+| `maxIterations` | number | Maximum agent loop iterations |
+| `timeoutMs` | number | Timeout in milliseconds. Overrides the gadget's hardcoded timeout. Set to `0` to disable. |
+| `headless` | boolean | Browser-specific: run headless or visible |
 
 ## Creating a Subagent
 
@@ -123,6 +134,10 @@ interface SubagentOptions {
   temperature?: number;          // LLM temperature
 }
 ```
+
+:::tip[Timeout Configuration]
+Subagent timeout is controlled via CLI config `[subagents.Name].timeoutMs`, not via `SubagentOptions`. The gadget's `timeoutMs` in the `Gadget({...})` config serves as the default, and can be overridden by users in their CLI config.
+:::
 
 ### Manual Pattern (Advanced)
 
