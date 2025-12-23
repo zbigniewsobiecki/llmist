@@ -352,6 +352,13 @@ function validateSingleSubagentConfig(
         );
       }
       result.maxIterations = val;
+    } else if (key === "timeoutMs") {
+      if (typeof val !== "number" || !Number.isInteger(val) || val < 0) {
+        throw new ConfigError(
+          `[${section}].${subagentName}.timeoutMs must be a non-negative integer`,
+        );
+      }
+      result.timeoutMs = val;
     } else {
       // Allow arbitrary additional options (headless, etc.)
       result[key] = val;
