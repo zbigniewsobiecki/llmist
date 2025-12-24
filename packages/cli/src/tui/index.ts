@@ -23,8 +23,7 @@
  */
 
 import type { Screen } from "@unblessed/node";
-import type { ExecutionTree, LLMMessage, StreamEvent, SubagentEvent } from "llmist";
-import type { LLMCallDisplayInfo } from "../ui/formatters.js";
+import type { ExecutionTree, StreamEvent } from "llmist";
 import { showApprovalDialog } from "./approval-dialog.js";
 import { BlockRenderer } from "./block-renderer.js";
 import { InputHandler } from "./input-handler.js";
@@ -73,17 +72,8 @@ export class TUIApp {
   /** Callback for mid-session input (REPL mode: inject user message during running session) */
   private onMidSessionInputCallback: ((message: string) => void) | null = null;
 
-  /** Track current LLM call ID for gadget parenting */
-  private currentLLMCallId: string | null = null;
-
   /** Track current iteration number for status bar */
   private currentIteration = 0;
-
-  /** Map gadget invocationId to block renderer's internal ID */
-  private gadgetIdMap = new Map<string, string>();
-
-  /** Map subagent LLM call key to block renderer's internal ID */
-  private subagentLLMCallMap = new Map<string, string>();
 
   /** Current focus mode (browse = navigate blocks, input = type in input field) */
   private focusMode: FocusMode = "browse";
@@ -397,205 +387,28 @@ export class TUIApp {
 
   /**
    * Handle an agent stream event.
-   * Converts events to interactive block operations.
    *
-   * When tree subscription is active, only handles text events.
-   * Gadgets and subagent events are handled automatically by tree.
+   * Only handles text events - gadgets and LLM calls are managed
+   * automatically by ExecutionTree subscription via subscribeToTree().
    */
   handleEvent(event: StreamEvent): void {
-    switch (event.type) {
-      case "text":
-        // Text flows as non-selectable content (tree doesn't track text)
-        this.blockRenderer.addText(event.content);
-        break;
-
-      case "gadget_call": {
-        // Tree handles gadget creation when subscribed
-        if (this.blockRenderer.isTreeSubscribed()) break;
-
-        // Legacy path: create gadget block as child of current LLM call
-        const gadgetId = this.blockRenderer.addGadget(
-          event.call.invocationId,
-          event.call.gadgetName,
-          event.call.parameters,
-        );
-        this.gadgetIdMap.set(event.call.invocationId, gadgetId);
-        // Track in status bar
-        this.statusBar.startGadget(event.call.gadgetName);
-        break;
-      }
-
-      case "gadget_result":
-        // Tree handles gadget completion when subscribed
-        if (this.blockRenderer.isTreeSubscribed()) break;
-
-        // Legacy path: complete the gadget block
-        this.blockRenderer.completeGadget(
-          event.result.invocationId,
-          event.result.result,
-          event.result.error,
-          event.result.executionTimeMs,
-          event.result.cost,
-        );
-        // Remove from status bar
-        this.statusBar.endGadget(event.result.gadgetName);
-        break;
-
-      case "subagent_event":
-        // Tree handles nested events automatically via parent-child relationships
-        if (this.blockRenderer.isTreeSubscribed()) break;
-
-        // Legacy path: handle nested events within gadgets
-        this.handleSubagentEvent(event.subagentEvent);
-        break;
-
-      case "stream_complete":
-        // Nothing special needed for blocks
-        break;
-
-      case "human_input_required":
-        // Handled by InputHandler, not here
-        break;
-
-      default:
-        // Other events (gadget_skipped, compaction, etc.)
-        break;
+    if (event.type === "text") {
+      // Text is append-only content not tracked by the tree
+      this.blockRenderer.addText(event.content);
     }
-  }
-
-  /**
-   * Handle subagent events (nested LLM calls and gadgets within gadgets).
-   */
-  private handleSubagentEvent(subEvent: SubagentEvent): void {
-    // Find the parent gadget block
-    const parentGadgetId = this.gadgetIdMap.get(subEvent.gadgetInvocationId);
-    if (!parentGadgetId) return;
-
-    switch (subEvent.type) {
-      case "llm_call_start": {
-        // Create nested LLM call as child of the gadget
-        const info = subEvent.event as import("llmist").LLMCallInfo;
-        // Unique key: gadgetInvocationId + iteration (uses raw iteration for tracking)
-        const key = `${subEvent.gadgetInvocationId}_${info.iteration}`;
-
-        // Deduplicate: skip if we already have this subagent LLM call
-        if (this.subagentLLMCallMap.has(key)) {
-          break;
-        }
-
-        const llmCallId = this.blockRenderer.addLLMCall(
-          info.iteration + 1, // Display as 1-indexed (consistent with main agent)
-          info.model,
-          parentGadgetId, // Parent is the gadget
-        );
-        this.subagentLLMCallMap.set(key, llmCallId);
-        // Track in status bar with subagent label
-        const subLabel = `#${this.currentIteration}.${info.iteration + 1}`;
-        this.statusBar.startLLMCall(subLabel, info.model);
-        break;
-      }
-
-      case "llm_call_end": {
-        const info = subEvent.event as import("llmist").LLMCallInfo;
-        const key = `${subEvent.gadgetInvocationId}_${info.iteration}`;
-        const llmCallId = this.subagentLLMCallMap.get(key);
-        if (llmCallId) {
-          this.blockRenderer.completeLLMCall(llmCallId, {
-            inputTokens: info.usage?.inputTokens ?? info.inputTokens,
-            cachedInputTokens: info.usage?.cachedInputTokens,
-            outputTokens: info.usage?.outputTokens ?? info.outputTokens,
-            elapsedSeconds: info.elapsedMs ? info.elapsedMs / 1000 : undefined,
-            cost: info.cost,
-            finishReason: info.finishReason ?? undefined,
-          });
-          // Remove from status bar
-          const subLabel = `#${this.currentIteration}.${info.iteration + 1}`;
-          this.statusBar.endLLMCall(subLabel);
-          // Accumulate subagent LLM call cost in status bar
-          if (info.cost && info.cost > 0) {
-            this.statusBar.addGadgetCost(info.cost);
-          }
-        }
-        break;
-      }
-
-      case "gadget_call": {
-        // Subagent gadget call - create as child of the subagent's LLM call
-        const gadgetEvent = subEvent.event as {
-          call?: { gadgetName: string; parameters: Record<string, unknown>; invocationId: string };
-        };
-        if (gadgetEvent.call) {
-          // Deduplicate: skip if we already have this gadget
-          if (this.gadgetIdMap.has(gadgetEvent.call.invocationId)) {
-            break;
-          }
-
-          // Set correct LLM call context for parenting
-          // Use the iteration from subagent event to find the correct subagent LLM call
-          if (subEvent.iteration !== undefined) {
-            const key = `${subEvent.gadgetInvocationId}_${subEvent.iteration}`;
-            const subagentLLMCallId = this.subagentLLMCallMap.get(key);
-            if (subagentLLMCallId) {
-              this.blockRenderer.setCurrentLLMCall(subagentLLMCallId);
-            }
-          }
-
-          const gadgetId = this.blockRenderer.addGadget(
-            gadgetEvent.call.invocationId,
-            gadgetEvent.call.gadgetName,
-            gadgetEvent.call.parameters,
-          );
-          this.gadgetIdMap.set(gadgetEvent.call.invocationId, gadgetId);
-          // Track in status bar
-          this.statusBar.startGadget(gadgetEvent.call.gadgetName);
-        }
-        break;
-      }
-
-      case "gadget_result": {
-        const gadgetEvent = subEvent.event as {
-          result?: {
-            invocationId: string;
-            gadgetName?: string;
-            executionTimeMs?: number;
-            error?: string;
-            result?: string;
-            cost?: number;
-          };
-        };
-        if (gadgetEvent.result) {
-          this.blockRenderer.completeGadget(
-            gadgetEvent.result.invocationId,
-            gadgetEvent.result.result,
-            gadgetEvent.result.error,
-            gadgetEvent.result.executionTimeMs,
-            gadgetEvent.result.cost,
-          );
-          // Remove from status bar
-          if (gadgetEvent.result.gadgetName) {
-            this.statusBar.endGadget(gadgetEvent.result.gadgetName);
-          }
-          // Track subagent gadget cost
-          if (gadgetEvent.result.cost && gadgetEvent.result.cost > 0) {
-            this.statusBar.addGadgetCost(gadgetEvent.result.cost);
-          }
-        }
-        break;
-      }
-    }
+    // All other events (gadget_call, gadget_result, subagent_event, etc.)
+    // are handled automatically by tree subscription in subscribeToTree()
   }
 
   /**
    * Show an LLM call starting.
-   * @param iteration - Current iteration number
-   * @param model - Model name
-   * @param estimatedInputTokens - Estimated input tokens for real-time display
+   * Only tracks iteration for status bar label formatting.
+   * Block creation is handled automatically by ExecutionTree subscription.
+   *
+   * @param iteration - Current iteration number (1-indexed)
    */
-  showLLMCallStart(iteration: number, _model: string, _estimatedInputTokens = 0): void {
-    // Tree subscription handles block creation and activity tracking via handleTreeEvent
-    // We only track IDs for raw response attachment in raw viewer
+  showLLMCallStart(iteration: number): void {
     this.currentIteration = iteration;
-    this.currentLLMCallId = this.blockRenderer.getCurrentLLMCallId();
   }
 
   /**
@@ -604,33 +417,6 @@ export class TUIApp {
    */
   updateStreamingTokens(estimatedOutputTokens: number): void {
     this.statusBar.updateStreaming(estimatedOutputTokens);
-  }
-
-  /**
-   * Show an LLM call completion.
-   */
-  showLLMCallComplete(info: LLMCallDisplayInfo & { rawResponse?: string }): void {
-    // Skip when tree subscription is active - tree handles raw data correctly
-    // using proper block IDs. Hook-based path uses stale currentLLMCallId.
-    if (this.blockRenderer.isTreeSubscribed()) return;
-
-    if (this.currentLLMCallId && info.rawResponse) {
-      this.blockRenderer.setLLMCallResponse(this.currentLLMCallId, info.rawResponse);
-    }
-  }
-
-  /**
-   * Store raw request messages for the current LLM call.
-   * Called from onLLMCallReady hook after controller modifications.
-   */
-  setLLMCallRequest(messages: LLMMessage[]): void {
-    // Skip when tree subscription is active - tree handles raw data correctly
-    // using proper block IDs. Hook-based path uses stale currentLLMCallId.
-    if (this.blockRenderer.isTreeSubscribed()) return;
-
-    if (this.currentLLMCallId) {
-      this.blockRenderer.setLLMCallRequest(this.currentLLMCallId, messages);
-    }
   }
 
   /**

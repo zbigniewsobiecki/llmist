@@ -8,7 +8,6 @@ import { text } from "llmist";
 import type { LLMMessage } from "llmist";
 import type { TokenUsage } from "llmist";
 import { GadgetRegistry } from "llmist";
-import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
 import type { ApprovalConfig } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
@@ -182,23 +181,6 @@ export async function executeAgent(
   const llmLogDir = llmLogsEnabled ? env.session?.logDir : undefined;
   let llmCallCounter = 0;
 
-  // Count tokens accurately using provider-specific methods
-  const countMessagesTokens = async (
-    model: string,
-    messages: LLMMessage[],
-  ): Promise<number> => {
-    try {
-      return await client.countTokens(model, messages);
-    } catch {
-      // Fallback to character-based estimation if counting fails
-      const totalChars = messages.reduce(
-        (sum, m) => sum + (m.content?.length ?? 0),
-        0,
-      );
-      return Math.round(totalChars / FALLBACK_CHARS_PER_TOKEN);
-    }
-  };
-
   // Count tokens for gadget output text
   const countGadgetOutputTokens = async (
     output: string | undefined,
@@ -238,29 +220,21 @@ export async function executeAgent(
     .withLogger(env.createLogger("llmist:cli:agent"))
     .withHooks({
       observers: {
-        // onLLMCallStart: Update TUI with LLM call info and estimated input tokens
+        // onLLMCallStart: Track iteration for status bar label formatting
         onLLMCallStart: async (context) => {
           if (context.subagentContext) return;
           llmCallCounter++;
 
           if (tui) {
-            // Estimate input tokens from messages
-            const estimatedInput = await countMessagesTokens(
-              context.options.model,
-              context.options.messages,
-            );
-            tui.showLLMCallStart(iterations + 1, context.options.model, estimatedInput);
+            // Only track iteration - tree subscription handles block creation
+            tui.showLLMCallStart(iterations + 1);
           }
         },
 
         // onLLMCallReady: Log the exact request being sent to the LLM
         onLLMCallReady: async (context) => {
           if (context.subagentContext) return;
-
-          // Store raw request in TUI for raw viewer
-          if (tui) {
-            tui.setLLMCallRequest(context.options.messages);
-          }
+          // Tree subscription handles raw request attachment via handleTreeEvent()
 
           if (llmLogDir) {
             const filename = `${formatCallNumber(llmCallCounter)}.request`;
@@ -279,47 +253,15 @@ export async function executeAgent(
           tui.updateStreamingTokens(estimatedOutputTokens);
         },
 
-        // onLLMCallComplete: Update TUI with completion metrics
+        // onLLMCallComplete: Capture metadata for final summary and file logging
         onLLMCallComplete: async (context) => {
           if (context.subagentContext) return;
 
-          // Capture completion metadata
+          // Capture completion metadata for final summary
           usage = context.usage;
           iterations = Math.max(iterations, context.iteration + 1);
 
-          // Calculate per-call cost
-          let callCost: number | undefined;
-          if (context.usage && client.modelRegistry) {
-            try {
-              const modelName = context.options.model.includes(":")
-                ? context.options.model.split(":")[1]
-                : context.options.model;
-              const costResult = client.modelRegistry.estimateCost(
-                modelName,
-                context.usage.inputTokens,
-                context.usage.outputTokens,
-                context.usage.cachedInputTokens ?? 0,
-                context.usage.cacheCreationInputTokens ?? 0,
-              );
-              if (costResult) callCost = costResult.totalCost;
-            } catch {
-              // Ignore cost calculation errors
-            }
-          }
-
-          if (tui) {
-            tui.showLLMCallComplete({
-              iteration: context.iteration + 1,
-              model: context.options.model,
-              inputTokens: context.usage?.inputTokens,
-              outputTokens: context.usage?.outputTokens,
-              cachedInputTokens: context.usage?.cachedInputTokens,
-              elapsedSeconds: tui.getElapsedSeconds(),
-              cost: callCost,
-              finishReason: context.finishReason ?? "stop",
-              rawResponse: context.rawResponse,
-            });
-          }
+          // Tree subscription handles block completion and raw response via handleTreeEvent()
 
           // Write LLM response to debug log if enabled
           if (llmLogDir) {
