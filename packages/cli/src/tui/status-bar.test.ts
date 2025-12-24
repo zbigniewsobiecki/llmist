@@ -342,6 +342,62 @@ describe("StatusBar", () => {
     });
   });
 
+  describe("setProfiles", () => {
+    test("selects first profile when initialProfile is undefined", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setProfiles(["agent", "news", "code"]);
+
+      expect(bar.getCurrentProfile()).toBe("agent");
+    });
+
+    test("selects correct profile when initialProfile matches", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setProfiles(["agent", "news", "code"], "news");
+
+      expect(bar.getCurrentProfile()).toBe("news");
+    });
+
+    test("selects first profile when initialProfile does not match any", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setProfiles(["agent", "news", "code"], "nonexistent");
+
+      expect(bar.getCurrentProfile()).toBe("agent");
+    });
+
+    test("displays current profile in status bar", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setProfiles(["agent", "news", "code"], "code");
+
+      const content = statusBox.getContent();
+      expect(content).toContain("code");
+    });
+
+    test("cycles to next profile with cycleProfile", () => {
+      const renderCallback = mock(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setProfiles(["agent", "news", "code"], "agent");
+      expect(bar.getCurrentProfile()).toBe("agent");
+
+      bar.cycleProfile();
+      expect(bar.getCurrentProfile()).toBe("news");
+
+      bar.cycleProfile();
+      expect(bar.getCurrentProfile()).toBe("code");
+
+      bar.cycleProfile();
+      expect(bar.getCurrentProfile()).toBe("agent"); // wraps around
+    });
+  });
+
   describe("subscribeToTree", () => {
     test("clears all activity state when subscribing to new tree", () => {
       const renderCallback = mock(() => {});
