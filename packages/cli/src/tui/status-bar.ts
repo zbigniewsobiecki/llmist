@@ -400,10 +400,13 @@ export class StatusBar {
 
   /**
    * Set available profiles for cycling.
+   * @param profiles - Available profile names
+   * @param initialProfile - Optional profile to select initially (defaults to first)
    */
-  setProfiles(profiles: string[]): void {
+  setProfiles(profiles: string[], initialProfile?: string): void {
     this.profiles = profiles;
-    this.currentProfileIndex = 0;
+    const index = initialProfile ? profiles.indexOf(initialProfile) : 0;
+    this.currentProfileIndex = index >= 0 ? index : 0;
     this.render();
   }
 

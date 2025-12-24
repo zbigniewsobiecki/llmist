@@ -165,12 +165,13 @@ export class TUIApp {
 		// Set up keyboard handlers
 		keyboardManager.setup();
 
-		// Wire up Ctrl+C/B/K/I/J from input handler to keyboard manager
+		// Wire up Ctrl+C/B/K/I/J/P from input handler to keyboard manager
 		inputHandler.onCtrlC(() => keyboardManager.handleForwardedKey("C-c"));
 		inputHandler.onCtrlB(() => keyboardManager.handleForwardedKey("C-b"));
 		inputHandler.onCtrlK(() => keyboardManager.handleForwardedKey("C-k"));
 		inputHandler.onCtrlI(() => keyboardManager.handleForwardedKey("C-i"));
 		inputHandler.onCtrlJ(() => keyboardManager.handleForwardedKey("C-j"));
+		inputHandler.onCtrlP(() => keyboardManager.handleForwardedKey("C-p"));
 
 		// Wire scroll event to detect user scrolling (for smart follow mode)
 		layout.body.on("scroll", () => {
@@ -331,6 +332,15 @@ export class TUIApp {
 	}
 
 	/**
+	 * Enter the pending REPL prompt state without blocking.
+	 * This enables Ctrl+P profile cycling while waiting for user input.
+	 * Call this early during startup so the REPL is in waiting mode immediately.
+	 */
+	startWaitingForPrompt(): void {
+		this.inputHandler.startWaitingForPrompt();
+	}
+
+	/**
 	 * Set callback for mid-session input.
 	 * Called when user submits input during a running session.
 	 */
@@ -446,9 +456,11 @@ export class TUIApp {
 
 	/**
 	 * Set available profiles for cycling.
+	 * @param profiles - Available profile names
+	 * @param initialProfile - Optional profile to select initially (defaults to first)
 	 */
-	setProfiles(profiles: string[]): void {
-		this.statusBar.setProfiles(profiles);
+	setProfiles(profiles: string[], initialProfile?: string): void {
+		this.statusBar.setProfiles(profiles, initialProfile);
 	}
 
 	/**

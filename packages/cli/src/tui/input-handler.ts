@@ -46,6 +46,9 @@ export class InputHandler {
   /** Callback when Ctrl+J is pressed (scroll down) */
   private ctrlJCallback: (() => void) | null = null;
 
+  /** Callback when Ctrl+P is pressed (cycle profiles) */
+  private ctrlPCallback: (() => void) | null = null;
+
   /** Callback for mid-session input (user submits while agent is running) */
   private midSessionHandler: ((message: string) => void) | null = null;
 
@@ -114,6 +117,14 @@ export class InputHandler {
       }
     });
 
+    // Handle Ctrl+P on the input bar - cycle profiles
+    // This ensures Ctrl+P works for profile cycling when inputBar has focus
+    this.inputBar.key(["C-p"], () => {
+      if (this.ctrlPCallback) {
+        this.ctrlPCallback();
+      }
+    });
+
     // Screen-level Enter key to activate pending REPL prompt
     // This allows navigation to work when not actively typing
     this.screen.key(["enter"], () => {
@@ -159,6 +170,13 @@ export class InputHandler {
    */
   onCtrlJ(callback: () => void): void {
     this.ctrlJCallback = callback;
+  }
+
+  /**
+   * Set callback for Ctrl+P events (cycle profiles).
+   */
+  onCtrlP(callback: () => void): void {
+    this.ctrlPCallback = callback;
   }
 
   /**
@@ -270,8 +288,7 @@ export class InputHandler {
     this.inputBar.show();
     // Render immediately to ensure input bar is visible before focus
     this.renderNowCallback();
-    // Then focus and start reading input
-    this.inputBar.focus();
+    // Only call readInput() - it handles focusing internally
     this.inputBar.readInput();
   }
 
@@ -301,8 +318,7 @@ export class InputHandler {
     const value = rawValue.trim();
 
     if (!value) {
-      // Empty input - refocus for retry
-      this.inputBar.focus();
+      // Empty input - readInput for retry (no separate focus call needed)
       this.inputBar.readInput();
       return;
     }
@@ -332,9 +348,8 @@ export class InputHandler {
    */
   private handleCancel(): void {
     if (this.pendingInput) {
-      // Don't actually cancel - just reset focus
+      // Don't actually cancel - just re-enter input mode
       // The pending input will continue to wait
-      this.inputBar.focus();
       this.inputBar.readInput();
     } else {
       this.setIdle();
@@ -350,6 +365,15 @@ export class InputHandler {
     this.inputBar.setValue("");
     // Don't focus - let body handle scroll keys
     this.renderCallback();
+  }
+
+  /**
+   * Enter the pending REPL prompt state without blocking.
+   * This enables Ctrl+P profile cycling while waiting for user input.
+   * Call this early during startup so the REPL is in waiting mode immediately.
+   */
+  startWaitingForPrompt(): void {
+    this.setPendingPrompt();
   }
 
   /**
@@ -372,7 +396,8 @@ export class InputHandler {
     this.isPendingREPLPrompt = false;
     this.promptLabel.setContent(ACTIVE_PROMPT);
     this.inputBar.setValue("");
-    this.inputBar.focus();
+    // Only call readInput() - it handles focusing internally
+    // Calling both focus() and readInput() can cause double character echo
     this.inputBar.readInput();
     this.renderCallback();
   }
