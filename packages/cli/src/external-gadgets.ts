@@ -273,20 +273,18 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
 
   const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
 
+  // Suppress donation messages from packages like core-js
+  const quietEnv = { ...process.env, DISABLE_OPENCOLLECTIVE: "1", ADBLOCK: "1" };
+
   // Prefer npm for external gadgets because:
   // - npm runs all postinstall scripts reliably (including subdependencies)
   // - Packages like dhalsim depend on camoufox which needs postinstall to download browsers
   // Use --foreground-scripts so postinstall output (e.g. download progress) is visible
   // Use --loglevel=error to suppress deprecation warnings and node-gyp verbose output
-  // Set DISABLE_OPENCOLLECTIVE and ADBLOCK to suppress donation messages from core-js etc.
   if (isCommandAvailable("npm")) {
     const installCmd = `npm install --foreground-scripts --loglevel=error "${packageSpec}"`;
     try {
-      execSync(installCmd, {
-        stdio: "inherit",
-        cwd: cacheDir,
-        env: { ...process.env, DISABLE_OPENCOLLECTIVE: "1", ADBLOCK: "1" },
-      });
+      execSync(installCmd, { stdio: "inherit", cwd: cacheDir, env: quietEnv });
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -303,11 +301,7 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
     );
     const installCmd = `bun add --trust "${packageSpec}"`;
     try {
-      execSync(installCmd, {
-        stdio: "inherit",
-        cwd: cacheDir,
-        env: { ...process.env, DISABLE_OPENCOLLECTIVE: "1", ADBLOCK: "1" },
-      });
+      execSync(installCmd, { stdio: "inherit", cwd: cacheDir, env: quietEnv });
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
