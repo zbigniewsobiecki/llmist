@@ -5,8 +5,8 @@
  * The input field is always visible but only active during prompts.
  */
 
-import type { Screen, Textbox, Box } from "@unblessed/node";
-import type { PendingInput, CtrlCCallback } from "./types.js";
+import type { Box, Screen, Text, Textbox } from "@unblessed/node";
+import type { CtrlCCallback, PendingInput } from "./types.js";
 
 /** Prompt indicator shown when input is idle */
 const IDLE_PROMPT = "> ";
@@ -14,14 +14,12 @@ const IDLE_PROMPT = "> ";
 /** Prompt indicator shown when waiting for input */
 const ACTIVE_PROMPT = ">>> ";
 
-/** Prompt indicator for pending REPL input (not capturing keys yet) */
-const PENDING_PROMPT = "> ";
-
 /**
  * Manages input field for AskUser responses.
  */
 export class InputHandler {
   private inputBar: Textbox;
+  private promptLabel: Text;
   private body: Box;
   private screen: Screen;
   private renderCallback: () => void;
@@ -39,17 +37,22 @@ export class InputHandler {
   /** Callback when Ctrl+B is pressed (toggle focus mode) */
   private ctrlBCallback: (() => void) | null = null;
 
+  /** Callback when Ctrl+K is pressed (toggle content filter mode) */
+  private ctrlKCallback: (() => void) | null = null;
+
   /** Callback for mid-session input (user submits while agent is running) */
   private midSessionHandler: ((message: string) => void) | null = null;
 
   constructor(
     inputBar: Textbox,
+    promptLabel: Text,
     body: Box,
     screen: Screen,
     renderCallback: () => void,
     renderNowCallback?: () => void,
   ) {
     this.inputBar = inputBar;
+    this.promptLabel = promptLabel;
     this.body = body;
     this.screen = screen;
     this.renderCallback = renderCallback;
@@ -81,6 +84,14 @@ export class InputHandler {
       }
     });
 
+    // Handle Ctrl+K on the input bar - toggle content filter mode
+    // This ensures Ctrl+K works to toggle focused/full mode when inputBar has focus
+    this.inputBar.key(["C-k"], () => {
+      if (this.ctrlKCallback) {
+        this.ctrlKCallback();
+      }
+    });
+
     // Screen-level Enter key to activate pending REPL prompt
     // This allows navigation to work when not actively typing
     this.screen.key(["enter"], () => {
@@ -105,6 +116,13 @@ export class InputHandler {
    */
   onCtrlB(callback: () => void): void {
     this.ctrlBCallback = callback;
+  }
+
+  /**
+   * Set callback for Ctrl+K events (toggle content filter mode).
+   */
+  onCtrlK(callback: () => void): void {
+    this.ctrlKCallback = callback;
   }
 
   /**
@@ -134,8 +152,8 @@ export class InputHandler {
         reject,
       };
 
-      // Show the question in the body area
-      this.appendQuestionToBody(question);
+      // Question is rendered via block tree system (AskUser gadget block)
+      // No need to inject directly - this ensures chronological ordering
 
       // Activate input mode
       this.setActive();
@@ -208,11 +226,12 @@ export class InputHandler {
   /**
    * Activate input mode - show input bar and capture keyboard.
    * Called by TUIApp when switching to input mode.
+   * Preserves current prompt indicator and input text.
    */
   activate(): void {
     this.isPendingREPLPrompt = false;
+    this.promptLabel.show();
     this.inputBar.show();
-    this.inputBar.setValue(ACTIVE_PROMPT);
     // Render immediately to ensure input bar is visible before focus
     this.renderNowCallback();
     // Then focus and start reading input
@@ -225,6 +244,7 @@ export class InputHandler {
    * Called by TUIApp when switching to browse mode.
    */
   deactivate(): void {
+    this.promptLabel.hide();
     this.inputBar.hide();
     this.isPendingREPLPrompt = false;
     this.renderNowCallback();
@@ -241,12 +261,8 @@ export class InputHandler {
    * Handle input submission.
    */
   private handleSubmit(rawValue: string): void {
-    // Extract actual input (remove prompt prefix)
-    const value = rawValue.startsWith(ACTIVE_PROMPT)
-      ? rawValue.slice(ACTIVE_PROMPT.length).trim()
-      : rawValue.startsWith(IDLE_PROMPT)
-        ? rawValue.slice(IDLE_PROMPT.length).trim()
-        : rawValue.trim();
+    // Value no longer contains prompt - just trim whitespace
+    const value = rawValue.trim();
 
     if (!value) {
       // Empty input - refocus for retry
@@ -294,7 +310,8 @@ export class InputHandler {
    */
   private setIdle(): void {
     this.isPendingREPLPrompt = false;
-    this.inputBar.setValue(IDLE_PROMPT);
+    this.promptLabel.setContent(IDLE_PROMPT);
+    this.inputBar.setValue("");
     // Don't focus - let body handle scroll keys
     this.renderCallback();
   }
@@ -305,7 +322,8 @@ export class InputHandler {
    */
   private setPendingPrompt(): void {
     this.isPendingREPLPrompt = true;
-    this.inputBar.setValue(PENDING_PROMPT);
+    this.promptLabel.setContent(IDLE_PROMPT);
+    this.inputBar.setValue("");
     // Don't focus - let navigation keys work
     // User presses Enter to activate and start typing
     this.renderCallback();
@@ -316,22 +334,10 @@ export class InputHandler {
    */
   private setActive(): void {
     this.isPendingREPLPrompt = false;
-    this.inputBar.setValue(ACTIVE_PROMPT);
+    this.promptLabel.setContent(ACTIVE_PROMPT);
+    this.inputBar.setValue("");
     this.inputBar.focus();
     this.inputBar.readInput();
-    this.renderCallback();
-  }
-
-  /**
-   * Append the question to the body content.
-   */
-  private appendQuestionToBody(question: string): void {
-    const currentContent = this.body.getContent();
-    const separator = "\n" + "─".repeat(40) + "\n";
-    const formatted = `${separator}? ${question}${separator}`;
-
-    this.body.setContent(currentContent + formatted);
-    this.body.setScrollPerc?.(100);
     this.renderCallback();
   }
 }

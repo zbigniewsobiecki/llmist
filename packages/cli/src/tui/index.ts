@@ -23,25 +23,24 @@
  */
 
 import type { Screen } from "@unblessed/node";
-import type { ExecutionTree } from "llmist";
-import type { StreamEvent, SubagentEvent } from "llmist";
+import type { ExecutionTree, LLMMessage, StreamEvent, SubagentEvent } from "llmist";
+import type { LLMCallDisplayInfo } from "../ui/formatters.js";
+import { showApprovalDialog } from "./approval-dialog.js";
+import { BlockRenderer } from "./block-renderer.js";
+import { InputHandler } from "./input-handler.js";
+import { createBlockLayout, setupBlockNavigationKeys } from "./layout.js";
+import { type RawViewerMode, showRawViewer } from "./raw-viewer.js";
+import { createScreen } from "./screen.js";
+import { StatusBar } from "./status-bar.js";
 import type {
-  TUIOptions,
-  TUIScreenContext,
-  TUIBlockLayout,
   ApprovalContext,
   ApprovalResponse,
+  ContentFilterMode,
   FocusMode,
+  TUIBlockLayout,
+  TUIOptions,
+  TUIScreenContext,
 } from "./types.js";
-import { createScreen } from "./screen.js";
-import { createBlockLayout, setupBlockNavigationKeys } from "./layout.js";
-import { StatusBar } from "./status-bar.js";
-import { InputHandler } from "./input-handler.js";
-import { BlockRenderer } from "./block-renderer.js";
-import { showApprovalDialog } from "./approval-dialog.js";
-import { showRawViewer, type RawViewerMode } from "./raw-viewer.js";
-import type { LLMCallDisplayInfo } from "../ui/formatters.js";
-import type { LLMMessage } from "llmist";
 
 /** Window for double Ctrl+C detection (ms) */
 const CTRL_C_WINDOW_MS = 1000;
@@ -89,6 +88,9 @@ export class TUIApp {
   /** Current focus mode (browse = navigate blocks, input = type in input field) */
   private focusMode: FocusMode = "browse";
 
+  /** Content filter mode (full = show all, focused = hide technical details) */
+  private contentFilterMode: ContentFilterMode = "full";
+
   /** Close function for currently open raw viewer (if any) */
   private closeRawViewer: (() => void) | null = null;
 
@@ -133,16 +135,18 @@ export class TUIApp {
     // Cast ScrollableBox to Box for InputHandler compatibility
     const inputHandler = new InputHandler(
       layout.inputBar,
+      layout.promptLabel,
       layout.body as unknown as import("@unblessed/node").Box,
       screen,
       () => screenCtx.requestRender(),
       () => screenCtx.renderNow(),
     );
 
-    // Create block renderer
+    // Create block renderer with both debounced and immediate render callbacks
     const blockRenderer = new BlockRenderer(
       layout.body,
       () => screenCtx.requestRender(),
+      () => screenCtx.renderNow(),
     );
 
     const app = new TUIApp(screenCtx, layout, statusBar, inputHandler, blockRenderer);
@@ -155,6 +159,9 @@ export class TUIApp {
 
     // Wire up Ctrl+B from input handler to toggle focus mode
     inputHandler.onCtrlB(() => app.toggleFocusMode());
+
+    // Wire up Ctrl+K from input handler to toggle content filter mode
+    inputHandler.onCtrlK(() => app.toggleContentFilterMode());
 
     // Set up block navigation keys (pass focus mode getter)
     setupBlockNavigationKeys(
@@ -239,6 +246,45 @@ export class TUIApp {
         this.statusBar.cycleProfile();
       }
     });
+
+    // Ctrl+K to toggle content filter mode (focused view)
+    screen.key(["C-k"], () => {
+      this.toggleContentFilterMode();
+    });
+
+    // Page Up/Down for scrolling (works in both browse and input modes)
+    // This enables scrolling in focused mode where block navigation is disabled
+    screen.key(["pageup"], () => {
+      this.scrollPage(-1);
+    });
+
+    screen.key(["pagedown"], () => {
+      this.scrollPage(1);
+    });
+  }
+
+  /**
+   * Scroll the body by a page (for PageUp/PageDown keys).
+   * Works in both browse and input modes.
+   *
+   * @param direction - -1 for page up, 1 for page down
+   */
+  private scrollPage(direction: number): void {
+    const body = this.layout.body;
+    if (!body.scroll) return; // Guard for scroll method availability
+
+    const containerHeight = body.height as number;
+    const scrollAmount = Math.max(1, containerHeight - 2); // Leave 2 lines of context
+
+    if (direction < 0) {
+      // Page up
+      body.scroll(-scrollAmount);
+    } else {
+      // Page down
+      body.scroll(scrollAmount);
+    }
+    this.blockRenderer.handleUserScroll();
+    this.screenCtx.renderNow();
   }
 
   /**
@@ -269,8 +315,12 @@ export class TUIApp {
   /**
    * Toggle between browse and input modes.
    * Called by Tab key handler.
+   * No-op in focused content mode (browse not allowed).
    */
   toggleFocusMode(): void {
+    // In focused content mode, always stay in input mode
+    if (this.contentFilterMode === "focused") return;
+
     this.focusMode = this.focusMode === "browse" ? "input" : "browse";
     this.applyFocusMode();
   }
@@ -278,8 +328,14 @@ export class TUIApp {
   /**
    * Set focus mode programmatically.
    * Used by AskUser to force input mode.
+   * BROWSE mode is ignored in focused content mode.
    */
   setFocusMode(mode: FocusMode): void {
+    // In focused content mode, don't allow browse mode
+    if (this.contentFilterMode === "focused" && mode === "browse") {
+      return;
+    }
+
     if (this.focusMode !== mode) {
       this.focusMode = mode;
       this.applyFocusMode();
@@ -313,6 +369,30 @@ export class TUIApp {
     } else {
       this.inputHandler.deactivate();
     }
+  }
+
+  /**
+   * Toggle content filter mode between full and focused.
+   * In focused mode:
+   * - Only text and user-facing gadgets (TellUser, AskUser) are visible
+   * - LLM call blocks and most gadgets are hidden
+   * - Forces INPUT mode (no BROWSE allowed)
+   * - Status bar shows FOCUSED instead of BROWSE/INPUT
+   */
+  toggleContentFilterMode(): void {
+    this.contentFilterMode = this.contentFilterMode === "full" ? "focused" : "full";
+
+    // In focused mode, force INPUT mode FIRST (before rebuilding blocks)
+    // This ensures the body height is correct when calculating block positions
+    if (this.contentFilterMode === "focused") {
+      this.setFocusMode("input");
+    }
+
+    // Update components - blocks will be rebuilt with correct body height
+    this.blockRenderer.setContentFilterMode(this.contentFilterMode);
+    this.statusBar.setContentFilterMode(this.contentFilterMode);
+
+    this.screenCtx.renderNow();
   }
 
   /**
@@ -441,7 +521,9 @@ export class TUIApp {
 
       case "gadget_call": {
         // Subagent gadget call - create as child of the subagent's LLM call
-        const gadgetEvent = subEvent.event as { call?: { gadgetName: string; parameters: Record<string, unknown>; invocationId: string } };
+        const gadgetEvent = subEvent.event as {
+          call?: { gadgetName: string; parameters: Record<string, unknown>; invocationId: string };
+        };
         if (gadgetEvent.call) {
           // Deduplicate: skip if we already have this gadget
           if (this.gadgetIdMap.has(gadgetEvent.call.invocationId)) {
@@ -471,7 +553,16 @@ export class TUIApp {
       }
 
       case "gadget_result": {
-        const gadgetEvent = subEvent.event as { result?: { invocationId: string; gadgetName?: string; executionTimeMs?: number; error?: string; result?: string; cost?: number } };
+        const gadgetEvent = subEvent.event as {
+          result?: {
+            invocationId: string;
+            gadgetName?: string;
+            executionTimeMs?: number;
+            error?: string;
+            result?: string;
+            cost?: number;
+          };
+        };
         if (gadgetEvent.result) {
           this.blockRenderer.completeGadget(
             gadgetEvent.result.invocationId,
@@ -847,8 +938,7 @@ export class TUIApp {
   }
 }
 
-// Re-export types for convenience
-export type { TUIOptions, ApprovalContext, ApprovalResponse } from "./types.js";
-
 // Re-export utilities
 export { StatusBar } from "./status-bar.js";
+// Re-export types for convenience
+export type { ApprovalContext, ApprovalResponse, TUIOptions } from "./types.js";

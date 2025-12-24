@@ -14,10 +14,9 @@
  */
 
 import chalk from "chalk";
+import type { StoredMedia, TokenUsage } from "llmist";
 import { type MarkedExtension, marked } from "marked";
 import { markedTerminal } from "marked-terminal";
-import type { TokenUsage } from "llmist";
-import type { StoredMedia } from "llmist";
 
 /**
  * Lazy-initialized flag for marked-terminal configuration.
@@ -70,7 +69,7 @@ function ensureMarkedConfigured(): void {
         firstHeading: chalk.magenta.underline.bold,
         showSectionPrefix: false, // Hide "###" prefix, use styling instead
 
-        // Links
+        // Links - will be overridden by OSC 8 renderer below
         link: chalk.blue,
         href: chalk.blue.underline,
 
@@ -82,6 +81,22 @@ function ensureMarkedConfigured(): void {
         listitem: chalk.reset, // Keep items readable (no dim)
       }) as unknown as MarkedExtension,
     );
+
+    // Override link rendering with OSC 8 hyperlinks for clickable terminal links
+    // This must come AFTER markedTerminal() to override its link handling
+    // OSC 8 format: ESC ] 8 ; ; URL ST text ESC ] 8 ; ; ST
+    // Terminals that don't support OSC 8 will ignore the sequences and show styled text
+    marked.use({
+      renderer: {
+        link({ href, text }) {
+          const linkStart = `\x1b]8;;${href}\x1b\\`;
+          const linkEnd = `\x1b]8;;\x1b\\`;
+          // Blue underline so it looks like a link even in non-OSC8 terminals
+          return `${linkStart}${chalk.blue.underline(text)}${linkEnd}`;
+        },
+      },
+    });
+
     markedConfigured = true;
   }
 }
@@ -404,7 +419,7 @@ export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
   }
 
   // ↓ output tokens
-  if (info.outputTokens !== undefined && info.outputTokens > 0 || info.isStreaming) {
+  if ((info.outputTokens !== undefined && info.outputTokens > 0) || info.isStreaming) {
     const prefix = info.estimated?.output ? "~" : "";
     parts.push(chalk.dim("↓") + chalk.green(` ${prefix}${formatTokens(info.outputTokens ?? 0)}`));
   }
@@ -1206,7 +1221,9 @@ export function formatGadgetSummary(result: GadgetResult): string {
       result.result?.match(/(\d+)\s+results?\s+found/i) || // "10 results found"
       result.result?.match(/found\s+(\d+)\s+results?/i); // "found 10 results"
     // Fall back to maxResults parameter if no count found in output
-    const count = countMatch?.[1] ?? (result.parameters.maxResults ? String(result.parameters.maxResults) : null);
+    const count =
+      countMatch?.[1] ??
+      (result.parameters.maxResults ? String(result.parameters.maxResults) : null);
     const countStr = count ? ` → ${count} results` : "";
     const queryPreview = truncateOutputPreview(query, availablePreview - 5 - countStr.length); // 🔍 + space + quotes
     customPreview = `🔍 "${queryPreview}"${countStr}`;
@@ -1246,7 +1263,9 @@ export function formatGadgetSummary(result: GadgetResult): string {
 
   // Build result line (opening line is now printed separately on gadget_call)
   let resultLine: string;
-  const previewContent = customPreview ?? (result.result?.trim() ? truncateOutputPreview(result.result, availablePreview) : null);
+  const previewContent =
+    customPreview ??
+    (result.result?.trim() ? truncateOutputPreview(result.result, availablePreview) : null);
   if (previewContent) {
     resultLine = `${resultIcon} ${nameRef} ${outputLabel}${subagentMetricsStr}${timeLabel}${chalk.dim(":")} ${chalk.dim(previewContent)}`;
   } else {
