@@ -52,6 +52,9 @@ export class InputHandler {
   /** Callback for mid-session input (user submits while agent is running) */
   private midSessionHandler: ((message: string) => void) | null = null;
 
+  /** Callback to check current focus mode (to avoid conflicts with browse mode) */
+  private getFocusModeCallback: (() => "input" | "browse") | null = null;
+
   constructor(
     inputBar: Textbox,
     promptLabel: Text,
@@ -127,8 +130,13 @@ export class InputHandler {
 
     // Screen-level Enter key to activate pending REPL prompt
     // This allows navigation to work when not actively typing
+    // Skip if in browse mode (Enter is used for toggling block expansion there)
     this.screen.key(["enter"], () => {
       if (this.isPendingREPLPrompt) {
+        // Don't activate in browse mode - Enter toggles block expansion there
+        if (this.getFocusModeCallback?.() === "browse") {
+          return;
+        }
         this.activatePendingPrompt();
       }
     });
@@ -188,6 +196,15 @@ export class InputHandler {
    */
   setMidSessionHandler(handler: (message: string) => void): void {
     this.midSessionHandler = handler;
+  }
+
+  /**
+   * Set callback to check focus mode.
+   * Used to avoid activating REPL prompt when in browse mode
+   * (where Enter is used for toggling block expansion).
+   */
+  setGetFocusMode(callback: () => "input" | "browse"): void {
+    this.getFocusModeCallback = callback;
   }
 
   /**
@@ -396,9 +413,10 @@ export class InputHandler {
     this.isPendingREPLPrompt = false;
     this.promptLabel.setContent(ACTIVE_PROMPT);
     this.inputBar.setValue("");
+    // Render immediately to ensure input bar is visible before focus
+    this.renderNowCallback();
     // Only call readInput() - it handles focusing internally
     // Calling both focus() and readInput() can cause double character echo
     this.inputBar.readInput();
-    this.renderCallback();
   }
 }

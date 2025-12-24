@@ -301,16 +301,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
     result = line;
   }
 
-  // TellUser: append full rendered message below the gadget line (like text blocks)
-  if (node.name === "TellUser" && node.parameters?.message) {
-    const message = String(node.parameters.message);
-    const rendered = renderMarkdown(message);
-    // Single blank line above and below for visual separation
-    // (double blank lines cause excessive spacing with consecutive TellUser calls)
-    result += `\n\n${rendered}\n`;
-  }
-
-  // AskUser: append full question below the gadget line (like TellUser)
+  // AskUser: append full question below the gadget line
   if (node.name === "AskUser" && node.parameters?.question) {
     const question = String(node.parameters.question);
     // Render with prompt indicator for visibility
