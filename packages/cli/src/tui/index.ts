@@ -173,6 +173,10 @@ export class TUIApp {
 		inputHandler.onCtrlJ(() => keyboardManager.handleForwardedKey("C-j"));
 		inputHandler.onCtrlP(() => keyboardManager.handleForwardedKey("C-p"));
 
+		// Wire up focus mode callback to prevent Enter key conflict
+		// (Enter activates REPL prompt in input mode, but toggles blocks in browse mode)
+		inputHandler.setGetFocusMode(() => controller.getFocusMode());
+
 		// Wire scroll event to detect user scrolling (for smart follow mode)
 		layout.body.on("scroll", () => {
 			blockRenderer.handleUserScroll();

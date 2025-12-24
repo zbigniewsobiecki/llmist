@@ -679,7 +679,9 @@ export class BlockRenderer {
    */
   private createBlock(node: BlockNode, top: number): SelectableBlock {
     const isSelected = this.selectableIds.length === this.selectedIndex;
-    const selectable = node.type !== "text";
+    // User messages are not selectable, but regular text blocks are
+    // (so they can be expanded from abbreviated view)
+    const selectable = node.type !== "text" || !node.id.startsWith("user_");
 
     // Get persisted expanded state (survives rebuildBlocks), default to collapsed
     const expanded = this.expandedStates.get(node.id) ?? false;
@@ -733,15 +735,54 @@ export class BlockRenderer {
         return [indent + collapsed, ...expandedLines.map((line) => contIndent + line)].join("\n");
       }
 
-      case "text":
+      case "text": {
         // User messages (id starts with "user_") are formatted specially
         // to show the user icon and avoid double markdown processing
         if (node.id.startsWith("user_")) {
           return formatUserMessage(node.content);
         }
-        // Regular text content - render as markdown with visual separation
-        return `\n${renderMarkdown(node.content)}\n`;
+        // Regular text content - abbreviate when collapsed, full when expanded
+        const fullContent = renderMarkdown(node.content);
+        if (expanded) {
+          return `\n${fullContent}\n`;
+        }
+        return this.abbreviateToLines(fullContent, 2, selected);
+      }
     }
+  }
+
+  /**
+   * Abbreviate text content to a maximum number of lines.
+   * Shows truncation indicator if content exceeds limit.
+   *
+   * @param text - The text to abbreviate
+   * @param maxLines - Maximum number of lines to show
+   * @param selected - Whether this block is selected (for indicator styling)
+   * @returns Abbreviated text with truncation indicator if needed
+   */
+  private abbreviateToLines(text: string, maxLines: number, selected: boolean): string {
+    // Split text into lines, filtering out empty lines at start
+    const lines = text.split("\n");
+
+    // Find first non-empty line
+    let startIndex = 0;
+    while (startIndex < lines.length && lines[startIndex].trim() === "") {
+      startIndex++;
+    }
+
+    // Get content lines (skip leading empty lines)
+    const contentLines = lines.slice(startIndex);
+
+    if (contentLines.length <= maxLines) {
+      // Content fits, return with leading newline for visual separation
+      return `\n${contentLines.join("\n")}`;
+    }
+
+    // Need to truncate - take first maxLines and add indicator
+    const truncatedLines = contentLines.slice(0, maxLines);
+    const indicator = selected ? "▶ ..." : "  ...";
+
+    return `\n${truncatedLines.join("\n")}\n${indicator}`;
   }
 
   /**
@@ -1145,7 +1186,11 @@ export class BlockRenderer {
       this.treeUnsubscribe();
     }
 
+    // Clear all mappings for a fresh start with the new tree
     this.treeNodeToBlockId.clear();
+    this.llmCallByIteration.clear();
+    this.gadgetByInvocationId.clear();
+    this.nestedLLMCallByKey.clear();
 
     // Subscribe to all events
     this.treeUnsubscribe = tree.onAll((event: ExecutionEvent) => {

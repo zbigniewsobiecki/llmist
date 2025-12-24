@@ -191,13 +191,13 @@ export function renderMarkdownWithSeparators(text: string): string {
  * @example
  * ```typescript
  * formatUserMessage("Can you add unit tests for this?");
- * // Returns: "\n👤 Can you add unit tests for this?\n"
+ * // Returns: "\n[inverse] 👤 Can you add unit tests for this? [/inverse]\n"
  * ```
  */
 export function formatUserMessage(message: string): string {
-  const icon = chalk.cyan("👤");
-  const rendered = renderMarkdown(message);
-  return `\n${icon} ${rendered}\n`;
+  const icon = "👤";
+  // User input is plain text, not markdown - render as clean inverse block
+  return `\n${chalk.inverse(` ${icon} ${message} `)}\n`;
 }
 
 /**

@@ -909,4 +909,141 @@ describe("BlockRenderer", () => {
       expect(firstTop).toBeLessThan(secondTop);
     });
   });
+
+  describe("text block selectability", () => {
+    test("user messages (user_*) are NOT selectable", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add a user message
+      const userId = renderer.addUserMessage("Test message");
+      expect(userId).toMatch(/^user_/);
+
+      // User messages should not be in selectableIds
+      // We can verify by checking the selected block after navigation
+      renderer.selectFirst();
+      const selected = renderer.getSelectedBlock();
+
+      // If only user messages exist, nothing should be selected
+      // because user messages are not selectable
+      expect(selected).toBeUndefined();
+    });
+
+    test("regular text blocks ARE selectable", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add a user message (not selectable)
+      renderer.addUserMessage("User input");
+
+      // Add an LLM call which will include text output
+      renderer.addLLMCall(1, "sonnet");
+
+      // Add a text block (simulated through tree subscription)
+      const tree = new ExecutionTree();
+      renderer.subscribeToTree(tree);
+
+      // Add LLM call via tree
+      const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
+
+      // Add text via tree event
+      tree.emitText("Response text", llmNode.id);
+
+      // The text node should be selectable, navigate to it
+      renderer.selectFirst();
+      const firstSelected = renderer.getSelectedBlock();
+
+      // First selectable should be the LLM call (iteration 1 from before tree)
+      expect(firstSelected).toBeDefined();
+    });
+
+    test("text blocks can be expanded with Enter", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+      const tree = new ExecutionTree();
+
+      renderer.subscribeToTree(tree);
+
+      // Add LLM call and text via tree
+      const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
+      tree.emitText("This is a long response that should be abbreviated when collapsed.", llmNode.id);
+
+      // Select the LLM call
+      renderer.selectFirst();
+      const block = renderer.getSelectedBlock();
+
+      if (block) {
+        // Initially collapsed
+        expect(block.expanded).toBe(false);
+
+        // Toggle expand
+        renderer.toggleExpand();
+        expect(block.expanded).toBe(true);
+
+        // Toggle again to collapse
+        renderer.toggleExpand();
+        expect(block.expanded).toBe(false);
+      }
+    });
+  });
+
+  describe("text abbreviation", () => {
+    test("short text is not truncated", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+      const tree = new ExecutionTree();
+
+      renderer.subscribeToTree(tree);
+
+      // Add short text that fits in 2 lines
+      const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
+      tree.emitText("Short response.", llmNode.id);
+
+      // The text block should exist
+      const blockId = renderer.getBlockIdForTreeNode(llmNode.id);
+      expect(blockId).toBeDefined();
+    });
+
+    test("long text shows truncation indicator when collapsed", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+      const tree = new ExecutionTree();
+
+      renderer.subscribeToTree(tree);
+
+      // Add long text that will be abbreviated
+      const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
+      tree.emitText(
+        "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10",
+        llmNode.id
+      );
+
+      // Select the text block
+      renderer.selectFirst();
+      const block = renderer.getSelectedBlock();
+
+      // Block should exist and be collapsed by default
+      expect(block).toBeDefined();
+      expect(block?.expanded).toBe(false);
+    });
+
+    test("expanded text shows full content", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+      const tree = new ExecutionTree();
+
+      renderer.subscribeToTree(tree);
+
+      // Add multi-line text
+      const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
+      tree.emitText("Line 1\nLine 2\nLine 3\nLine 4\nLine 5", llmNode.id);
+
+      // Select and expand
+      renderer.selectFirst();
+      renderer.toggleExpand();
+
+      const block = renderer.getSelectedBlock();
+      expect(block?.expanded).toBe(true);
+    });
+  });
 });

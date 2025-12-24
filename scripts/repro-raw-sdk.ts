@@ -23,6 +23,7 @@ import OpenAI from "openai";
 const provider = process.argv[2] || "openai";
 
 // Read the exact messages from the log file
+// biome-ignore lint/suspicious/noExplicitAny: Debug script parsing log files
 function extractMessagesFromLog(): { messages: any[]; model: string } | null {
   const logPath = "/tmp/llmist.develop.log.jsonl";
 
@@ -95,6 +96,7 @@ console.log("=".repeat(70));
 try {
   const response = await client.chat.completions.create({
     model,
+    // biome-ignore lint/suspicious/noExplicitAny: Debug script with untyped log data
     messages: logData.messages.map((m: any) => ({
       role: m.role,
       content: m.content,

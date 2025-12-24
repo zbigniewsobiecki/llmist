@@ -1240,16 +1240,18 @@ describe("formatUserMessage", () => {
     expect(result).toContain("Hello!");
   });
 
-  it("includes ANSI codes for cyan coloring", () => {
+  it("includes ANSI codes for inverse styling", () => {
     const result = formatUserMessage("Test message");
-    // Check for ANSI escape sequence
+    // Check for ANSI escape sequence (inverse mode: \x1b[7m)
     expect(result.includes("\x1b[")).toBe(true);
   });
 
-  it("renders markdown in user messages", () => {
+  it("renders plain text (not markdown) for clean inverse styling", () => {
+    // User input is plain text - markdown syntax should appear as-is
     const result = formatUserMessage("**Bold** and *italic*");
-    expect(result).toContain("Bold");
-    expect(result).toContain("italic");
+    // The asterisks should be preserved (not rendered as markdown)
+    expect(result).toContain("**Bold**");
+    expect(result).toContain("*italic*");
   });
 
   it("adds newlines for visual separation", () => {
@@ -1264,10 +1266,17 @@ describe("formatUserMessage", () => {
     expect(result.startsWith("\n")).toBe(true);
   });
 
-  it("handles multiline messages", () => {
+  it("preserves multiline messages as-is", () => {
     const result = formatUserMessage("Line 1\nLine 2\nLine 3");
+    // All lines should be in the single inverse block
     expect(result).toContain("Line 1");
     expect(result).toContain("Line 2");
     expect(result).toContain("Line 3");
+  });
+
+  it("has visual padding with spaces around content", () => {
+    const result = formatUserMessage("test");
+    // The inverse block should have padding: " 👤 test "
+    expect(result).toContain(" 👤 test ");
   });
 });
