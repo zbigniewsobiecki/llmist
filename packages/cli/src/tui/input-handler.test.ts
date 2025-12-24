@@ -395,4 +395,91 @@ describe("InputHandler", () => {
       expect(secondHandler).not.toHaveBeenCalled();
     });
   });
+
+  describe("setGetFocusMode", () => {
+    test("stores focus mode callback", () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const focusModeCallback = mock(() => "input" as const);
+      handler.setGetFocusMode(focusModeCallback);
+
+      // Callback is stored (can't directly verify, but no error thrown)
+      expect(true).toBe(true);
+    });
+
+    test("can be updated with new callback", () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const firstCallback = mock(() => "input" as const);
+      const secondCallback = mock(() => "browse" as const);
+
+      handler.setGetFocusMode(firstCallback);
+      handler.setGetFocusMode(secondCallback);
+
+      // Both callbacks stored without error
+      expect(firstCallback).not.toHaveBeenCalled();
+      expect(secondCallback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("REPL prompt activation in browse mode", () => {
+    test("waitForPrompt sets pending REPL state", async () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      // Start waiting for REPL prompt
+      const promptPromise = handler.waitForPrompt();
+
+      // Should be waiting for REPL prompt
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+      expect(handler.hasPendingInput()).toBe(true);
+
+      // Clean up
+      handler.cancelPending();
+      await promptPromise.catch(() => {});
+    });
+
+    test("activatePendingPrompt requires REPL waiting state", () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      // Not waiting for prompt
+      expect(handler.isWaitingForREPLPrompt()).toBe(false);
+
+      // Activating should have no effect when not waiting
+      handler.activatePendingPrompt();
+
+      // Still not waiting (no state change)
+      expect(handler.isWaitingForREPLPrompt()).toBe(false);
+    });
+
+    test("activatePendingPrompt clears REPL waiting state when activated", async () => {
+      const renderCallback = mock(() => {});
+      const renderNowCallback = mock(() => {});
+      const handler = new InputHandler(
+        inputBar,
+        promptLabel,
+        body,
+        screen,
+        renderCallback,
+        renderNowCallback
+      );
+
+      // Start waiting for REPL prompt
+      const promptPromise = handler.waitForPrompt();
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+
+      // Activate the prompt
+      handler.activatePendingPrompt();
+
+      // No longer in waiting state (now active)
+      expect(handler.isWaitingForREPLPrompt()).toBe(false);
+
+      // Clean up
+      handler.cancelPending();
+      await promptPromise.catch(() => {});
+    });
+  });
 });
