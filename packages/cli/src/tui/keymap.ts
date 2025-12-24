@@ -7,8 +7,7 @@
  *
  * Key handling rules:
  * - Navigation keys (arrows, vim keys) only work in "browse" mode
- * - Ctrl+B/K work in both modes (forwarded from InputHandler when in input mode)
- * - Ctrl+P only works when waiting for REPL prompt
+ * - Ctrl+B/K/P work in both modes (forwarded from InputHandler when in input mode)
  * - PageUp/PageDown work in both modes
  */
 
@@ -87,11 +86,10 @@ export class KeyboardManager {
 			onAction({ type: "toggle_content_filter" });
 		});
 
-		// Ctrl+P to cycle profiles (only in REPL mode)
+		// Ctrl+P to cycle profiles (works in both modes)
+		// Profile changes affect the next session, so it's safe to cycle anytime
 		screen.key(["C-p"], () => {
-			if (this.config.isWaitingForREPLPrompt()) {
-				onAction({ type: "cycle_profile" });
-			}
+			onAction({ type: "cycle_profile" });
 		});
 
 		// PageUp/PageDown for scrolling (works in both modes)
@@ -151,7 +149,7 @@ export class KeyboardManager {
 	 * Handle a key forwarded from InputHandler.
 	 * Used for keys that need to work even when the input field is focused.
 	 */
-	handleForwardedKey(key: "C-c" | "C-b" | "C-k" | "C-i" | "C-j"): void {
+	handleForwardedKey(key: "C-c" | "C-b" | "C-k" | "C-i" | "C-j" | "C-p"): void {
 		const { onAction } = this.config;
 
 		switch (key) {
@@ -169,6 +167,9 @@ export class KeyboardManager {
 				break;
 			case "C-j":
 				onAction({ type: "scroll_page", direction: 1 });
+				break;
+			case "C-p":
+				onAction({ type: "cycle_profile" });
 				break;
 		}
 	}

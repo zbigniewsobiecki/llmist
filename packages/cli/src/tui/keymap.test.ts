@@ -83,24 +83,14 @@ describe("KeyboardManager", () => {
 	});
 
 	describe("profile cycling", () => {
-		test("Ctrl+P dispatches cycle_profile when waiting for REPL prompt", () => {
+		test("Ctrl+P always dispatches cycle_profile", () => {
 			const onAction = mock(() => {});
 			const screen = createMockScreen();
-			createKeyboardManager(screen, onAction, { isWaitingForREPLPrompt: true });
+			createKeyboardManager(screen, onAction);
 
 			screen.simulateKey("C-p");
 
 			expect(onAction).toHaveBeenCalledWith({ type: "cycle_profile" });
-		});
-
-		test("Ctrl+P does nothing when not waiting for REPL prompt", () => {
-			const onAction = mock(() => {});
-			const screen = createMockScreen();
-			createKeyboardManager(screen, onAction, { isWaitingForREPLPrompt: false });
-
-			screen.simulateKey("C-p");
-
-			expect(onAction).not.toHaveBeenCalled();
 		});
 	});
 

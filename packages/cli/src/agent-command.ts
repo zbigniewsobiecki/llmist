@@ -47,6 +47,7 @@ export async function executeAgent(
   promptArg: string | undefined,
   options: CLIAgentOptions,
   env: CLIEnvironment,
+  commandName?: string,
 ): Promise<void> {
   const client = env.createClient();
 
@@ -111,9 +112,20 @@ export async function executeAgent(
       const customProfiles = getCustomCommandNames(fullConfig);
       // "agent" is the default profile, custom profiles come from cli.toml sections
       const profiles = ["agent", ...customProfiles];
-      tui.setProfiles(profiles);
+      // Set initial profile to match the command being run
+      tui.setProfiles(profiles, commandName ?? "agent");
     } catch {
       // Config loading may fail (e.g., no config file) - profiles are optional
+    }
+
+
+
+    // If no initial prompt, start waiting for input early
+    // This puts the REPL in "waiting" mode immediately, enabling Ctrl+P profile cycling
+    // The Promise constructor runs synchronously, so isPendingREPLPrompt is set right away
+    if (!prompt) {
+      tui.setFocusMode("input");
+      tui.startWaitingForPrompt();
     }
   }
 
@@ -576,7 +588,7 @@ export function registerAgentCommand(
         subagents: config?.subagents,
         globalSubagents,
       };
-      return executeAgent(prompt, mergedOptions, env);
+      return executeAgent(prompt, mergedOptions, env, "agent");
     }, env),
   );
 }

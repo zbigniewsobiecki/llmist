@@ -67,13 +67,14 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
 
   // Input bar - editable textbox positioned after the prompt label
   // Value contains ONLY user input, no prompt prefix
+  // Note: Don't use inputOnFocus - we explicitly call readInput() in InputHandler
+  // Using both causes double character echo
   const inputBar = new Textbox({
     parent: screen,
     bottom: 1,
     left: 4, // Position after prompt label
     width: "100%-4",
     height: 1,
-    inputOnFocus: true,
     keys: true,
     mouse: true,
     style: {

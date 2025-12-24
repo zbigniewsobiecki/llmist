@@ -79,6 +79,11 @@ function ensureMarkedConfigured(): void {
         // List formatting - reduce indentation and add bullet styling
         tab: 2, // Reduce from default 4 to 2 spaces
         listitem: chalk.reset, // Keep items readable (no dim)
+
+        // Width settings - use full terminal width to avoid truncation
+        // Default is 80 which cuts off TellUser messages
+        width: process.stdout.columns || 120,
+        reflowText: true,
       }) as unknown as MarkedExtension,
     );
 
