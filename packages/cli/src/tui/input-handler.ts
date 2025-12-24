@@ -40,6 +40,12 @@ export class InputHandler {
   /** Callback when Ctrl+K is pressed (toggle content filter mode) */
   private ctrlKCallback: (() => void) | null = null;
 
+  /** Callback when Ctrl+I is pressed (scroll up) */
+  private ctrlICallback: (() => void) | null = null;
+
+  /** Callback when Ctrl+J is pressed (scroll down) */
+  private ctrlJCallback: (() => void) | null = null;
+
   /** Callback for mid-session input (user submits while agent is running) */
   private midSessionHandler: ((message: string) => void) | null = null;
 
@@ -92,6 +98,22 @@ export class InputHandler {
       }
     });
 
+    // Handle Ctrl+I on the input bar - scroll up
+    // This ensures Ctrl+I works for scrolling when inputBar has focus
+    this.inputBar.key(["C-i"], () => {
+      if (this.ctrlICallback) {
+        this.ctrlICallback();
+      }
+    });
+
+    // Handle Ctrl+J on the input bar - scroll down
+    // This ensures Ctrl+J works for scrolling when inputBar has focus
+    this.inputBar.key(["C-j"], () => {
+      if (this.ctrlJCallback) {
+        this.ctrlJCallback();
+      }
+    });
+
     // Screen-level Enter key to activate pending REPL prompt
     // This allows navigation to work when not actively typing
     this.screen.key(["enter"], () => {
@@ -123,6 +145,20 @@ export class InputHandler {
    */
   onCtrlK(callback: () => void): void {
     this.ctrlKCallback = callback;
+  }
+
+  /**
+   * Set callback for Ctrl+I events (scroll up).
+   */
+  onCtrlI(callback: () => void): void {
+    this.ctrlICallback = callback;
+  }
+
+  /**
+   * Set callback for Ctrl+J events (scroll down).
+   */
+  onCtrlJ(callback: () => void): void {
+    this.ctrlJCallback = callback;
   }
 
   /**
