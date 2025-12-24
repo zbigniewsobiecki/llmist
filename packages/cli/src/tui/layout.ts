@@ -7,8 +7,8 @@
  * - StatusBar: Metrics display (tokens, time, cost)
  */
 
-import { Box, ScrollableBox, Textbox, type Screen } from "@unblessed/node";
-import type { TUIBlockLayout, FocusMode } from "./types.js";
+import { Box, type Screen, ScrollableBox, Text, Textbox } from "@unblessed/node";
+import type { FocusMode, TUIBlockLayout } from "./types.js";
 
 /**
  * Creates the TUI layout with ScrollableBox for interactive blocks.
@@ -50,13 +50,28 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
     },
   });
 
-  // Input bar - always visible at bottom - 1
-  // Shows "> " prompt indicator even when idle
-  const inputBar = new Textbox({
+  // Static prompt label (non-editable)
+  // This widget displays "> " or ">>> " and cannot be modified by the user
+  const promptLabel = new Text({
     parent: screen,
     bottom: 1,
     left: 0,
-    width: "100%",
+    width: 4, // ">>> " = 4 chars (max prompt width)
+    height: 1,
+    content: "> ",
+    style: {
+      fg: "cyan",
+      bg: "black",
+    },
+  });
+
+  // Input bar - editable textbox positioned after the prompt label
+  // Value contains ONLY user input, no prompt prefix
+  const inputBar = new Textbox({
+    parent: screen,
+    bottom: 1,
+    left: 4, // Position after prompt label
+    width: "100%-4",
     height: 1,
     inputOnFocus: true,
     keys: true,
@@ -66,9 +81,6 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
       bg: "black",
     },
   });
-
-  // Pre-fill with prompt indicator
-  inputBar.setValue("> ");
 
   // Status bar at very bottom
   // Uses ANSI codes for color formatting (tags: false)
@@ -85,7 +97,7 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
     },
   });
 
-  return { body, inputBar, statusBar };
+  return { body, promptLabel, inputBar, statusBar };
 }
 
 /**

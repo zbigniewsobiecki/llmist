@@ -11,26 +11,24 @@
  */
 
 import { Box, type ScrollableBox } from "@unblessed/node";
-import type {
-  ExecutionTree,
-  ExecutionEvent,
-} from "llmist";
-import type {
-  BlockNode,
-  LLMCallNode,
-  GadgetNode,
-  TextNode,
-  SelectableBlock,
-} from "./types.js";
+import type { ExecutionEvent, ExecutionTree } from "llmist";
 import {
-  formatLLMCallCollapsed,
-  formatLLMCallExpanded,
   formatGadgetCollapsed,
   formatGadgetExpanded,
-  getIndent,
+  formatLLMCallCollapsed,
+  formatLLMCallExpanded,
   getContinuationIndent,
+  getIndent,
 } from "../ui/block-formatters.js";
-import { renderMarkdown, formatUserMessage } from "../ui/formatters.js";
+import { formatUserMessage, renderMarkdown } from "../ui/formatters.js";
+import type {
+  BlockNode,
+  ContentFilterMode,
+  GadgetNode,
+  LLMCallNode,
+  SelectableBlock,
+  TextNode,
+} from "./types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BlockRenderer Class
@@ -48,6 +46,7 @@ import { renderMarkdown, formatUserMessage } from "../ui/formatters.js";
 export class BlockRenderer {
   private container: ScrollableBox;
   private renderCallback: () => void;
+  private renderNowCallback: () => void;
 
   /** All nodes in the tree (flat for easy lookup) */
   private nodes = new Map<string, BlockNode>();
@@ -76,6 +75,9 @@ export class BlockRenderer {
   /** Whether to auto-scroll to bottom on new content ("follow mode") */
   private followMode: boolean = true;
 
+  /** Content filter mode for block visibility */
+  private contentFilterMode: ContentFilterMode = "full";
+
   /** Threshold in pixels for detecting "at bottom" position */
   private static readonly AT_BOTTOM_THRESHOLD = 5;
 
@@ -88,9 +90,14 @@ export class BlockRenderer {
   /** Track nested LLM calls by parentId_iteration to prevent duplicates */
   private nestedLLMCallByKey = new Map<string, string>();
 
-  constructor(container: ScrollableBox, renderCallback: () => void) {
+  constructor(
+    container: ScrollableBox,
+    renderCallback: () => void,
+    renderNowCallback?: () => void,
+  ) {
     this.container = container;
     this.renderCallback = renderCallback;
+    this.renderNowCallback = renderNowCallback ?? renderCallback;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -171,11 +178,7 @@ export class BlockRenderer {
   /**
    * Complete an LLM call with details and optional raw response.
    */
-  completeLLMCall(
-    id: string,
-    details: LLMCallNode["details"],
-    rawResponse?: string,
-  ): void {
+  completeLLMCall(id: string, details: LLMCallNode["details"], rawResponse?: string): void {
     const node = this.getNode(id) as LLMCallNode | undefined;
     if (!node || node.type !== "llm_call") return;
 
@@ -191,10 +194,7 @@ export class BlockRenderer {
    * Store raw request messages for an LLM call.
    * Called when the LLM call is ready (after controller modifications).
    */
-  setLLMCallRequest(
-    id: string,
-    messages: import("llmist").LLMMessage[],
-  ): void {
+  setLLMCallRequest(id: string, messages: import("llmist").LLMMessage[]): void {
     const node = this.getNode(id) as LLMCallNode | undefined;
     if (!node || node.type !== "llm_call") return;
     node.rawRequest = messages;
@@ -206,11 +206,7 @@ export class BlockRenderer {
    * Gadgets are nested under the LLM call that spawned them.
    * They appear indented and are visible when the parent is rendered.
    */
-  addGadget(
-    invocationId: string,
-    name: string,
-    parameters?: Record<string, unknown>,
-  ): string {
+  addGadget(invocationId: string, name: string, parameters?: Record<string, unknown>): string {
     // Deduplicate gadgets by invocationId
     const existingId = this.gadgetByInvocationId.get(invocationId);
     if (existingId) {
@@ -296,9 +292,7 @@ export class BlockRenderer {
   /**
    * Aggregate token/cost stats from child LLM call nodes.
    */
-  private aggregateSubagentStats(
-    childIds: string[],
-  ): GadgetNode["subagentStats"] {
+  private aggregateSubagentStats(childIds: string[]): GadgetNode["subagentStats"] {
     let inputTokens = 0;
     let outputTokens = 0;
     let cachedTokens = 0;
@@ -351,14 +345,15 @@ export class BlockRenderer {
    */
   addUserMessage(message: string): string {
     const id = this.generateId("user");
-    const formatted = formatUserMessage(message);
+    // Store raw message - formatting happens in formatBlockContent
+    // to avoid double markdown rendering
 
     const node: TextNode = {
       id,
       type: "text",
       depth: 0,
       parentId: null,
-      content: formatted,
+      content: message,
       children: [] as never[],
     };
 
@@ -553,6 +548,9 @@ export class BlockRenderer {
     for (const child of [...this.container.children]) {
       child.detach();
     }
+    // Clear any direct content on the container (e.g., from appendQuestionToBody)
+    // This prevents stale content from persisting across mode switches
+    this.container.setContent("");
     this.blocks.clear();
     this.selectableIds = [];
 
@@ -578,26 +576,43 @@ export class BlockRenderer {
   /**
    * Render a node and its children recursively.
    * Returns the next available top position.
+   *
+   * In focused mode, hidden nodes (LLM calls, most gadgets) are skipped
+   * but their children are still traversed to find visible nested content
+   * like TellUser gadgets within subagents.
+   *
+   * TellUser gadgets render as plain text in focused mode
+   * (no headers, just content) for a clean chat-like experience.
    */
   private renderNodeTree(nodeId: string, top: number): number {
     const node = this.getNode(nodeId);
     if (!node) return top;
 
-    // Create block for this node
-    const block = this.createBlock(node, top);
-    this.blocks.set(nodeId, block);
+    // Check if this node should be visible in current filter mode
+    const visible = this.isNodeVisible(node);
 
-    // Track selectable blocks
-    if (block.selectable) {
-      this.selectableIds.push(nodeId);
+    if (visible) {
+      // In focused mode, TellUser renders as plain text (chat-like)
+      const renderAsText = this.shouldRenderAsText(node);
+
+      // Create block for this node
+      const block = renderAsText
+        ? this.createTextLikeBlock(node as GadgetNode, top)
+        : this.createBlock(node, top);
+      this.blocks.set(nodeId, block);
+
+      // Track selectable blocks (only if visible and not rendered as text)
+      if (block.selectable) {
+        this.selectableIds.push(nodeId);
+      }
+
+      // Calculate height of this block
+      const height = this.getBlockHeight(block);
+      top += height;
     }
 
-    // Calculate height of this block
-    const height = this.getBlockHeight(block);
-    top += height;
-
-    // Always render children (gadgets are always visible under their LLM call)
-    // The expanded state controls inline details, not child visibility
+    // Always traverse children even if parent is hidden
+    // This ensures nested TellUser/AskUser gadgets are found
     if ("children" in node && node.children.length > 0) {
       for (const childId of node.children) {
         top = this.renderNodeTree(childId, top);
@@ -605,6 +620,58 @@ export class BlockRenderer {
     }
 
     return top;
+  }
+
+  /**
+   * Check if a gadget should render as plain text in focused mode.
+   * TellUser and AskUser render as text for a chat-like experience.
+   */
+  private shouldRenderAsText(node: BlockNode): boolean {
+    if (this.contentFilterMode !== "focused") return false;
+    if (node.type !== "gadget") return false;
+
+    const name = (node as GadgetNode).name;
+    return name === "TellUser" || name === "AskUser";
+  }
+
+  /**
+   * Create a text-like block for TellUser/AskUser gadgets in focused mode.
+   * Renders just the content without the gadget header.
+   */
+  private createTextLikeBlock(node: GadgetNode, top: number): SelectableBlock {
+    // Extract message/question from gadget parameters
+    let content = "";
+
+    if (node.name === "TellUser") {
+      const message = node.parameters?.message;
+      if (typeof message === "string") {
+        content = `\n${renderMarkdown(message)}\n`;
+      }
+    } else if (node.name === "AskUser") {
+      const question = node.parameters?.question;
+      if (typeof question === "string") {
+        // Render question with a prompt indicator
+        content = `\n? ${question}\n`;
+      }
+    }
+
+    // Create Box widget (non-selectable, like text blocks)
+    const box = new Box({
+      parent: this.container,
+      top,
+      left: 0,
+      width: "100%",
+      height: content.split("\n").length,
+      content,
+      tags: false,
+    });
+
+    return {
+      node,
+      box,
+      expanded: false,
+      selectable: false, // Not selectable in focused mode
+    };
   }
 
   /**
@@ -642,11 +709,7 @@ export class BlockRenderer {
   /**
    * Format block content based on type and state.
    */
-  private formatBlockContent(
-    node: BlockNode,
-    selected: boolean,
-    expanded: boolean,
-  ): string {
+  private formatBlockContent(node: BlockNode, selected: boolean, expanded: boolean): string {
     const indent = getIndent(node.depth);
 
     switch (node.type) {
@@ -657,10 +720,7 @@ export class BlockRenderer {
         }
         const expandedLines = formatLLMCallExpanded(node);
         const contIndent = getContinuationIndent(node.depth);
-        return [
-          indent + collapsed,
-          ...expandedLines.map((line) => contIndent + line),
-        ].join("\n");
+        return [indent + collapsed, ...expandedLines.map((line) => contIndent + line)].join("\n");
       }
 
       case "gadget": {
@@ -670,15 +730,16 @@ export class BlockRenderer {
         }
         const expandedLines = formatGadgetExpanded(node);
         const contIndent = getContinuationIndent(node.depth);
-        return [
-          indent + collapsed,
-          ...expandedLines.map((line) => contIndent + line),
-        ].join("\n");
+        return [indent + collapsed, ...expandedLines.map((line) => contIndent + line)].join("\n");
       }
 
       case "text":
-        // Render text content as markdown for beautiful formatting
-        // Add margin (empty line) above and below for visual separation
+        // User messages (id starts with "user_") are formatted specially
+        // to show the user icon and avoid double markdown processing
+        if (node.id.startsWith("user_")) {
+          return formatUserMessage(node.content);
+        }
+        // Regular text content - render as markdown with visual separation
         return `\n${renderMarkdown(node.content)}\n`;
     }
   }
@@ -748,15 +809,18 @@ export class BlockRenderer {
   }
 
   private repositionNodeTree(nodeId: string, top: number): number {
-    const block = this.blocks.get(nodeId);
     const node = this.getNode(nodeId);
-    if (!block || !node) return top;
+    if (!node) return top;
 
-    block.box.top = top;
-    const height = this.getBlockHeight(block);
-    top += height;
+    // Only reposition if node has a block (visible nodes)
+    const block = this.blocks.get(nodeId);
+    if (block) {
+      block.box.top = top;
+      const height = this.getBlockHeight(block);
+      top += height;
+    }
 
-    // Always traverse children (they're always visible)
+    // Always traverse children even if parent is hidden
     if ("children" in node) {
       for (const childId of node.children) {
         top = this.repositionNodeTree(childId, top);
@@ -814,12 +878,16 @@ export class BlockRenderer {
   }
 
   private sumNodeTreeHeight(nodeId: string, currentHeight: number): number {
-    const block = this.blocks.get(nodeId);
     const node = this.getNode(nodeId);
-    if (!block || !node) return currentHeight;
+    if (!node) return currentHeight;
 
-    currentHeight += this.getBlockHeight(block);
+    // Only count height for visible nodes (those with blocks)
+    const block = this.blocks.get(nodeId);
+    if (block) {
+      currentHeight += this.getBlockHeight(block);
+    }
 
+    // Always traverse children even if parent is hidden
     if ("children" in node) {
       for (const childId of node.children) {
         currentHeight = this.sumNodeTreeHeight(childId, currentHeight);
@@ -890,12 +958,16 @@ export class BlockRenderer {
    * Apply vertical offset to a node tree (for bottom alignment).
    */
   private applyOffsetToNodeTree(nodeId: string, offset: number): void {
-    const block = this.blocks.get(nodeId);
     const node = this.getNode(nodeId);
-    if (!block || !node) return;
+    if (!node) return;
 
-    block.box.top = (block.box.top as number) + offset;
+    // Only apply offset to visible nodes (those with blocks)
+    const block = this.blocks.get(nodeId);
+    if (block) {
+      block.box.top = (block.box.top as number) + offset;
+    }
 
+    // Always traverse children even if parent is hidden
     if ("children" in node) {
       for (const childId of node.children) {
         this.applyOffsetToNodeTree(childId, offset);
@@ -933,6 +1005,106 @@ export class BlockRenderer {
   handleResize(): void {
     this.repositionBlocks();
     this.renderCallback();
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Content Filter Mode (Focused Mode)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Set content filter mode (full or focused).
+   * In focused mode, only text and user-facing gadgets are visible.
+   */
+  setContentFilterMode(mode: ContentFilterMode): void {
+    if (this.contentFilterMode === mode) return;
+    this.contentFilterMode = mode;
+    // Clear selection when switching to focused mode (nothing selectable)
+    if (mode === "focused") {
+      this.selectedIndex = -1;
+    }
+    // Reset follow mode to ensure scroll position is corrected for new content height
+    // Without this, old scroll position may exceed new content, causing blank screen
+    this.followMode = true;
+    // Rebuild blocks with immediate render to ensure screen is properly cleared
+    // This prevents visual artifacts from the previous mode persisting
+    this.rebuildBlocksImmediate();
+  }
+
+  /**
+   * Rebuild all blocks and render immediately.
+   * Used for mode switches where we need to ensure the screen is fully cleared.
+   */
+  private rebuildBlocksImmediate(): void {
+    // Clear existing blocks
+    for (const child of [...this.container.children]) {
+      child.detach();
+    }
+    // Clear any direct content on the container
+    this.container.setContent("");
+    this.blocks.clear();
+    this.selectableIds = [];
+
+    // Force immediate render to clear old visual artifacts BEFORE creating new blocks
+    // This is critical for mode switches to prevent content overlay
+    this.renderNowCallback();
+
+    // Track vertical position (starts at 0, will be offset for bottom-alignment)
+    let top = 0;
+
+    // Traverse tree in order
+    for (const rootId of this.rootIds) {
+      top = this.renderNodeTree(rootId, top);
+    }
+
+    // Restore selection if possible
+    if (this.selectedIndex >= this.selectableIds.length) {
+      this.selectedIndex = this.selectableIds.length - 1;
+    }
+
+    // Apply bottom alignment and auto-scroll (chat-like behavior)
+    this.applyBottomAlignmentAndScroll();
+
+    // Render again with new content
+    this.renderNowCallback();
+  }
+
+  /**
+   * Get the current content filter mode.
+   */
+  getContentFilterMode(): ContentFilterMode {
+    return this.contentFilterMode;
+  }
+
+  /**
+   * Check if a node should be visible in the current content filter mode.
+   *
+   * In focused mode:
+   * - Text nodes are always visible
+   * - LLM call blocks are hidden
+   * - Gadget blocks are hidden EXCEPT TellUser and AskUser
+   *   (Finish is hidden - status bar indicates completion)
+   */
+  private isNodeVisible(node: BlockNode): boolean {
+    if (this.contentFilterMode === "full") {
+      return true;
+    }
+
+    // Focused mode filtering
+    switch (node.type) {
+      case "text":
+        // Text is always visible
+        return true;
+      case "llm_call":
+        // LLM calls are hidden in focused mode
+        return false;
+      case "gadget": {
+        // Keep user-facing gadgets visible (Finish hidden - status bar shows completion)
+        const name = (node as GadgetNode).name;
+        return name === "TellUser" || name === "AskUser";
+      }
+      default:
+        return false;
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -1054,11 +1226,7 @@ export class BlockRenderer {
           this.setCurrentLLMCall(parentBlockId);
         }
 
-        const blockId = this.addGadget(
-          event.invocationId,
-          event.name,
-          event.parameters,
-        );
+        const blockId = this.addGadget(event.invocationId, event.name, event.parameters);
         this.treeNodeToBlockId.set(event.nodeId, blockId);
 
         // Restore previous context
@@ -1078,12 +1246,7 @@ export class BlockRenderer {
       }
 
       case "gadget_error": {
-        this.completeGadget(
-          event.invocationId,
-          undefined,
-          event.error,
-          event.executionTimeMs,
-        );
+        this.completeGadget(event.invocationId, undefined, event.error, event.executionTimeMs);
         break;
       }
 

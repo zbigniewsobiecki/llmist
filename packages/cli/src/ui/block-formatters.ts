@@ -8,8 +8,8 @@
  */
 
 import chalk from "chalk";
-import type { LLMCallNode, GadgetNode } from "../tui/types.js";
-import { formatTokens, formatCost, renderMarkdown } from "./formatters.js";
+import type { GadgetNode, LLMCallNode } from "../tui/types.js";
+import { formatCost, formatTokens, renderMarkdown } from "./formatters.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Box Drawing Characters
@@ -147,7 +147,9 @@ export function formatLLMCallExpanded(node: LLMCallNode): string[] {
 
   // Output tokens
   if (d.outputTokens !== undefined) {
-    lines.push(`${indent}${chalk.dim(BOX.vertical)} Output:  ${chalk.green(formatTokens(d.outputTokens))} tokens`);
+    lines.push(
+      `${indent}${chalk.dim(BOX.vertical)} Output:  ${chalk.green(formatTokens(d.outputTokens))} tokens`,
+    );
   }
 
   // Context usage
@@ -155,7 +157,9 @@ export function formatLLMCallExpanded(node: LLMCallNode): string[] {
     let contextColor = chalk.green;
     if (d.contextPercent >= 80) contextColor = chalk.red;
     else if (d.contextPercent >= 50) contextColor = chalk.yellow;
-    lines.push(`${indent}${chalk.dim(BOX.vertical)} Context: ${contextColor(`${Math.round(d.contextPercent)}%`)}`);
+    lines.push(
+      `${indent}${chalk.dim(BOX.vertical)} Context: ${contextColor(`${Math.round(d.contextPercent)}%`)}`,
+    );
   }
 
   // Time with tokens/second calculation
@@ -170,7 +174,9 @@ export function formatLLMCallExpanded(node: LLMCallNode): string[] {
 
   // Cost with breakdown
   if (d.cost !== undefined && d.cost > 0) {
-    lines.push(`${indent}${chalk.dim(BOX.vertical)} Cost:    ${chalk.cyan(`$${formatCost(d.cost)}`)}`);
+    lines.push(
+      `${indent}${chalk.dim(BOX.vertical)} Cost:    ${chalk.cyan(`$${formatCost(d.cost)}`)}`,
+    );
   }
 
   // Finish reason
@@ -226,13 +232,17 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
       };
       const emoji = typeEmojis[messageType as keyof typeof typeEmojis] || typeEmojis.info;
       paramsStr = ` ${emoji}`;
+    } else if (node.name === "AskUser") {
+      // AskUser: just show question emoji, full question rendered below
+      paramsStr = " ❓";
     } else {
       const termWidth = process.stdout.columns || 120;
       const maxParamLen = Math.max(60, termWidth - 40); // Leave room for indicator, name, time
       const entries = Object.entries(node.parameters).slice(0, 4);
       const formatted = entries.map(([key, value]) => {
         const strValue = typeof value === "string" ? value : JSON.stringify(value);
-        const truncated = strValue.length > maxParamLen ? strValue.slice(0, maxParamLen - 3) + "..." : strValue;
+        const truncated =
+          strValue.length > maxParamLen ? strValue.slice(0, maxParamLen - 3) + "..." : strValue;
         return `${chalk.dim(key)}=${chalk.cyan(truncated)}`;
       });
       paramsStr = `${chalk.dim("(")}${formatted.join(chalk.dim(", "))}${chalk.dim(")")}`;
@@ -251,9 +261,10 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
 
   // Duration
   if (node.executionTimeMs !== undefined) {
-    const time = node.executionTimeMs >= 1000
-      ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
-      : `${Math.round(node.executionTimeMs)}ms`;
+    const time =
+      node.executionTimeMs >= 1000
+        ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
+        : `${Math.round(node.executionTimeMs)}ms`;
     metrics.push(time);
   }
 
@@ -299,6 +310,13 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
     result += `\n\n${rendered}\n`;
   }
 
+  // AskUser: append full question below the gadget line (like TellUser)
+  if (node.name === "AskUser" && node.parameters?.question) {
+    const question = String(node.parameters.question);
+    // Render with prompt indicator for visibility
+    result += `\n\n? ${question}\n`;
+  }
+
   return result;
 }
 
@@ -330,15 +348,20 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
       const valueLines = strValue.split("\n");
       const maxValueLen = width - 10; // Leave room for indent and key
       if (valueLines.length === 1) {
-        const truncated = strValue.length > maxValueLen ? strValue.slice(0, maxValueLen - 3) + "..." : strValue;
-        lines.push(`${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(key)}: ${chalk.cyan(truncated)}`);
+        const truncated =
+          strValue.length > maxValueLen ? strValue.slice(0, maxValueLen - 3) + "..." : strValue;
+        lines.push(
+          `${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(key)}: ${chalk.cyan(truncated)}`,
+        );
       } else {
         lines.push(`${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(key)}:`);
         for (const line of valueLines.slice(0, 5)) {
           lines.push(`${indent}${chalk.dim(BOX.vertical)}   ${chalk.cyan(line)}`);
         }
         if (valueLines.length > 5) {
-          lines.push(`${indent}${chalk.dim(BOX.vertical)}   ${chalk.dim(`... (${valueLines.length - 5} more lines)`)}`);
+          lines.push(
+            `${indent}${chalk.dim(BOX.vertical)}   ${chalk.dim(`... (${valueLines.length - 5} more lines)`)}`,
+          );
         }
       }
     }
@@ -357,7 +380,8 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
       warning: { emoji: "⚠️", color: chalk.yellow },
       error: { emoji: "❌", color: chalk.red },
     };
-    const typeInfo = typeIndicators[messageType as keyof typeof typeIndicators] || typeIndicators.info;
+    const typeInfo =
+      typeIndicators[messageType as keyof typeof typeIndicators] || typeIndicators.info;
 
     // Message header
     const headerLine = `${BOX.topLeft}${BOX.horizontal} ${typeInfo.emoji} Message ${BOX.horizontal.repeat(width - 13)}`;
@@ -392,14 +416,17 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
     }
 
     if (contentLines.length > maxLines) {
-      lines.push(`${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(`... (${contentLines.length - maxLines} more lines)`)}`);
+      lines.push(
+        `${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(`... (${contentLines.length - maxLines} more lines)`)}`,
+      );
     }
 
     // Execution time
     if (node.executionTimeMs !== undefined) {
-      const time = node.executionTimeMs >= 1000
-        ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
-        : `${Math.round(node.executionTimeMs)}ms`;
+      const time =
+        node.executionTimeMs >= 1000
+          ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
+          : `${Math.round(node.executionTimeMs)}ms`;
       lines.push(`${indent}${chalk.dim(BOX.vertical)} Time: ${chalk.dim(time)}`);
     }
 
@@ -410,7 +437,9 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
   if (node.children.length > 0) {
     const headerLine = `${BOX.topLeft}${BOX.horizontal} Subagent Activity ${BOX.horizontal.repeat(width - 21)}`;
     lines.push(`${indent}${chalk.dim(headerLine)}`);
-    lines.push(`${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(`${node.children.length} nested calls (expand children to see details)`)}`);
+    lines.push(
+      `${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(`${node.children.length} nested calls (expand children to see details)`)}`,
+    );
     lines.push(`${indent}${chalk.dim(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
   }
 
@@ -421,20 +450,25 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
 
     // Duration
     if (node.executionTimeMs !== undefined) {
-      const time = node.executionTimeMs >= 1000
-        ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
-        : `${Math.round(node.executionTimeMs)}ms`;
+      const time =
+        node.executionTimeMs >= 1000
+          ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
+          : `${Math.round(node.executionTimeMs)}ms`;
       lines.push(`${indent}${chalk.dim(BOX.vertical)} Duration: ${chalk.dim(time)}`);
     }
 
     // Output tokens (estimated from result)
     if (node.resultTokens && node.resultTokens > 0) {
-      lines.push(`${indent}${chalk.dim(BOX.vertical)} Output:   ${chalk.green(`~${formatTokens(node.resultTokens)}`)} tokens`);
+      lines.push(
+        `${indent}${chalk.dim(BOX.vertical)} Output:   ${chalk.green(`~${formatTokens(node.resultTokens)}`)} tokens`,
+      );
     }
 
     // Cost
     if (node.cost && node.cost > 0) {
-      lines.push(`${indent}${chalk.dim(BOX.vertical)} Cost:     ${chalk.cyan(`$${formatCost(node.cost)}`)}`);
+      lines.push(
+        `${indent}${chalk.dim(BOX.vertical)} Cost:     ${chalk.cyan(`$${formatCost(node.cost)}`)}`,
+      );
     }
 
     // Subagent stats (aggregated from child LLM calls)

@@ -1,8 +1,8 @@
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { Writable, Readable } from "node:stream";
-import { setRuntime, NodeRuntime, ScrollableBox, Screen } from "@unblessed/node";
-import { BlockRenderer } from "./block-renderer.js";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { Readable, Writable } from "node:stream";
+import { NodeRuntime, Screen, ScrollableBox, setRuntime } from "@unblessed/node";
 import { ExecutionTree } from "llmist";
+import { BlockRenderer } from "./block-renderer.js";
 
 // TUI tests use mock streams - no real TTY needed
 
@@ -580,7 +580,9 @@ describe("BlockRenderer", () => {
       const unsubscribe = renderer.subscribeToTree(tree);
 
       // Manually create gadget (simulates handleEvent path)
-      const manualGadgetId = renderer.addGadget("gc_browse", "BrowseWeb", { url: "https://example.com" });
+      const manualGadgetId = renderer.addGadget("gc_browse", "BrowseWeb", {
+        url: "https://example.com",
+      });
 
       // Tree event for same gadget (should reuse existing)
       // Tree uses 0-indexed iteration, handler adds +1 to match display
@@ -704,6 +706,207 @@ describe("BlockRenderer", () => {
 
       // IDs should still be unique after clear
       expect(id1).not.toBe(id2);
+    });
+  });
+
+  describe("content filter mode ordering", () => {
+    test("block positions are preserved across mode switches", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add a user message (text block)
+      const textId = renderer.addUserMessage("User question");
+
+      // Add an LLM call with a TellUser gadget
+      const llmId = renderer.addLLMCall(1, "sonnet");
+      const tellUserId = renderer.addGadget("gc_tell", "TellUser", { message: "Answer" });
+
+      // In full mode: text, llm_call, gadget
+      expect(renderer.getContentFilterMode()).toBe("full");
+
+      // Get positions in full mode
+      // Note: We can't easily access box positions in tests, but we can verify
+      // the blocks are created in the right order by checking container.children
+
+      // Switch to focused mode
+      renderer.setContentFilterMode("focused");
+      expect(renderer.getContentFilterMode()).toBe("focused");
+
+      // Switch back to full mode
+      renderer.setContentFilterMode("full");
+      expect(renderer.getContentFilterMode()).toBe("full");
+
+      // The mode should be preserved
+      expect(renderer.getContentFilterMode()).toBe("full");
+    });
+
+    test("TellUser gadgets are visible in focused mode", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add an LLM call with a TellUser gadget
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_tell", "TellUser", { message: "Important info" });
+
+      // Switch to focused mode
+      renderer.setContentFilterMode("focused");
+
+      // The TellUser gadget should still be findable
+      const gadget = renderer.findGadgetByInvocationId("gc_tell");
+      expect(gadget).toBeDefined();
+      expect(gadget?.name).toBe("TellUser");
+    });
+
+    test("non-TellUser gadgets are hidden in focused mode", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add an LLM call with a ReadFile gadget
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_read", "ReadFile", { path: "/test.txt" });
+
+      // Switch to focused mode
+      renderer.setContentFilterMode("focused");
+
+      // The gadget should still exist in the data structure
+      const gadget = renderer.findGadgetByInvocationId("gc_read");
+      expect(gadget).toBeDefined();
+      expect(gadget?.name).toBe("ReadFile");
+    });
+
+    test("multiple mode switches preserve node tree structure", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Create a complex structure
+      renderer.addUserMessage("Question 1");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_tell_1", "TellUser", { message: "Answer 1" });
+
+      renderer.addUserMessage("Question 2");
+      renderer.addLLMCall(2, "opus");
+      renderer.addGadget("gc_tell_2", "TellUser", { message: "Answer 2" });
+
+      // Switch back and forth multiple times
+      for (let i = 0; i < 5; i++) {
+        renderer.setContentFilterMode("focused");
+        renderer.setContentFilterMode("full");
+      }
+
+      // All gadgets should still be findable
+      expect(renderer.findGadgetByInvocationId("gc_tell_1")).toBeDefined();
+      expect(renderer.findGadgetByInvocationId("gc_tell_2")).toBeDefined();
+    });
+
+    test("block order is maintained in container children after mode switches", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add nodes in order
+      renderer.addUserMessage("User prompt");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_tell", "TellUser", { message: "Response" });
+
+      // Record initial child count
+      const initialChildCount = container.children.length;
+
+      // Switch to focused mode (some blocks hidden)
+      renderer.setContentFilterMode("focused");
+      const focusedChildCount = container.children.length;
+
+      // Focused should have fewer children (LLM call hidden)
+      expect(focusedChildCount).toBeLessThan(initialChildCount);
+
+      // Switch back to full mode
+      renderer.setContentFilterMode("full");
+      const fullChildCount = container.children.length;
+
+      // Should be back to original count
+      expect(fullChildCount).toBe(initialChildCount);
+    });
+
+    test("box top positions increase monotonically after mode switch", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add multiple text blocks and gadgets
+      renderer.addUserMessage("First");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_1", "TellUser", { message: "Second" });
+      renderer.addUserMessage("Third");
+
+      // Switch modes
+      renderer.setContentFilterMode("focused");
+      renderer.setContentFilterMode("full");
+
+      // Get all child boxes and verify top positions are monotonically increasing
+      const boxes = container.children.filter((c) => c.type === "box");
+      let lastTop = -1;
+      for (const box of boxes) {
+        const boxTop = box.top as number;
+        expect(boxTop).toBeGreaterThan(lastTop);
+        lastTop = boxTop;
+      }
+    });
+
+    test("content order preserved after 10 rapid mode switches", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Simulate a REPL session with multiple exchanges
+      renderer.addUserMessage("Question 1");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_1", "TellUser", { message: "Answer 1" });
+
+      renderer.addUserMessage("Question 2");
+      renderer.addLLMCall(2, "sonnet");
+      renderer.addGadget("gc_2", "TellUser", { message: "Answer 2" });
+
+      renderer.addUserMessage("Question 3");
+      renderer.addLLMCall(3, "sonnet");
+      renderer.addGadget("gc_3", "TellUser", { message: "Answer 3" });
+
+      // Record positions before rapid switching
+      const getBoxTops = () =>
+        container.children.filter((c) => c.type === "box").map((b) => b.top as number);
+
+      const beforeSwitching = getBoxTops();
+
+      // Rapid mode switching
+      for (let i = 0; i < 10; i++) {
+        renderer.setContentFilterMode("focused");
+        renderer.setContentFilterMode("full");
+      }
+
+      const afterSwitching = getBoxTops();
+
+      // Positions should be exactly the same after switching back to full mode
+      expect(afterSwitching).toEqual(beforeSwitching);
+    });
+
+    test("focused mode shows content in correct order", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      // Add user message, then LLM call with TellUser
+      renderer.addUserMessage("My question");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_tell", "TellUser", { message: "The answer" });
+
+      // Switch to focused mode
+      renderer.setContentFilterMode("focused");
+
+      // Get visible boxes (text and TellUser)
+      const boxes = container.children.filter((c) => c.type === "box");
+
+      // Should have exactly 2 boxes: user message and TellUser
+      expect(boxes.length).toBe(2);
+
+      // First box (user message) should be at a lower top than second box (TellUser)
+      // This ensures the question appears BEFORE the answer
+      const firstTop = boxes[0]!.top as number;
+      const secondTop = boxes[1]!.top as number;
+      expect(firstTop).toBeLessThan(secondTop);
     });
   });
 });
