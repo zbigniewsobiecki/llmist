@@ -1,3 +1,8 @@
+## <small>10.1.1 (2025-12-28)</small>
+
+* Merge pull request #281 from zbigniewsobiecki/dev ([d0a6d6a](https://github.com/zbigniewsobiecki/llmist/commit/d0a6d6a)), closes [#281](https://github.com/zbigniewsobiecki/llmist/issues/281)
+* fix(agent): forward subagent events in withParentContext (#280) ([1ed2109](https://github.com/zbigniewsobiecki/llmist/commit/1ed2109)), closes [#280](https://github.com/zbigniewsobiecki/llmist/issues/280)
+
 ## 10.0.0 (2025-12-23)
 
 * feat(agent): inherit logger in withParentContext (#269) ([d27d618](https://github.com/zbigniewsobiecki/llmist/commit/d27d618)), closes [#269](https://github.com/zbigniewsobiecki/llmist/issues/269)
