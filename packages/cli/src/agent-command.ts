@@ -409,6 +409,20 @@ export async function executeAgent(
     "gc_init_1",
   );
 
+  // Apply initial gadgets from config (pre-seeded context)
+  // These appear as if the agent already called these gadgets and received results
+  if (options.initialGadgets) {
+    for (let i = 0; i < options.initialGadgets.length; i++) {
+      const ig = options.initialGadgets[i];
+      builder.withSyntheticGadgetCall(
+        ig.gadget,
+        ig.parameters,
+        ig.result,
+        `gc_init_${i + 2}`, // Start at 2 since gc_init_1 is TellUser greeting
+      );
+    }
+  }
+
   // Continue looping when LLM responds with just text (no gadget calls)
   // This allows multi-turn conversations where the LLM may explain before acting
   builder.withTextOnlyHandler("acknowledge");
@@ -587,6 +601,7 @@ export function registerAgentCommand(
         gadgetApproval: config?.["gadget-approval"],
         subagents: config?.subagents,
         globalSubagents,
+        initialGadgets: config?.["initial-gadgets"],
       };
       return executeAgent(prompt, mergedOptions, env, "agent");
     }, env),

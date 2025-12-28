@@ -99,6 +99,19 @@ export interface SpeechConfig {
 }
 
 /**
+ * Configuration for a pre-seeded gadget result.
+ * Used with initial-gadgets to inject context into the agent's conversation history.
+ */
+export interface InitialGadget {
+  /** Name of the gadget (e.g., "ListDirectory", "ReadFile") */
+  gadget: string;
+  /** Parameters that were "passed" to the gadget */
+  parameters: Record<string, unknown>;
+  /** The pre-filled result from the gadget */
+  result: string;
+}
+
+/**
  * Configuration for the agent command.
  */
 export interface AgentConfig extends SharedCommandConfig {
@@ -115,6 +128,8 @@ export interface AgentConfig extends SharedCommandConfig {
   "gadget-approval"?: GadgetPermissionPolicy;
   /** Per-subagent configuration overrides for this profile/command */
   subagents?: SubagentConfigMap;
+  /** Pre-seeded gadget results to inject into conversation history */
+  "initial-gadgets"?: InitialGadget[];
   quiet?: boolean;
   "log-level"?: LogLevel;
   "log-llm-requests"?: boolean;
@@ -194,6 +209,7 @@ const AGENT_CONFIG_KEYS = new Set([
   "gadget-arg-prefix",
   "gadget-approval",
   "subagents", // Per-subagent configuration overrides
+  "initial-gadgets", // Pre-seeded gadget results
   "quiet",
   "inherits",
   "log-level",
@@ -444,6 +460,62 @@ function validateGadgetApproval(value: unknown, section: string): GadgetPermissi
 }
 
 /**
+ * Validates that a value is an initial-gadgets array.
+ * Each entry must have: gadget (string), parameters (object), result (string).
+ */
+function validateInitialGadgets(value: unknown, section: string): InitialGadget[] {
+  if (!Array.isArray(value)) {
+    throw new ConfigError(`[${section}].initial-gadgets must be an array`);
+  }
+
+  const result: InitialGadget[] = [];
+  for (let i = 0; i < value.length; i++) {
+    const entry = value[i];
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new ConfigError(
+        `[${section}].initial-gadgets[${i}] must be a table with gadget, parameters, and result`,
+      );
+    }
+
+    const entryObj = entry as Record<string, unknown>;
+
+    // Validate required 'gadget' field
+    if (!("gadget" in entryObj)) {
+      throw new ConfigError(`[${section}].initial-gadgets[${i}] is missing required field 'gadget'`);
+    }
+    if (typeof entryObj.gadget !== "string") {
+      throw new ConfigError(`[${section}].initial-gadgets[${i}].gadget must be a string`);
+    }
+
+    // Validate required 'parameters' field
+    if (!("parameters" in entryObj)) {
+      throw new ConfigError(
+        `[${section}].initial-gadgets[${i}] is missing required field 'parameters'`,
+      );
+    }
+    if (typeof entryObj.parameters !== "object" || entryObj.parameters === null) {
+      throw new ConfigError(`[${section}].initial-gadgets[${i}].parameters must be a table`);
+    }
+
+    // Validate required 'result' field
+    if (!("result" in entryObj)) {
+      throw new ConfigError(`[${section}].initial-gadgets[${i}] is missing required field 'result'`);
+    }
+    if (typeof entryObj.result !== "string") {
+      throw new ConfigError(`[${section}].initial-gadgets[${i}].result must be a string`);
+    }
+
+    result.push({
+      gadget: entryObj.gadget,
+      parameters: entryObj.parameters as Record<string, unknown>,
+      result: entryObj.result,
+    });
+  }
+
+  return result;
+}
+
+/**
  * Validates and extracts logging config fields from a raw object.
  */
 function validateLoggingConfig(
@@ -633,6 +705,9 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
   }
   if ("subagents" in rawObj) {
     result.subagents = validateSubagentConfigMap(rawObj.subagents, section);
+  }
+  if ("initial-gadgets" in rawObj) {
+    result["initial-gadgets"] = validateInitialGadgets(rawObj["initial-gadgets"], section);
   }
   if ("quiet" in rawObj) {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
@@ -831,6 +906,9 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
   }
   if ("subagents" in rawObj) {
     result.subagents = validateSubagentConfigMap(rawObj.subagents, section);
+  }
+  if ("initial-gadgets" in rawObj) {
+    result["initial-gadgets"] = validateInitialGadgets(rawObj["initial-gadgets"], section);
   }
 
   // Complete-specific fields

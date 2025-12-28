@@ -94,6 +94,7 @@ LLMist.createAgent()
 |--------|------|-------------|
 | `.withHistory(messages)` | `HistoryMessage[]` | Add conversation history |
 | `.addMessage(message)` | `HistoryMessage` | Add single message |
+| `.withSyntheticGadgetCall(...)` | See below | Pre-seed gadget results |
 
 ```typescript
 .withHistory([
@@ -101,6 +102,46 @@ LLMist.createAgent()
   { assistant: 'Hi there!' },
 ])
 ```
+
+#### Pre-seeding Gadget Results
+
+Inject synthetic gadget calls into conversation history so the agent starts with context already visible. This is useful for:
+
+- **Codebase context**: Show directory structure before the agent starts
+- **In-context learning**: Demonstrate expected gadget call patterns
+- **Workflow bootstrapping**: Pre-populate known data
+
+```typescript
+// SDK: Pre-seed a ListDirectory result
+LLMist.createAgent()
+  .withModel('sonnet')
+  .withGadgets(ListDirectory, ReadFile)
+  .withSyntheticGadgetCall(
+    'ListDirectory',                       // Gadget name
+    { directoryPath: '.', maxDepth: 2 },  // Parameters "used"
+    './src\n./package.json\n./README.md', // Pre-filled result
+    'gc_init_1'                            // Invocation ID
+  )
+  .ask('Analyze this project');
+```
+
+Or in CLI config (`~/.llmist/cli.toml`):
+
+```toml
+[my-profile]
+inherits = "agent"
+system = "You are a code analyst."
+initial-gadgets = [
+  { gadget = "ListDirectory", parameters = { directoryPath = ".", maxDepth = 2 }, result = """
+./src
+./src/index.ts
+./package.json
+./README.md
+""" }
+]
+```
+
+The agent will see this as if it already called `ListDirectory` and received the result, providing immediate context without using an iteration.
 
 ### Lifecycle
 
