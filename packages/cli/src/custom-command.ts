@@ -100,7 +100,7 @@ export function registerCustomCommand(
           ...(cliOptions as Partial<CLIAgentOptions>),
           globalSubagents,
         } as CLIAgentOptions;
-        await executeAgent(prompt, options, cmdEnv);
+        await executeAgent(prompt, options, cmdEnv, name);
       }, cmdEnv);
     });
   }

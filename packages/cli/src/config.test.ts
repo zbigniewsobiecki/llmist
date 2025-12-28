@@ -414,6 +414,289 @@ describe("config", () => {
             "[subagents].BrowseWeb.timeoutMs must be a non-negative integer",
           );
         });
+
+        it("should accept valid subagent maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                model: "inherit",
+                maxConcurrent: 2,
+              },
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.subagents?.BrowseWeb?.maxConcurrent).toBe(2);
+        });
+
+        it("should accept maxConcurrent of 0 (unlimited)", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: 0,
+              },
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.subagents?.BrowseWeb?.maxConcurrent).toBe(0);
+        });
+
+        it("should reject negative maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: -1,
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.maxConcurrent must be a non-negative integer",
+          );
+        });
+
+        it("should reject non-integer maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: 2.5,
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.maxConcurrent must be a non-negative integer",
+          );
+        });
+
+        it("should reject string maxConcurrent", () => {
+          const raw = {
+            subagents: {
+              BrowseWeb: {
+                maxConcurrent: "2",
+              },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[subagents].BrowseWeb.maxConcurrent must be a non-negative integer",
+          );
+        });
+      });
+
+      describe("initial-gadgets config validation", () => {
+        it("should accept valid initial-gadgets array", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: "ListDirectory",
+                  parameters: { directoryPath: "." },
+                  result: "file1.ts\nfile2.ts",
+                },
+              ],
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.agent?.["initial-gadgets"]).toHaveLength(1);
+          expect(config.agent?.["initial-gadgets"]?.[0].gadget).toBe("ListDirectory");
+          expect(config.agent?.["initial-gadgets"]?.[0].parameters).toEqual({
+            directoryPath: ".",
+          });
+          expect(config.agent?.["initial-gadgets"]?.[0].result).toBe("file1.ts\nfile2.ts");
+        });
+
+        it("should accept multiple initial-gadgets entries", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: "ListDirectory",
+                  parameters: { directoryPath: "." },
+                  result: "file1.ts",
+                },
+                {
+                  gadget: "ReadFile",
+                  parameters: { filePath: "README.md" },
+                  result: "# Hello",
+                },
+              ],
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.agent?.["initial-gadgets"]).toHaveLength(2);
+          expect(config.agent?.["initial-gadgets"]?.[0].gadget).toBe("ListDirectory");
+          expect(config.agent?.["initial-gadgets"]?.[1].gadget).toBe("ReadFile");
+        });
+
+        it("should accept empty initial-gadgets array", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [],
+            },
+          };
+
+          const config = validateConfig(raw);
+          expect(config.agent?.["initial-gadgets"]).toEqual([]);
+        });
+
+        it("should reject initial-gadgets that is not an array", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": { gadget: "ListDirectory" },
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow("[agent].initial-gadgets must be an array");
+        });
+
+        it("should reject initial-gadgets entry missing 'gadget' field", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  parameters: { path: "." },
+                  result: "output",
+                },
+              ],
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[agent].initial-gadgets[0] is missing required field 'gadget'",
+          );
+        });
+
+        it("should reject initial-gadgets entry missing 'parameters' field", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: "ListDirectory",
+                  result: "output",
+                },
+              ],
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[agent].initial-gadgets[0] is missing required field 'parameters'",
+          );
+        });
+
+        it("should reject initial-gadgets entry missing 'result' field", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: "ListDirectory",
+                  parameters: { path: "." },
+                },
+              ],
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[agent].initial-gadgets[0] is missing required field 'result'",
+          );
+        });
+
+        it("should reject initial-gadgets entry with non-string gadget", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: 123,
+                  parameters: { path: "." },
+                  result: "output",
+                },
+              ],
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[agent].initial-gadgets[0].gadget must be a string",
+          );
+        });
+
+        it("should reject initial-gadgets entry with non-object parameters", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: "ListDirectory",
+                  parameters: "not-an-object",
+                  result: "output",
+                },
+              ],
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[agent].initial-gadgets[0].parameters must be a table",
+          );
+        });
+
+        it("should reject initial-gadgets entry with non-string result", () => {
+          const raw = {
+            agent: {
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: "ListDirectory",
+                  parameters: { path: "." },
+                  result: 123,
+                },
+              ],
+            },
+          };
+
+          expect(() => validateConfig(raw)).toThrow(ConfigError);
+          expect(() => validateConfig(raw)).toThrow(
+            "[agent].initial-gadgets[0].result must be a string",
+          );
+        });
+
+        it("should accept initial-gadgets in custom command section", () => {
+          const raw = {
+            "my-command": {
+              type: "agent",
+              model: "test",
+              "initial-gadgets": [
+                {
+                  gadget: "ListDirectory",
+                  parameters: { path: "." },
+                  result: "output",
+                },
+              ],
+            },
+          };
+
+          const config = validateConfig(raw);
+          const cmd = config["my-command"] as { "initial-gadgets"?: unknown[] };
+          expect(cmd["initial-gadgets"]).toHaveLength(1);
+        });
       });
     });
   });

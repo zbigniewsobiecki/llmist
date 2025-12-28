@@ -2,7 +2,7 @@
  * TUI type definitions for the blessed-based terminal interface.
  */
 
-import type { Screen, Box, Textbox, ScrollableBox } from "@unblessed/node";
+import type { Box, Screen, ScrollableBox, Text, Textbox } from "@unblessed/node";
 
 // Note: Box is imported for SelectableBlock.box type
 
@@ -49,6 +49,14 @@ export type ApprovalResponse = "yes" | "no" | "always" | "deny" | "cancel";
  * - "input": Type in input bar, navigation disabled
  */
 export type FocusMode = "browse" | "input";
+
+/**
+ * Content filter mode for block visibility.
+ * - "full": Show all blocks (LLM calls, gadgets, text)
+ * - "focused": Clean view - hide technical details, show only user communication
+ *              (text, TellUser, AskUser, Finish gadgets)
+ */
+export type ContentFilterMode = "full" | "focused";
 
 /**
  * Context for approval dialog display.
@@ -255,7 +263,9 @@ export interface SelectableBlock {
 export interface TUIBlockLayout {
   /** Main scrollable container with Box children */
   body: ScrollableBox;
-  /** Input field at the bottom */
+  /** Static prompt label (non-editable "> " or ">>> ") */
+  promptLabel: Text;
+  /** Input field at the bottom (editable, no prompt in value) */
   inputBar: Textbox;
   /** Status bar */
   statusBar: Box;

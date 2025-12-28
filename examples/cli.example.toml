@@ -98,11 +98,13 @@ max-iterations = 15                      # Max agent loop iterations
 # model = "inherit"                      # Use parent agent's model
 # maxIterations = 15                     # Max browsing iterations
 # timeoutMs = 300000                     # 5 minute timeout (default)
+# maxConcurrent = 2                      # Limit parallel executions (0 = unlimited)
 # headless = true                        # Run browser without UI
 
-# Example: extend timeout for long browsing tasks
+# Example: limit browser concurrency to prevent resource exhaustion
 # [subagents.BrowseWeb]
-# timeoutMs = 600000                     # 10 minutes for complex browsing
+# maxConcurrent = 2                      # Max 2 browsers at once, queue the rest
+# headless = true                        # Headless mode for batch operations
 
 #──────────────────────────────────────────────────────────────────────────────
 # PROMPT TEMPLATES

@@ -273,14 +273,18 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
 
   const packageSpec = spec.version ? `${spec.package}@${spec.version}` : spec.package;
 
+  // Suppress donation messages from packages like core-js
+  const quietEnv = { ...process.env, DISABLE_OPENCOLLECTIVE: "1", ADBLOCK: "1" };
+
   // Prefer npm for external gadgets because:
   // - npm runs all postinstall scripts reliably (including subdependencies)
   // - Packages like dhalsim depend on camoufox which needs postinstall to download browsers
   // Use --foreground-scripts so postinstall output (e.g. download progress) is visible
+  // Use --loglevel=error to suppress deprecation warnings and node-gyp verbose output
   if (isCommandAvailable("npm")) {
-    const installCmd = `npm install --foreground-scripts "${packageSpec}"`;
+    const installCmd = `npm install --foreground-scripts --loglevel=error "${packageSpec}"`;
     try {
-      execSync(installCmd, { stdio: "inherit", cwd: cacheDir });
+      execSync(installCmd, { stdio: "inherit", cwd: cacheDir, env: quietEnv });
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -297,7 +301,7 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
     );
     const installCmd = `bun add --trust "${packageSpec}"`;
     try {
-      execSync(installCmd, { stdio: "inherit", cwd: cacheDir });
+      execSync(installCmd, { stdio: "inherit", cwd: cacheDir, env: quietEnv });
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -363,12 +367,15 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
 
       // Use bun if available (faster), otherwise npm
       const useBun = hasBun;
-      const installCmd = useBun ? "bun install" : "npm install --foreground-scripts";
+      const installCmd = useBun ? "bun install" : "npm install --foreground-scripts --loglevel=error";
       const runCmd = useBun ? "bun run" : "npm run";
       const pmName = useBun ? "bun" : "npm";
 
+      // Suppress donation messages from packages like core-js
+      const quietEnv = { ...process.env, DISABLE_OPENCOLLECTIVE: "1", ADBLOCK: "1" };
+
       try {
-        execSync(installCmd, { cwd: cacheDir, stdio: "inherit" });
+        execSync(installCmd, { cwd: cacheDir, stdio: "inherit", env: quietEnv });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to install dependencies for '${spec.package}' using ${pmName}: ${message}`);
@@ -378,7 +385,7 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
       const packageJson = JSON.parse(fs.readFileSync(path.join(cacheDir, "package.json"), "utf-8"));
       if (packageJson.scripts?.build) {
         try {
-          execSync(`${runCmd} build`, { cwd: cacheDir, stdio: "inherit" });
+          execSync(`${runCmd} build`, { cwd: cacheDir, stdio: "inherit", env: quietEnv });
         } catch (error) {
           // Build may fail (e.g., TypeScript errors in test files) but the main bundle
           // may still be created. Check if the entry point exists before failing.

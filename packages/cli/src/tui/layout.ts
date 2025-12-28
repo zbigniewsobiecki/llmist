@@ -7,8 +7,8 @@
  * - StatusBar: Metrics display (tokens, time, cost)
  */
 
-import { Box, ScrollableBox, Textbox, type Screen } from "@unblessed/node";
-import type { TUIBlockLayout, FocusMode } from "./types.js";
+import { Box, type Screen, ScrollableBox, Text, Textbox } from "@unblessed/node";
+import type { TUIBlockLayout } from "./types.js";
 
 /**
  * Creates the TUI layout with ScrollableBox for interactive blocks.
@@ -50,15 +50,31 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
     },
   });
 
-  // Input bar - always visible at bottom - 1
-  // Shows "> " prompt indicator even when idle
-  const inputBar = new Textbox({
+  // Static prompt label (non-editable)
+  // This widget displays "> " or ">>> " and cannot be modified by the user
+  const promptLabel = new Text({
     parent: screen,
     bottom: 1,
     left: 0,
-    width: "100%",
+    width: 4, // ">>> " = 4 chars (max prompt width)
     height: 1,
-    inputOnFocus: true,
+    content: "> ",
+    style: {
+      fg: "cyan",
+      bg: "black",
+    },
+  });
+
+  // Input bar - editable textbox positioned after the prompt label
+  // Value contains ONLY user input, no prompt prefix
+  // Note: Don't use inputOnFocus - we explicitly call readInput() in InputHandler
+  // Using both causes double character echo
+  const inputBar = new Textbox({
+    parent: screen,
+    bottom: 1,
+    left: 4, // Position after prompt label
+    width: "100%-4",
+    height: 1,
     keys: true,
     mouse: true,
     style: {
@@ -66,9 +82,6 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
       bg: "black",
     },
   });
-
-  // Pre-fill with prompt indicator
-  inputBar.setValue("> ");
 
   // Status bar at very bottom
   // Uses ANSI codes for color formatting (tags: false)
@@ -85,84 +98,5 @@ export function createBlockLayout(screen: Screen): TUIBlockLayout {
     },
   });
 
-  return { body, inputBar, statusBar };
-}
-
-/**
- * Sets up keyboard navigation for block selection in the TUI.
- *
- * Provides navigation between selectable blocks (LLM calls, gadgets)
- * and expand/collapse functionality for viewing details.
- *
- * Navigation only works in "browse" focus mode. In "input" mode,
- * keys are captured by the input field.
- *
- * @param screen - The blessed Screen instance
- * @param callbacks - Object with navigation callback functions
- * @param getFocusMode - Function to get current focus mode
- */
-export function setupBlockNavigationKeys(
-  screen: Screen,
-  callbacks: {
-    onSelectNext: () => void;
-    onSelectPrevious: () => void;
-    onToggleExpand: () => void;
-    onCollapse: () => void;
-    onSelectFirst: () => void;
-    onSelectLast: () => void;
-    onShowRawRequest?: () => void;
-    onShowRawResponse?: () => void;
-  },
-  getFocusMode: () => FocusMode,
-): void {
-  // Navigation: up/down or vim keys (browse mode only)
-  screen.key(["up", "k"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onSelectPrevious();
-    screen.render();
-  });
-
-  screen.key(["down", "j"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onSelectNext();
-    screen.render();
-  });
-
-  // Expand/collapse with Enter or Space (browse mode only)
-  screen.key(["enter", "space"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onToggleExpand();
-    screen.render();
-  });
-
-  // Collapse with Escape or h (vim-style left) (browse mode only)
-  screen.key(["escape", "h"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onCollapse();
-    screen.render();
-  });
-
-  // Jump to first/last (browse mode only)
-  screen.key(["home", "g"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onSelectFirst();
-    screen.render();
-  });
-
-  screen.key(["end", "G"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onSelectLast();
-    screen.render();
-  });
-
-  // Raw viewer: r = request, R = response (browse mode only)
-  screen.key(["r"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onShowRawRequest?.();
-  });
-
-  screen.key(["S-r"], () => {
-    if (getFocusMode() !== "browse") return;
-    callbacks.onShowRawResponse?.();
-  });
+  return { body, promptLabel, inputBar, statusBar };
 }

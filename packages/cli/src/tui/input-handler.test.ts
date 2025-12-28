@@ -1,6 +1,6 @@
-import { describe, expect, test, beforeAll, afterAll, mock } from "bun:test";
-import { Writable, Readable } from "node:stream";
-import { setRuntime, NodeRuntime, Screen, Textbox, Box } from "@unblessed/node";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { Readable, Writable } from "node:stream";
+import { Box, NodeRuntime, Screen, setRuntime, Text, Textbox } from "@unblessed/node";
 import { InputHandler } from "./input-handler.js";
 
 // TUI tests use mock streams - no real TTY needed
@@ -21,6 +21,7 @@ class MockInputStream extends Readable {
 // Initialize unblessed for testing
 let screen: Screen;
 let inputBar: Textbox;
+let promptLabel: Text;
 let body: Box;
 let mockOutput: MockOutputStream;
 let mockInput: MockInputStream;
@@ -37,11 +38,22 @@ beforeAll(() => {
     output: mockOutput,
   });
 
-  inputBar = new Textbox({
+  // Static prompt label (non-editable)
+  promptLabel = new Text({
     parent: screen,
     bottom: 1,
     left: 0,
-    width: "100%",
+    width: 4,
+    height: 1,
+    content: "> ",
+    style: { fg: "cyan", bg: "black" },
+  });
+
+  inputBar = new Textbox({
+    parent: screen,
+    bottom: 1,
+    left: 4,
+    width: "100%-4",
     height: 1,
     inputOnFocus: true,
     keys: true,
@@ -70,17 +82,19 @@ describe("InputHandler", () => {
   describe("constructor", () => {
     test("initializes with idle prompt", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      // Initial state should show idle prompt
-      expect(inputBar.getValue()).toBe("> ");
+      // Initial state should show idle prompt in promptLabel
+      expect(promptLabel.getContent()).toBe("> ");
+      // inputBar should be empty (no prompt prefix stored in value)
+      expect(inputBar.getValue()).toBe("");
     });
   });
 
   describe("Ctrl+C callback", () => {
     test("onCtrlC sets the callback", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const ctrlCCallback = mock(() => {});
       handler.onCtrlC(ctrlCCallback);
@@ -93,7 +107,7 @@ describe("InputHandler", () => {
   describe("Ctrl+B callback", () => {
     test("onCtrlB sets the callback", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const ctrlBCallback = mock(() => {});
       handler.onCtrlB(ctrlBCallback);
@@ -104,23 +118,32 @@ describe("InputHandler", () => {
   });
 
   describe("focus mode API", () => {
-    test("activate shows input bar and sets active prompt", () => {
+    test("activate shows input bar and preserves current state", () => {
       const renderCallback = mock(() => {});
       const renderNowCallback = mock(() => {});
       const handler = new InputHandler(
         inputBar,
+        promptLabel,
         body,
         screen,
         renderCallback,
         renderNowCallback,
       );
 
+      // Set some initial state
+      promptLabel.setContent("> ");
+      inputBar.setValue("my text");
+
       handler.activate();
 
       // Input bar should be visible
       expect(inputBar.visible).not.toBe(false);
-      // Should show active prompt
-      expect(inputBar.getValue()).toBe(">>> ");
+      // Prompt label should be visible
+      expect(promptLabel.visible).not.toBe(false);
+      // Should preserve the current prompt (idle state from constructor)
+      expect(promptLabel.getContent()).toBe("> ");
+      // Should preserve the input text
+      expect(inputBar.getValue()).toBe("my text");
       // Should have rendered immediately
       expect(renderNowCallback).toHaveBeenCalled();
     });
@@ -130,6 +153,7 @@ describe("InputHandler", () => {
       const renderNowCallback = mock(() => {});
       const handler = new InputHandler(
         inputBar,
+        promptLabel,
         body,
         screen,
         renderCallback,
@@ -143,13 +167,14 @@ describe("InputHandler", () => {
       // Then deactivate
       handler.deactivate();
 
-      // Input bar should be hidden
+      // Input bar and promptLabel should be hidden
       expect(inputBar.visible).toBe(false);
+      expect(promptLabel.visible).toBe(false);
     });
 
     test("isInputActive returns true when visible", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       handler.activate();
       expect(handler.isInputActive()).toBe(true);
@@ -157,7 +182,7 @@ describe("InputHandler", () => {
 
     test("isInputActive returns false when hidden", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       handler.deactivate();
       expect(handler.isInputActive()).toBe(false);
@@ -165,19 +190,20 @@ describe("InputHandler", () => {
 
     test("activate clears pending REPL prompt state", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Setup pending prompt state (internal state we're checking behavior)
       handler.activate();
 
       // Verify handler is active
       expect(handler.isInputActive()).toBe(true);
-      expect(inputBar.getValue()).toBe(">>> ");
+      // Prompt is preserved (idle state "> " from constructor)
+      expect(promptLabel.getContent()).toBe("> ");
     });
 
     test("deactivate clears pending REPL prompt state", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       handler.deactivate();
 
@@ -189,14 +215,14 @@ describe("InputHandler", () => {
   describe("hasPendingInput", () => {
     test("returns false initially", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       expect(handler.hasPendingInput()).toBe(false);
     });
 
     test("returns true after waitForInput is called", async () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Start waiting for input (don't await - it won't resolve)
       const inputPromise = handler.waitForInput("Test question?", "TestGadget");
@@ -212,7 +238,7 @@ describe("InputHandler", () => {
   describe("cancelPending", () => {
     test("rejects pending input promise", async () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const inputPromise = handler.waitForInput("Test?", "TestGadget");
 
@@ -223,12 +249,14 @@ describe("InputHandler", () => {
 
     test("sets input to idle state", async () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const inputPromise = handler.waitForInput("Test?", "TestGadget");
       handler.cancelPending();
 
-      expect(inputBar.getValue()).toBe("> ");
+      // Prompt should be in promptLabel, inputBar should be empty
+      expect(promptLabel.getContent()).toBe("> ");
+      expect(inputBar.getValue()).toBe("");
 
       // Clean up the rejected promise
       await inputPromise.catch(() => {});
@@ -236,7 +264,7 @@ describe("InputHandler", () => {
 
     test("clears pending input state", async () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const inputPromise = handler.waitForInput("Test?", "TestGadget");
       expect(handler.hasPendingInput()).toBe(true);
@@ -251,13 +279,14 @@ describe("InputHandler", () => {
   describe("waitForPrompt", () => {
     test("sets up pending REPL prompt state", async () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const promptPromise = handler.waitForPrompt();
 
       expect(handler.hasPendingInput()).toBe(true);
-      // Shows pending prompt indicator
-      expect(inputBar.getValue()).toBe("> ");
+      // Shows pending prompt indicator in promptLabel
+      expect(promptLabel.getContent()).toBe("> ");
+      expect(inputBar.getValue()).toBe("");
 
       // Clean up
       handler.cancelPending();
@@ -268,11 +297,11 @@ describe("InputHandler", () => {
   describe("activatePendingPrompt", () => {
     test("activates pending REPL prompt", async () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Start waiting for prompt
       const promptPromise = handler.waitForPrompt();
-      expect(inputBar.getValue()).toBe("> ");
+      expect(promptLabel.getContent()).toBe("> ");
       expect(handler.hasPendingInput()).toBe(true);
 
       // Activate it (simulates Enter key)
@@ -290,7 +319,7 @@ describe("InputHandler", () => {
 
     test("does nothing when no pending prompt", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Call without any pending prompt
       handler.activatePendingPrompt();
@@ -303,7 +332,7 @@ describe("InputHandler", () => {
   describe("setMidSessionHandler", () => {
     test("sets the mid-session handler callback", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const midSessionCallback = mock(() => {});
       handler.setMidSessionHandler(midSessionCallback);
@@ -314,7 +343,7 @@ describe("InputHandler", () => {
 
     test("mid-session handler receives submitted value when no pending input", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const receivedMessages: string[] = [];
       const midSessionCallback = mock((msg: string) => {
@@ -332,7 +361,7 @@ describe("InputHandler", () => {
 
     test("mid-session handler is not called when there is pending input", async () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const midSessionCallback = mock(() => {});
       handler.setMidSessionHandler(midSessionCallback);
@@ -353,7 +382,7 @@ describe("InputHandler", () => {
 
     test("can be called multiple times to update handler", () => {
       const renderCallback = mock(() => {});
-      const handler = new InputHandler(inputBar, body, screen, renderCallback);
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const firstHandler = mock(() => {});
       const secondHandler = mock(() => {});
@@ -364,6 +393,93 @@ describe("InputHandler", () => {
       // Both handlers should not have been called yet
       expect(firstHandler).not.toHaveBeenCalled();
       expect(secondHandler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("setGetFocusMode", () => {
+    test("stores focus mode callback", () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const focusModeCallback = mock(() => "input" as const);
+      handler.setGetFocusMode(focusModeCallback);
+
+      // Callback is stored (can't directly verify, but no error thrown)
+      expect(true).toBe(true);
+    });
+
+    test("can be updated with new callback", () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const firstCallback = mock(() => "input" as const);
+      const secondCallback = mock(() => "browse" as const);
+
+      handler.setGetFocusMode(firstCallback);
+      handler.setGetFocusMode(secondCallback);
+
+      // Both callbacks stored without error
+      expect(firstCallback).not.toHaveBeenCalled();
+      expect(secondCallback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("REPL prompt activation in browse mode", () => {
+    test("waitForPrompt sets pending REPL state", async () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      // Start waiting for REPL prompt
+      const promptPromise = handler.waitForPrompt();
+
+      // Should be waiting for REPL prompt
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+      expect(handler.hasPendingInput()).toBe(true);
+
+      // Clean up
+      handler.cancelPending();
+      await promptPromise.catch(() => {});
+    });
+
+    test("activatePendingPrompt requires REPL waiting state", () => {
+      const renderCallback = mock(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      // Not waiting for prompt
+      expect(handler.isWaitingForREPLPrompt()).toBe(false);
+
+      // Activating should have no effect when not waiting
+      handler.activatePendingPrompt();
+
+      // Still not waiting (no state change)
+      expect(handler.isWaitingForREPLPrompt()).toBe(false);
+    });
+
+    test("activatePendingPrompt clears REPL waiting state when activated", async () => {
+      const renderCallback = mock(() => {});
+      const renderNowCallback = mock(() => {});
+      const handler = new InputHandler(
+        inputBar,
+        promptLabel,
+        body,
+        screen,
+        renderCallback,
+        renderNowCallback
+      );
+
+      // Start waiting for REPL prompt
+      const promptPromise = handler.waitForPrompt();
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+
+      // Activate the prompt
+      handler.activatePendingPrompt();
+
+      // No longer in waiting state (now active)
+      expect(handler.isWaitingForREPLPrompt()).toBe(false);
+
+      // Clean up
+      handler.cancelPending();
+      await promptPromise.catch(() => {});
     });
   });
 });

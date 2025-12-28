@@ -5,6 +5,7 @@ import type {
   CustomCommandConfig,
   GadgetPermissionPolicy,
   GlobalSubagentConfig,
+  InitialGadget,
   SubagentConfigMap,
 } from "./config.js";
 import { DEFAULT_MODEL, OPTION_DESCRIPTIONS, OPTION_FLAGS } from "./constants.js";
@@ -51,6 +52,8 @@ export interface CLIAgentOptions {
   subagents?: SubagentConfigMap;
   /** Global subagent configuration (from [subagents] section) */
   globalSubagents?: GlobalSubagentConfig;
+  /** Pre-seeded gadget results to inject into conversation history */
+  initialGadgets?: InitialGadget[];
 }
 
 /**
@@ -176,5 +179,6 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
   if (config.quiet !== undefined) result.quiet = config.quiet;
   if (config["log-llm-requests"] !== undefined) result.logLlmRequests = config["log-llm-requests"];
   if (config.subagents !== undefined) result.subagents = config.subagents;
+  if (config["initial-gadgets"] !== undefined) result.initialGadgets = config["initial-gadgets"];
   return result;
 }

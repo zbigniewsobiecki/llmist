@@ -949,6 +949,13 @@ export interface SubagentConfig {
    * Set to 0 to disable timeout for this gadget.
    */
   timeoutMs?: number;
+  /**
+   * Maximum number of concurrent executions allowed for this gadget.
+   * When the limit is reached, additional calls are queued and processed
+   * as earlier executions complete (FIFO order).
+   * Set to 0 or omit to allow unlimited concurrent executions (default).
+   */
+  maxConcurrent?: number;
   /** Additional subagent-specific options */
   [key: string]: unknown;
 }

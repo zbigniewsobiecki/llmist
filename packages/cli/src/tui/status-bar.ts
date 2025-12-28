@@ -7,9 +7,9 @@
  */
 
 import type { Box } from "@unblessed/node";
-import type { TUIMetrics, FocusMode } from "./types.js";
-import { formatTokens, formatCost } from "../ui/formatters.js";
-import type { ExecutionTree, ExecutionEvent, NodeId } from "llmist";
+import type { ExecutionEvent, ExecutionTree, NodeId } from "llmist";
+import { formatCost, formatTokens } from "../ui/formatters.js";
+import type { ContentFilterMode, FocusMode, TUIMetrics } from "./types.js";
 
 /** Rough estimate: ~4 characters per token for English text */
 const CHARS_PER_TOKEN = 4;
@@ -50,6 +50,20 @@ export class StatusBar {
 
   /** Current focus mode */
   private focusMode: FocusMode = "browse";
+
+  /** Current content filter mode */
+  private contentFilterMode: ContentFilterMode = "full";
+
+  /** Available agent profiles (from config) */
+  private profiles: string[] = [];
+
+  /** Currently selected profile index */
+  private currentProfileIndex = 0;
+
+  /** Selection debug info callback */
+  private selectionDebugCallback:
+    | (() => { index: number; total: number; nodeType?: string; nodeId?: string })
+    | null = null;
 
   /** Track tree node IDs to display labels for LLM calls */
   private nodeIdToLabel = new Map<NodeId, string>();
@@ -112,12 +126,7 @@ export class StatusBar {
    * Called when an LLM call completes.
    * Replaces streaming estimates with actual values.
    */
-  endCall(
-    inputTokens: number,
-    outputTokens: number,
-    cachedTokens: number,
-    cost: number,
-  ): void {
+  endCall(inputTokens: number, outputTokens: number, cachedTokens: number, cost: number): void {
     // Add actual values to accumulated totals
     this.metrics.inputTokens += inputTokens;
     this.metrics.outputTokens += outputTokens;
@@ -275,9 +284,8 @@ export class StatusBar {
     switch (event.type) {
       case "llm_call_start": {
         // Create label like "#1" for root calls, "#1.1" for nested
-        const label = event.depth === 0
-          ? `#${event.iteration + 1}`
-          : `#${event.iteration + 1}.${event.depth}`;
+        const label =
+          event.depth === 0 ? `#${event.iteration + 1}` : `#${event.iteration + 1}.${event.depth}`;
         this.nodeIdToLabel.set(event.nodeId, label);
         this.startLLMCall(label, event.model);
         break;
@@ -362,6 +370,64 @@ export class StatusBar {
   }
 
   /**
+   * Set the content filter mode (full or focused).
+   * In focused mode, displays "FOCUSED" with dark blue background.
+   */
+  setContentFilterMode(mode: ContentFilterMode): void {
+    this.contentFilterMode = mode;
+    this.render(true); // immediate render for mode changes
+  }
+
+  /**
+   * Get the current content filter mode.
+   */
+  getContentFilterMode(): ContentFilterMode {
+    return this.contentFilterMode;
+  }
+
+  /**
+   * Set a callback to get selection debug info from BlockRenderer.
+   */
+  setSelectionDebugCallback(
+    callback: () => { index: number; total: number; nodeType?: string; nodeId?: string },
+  ): void {
+    this.selectionDebugCallback = callback;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Profile Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Set available profiles for cycling.
+   * @param profiles - Available profile names
+   * @param initialProfile - Optional profile to select initially (defaults to first)
+   */
+  setProfiles(profiles: string[], initialProfile?: string): void {
+    this.profiles = profiles;
+    const index = initialProfile ? profiles.indexOf(initialProfile) : 0;
+    this.currentProfileIndex = index >= 0 ? index : 0;
+    this.render();
+  }
+
+  /**
+   * Cycle to the next profile (Ctrl+P).
+   */
+  cycleProfile(): void {
+    if (this.profiles.length > 1) {
+      this.currentProfileIndex = (this.currentProfileIndex + 1) % this.profiles.length;
+      this.render(true);
+    }
+  }
+
+  /**
+   * Get the currently selected profile name.
+   */
+  getCurrentProfile(): string | null {
+    return this.profiles[this.currentProfileIndex] ?? null;
+  }
+
+  /**
    * Shorten model name for display.
    * "gemini:gemini-2.5-flash" → "2.5-flash"
    */
@@ -418,11 +484,21 @@ export class StatusBar {
     // Order: mode indicator, stable metrics (tokens, time, cost), then dynamic activity (LLM calls, gadgets)
     const parts: string[] = [];
 
-    // Focus mode indicator at the start
-    if (this.focusMode === "browse") {
+    // Mode indicator at the start
+    // In focused mode, show FOCUSED (dark blue bg) instead of BROWSE/INPUT
+    if (this.contentFilterMode === "focused") {
+      parts.push(`${BG_BLUE}${WHITE} FOCUSED ${RESET}`);
+    } else if (this.focusMode === "browse") {
       parts.push(`${BG_BLUE}${WHITE} BROWSE ${RESET}`);
     } else {
       parts.push(`${BG_GREEN}${BLACK} INPUT ${RESET}`);
+    }
+
+    // Profile indicator (if profiles are set)
+    if (this.profiles.length > 0) {
+      const profile = this.profiles[this.currentProfileIndex];
+      const display = profile.length > 12 ? `${profile.slice(0, 11)}…` : profile;
+      parts.push(`${YELLOW}${display}${RESET}`);
     }
 
     // Input tokens (yellow) - show ~ prefix during streaming to indicate estimate
@@ -443,6 +519,14 @@ export class StatusBar {
 
     // Cost (cyan)
     parts.push(`${CYAN}$${formatCost(this.metrics.cost)}${RESET}`);
+
+    // Selection debug info (if callback is set)
+    if (this.selectionDebugCallback) {
+      const debug = this.selectionDebugCallback();
+      const debugStr = `sel:${debug.index}/${debug.total}`;
+      const typeStr = debug.nodeType ? ` [${debug.nodeType}]` : "";
+      parts.push(`${GRAY}${debugStr}${typeStr}${RESET}`);
+    }
 
     // Activity section at the end (if anything is running)
     if (this.activeLLMCalls.size > 0 || this.activeGadgets.size > 0) {
