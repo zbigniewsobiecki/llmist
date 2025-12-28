@@ -1,3 +1,11 @@
+## 10.2.0 (2025-12-28)
+
+* Merge origin/main into dev (resolve version conflict) ([893ffcc](https://github.com/zbigniewsobiecki/llmist/commit/893ffcc))
+* Merge pull request #282 from zbigniewsobiecki/dev ([e551f5f](https://github.com/zbigniewsobiecki/llmist/commit/e551f5f)), closes [#282](https://github.com/zbigniewsobiecki/llmist/issues/282)
+* fix(gadgets): remove caching in getHostExportsInternal() ([300c1dc](https://github.com/zbigniewsobiecki/llmist/commit/300c1dc))
+* chore: bump version to 10.2.0 ([adc640c](https://github.com/zbigniewsobiecki/llmist/commit/adc640c))
+* feat(agent): auto-forward subagent events via hooks in withParentContext ([aec58a6](https://github.com/zbigniewsobiecki/llmist/commit/aec58a6))
+
 ## <small>10.1.1 (2025-12-28)</small>
 
 * Merge pull request #281 from zbigniewsobiecki/dev ([d0a6d6a](https://github.com/zbigniewsobiecki/llmist/commit/d0a6d6a)), closes [#281](https://github.com/zbigniewsobiecki/llmist/issues/281)
