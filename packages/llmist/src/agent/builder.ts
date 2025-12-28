@@ -774,6 +774,18 @@ export class AgentBuilder {
       };
     }
 
+    // Set up subagent event callback to forward events to parent
+    // This enables the parent agent to create child sessions and display nested activity
+    if (ctx.onSubagentEvent && ctx.invocationId) {
+      this.subagentEventCallback = (event) => {
+        ctx.onSubagentEvent!({
+          ...event,
+          gadgetInvocationId: ctx.invocationId!,
+          depth: depth,
+        });
+      };
+    }
+
     // Auto-forward abort signal from parent for proper cancellation propagation
     if (ctx.signal && !this.signal) {
       this.signal = ctx.signal;
