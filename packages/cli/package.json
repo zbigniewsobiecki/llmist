@@ -8,6 +8,20 @@
   "bin": {
     "llmist": "dist/cli.js"
   },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/cli.d.ts",
+        "default": "./dist/cli.js"
+      }
+    },
+    "./gadgets": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

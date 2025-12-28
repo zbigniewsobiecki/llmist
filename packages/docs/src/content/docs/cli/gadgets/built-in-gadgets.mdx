@@ -1,0 +1,174 @@
+---
+title: Built-in Gadgets
+description: Use CLI built-in gadgets in your own agents
+sidebar:
+  order: 0
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The CLI includes 5 built-in gadgets for filesystem operations and command execution. You can import these gadgets directly into your projects.
+
+## Installation
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bun add @llmist/cli
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm install @llmist/cli
+    ```
+  </TabItem>
+</Tabs>
+
+## Usage
+
+```typescript
+import { ReadFile, WriteFile, RunCommand, ListDirectory, EditFile } from '@llmist/cli/gadgets';
+import { AgentBuilder } from 'llmist';
+
+const agent = new AgentBuilder()
+  .withModel('sonnet')
+  .withGadgets(ReadFile, WriteFile, ListDirectory, RunCommand)
+  .ask('Read package.json and list the dependencies');
+
+for await (const event of agent.run()) {
+  if (event.type === 'text') {
+    process.stdout.write(event.text);
+  }
+}
+```
+
+## Available Gadgets
+
+### Filesystem Gadgets
+
+| Gadget | Description |
+|--------|-------------|
+| `ListDirectory` | List files and directories with metadata (size, age) |
+| `ReadFile` | Read the entire content of a file |
+| `WriteFile` | Write content to a file (creates directories if needed) |
+| `EditFile` | Edit files using ed line-oriented editor commands |
+
+### System Gadgets
+
+| Gadget | Description |
+|--------|-------------|
+| `RunCommand` | Execute a command with arguments and return output |
+
+<Aside type="caution">
+  All filesystem gadgets validate that paths are within the current working directory. Attempts to access files outside this boundary will throw a `PathSandboxException`.
+</Aside>
+
+## Gadget Details
+
+### ListDirectory
+
+Lists files and directories with metadata in a compact format.
+
+```typescript
+import { ListDirectory } from '@llmist/cli/gadgets';
+
+// Schema: { directoryPath: string, maxDepth: number (1-10) }
+```
+
+### ReadFile
+
+Reads the entire content of a file.
+
+```typescript
+import { ReadFile } from '@llmist/cli/gadgets';
+
+// Schema: { filePath: string }
+```
+
+### WriteFile
+
+Writes content to a file, creating parent directories if needed.
+
+```typescript
+import { WriteFile } from '@llmist/cli/gadgets';
+
+// Schema: { filePath: string, content: string }
+```
+
+### EditFile
+
+Edits files using ed commands for precise line-oriented modifications.
+
+```typescript
+import { EditFile } from '@llmist/cli/gadgets';
+
+// Schema: { filePath: string, commands: string }
+```
+
+### RunCommand
+
+Executes system commands with arguments (bypasses shell interpretation).
+
+```typescript
+import { RunCommand } from '@llmist/cli/gadgets';
+
+// Schema: { argv: string[], cwd?: string, timeout?: number }
+```
+
+## Utilities
+
+For building custom filesystem gadgets with the same sandboxing behavior:
+
+```typescript
+import { validatePathIsWithinCwd, PathSandboxException } from '@llmist/cli/gadgets';
+
+try {
+  const safePath = validatePathIsWithinCwd(userInput);
+  // safePath is guaranteed to be within cwd
+} catch (error) {
+  if (error instanceof PathSandboxException) {
+    console.error('Access denied:', error.message);
+  }
+}
+```
+
+## Complete Example
+
+```typescript
+import { AgentBuilder } from 'llmist';
+import { ReadFile, WriteFile, ListDirectory, RunCommand } from '@llmist/cli/gadgets';
+
+async function main() {
+  const agent = new AgentBuilder()
+    .withModel('sonnet')
+    .withGadgets(ReadFile, WriteFile, ListDirectory, RunCommand)
+    .withSystemPrompt('You are a helpful coding assistant.')
+    .ask('Find all TypeScript files and count the lines of code');
+
+  for await (const event of agent.run()) {
+    if (event.type === 'text') {
+      process.stdout.write(event.text);
+    }
+  }
+}
+
+main();
+```
+
+## Naming Conventions
+
+Each gadget is exported with two names for convenience:
+
+```typescript
+// PascalCase (matches gadget name - recommended)
+import { ReadFile, WriteFile } from '@llmist/cli/gadgets';
+
+// camelCase (internal convention)
+import { readFile, writeFile } from '@llmist/cli/gadgets';
+```
+
+## See Also
+
+- [CLI Gadgets](/cli/gadgets/local-gadgets/) - Creating custom gadgets for CLI use
+- [Creating Gadgets](/library/guides/creating-gadgets/) - Comprehensive gadget development guide
+- [Gadget Ecosystem](/cli/gadgets/external-gadgets/) - Third-party gadgets and packages
