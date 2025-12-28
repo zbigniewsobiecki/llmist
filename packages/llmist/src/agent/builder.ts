@@ -774,15 +774,78 @@ export class AgentBuilder {
       };
     }
 
-    // Set up subagent event callback to forward events to parent
+    // Set up subagent event forwarding to parent
     // This enables the parent agent to create child sessions and display nested activity
     if (ctx.onSubagentEvent && ctx.invocationId) {
+      const invocationId = ctx.invocationId;
+
+      // Forward nested subagent events (recursive case - when this subagent's gadgets also have subagents)
       this.subagentEventCallback = (event) => {
         ctx.onSubagentEvent!({
           ...event,
-          gadgetInvocationId: ctx.invocationId!,
-          depth: depth,
+          gadgetInvocationId: invocationId,
+          // Add depths: parent's depth + event's depth (for recursive nesting)
+          depth: depth + (event.depth ?? 0),
         });
+      };
+
+      // Set up observer hooks to forward THIS agent's own events as SubagentEvents
+      // This handles the non-recursive case where the subagent's own LLM calls and gadgets
+      // need to be reported to the parent
+      const existingHooks = this.hooks ?? {};
+      this.hooks = {
+        ...existingHooks,
+        observers: {
+          ...existingHooks.observers,
+          onLLMCallStart: async (info) => {
+            await existingHooks.observers?.onLLMCallStart?.(info);
+            // Convert ObserveLLMCallContext to LLMCallInfo for SubagentEvent
+            ctx.onSubagentEvent!({
+              type: "llm_call_start",
+              event: {
+                iteration: info.iteration,
+                model: info.options.model,
+              },
+              gadgetInvocationId: invocationId,
+              depth,
+              iteration: info.iteration,
+            });
+          },
+          onGadgetExecutionStart: async (gadgetCtx) => {
+            await existingHooks.observers?.onGadgetExecutionStart?.(gadgetCtx);
+            // Convert ObserveGadgetStartContext to StreamEvent with type gadget_call
+            ctx.onSubagentEvent!({
+              type: "gadget_call",
+              event: {
+                type: "gadget_call",
+                call: {
+                  gadgetName: gadgetCtx.gadgetName,
+                  invocationId: gadgetCtx.invocationId,
+                  parametersRaw: JSON.stringify(gadgetCtx.parameters),
+                  parameters: gadgetCtx.parameters as Record<string, unknown>,
+                  dependencies: [],
+                },
+              },
+              gadgetInvocationId: invocationId,
+              depth,
+            });
+          },
+          onLLMCallComplete: async (info) => {
+            await existingHooks.observers?.onLLMCallComplete?.(info);
+            // Convert ObserveLLMCompleteContext to LLMCallInfo for SubagentEvent
+            ctx.onSubagentEvent!({
+              type: "llm_call_end",
+              event: {
+                iteration: info.iteration,
+                model: info.options.model,
+                finishReason: info.finishReason ?? undefined,
+                usage: info.usage,
+              },
+              gadgetInvocationId: invocationId,
+              depth,
+            });
+          },
+        },
       };
     }
 

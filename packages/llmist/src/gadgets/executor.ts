@@ -34,22 +34,21 @@ import type {
 } from "./types.js";
 
 /**
- * Lazily create host exports to avoid circular dependency issues.
- * Cached after first call.
+ * Get host exports for external gadgets to use when creating subagents.
+ *
+ * Note: We intentionally do NOT cache these references. In bundled environments,
+ * caching can capture class references before they are fully initialized,
+ * leading to stale AgentBuilder instances that lack methods like withParentContext.
  */
-let cachedHostExports: HostExports | undefined;
 function getHostExportsInternal(): HostExports {
-  if (!cachedHostExports) {
-    cachedHostExports = {
-      AgentBuilder,
-      Gadget,
-      createGadget,
-      ExecutionTree,
-      LLMist,
-      z,
-    };
-  }
-  return cachedHostExports;
+  return {
+    AgentBuilder,
+    Gadget,
+    createGadget,
+    ExecutionTree,
+    LLMist,
+    z,
+  };
 }
 
 export class GadgetExecutor {
