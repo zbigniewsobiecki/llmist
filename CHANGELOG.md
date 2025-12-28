@@ -1,3 +1,10 @@
+## 10.3.0 (2025-12-28)
+
+* Merge pull request #283 from zbigniewsobiecki/chore/bump-10.2.1 ([1f6d495](https://github.com/zbigniewsobiecki/llmist/commit/1f6d495)), closes [#283](https://github.com/zbigniewsobiecki/llmist/issues/283)
+* Merge pull request #285 from zbigniewsobiecki/dev ([df4b8a6](https://github.com/zbigniewsobiecki/llmist/commit/df4b8a6)), closes [#285](https://github.com/zbigniewsobiecki/llmist/issues/285)
+* feat(cli): export built-in gadgets via @llmist/cli/gadgets (#284) ([a75caac](https://github.com/zbigniewsobiecki/llmist/commit/a75caac)), closes [#284](https://github.com/zbigniewsobiecki/llmist/issues/284)
+* chore(release): bump version to 10.2.1 for caching fix release ([679bf63](https://github.com/zbigniewsobiecki/llmist/commit/679bf63))
+
 ## 10.2.0 (2025-12-28)
 
 * Merge origin/main into dev (resolve version conflict) ([893ffcc](https://github.com/zbigniewsobiecki/llmist/commit/893ffcc))
