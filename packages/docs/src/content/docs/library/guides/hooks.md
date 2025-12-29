@@ -193,7 +193,7 @@ describe('Agent tests', () => {
 
 ## Subagent Events
 
-When using subagent gadgets, check `ctx.subagentContext` to distinguish events:
+When using subagent gadgets created with `withParentContext()`, all events (including gadget events) automatically include `subagentContext`:
 
 ```typescript
 observers: {
@@ -204,8 +204,19 @@ observers: {
       console.log(`Main agent LLM call #${ctx.iteration}`);
     }
   },
+  onGadgetExecutionComplete: (ctx) => {
+    if (ctx.subagentContext) {
+      console.log(`↳ Subagent gadget ${ctx.gadgetName} (depth ${ctx.subagentContext.depth})`);
+    } else {
+      console.log(`Main agent gadget ${ctx.gadgetName}`);
+    }
+  },
 }
 ```
+
+:::note[Unified Event Architecture]
+All gadget observer hooks (`onGadgetExecutionStart`, `onGadgetExecutionComplete`, `onGadgetSkipped`) are derived from the [ExecutionTree](/library/advanced/execution-tree/). This ensures consistent `subagentContext` for nested agents and unified event handling across the TUI and user code.
+:::
 
 ## Merging Hooks
 
@@ -239,8 +250,9 @@ const myHooks = HookPresets.merge(
 | `onLLMCallStart` | `iteration`, `options`, `logger`, `subagentContext?` |
 | `onLLMCallComplete` | `iteration`, `options`, `finishReason`, `usage`, `rawResponse`, `finalMessage`, `logger` |
 | `onLLMCallError` | `iteration`, `options`, `error`, `recovered`, `logger` |
-| `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger` |
-| `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `originalResult`, `finalResult`, `error`, `executionTimeMs`, `breaksLoop`, `logger` |
+| `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger`, `subagentContext?` |
+| `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `finalResult`, `error`, `executionTimeMs`, `cost?`, `logger`, `subagentContext?` |
+| `onGadgetSkipped` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `failedDependency`, `failedDependencyError`, `logger`, `subagentContext?` |
 
 ## See Also
 

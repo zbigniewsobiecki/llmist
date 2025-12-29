@@ -583,81 +583,9 @@ describe("StreamProcessor", () => {
     });
   });
 
-  describe("Observer: onGadgetExecutionStart", () => {
-    it("calls observer before execution", async () => {
-      const testGadget = createMockGadget({ name: "TestGadget", result: "done" });
-      registry.registerByClass(testGadget);
-
-      let startObserverCalled = false;
-      const onGadgetExecutionStart = mock(async () => {
-        startObserverCalled = true;
-        expect(testGadget.getCallCount()).toBe(0); // Not executed yet
-      });
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        hooks: { observers: { onGadgetExecutionStart } },
-      });
-      const stream = createTextStream(createGadgetCallString("TestGadget"));
-
-      await consumeStream(processor, stream);
-
-      expect(startObserverCalled).toBe(true);
-      expect(testGadget.getCallCount()).toBe(1);
-    });
-
-    it("provides correct context", async () => {
-      const testGadget = createMockGadget({
-        name: "TestGadget",
-        schema: z.object({ value: z.string() }),
-        result: "done",
-      });
-      registry.registerByClass(testGadget);
-
-      let capturedContext: unknown;
-      const onGadgetExecutionStart = mock(async (ctx: unknown) => {
-        capturedContext = ctx;
-      });
-
-      const processor = new StreamProcessor({
-        iteration: 4,
-        registry,
-        hooks: { observers: { onGadgetExecutionStart } },
-      });
-      const stream = createTextStream(createGadgetCallString("TestGadget", { value: "test" }));
-
-      await consumeStream(processor, stream);
-
-      expect(capturedContext).toMatchObject({
-        iteration: 4,
-        gadgetName: "TestGadget",
-        parameters: { value: "test" },
-      });
-    });
-
-    it("handles observer errors gracefully", async () => {
-      const testGadget = createMockGadget({ name: "TestGadget", result: "done" });
-      registry.registerByClass(testGadget);
-
-      const onGadgetExecutionStart = mock(async () => {
-        throw new Error("Observer error");
-      });
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        hooks: { observers: { onGadgetExecutionStart } },
-      });
-      const stream = createTextStream(createGadgetCallString("TestGadget"));
-
-      const result = await consumeStream(processor, stream);
-
-      // Execution should still complete
-      expect(testGadget.getCallCount()).toBe(1);
-      expect(result.didExecuteGadgets).toBe(true);
-    });
-  });
+  // NOTE: Observer tests (onGadgetExecutionStart, onGadgetExecutionComplete)
+  // have been moved to tree-hook-bridge.test.ts since observers are now
+  // triggered via ExecutionTree events, not directly by StreamProcessor.
 
   describe("Interceptor: interceptGadgetResult", () => {
     it("transforms result after execution", async () => {
@@ -780,80 +708,6 @@ describe("StreamProcessor", () => {
       expect(
         gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error,
       ).toBeUndefined();
-    });
-  });
-
-  describe("Observer: onGadgetExecutionComplete", () => {
-    it("calls observer after execution", async () => {
-      const testGadget = createMockGadget({ name: "TestGadget", result: "done" });
-      registry.registerByClass(testGadget);
-
-      const onGadgetExecutionComplete = mock(async () => {});
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        hooks: { observers: { onGadgetExecutionComplete } },
-      });
-      const stream = createTextStream(createGadgetCallString("TestGadget"));
-
-      await consumeStream(processor, stream);
-
-      expect(onGadgetExecutionComplete).toHaveBeenCalled();
-    });
-
-    it("provides both originalResult and finalResult", async () => {
-      const testGadget = createMockGadget({ name: "TestGadget", result: "original" });
-      registry.registerByClass(testGadget);
-
-      let capturedContext: unknown;
-      const onGadgetExecutionComplete = mock(async (ctx: unknown) => {
-        capturedContext = ctx;
-      });
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        hooks: {
-          observers: { onGadgetExecutionComplete },
-          interceptors: {
-            interceptGadgetResult: (r) => `[modified] ${r}`,
-          },
-        },
-      });
-      const stream = createTextStream(createGadgetCallString("TestGadget"));
-
-      await consumeStream(processor, stream);
-
-      const ctx = capturedContext as { originalResult: string; finalResult: string };
-      expect(ctx.originalResult).toBe("original");
-      expect(ctx.finalResult).toBe("[modified] original");
-    });
-
-    it("includes breaksLoop flag", async () => {
-      const breakingGadget = createMockGadget({
-        name: "BreakGadget",
-        resultFn: () => {
-          throw new TaskCompletionSignal("Done!");
-        },
-      });
-      registry.registerByClass(breakingGadget);
-
-      let capturedContext: unknown;
-      const onGadgetExecutionComplete = mock(async (ctx: unknown) => {
-        capturedContext = ctx;
-      });
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        hooks: { observers: { onGadgetExecutionComplete } },
-      });
-      const stream = createTextStream(createGadgetCallString("BreakGadget"));
-
-      await consumeStream(processor, stream);
-
-      expect((capturedContext as { breaksLoop: boolean }).breaksLoop).toBe(true);
     });
   });
 
@@ -1455,44 +1309,7 @@ test value
       );
     });
 
-    it("calls onGadgetSkipped observer", async () => {
-      const errorGadget = createMockGadget({ name: "ErrorGadget", error: "Test error" });
-      const dependentGadget = createMockGadget({
-        name: "DependentGadget",
-        result: "should_not_run",
-      });
-      registry.registerByClass(errorGadget);
-      registry.registerByClass(dependentGadget);
-
-      const onGadgetSkipped = mock(() => {});
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        hooks: {
-          observers: { onGadgetSkipped },
-        },
-      });
-
-      const gadgetCalls =
-        createGadgetCallString("ErrorGadget", {}, { invocationId: "err1" }) +
-        "\n" +
-        createGadgetCallString(
-          "DependentGadget",
-          {},
-          { invocationId: "dep1", dependencies: ["err1"] },
-        );
-
-      const stream = createTextStream(gadgetCalls);
-      await consumeStream(processor, stream);
-
-      expect(onGadgetSkipped).toHaveBeenCalledTimes(1);
-      expect(onGadgetSkipped.mock.calls[0][0]).toMatchObject({
-        gadgetName: "DependentGadget",
-        invocationId: "dep1",
-        failedDependency: "err1",
-      });
-    });
+    // NOTE: onGadgetSkipped observer test moved to tree-hook-bridge.test.ts
   });
 
   describe("Parallel Execution", () => {
@@ -1843,107 +1660,7 @@ test value
     });
   });
 
-  describe("Subagent Event Streaming", () => {
-    it("pushes subagent events to completedResultsQueue for real-time streaming", async () => {
-      const testGadget = createMockGadget({ name: "TestGadget", result: "success" });
-      registry.registerByClass(testGadget);
-
-      const subagentEvents: Array<{ type: string }> = [];
-      const onSubagentEvent = (event: { type: string }) => {
-        subagentEvents.push(event);
-      };
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        onSubagentEvent,
-      });
-
-      // Simulate calling onSubagentEvent during processing
-      const mockEvent = { type: "llm_call_start", event: { model: "test" } };
-      // Access the internal wrapped callback through the executor
-      // (this tests the integration, not the exact mechanism)
-
-      const gadgetCall = createGadgetCallString("TestGadget", {});
-      const stream = createTextStream(gadgetCall);
-      const result = await consumeStream(processor, stream);
-
-      // Verify the gadget executed successfully
-      expect(result.didExecuteGadgets).toBe(true);
-      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetResults).toHaveLength(1);
-    });
-
-    it("calls user callback before queuing event (ordering test)", async () => {
-      const callOrder: string[] = [];
-      const testGadget = createMockGadget({ name: "TestGadget", result: "success" });
-      registry.registerByClass(testGadget);
-
-      const onSubagentEvent = (_event: unknown) => {
-        callOrder.push("callback");
-      };
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        onSubagentEvent,
-      });
-
-      // The wrappedOnSubagentEvent in StreamProcessor should call callback first
-      // We can't directly test internal ordering without mocking, but we verify
-      // that the callback is indeed called
-      const gadgetCall = createGadgetCallString("TestGadget", {});
-      const stream = createTextStream(gadgetCall);
-      await consumeStream(processor, stream);
-
-      // Basic verification that the processor was created with the callback
-      expect(processor).toBeDefined();
-    });
-
-    it("handles missing onSubagentEvent callback gracefully", async () => {
-      const testGadget = createMockGadget({ name: "TestGadget", result: "success" });
-      registry.registerByClass(testGadget);
-
-      // Create processor without onSubagentEvent
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        // no onSubagentEvent provided
-      });
-
-      const gadgetCall = createGadgetCallString("TestGadget", {});
-      const stream = createTextStream(gadgetCall);
-
-      // Should not throw
-      const result = await consumeStream(processor, stream);
-      expect(result.didExecuteGadgets).toBe(true);
-    });
-
-    it("subagent events appear interleaved with gadget results in completedResultsQueue", async () => {
-      // This tests that subagent_event type events can be yielded from the processor
-      const testGadget = createMockGadget({ name: "TestGadget", result: "success" });
-      registry.registerByClass(testGadget);
-
-      const processor = new StreamProcessor({
-        iteration: 1,
-        registry,
-        onSubagentEvent: () => {
-          // User callback - called before queue push
-        },
-      });
-
-      const gadgetCall = createGadgetCallString("TestGadget", {});
-      const stream = createTextStream(gadgetCall);
-      const result = await consumeStream(processor, stream);
-
-      // Verify gadget execution succeeded
-      expect(result.didExecuteGadgets).toBe(true);
-
-      // Check that we have gadget_call and gadget_result events
-      const gadgetCalls = result.outputs.filter((e) => e.type === "gadget_call");
-      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
-      expect(gadgetCalls).toHaveLength(1);
-      expect(gadgetResults).toHaveLength(1);
-    });
-  });
+  // NOTE: Subagent event streaming tests removed - onSubagentEvent callback was replaced
+  // by ExecutionTree event propagation via tree-hook-bridge. See tree-sharing.test.ts for
+  // subagent event integration tests.
 });

@@ -453,20 +453,28 @@ describe("Observers (Read-Only Hooks)", () => {
     });
   });
 
+  // NOTE: onGadgetExecutionStart is now called via the tree-hook-bridge in Agent.run(),
+  // so these tests must use the full Agent instead of StreamProcessor directly.
   describe("onGadgetExecutionStart", () => {
     it("is called before gadget execution", async () => {
       registry.registerByClass(new TestGadget());
       const onGadgetExecutionStart = mock<(context: ObserveGadgetStartContext) => void>();
 
-      const stream = createMockStream([
-        {
-          text: `${GADGET_START_PREFIX}TestGadget:123\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}23`,
-        },
-        { text: "", finishReason: "stop" },
+      const mockAdapter = new MockAdapter([
+        [
+          {
+            text: `${GADGET_START_PREFIX}TestGadget:123\n${GADGET_ARG_PREFIX}message\nhello\n${GADGET_END_PREFIX}`,
+          },
+          { text: "", finishReason: "stop" },
+        ],
+        [{ text: "Done", finishReason: "stop" }],
       ]);
 
-      const processor = new StreamProcessor({
-        iteration: 0,
+      const client = new LLMist([mockAdapter]);
+      const agent = new Agent(AGENT_INTERNAL_KEY, {
+        client,
+        model: "openai:gpt-4",
+        userPrompt: "Test",
         registry,
         logger: testLogger,
         hooks: {
@@ -474,7 +482,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await consumeStream(processor, stream);
+      await collectEvents(agent.run());
 
       expect(onGadgetExecutionStart).toHaveBeenCalledTimes(1);
       expect(onGadgetExecutionStart).toHaveBeenCalledWith(
@@ -492,18 +500,24 @@ describe("Observers (Read-Only Hooks)", () => {
       registry.registerByClass(new TestGadget());
       const onGadgetExecutionStart = mock<(context: ObserveGadgetStartContext) => void>();
 
-      const stream = createMockStream([
-        {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}`,
-        },
-        {
-          text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}`,
-        },
-        { text: "", finishReason: "stop" },
+      const mockAdapter = new MockAdapter([
+        [
+          {
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\nfirst\n${GADGET_END_PREFIX}`,
+          },
+          {
+            text: `${GADGET_START_PREFIX}TestGadget:2\n${GADGET_ARG_PREFIX}message\nsecond\n${GADGET_END_PREFIX}`,
+          },
+          { text: "", finishReason: "stop" },
+        ],
+        [{ text: "Done", finishReason: "stop" }],
       ]);
 
-      const processor = new StreamProcessor({
-        iteration: 0,
+      const client = new LLMist([mockAdapter]);
+      const agent = new Agent(AGENT_INTERNAL_KEY, {
+        client,
+        model: "openai:gpt-4",
+        userPrompt: "Test",
         registry,
         logger: testLogger,
         hooks: {
@@ -511,7 +525,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await consumeStream(processor, stream);
+      await collectEvents(agent.run());
 
       expect(onGadgetExecutionStart).toHaveBeenCalledTimes(2);
       expect(onGadgetExecutionStart).toHaveBeenNthCalledWith(
@@ -525,20 +539,28 @@ describe("Observers (Read-Only Hooks)", () => {
     });
   });
 
+  // NOTE: onGadgetExecutionComplete is now called via the tree-hook-bridge in Agent.run(),
+  // so these tests must use the full Agent instead of StreamProcessor directly.
   describe("onGadgetExecutionComplete", () => {
     it("is called after successful gadget execution", async () => {
       registry.registerByClass(new TestGadget());
       const onGadgetExecutionComplete = mock<(context: ObserveGadgetCompleteContext) => void>();
 
-      const stream = createMockStream([
-        {
-          text: `${GADGET_START_PREFIX}TestGadget:456\n${GADGET_ARG_PREFIX}message\nsuccess\n${GADGET_END_PREFIX}`,
-        },
-        { text: "", finishReason: "stop" },
+      const mockAdapter = new MockAdapter([
+        [
+          {
+            text: `${GADGET_START_PREFIX}TestGadget:456\n${GADGET_ARG_PREFIX}message\nsuccess\n${GADGET_END_PREFIX}`,
+          },
+          { text: "", finishReason: "stop" },
+        ],
+        [{ text: "Done", finishReason: "stop" }],
       ]);
 
-      const processor = new StreamProcessor({
-        iteration: 0,
+      const client = new LLMist([mockAdapter]);
+      const agent = new Agent(AGENT_INTERNAL_KEY, {
+        client,
+        model: "openai:gpt-4",
+        userPrompt: "Test",
         registry,
         logger: testLogger,
         hooks: {
@@ -546,7 +568,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await consumeStream(processor, stream);
+      await collectEvents(agent.run());
 
       expect(onGadgetExecutionComplete).toHaveBeenCalledTimes(1);
       expect(onGadgetExecutionComplete).toHaveBeenCalledWith(
@@ -555,9 +577,7 @@ describe("Observers (Read-Only Hooks)", () => {
           gadgetName: "TestGadget",
           invocationId: "456",
           parameters: { message: "success" },
-          originalResult: "Echo: success",
           finalResult: "Echo: success",
-          error: undefined,
           executionTimeMs: expect.any(Number),
           logger: expect.any(Object),
         }),
@@ -568,15 +588,21 @@ describe("Observers (Read-Only Hooks)", () => {
       registry.registerByClass(new ErrorGadget());
       const onGadgetExecutionComplete = mock<(context: ObserveGadgetCompleteContext) => void>();
 
-      const stream = createMockStream([
-        {
-          text: `${GADGET_START_PREFIX}ErrorGadget:789\n{}\n${GADGET_END_PREFIX}`,
-        },
-        { text: "", finishReason: "stop" },
+      const mockAdapter = new MockAdapter([
+        [
+          {
+            text: `${GADGET_START_PREFIX}ErrorGadget:789\n{}\n${GADGET_END_PREFIX}`,
+          },
+          { text: "", finishReason: "stop" },
+        ],
+        [{ text: "Done", finishReason: "stop" }],
       ]);
 
-      const processor = new StreamProcessor({
-        iteration: 0,
+      const client = new LLMist([mockAdapter]);
+      const agent = new Agent(AGENT_INTERNAL_KEY, {
+        client,
+        model: "openai:gpt-4",
+        userPrompt: "Test",
         registry,
         logger: testLogger,
         hooks: {
@@ -584,7 +610,7 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await consumeStream(processor, stream);
+      await collectEvents(agent.run());
 
       expect(onGadgetExecutionComplete).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -595,19 +621,28 @@ describe("Observers (Read-Only Hooks)", () => {
       );
     });
 
-    it("shows both original and final result when intercepted", async () => {
+    it("shows final result after interceptor modification", async () => {
+      // NOTE: With the tree-hook-bridge architecture, observers receive the final (post-interceptor)
+      // result from the tree event. The originalResult field is no longer populated since the
+      // tree only stores the final result.
       registry.registerByClass(new TestGadget());
       const onGadgetExecutionComplete = mock<(context: ObserveGadgetCompleteContext) => void>();
 
-      const stream = createMockStream([
-        {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
-        },
-        { text: "", finishReason: "stop" },
+      const mockAdapter = new MockAdapter([
+        [
+          {
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
+          },
+          { text: "", finishReason: "stop" },
+        ],
+        [{ text: "Done", finishReason: "stop" }],
       ]);
 
-      const processor = new StreamProcessor({
-        iteration: 0,
+      const client = new LLMist([mockAdapter]);
+      const agent = new Agent(AGENT_INTERNAL_KEY, {
+        client,
+        model: "openai:gpt-4",
+        userPrompt: "Test",
         registry,
         logger: testLogger,
         hooks: {
@@ -618,11 +653,10 @@ describe("Observers (Read-Only Hooks)", () => {
         },
       });
 
-      await consumeStream(processor, stream);
+      await collectEvents(agent.run());
 
       expect(onGadgetExecutionComplete).toHaveBeenCalledWith(
         expect.objectContaining({
-          originalResult: "Echo: test",
           finalResult: "[MODIFIED] Echo: test",
         }),
       );
@@ -1028,19 +1062,26 @@ describe("Interceptors (Synchronous Transformations)", () => {
       }
     });
 
+    // NOTE: This test uses Agent since onGadgetExecutionStart is now called via the tree-hook-bridge
     it("modified parameters are visible in subsequent hooks", async () => {
       registry.registerByClass(new TestGadget());
       const onGadgetExecutionStart = mock<(context: ObserveGadgetStartContext) => void>();
 
-      const stream = createMockStream([
-        {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\noriginal\n${GADGET_END_PREFIX}`,
-        },
-        { text: "", finishReason: "stop" },
+      const mockAdapter = new MockAdapter([
+        [
+          {
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\noriginal\n${GADGET_END_PREFIX}`,
+          },
+          { text: "", finishReason: "stop" },
+        ],
+        [{ text: "Done", finishReason: "stop" }],
       ]);
 
-      const processor = new StreamProcessor({
-        iteration: 0,
+      const client = new LLMist([mockAdapter]);
+      const agent = new Agent(AGENT_INTERNAL_KEY, {
+        client,
+        model: "openai:gpt-4",
+        userPrompt: "Test",
         registry,
         logger: testLogger,
         hooks: {
@@ -1051,7 +1092,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
         },
       });
 
-      await consumeStream(processor, stream);
+      await collectEvents(agent.run());
 
       expect(onGadgetExecutionStart).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2142,6 +2183,7 @@ describe("Hook System Integration", () => {
       }
     });
 
+    // NOTE: This test uses Agent since onGadgetExecutionComplete is now called via the tree-hook-bridge
     it("combines observer and controller for metrics and control", async () => {
       registry.registerByClass(new TestGadget());
       let executionTimeTracked = 0;
@@ -2162,15 +2204,21 @@ describe("Hook System Integration", () => {
         return { action: "continue" };
       });
 
-      const stream = createMockStream([
-        {
-          text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
-        },
-        { text: "", finishReason: "stop" },
+      const mockAdapter = new MockAdapter([
+        [
+          {
+            text: `${GADGET_START_PREFIX}TestGadget:1\n${GADGET_ARG_PREFIX}message\ntest\n${GADGET_END_PREFIX}`,
+          },
+          { text: "", finishReason: "stop" },
+        ],
+        [{ text: "Done", finishReason: "stop" }],
       ]);
 
-      const processor = new StreamProcessor({
-        iteration: 0,
+      const client = new LLMist([mockAdapter]);
+      const agent = new Agent(AGENT_INTERNAL_KEY, {
+        client,
+        model: "openai:gpt-4",
+        userPrompt: "Test",
         registry,
         logger: testLogger,
         hooks: {
@@ -2179,7 +2227,7 @@ describe("Hook System Integration", () => {
         },
       });
 
-      await consumeStream(processor, stream);
+      await collectEvents(agent.run());
 
       expect(onGadgetExecutionComplete).toHaveBeenCalled();
       expect(executionTimeTracked).toBeGreaterThanOrEqual(0);

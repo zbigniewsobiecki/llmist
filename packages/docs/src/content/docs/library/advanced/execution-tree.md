@@ -56,18 +56,44 @@ const ancestors = tree.getAncestors("gadget_xyz");
 
 ## Event Subscription
 
+The ExecutionTree is the **single source of truth** for all agent events. Both the TUI/CLI and user hook observers receive events from the same source, ensuring consistent behavior.
+
 ```typescript
 tree.on("gadget_complete", (event) => {
-  console.log(`${event.name} completed in ${event.executionTimeMs}ms`);
+  // Check if this is from a subagent
+  if (event.depth > 0) {
+    console.log(`↳ Subagent gadget: ${event.name} (depth ${event.depth})`);
+  } else {
+    console.log(`${event.name} completed in ${event.executionTimeMs}ms`);
+  }
 });
 
-// Or iterate
+// Or iterate with full subagent awareness
 for await (const event of tree.events()) {
   if (event.type === 'llm_call_complete') {
-    console.log(`LLM #${event.iteration}: ${event.usage?.totalTokens} tokens`);
+    const prefix = event.depth > 0 ? `  ↳ [depth ${event.depth}]` : '';
+    console.log(`${prefix}LLM #${event.iteration}: ${event.usage?.totalTokens} tokens`);
   }
 }
 ```
+
+### Available Event Types
+
+| Event Type | Description |
+|------------|-------------|
+| `llm_call_start` | LLM request initiated |
+| `llm_call_complete` | LLM response received with usage stats |
+| `gadget_call` | Gadget parsed from stream (before execution) |
+| `gadget_start` | Gadget execution started |
+| `gadget_complete` | Gadget executed successfully |
+| `gadget_error` | Gadget failed with error |
+| `gadget_skipped` | Gadget skipped due to failed dependency |
+| `text` | Text output from LLM |
+| `compaction` | Context was compacted |
+
+:::tip[Hook Observers]
+Hook observers like `onGadgetExecutionStart` and `onGadgetExecutionComplete` are automatically derived from tree events. This means they include full context (`depth`, `subagentContext`) for subagent activity. See [Hooks Guide](/library/guides/hooks/) for details.
+:::
 
 ## Subagent Integration
 
