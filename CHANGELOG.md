@@ -1,3 +1,41 @@
+## 11.0.0 (2025-12-29)
+
+* Merge branch 'dev' into main ([5911c3a](https://github.com/zbigniewsobiecki/llmist/commit/5911c3a))
+* Merge pull request #287 from zbigniewsobiecki/fix/subagent-event-duplication ([dc56f20](https://github.com/zbigniewsobiecki/llmist/commit/dc56f20)), closes [#287](https://github.com/zbigniewsobiecki/llmist/issues/287)
+* refactor(agent): make ExecutionTree single source of truth for subagent events (#291) ([a7f1e23](https://github.com/zbigniewsobiecki/llmist/commit/a7f1e23)), closes [#291](https://github.com/zbigniewsobiecki/llmist/issues/291)
+* refactor(agent): streamline subagent event flow via completedResultsQueue (#288) ([4c5e71c](https://github.com/zbigniewsobiecki/llmist/commit/4c5e71c)), closes [#288](https://github.com/zbigniewsobiecki/llmist/issues/288) [#287](https://github.com/zbigniewsobiecki/llmist/issues/287) [#287](https://github.com/zbigniewsobiecki/llmist/issues/287)
+* chore: merge dev to main for release (#290) ([969c4b1](https://github.com/zbigniewsobiecki/llmist/commit/969c4b1)), closes [#290](https://github.com/zbigniewsobiecki/llmist/issues/290) [#288](https://github.com/zbigniewsobiecki/llmist/issues/288) [#287](https://github.com/zbigniewsobiecki/llmist/issues/287) [#287](https://github.com/zbigniewsobiecki/llmist/issues/287)
+* chore(release): bump version to 10.3.1 for subagent context fix ([65ed0b7](https://github.com/zbigniewsobiecki/llmist/commit/65ed0b7))
+* fix(agent): pass subagentContext to existing hooks in configureForSubagent (#289) ([faada93](https://github.com/zbigniewsobiecki/llmist/commit/faada93)), closes [#289](https://github.com/zbigniewsobiecki/llmist/issues/289)
+* fix(agent): remove duplicate subagent event emission ([84c89e5](https://github.com/zbigniewsobiecki/llmist/commit/84c89e5))
+
+
+### BREAKING CHANGE
+
+* Remove SubagentEvent callback infrastructure
+
+This refactoring eliminates duplicate subagent event emissions by making
+ExecutionTree the single source of truth for all execution events.
+
+Removed:
+- `SubagentEvent`, `SubagentStreamEvent`, `LLMCallInfo` types
+- `onSubagentEvent` callback from ExecutionContext
+- `withSubagentEventCallback` method from AgentBuilder
+- `wrappedOnSubagentEvent` from StreamProcessor
+- Legacy tests for removed callback functionality
+
+Migration guide:
+- Use `tree.onAll()` to subscribe to all execution events
+- Use `event.depth > 0` or `isSubagentEvent(event)` to detect subagent events
+- Use `event.parentId` to traverse the execution hierarchy
+
+The `withParentContext(ctx)` mechanism for tree sharing remains unchanged -
+this is the key to unified event visibility across parent and subagents.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 10.3.1 (2025-12-29)
 
 * fix(agent): pass subagentContext to existing hooks in configureForSubagent (#289)
