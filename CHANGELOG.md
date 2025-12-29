@@ -1,3 +1,8 @@
+## <small>11.0.1 (2025-12-29)</small>
+
+* Merge pull request #294 from zbigniewsobiecki/dev ([d72bf28](https://github.com/zbigniewsobiecki/llmist/commit/d72bf28)), closes [#294](https://github.com/zbigniewsobiecki/llmist/issues/294)
+* refactor(agent): make ExecutionTree single source of truth for subagent events (#293) ([5136546](https://github.com/zbigniewsobiecki/llmist/commit/5136546)), closes [#293](https://github.com/zbigniewsobiecki/llmist/issues/293) [#291](https://github.com/zbigniewsobiecki/llmist/issues/291)
+
 ## 11.0.0 (2025-12-29)
 
 * Merge branch 'dev' into main ([5911c3a](https://github.com/zbigniewsobiecki/llmist/commit/5911c3a))
