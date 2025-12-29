@@ -236,9 +236,16 @@ export class Agent {
   private readonly agentContextConfig: AgentContextConfig;
   private readonly subagentConfig?: SubagentConfigMap;
 
-  // Subagent event callback for subagent gadgets
+  /**
+   * User-provided callback for subagent events (from withSubagentEventHandler).
+   * Called synchronously before events are queued for streaming.
+   */
   private readonly userSubagentEventCallback?: (event: SubagentEvent) => void;
-  // Callback passed to StreamProcessor - events flow through completedResultsQueue for real-time streaming
+  /**
+   * Internal callback passed to StreamProcessor.
+   * StreamProcessor wraps this to: (1) call userSubagentEventCallback, then (2) queue for streaming.
+   * @see StreamProcessor.wrappedOnSubagentEvent for the unified event streaming architecture.
+   */
   private readonly onSubagentEvent: (event: SubagentEvent) => void;
   // Counter for generating synthetic invocation IDs for wrapped text content
   private syntheticInvocationCounter = 0;
@@ -363,13 +370,27 @@ export class Agent {
     this.parentNodeId = options.parentNodeId ?? null;
     this.baseDepth = options.baseDepth ?? 0;
 
-    // Store user callback - events are now streamed via stream-processor's completedResultsQueue
-    // so we don't need to push to pendingSubagentEvents here. The callback is called
-    // by stream-processor's wrappedOnSubagentEvent after pushing to the queue.
+    /**
+     * Configure subagent event handling.
+     *
+     * UNIFIED EVENT STREAMING ARCHITECTURE:
+     * Subagent events (llm_call_start, gadget_call, etc.) are streamed in real-time through
+     * StreamProcessor's `completedResultsQueue`. This creates a unified event bus where all
+     * runtime events are interleaved and yielded via `waitForInFlightExecutions()`.
+     *
+     * EVENT FLOW:
+     * 1. Subagent gadget emits event → StreamProcessor.wrappedOnSubagentEvent
+     * 2. wrappedOnSubagentEvent calls this.onSubagentEvent (user callback first)
+     * 3. Then pushes to completedResultsQueue for streaming
+     * 4. Agent's run() loop yields event via waitForInFlightExecutions()
+     *
+     * This replaces the previous architecture where events were queued in a separate
+     * `pendingSubagentEvents` array and flushed at iteration boundaries, which caused
+     * batching rather than real-time streaming.
+     */
     this.userSubagentEventCallback = options.onSubagentEvent;
     this.onSubagentEvent = (event: SubagentEvent) => {
-      // Just call the user callback if provided - don't push to pendingSubagentEvents
-      // since events flow through stream-processor's completedResultsQueue for real-time streaming
+      // Invoke user callback - StreamProcessor handles queuing for real-time streaming
       this.userSubagentEventCallback?.(event);
     };
   }
