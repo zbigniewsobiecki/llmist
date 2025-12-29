@@ -248,8 +248,9 @@ const myHooks = HookPresets.merge(
 | Hook | Context Properties |
 |------|-------------------|
 | `onLLMCallStart` | `iteration`, `options`, `logger`, `subagentContext?` |
-| `onLLMCallComplete` | `iteration`, `options`, `finishReason`, `usage`, `rawResponse`, `finalMessage`, `logger` |
-| `onLLMCallError` | `iteration`, `options`, `error`, `recovered`, `logger` |
+| `onLLMCallReady` | `iteration`, `maxIterations`, `options`, `logger`, `subagentContext?` |
+| `onLLMCallComplete` | `iteration`, `options`, `finishReason`, `usage`, `rawResponse`, `finalMessage`, `logger`, `subagentContext?` |
+| `onLLMCallError` | `iteration`, `options`, `error`, `recovered`, `logger`, `subagentContext?` |
 | `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger`, `subagentContext?` |
 | `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `finalResult`, `error`, `executionTimeMs`, `cost?`, `logger`, `subagentContext?` |
 | `onGadgetSkipped` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `failedDependency`, `failedDependencyError`, `logger`, `subagentContext?` |

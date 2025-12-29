@@ -67,21 +67,67 @@ function getIterationFromTree(tree: ExecutionTree, nodeId: NodeId): number {
 }
 
 /**
- * Build SubagentContext for events with depth > 0.
+ * Build SubagentContext for events that are inside a subagent's execution.
+ *
+ * A SubagentContext exists only if the event has a parent gadget in its ancestry.
+ * This distinguishes:
+ * - Root agent gadgets (no parent gadget) → returns undefined
+ * - Subagent gadgets (have parent gadget that spawned them) → returns SubagentContext
  */
 function buildSubagentContext(
   tree: ExecutionTree,
   event: ExecutionEvent,
 ): SubagentContext | undefined {
-  if (event.depth === 0) {
-    return undefined;
-  }
-
   const parentGadgetInvocationId = findParentGadgetInvocationId(tree, event.nodeId);
 
+  if (!parentGadgetInvocationId) {
+    return undefined; // No parent gadget = not in subagent context
+  }
+
   return {
-    parentGadgetInvocationId: parentGadgetInvocationId ?? "unknown",
+    parentGadgetInvocationId,
     depth: event.depth,
+  };
+}
+
+/**
+ * Get SubagentContext for a specific node in the execution tree.
+ *
+ * This is exported for use by agent.ts when calling LLM hooks directly.
+ * LLM hooks are awaited (unlike gadget hooks which are fire-and-forget via the bridge),
+ * so they need to derive SubagentContext manually.
+ *
+ * @param tree - The ExecutionTree to query
+ * @param nodeId - The node ID to get context for
+ * @returns SubagentContext if the node is inside a subagent execution, undefined otherwise
+ *
+ * @example
+ * ```typescript
+ * const subagentContext = getSubagentContextForNode(this.tree, llmNodeId);
+ * const context: ObserveLLMCallContext = {
+ *   iteration,
+ *   options: llmOptions,
+ *   logger: this.logger,
+ *   subagentContext,
+ * };
+ * ```
+ */
+export function getSubagentContextForNode(
+  tree: ExecutionTree,
+  nodeId: NodeId,
+): SubagentContext | undefined {
+  const node = tree.getNode(nodeId);
+  if (!node) return undefined;
+
+  const parentGadgetInvocationId = findParentGadgetInvocationId(tree, nodeId);
+
+  if (!parentGadgetInvocationId) {
+    return undefined; // No parent gadget = not in subagent context
+  }
+
+  return {
+    parentGadgetInvocationId,
+    depth: node.depth,
   };
 }
 
