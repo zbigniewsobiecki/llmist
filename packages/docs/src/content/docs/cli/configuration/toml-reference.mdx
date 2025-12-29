@@ -12,16 +12,16 @@ The llmist CLI is configured through TOML files and environment variables.
 The CLI loads configuration from `~/.llmist/cli.toml`:
 
 <Tabs>
-  <TabItem label="bun">
-    ```bash
-    # Initialize with default config
-    bunx @llmist/cli init
-    ```
-  </TabItem>
   <TabItem label="npm">
     ```bash
     # Initialize with default config
     npx @llmist/cli init
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    # Initialize with default config
+    bunx @llmist/cli init
     ```
   </TabItem>
 </Tabs>
@@ -72,14 +72,14 @@ gadget = ["~/gadgets/code-tools.ts"]
 Run with:
 
 <Tabs>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli code-review "Review my PR"
-    ```
-  </TabItem>
   <TabItem label="npm">
     ```bash
     npx @llmist/cli code-review "Review my PR"
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    bunx @llmist/cli code-review "Review my PR"
     ```
   </TabItem>
 </Tabs>

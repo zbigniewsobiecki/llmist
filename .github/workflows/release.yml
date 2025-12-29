@@ -47,22 +47,18 @@ jobs:
           # For workflow_run, checkout the commit that triggered CI
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Build package
-        run: bun run build
+        run: npm run build
 
       - name: Configure git
         run: |
@@ -117,11 +113,11 @@ jobs:
           BEFORE_SHA=$(git rev-parse HEAD)
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             echo "Running in dry-run mode"
-            bunx semantic-release --dry-run
+            npx semantic-release --dry-run
           else
             # Run semantic-release (publishes llmist package to npm)
             # The @semantic-release/exec plugin runs sync-versions.js to sync all package versions
-            bunx semantic-release || RELEASE_EXIT_CODE=$?
+            npx semantic-release || RELEASE_EXIT_CODE=$?
           fi
           AFTER_SHA=$(git rev-parse HEAD)
           # Check if a release commit was made (HEAD changed)
@@ -146,7 +142,7 @@ jobs:
           echo "Publishing @llmist/cli@${{ steps.semantic.outputs.version }}..."
           # Rebuild CLI to include correct version (was built before version sync)
           cd packages/cli
-          bun run build
+          npm run build
           npm publish --access public
 
       - name: Publish @llmist/testing to npm
@@ -157,7 +153,7 @@ jobs:
           echo "Publishing @llmist/testing@${{ steps.semantic.outputs.version }}..."
           # Rebuild testing to include correct version (was built before version sync)
           cd packages/testing
-          bun run build
+          npm run build
           npm publish --access public
 
   # Sync dev branch after release - failures are visible in GitHub Actions UI

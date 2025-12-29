@@ -10,9 +10,9 @@ The `@llmist/testing` package provides utilities for testing llmist agents witho
 ## Installation
 
 ```bash
-bun add -D @llmist/testing
-# or
 npm install --save-dev @llmist/testing
+# or
+bun add -D @llmist/testing
 ```
 
 ## Why Mock?

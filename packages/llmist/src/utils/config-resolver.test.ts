@@ -3,7 +3,7 @@
  * configuration from multiple sources with proper priority.
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import type { ExecutionContext } from "../gadgets/types.js";
 import {
   resolveConfig,

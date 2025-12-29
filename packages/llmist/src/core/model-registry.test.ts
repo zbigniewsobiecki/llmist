@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ProviderAdapter } from "../providers/provider.js";
 import type { ModelSpec } from "./model-catalog.js";
 import { ModelRegistry } from "./model-registry.js";

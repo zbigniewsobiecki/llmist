@@ -6,7 +6,7 @@ description: Runnable TypeScript examples demonstrating llmist features
 All examples are located in the [`/examples/`](https://github.com/zbigniewsobiecki/llmist/tree/main/examples) directory and can be run with:
 
 ```bash
-bunx tsx examples/01-basic-usage.ts
+npx tsx examples/01-basic-usage.ts
 ```
 
 ## Basic Examples

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PROMPTS,
   type PromptTemplateConfig,
@@ -90,7 +90,7 @@ describe("prompt-config", () => {
 
     it("should use default rules when undefined", () => {
       const result = resolveRulesTemplate(undefined, mockContext);
-      expect(result).toBeArray();
+      expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThan(0);
       expect(result[0]).toContain("plain text with the exact markers");
     });
@@ -144,7 +144,7 @@ describe("prompt-config", () => {
     it("should have rules as function", () => {
       expect(typeof DEFAULT_PROMPTS.rules).toBe("function");
       const rules = DEFAULT_PROMPTS.rules(mockContext);
-      expect(rules).toBeArray();
+      expect(Array.isArray(rules)).toBe(true);
       expect(rules.length).toBe(5);
       expect(rules[0]).toContain("plain text with the exact markers");
     });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { LLMMessage } from "../../../core/messages.js";
 import { createMockClient, MockManager, mockLLM } from "../../../../../testing/src/index.js";
 import type { ResolvedCompactionConfig } from "../config.js";

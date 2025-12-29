@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
+import { describe, expect, test, beforeAll, afterAll } from "vitest";
 import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen } from "@unblessed/node";
 import { showRawViewer, type RawViewerMode } from "./raw-viewer.js";

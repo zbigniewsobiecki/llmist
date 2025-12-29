@@ -68,15 +68,6 @@ These can also be set via command-line flags:
 | `--log-level` | `LLMIST_LOG_LEVEL` | Set log level |
 
 <Tabs>
-  <TabItem label="bun">
-    ```bash
-    # Via flag
-    bunx @llmist/cli agent "Hello" --log-level debug
-
-    # Via environment
-    LLMIST_LOG_LEVEL=debug bunx @llmist/cli agent "Hello"
-    ```
-  </TabItem>
   <TabItem label="npm">
     ```bash
     # Via flag
@@ -84,6 +75,15 @@ These can also be set via command-line flags:
 
     # Via environment
     LLMIST_LOG_LEVEL=debug npx @llmist/cli agent "Hello"
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    # Via flag
+    bunx @llmist/cli agent "Hello" --log-level debug
+
+    # Via environment
+    LLMIST_LOG_LEVEL=debug bunx @llmist/cli agent "Hello"
     ```
   </TabItem>
 </Tabs>

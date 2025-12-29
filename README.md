@@ -24,7 +24,8 @@
 ## Installation
 
 ```bash
-bun add llmist
+npm install llmist
+# or: bun add llmist
 ```
 
 ## Packages
@@ -98,7 +99,8 @@ Full mocking for deterministic, LLM-free testing. [Learn more →](https://llmis
 ### Library
 
 ```bash
-bun add llmist
+npm install llmist
+# or: bun add llmist
 export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, GEMINI_API_KEY
 ```
 
@@ -126,7 +128,8 @@ const answer = await LLMist.createAgent()
 ### CLI
 
 ```bash
-bun install -g @llmist/cli
+npm install -g @llmist/cli
+# or: bun add -g @llmist/cli
 
 # Quick completion
 llmist complete "Explain TypeScript generics"
@@ -143,7 +146,8 @@ See [Dhalsim](https://github.com/zbigniewsobiecki/dhalsim) for browser automatio
 ### Testing
 
 ```bash
-bun add -D @llmist/testing
+npm install -D @llmist/testing
+# or: bun add -D @llmist/testing
 ```
 
 ```typescript
@@ -175,7 +179,7 @@ Browse documentation at [llmist.dev](https://llmist.dev).
 All examples are in the [`examples/`](/examples/) directory:
 
 ```bash
-bunx tsx examples/01-basic-usage.ts
+npx tsx examples/01-basic-usage.ts
 ```
 
 See [`examples/README.md`](/examples/README.md) for the full list.
@@ -183,10 +187,10 @@ See [`examples/README.md`](/examples/README.md) for the full list.
 ## Development
 
 ```bash
-bun install
-bun run build     # Build all packages
-bun run test      # Test all packages
-bun run lint      # Lint and format
+npm install
+npm run build     # Build all packages
+npm run test      # Test all packages
+npm run lint      # Lint and format
 ```
 
 ## Contributing

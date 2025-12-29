@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";

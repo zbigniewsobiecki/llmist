@@ -4,7 +4,7 @@
  * Verifies vision analysis with various image input formats and error handling.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMockClient, getMockManager, mockLLM } from "../../../../testing/src/index.js";
 
 describe("VisionNamespace", () => {

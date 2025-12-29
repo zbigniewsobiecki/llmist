@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node", "bun-types"]
+    "types": ["node"]
   },
   "include": ["src"],
   "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.e2e.test.ts", "src/e2e"]

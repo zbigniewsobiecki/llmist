@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type CompactionConfig,
   DEFAULT_COMPACTION_CONFIG,
@@ -141,7 +141,7 @@ describe("CompactionConfig", () => {
     });
 
     it("should warn when targetPercent >= triggerThresholdPercent", () => {
-      warnMock = mock(() => {});
+      warnMock = vi.fn(() => {});
       console.warn = warnMock;
 
       resolveCompactionConfig({
@@ -156,7 +156,7 @@ describe("CompactionConfig", () => {
     });
 
     it("should warn when targetPercent equals triggerThresholdPercent", () => {
-      warnMock = mock(() => {});
+      warnMock = vi.fn(() => {});
       console.warn = warnMock;
 
       resolveCompactionConfig({
@@ -168,7 +168,7 @@ describe("CompactionConfig", () => {
     });
 
     it("should not warn when targetPercent < triggerThresholdPercent", () => {
-      warnMock = mock(() => {});
+      warnMock = vi.fn(() => {});
       console.warn = warnMock;
 
       resolveCompactionConfig({

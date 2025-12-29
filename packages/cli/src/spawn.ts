@@ -8,6 +8,23 @@
  * @module cli/spawn
  */
 
+// Minimal type declaration for Bun runtime detection (used at runtime only)
+// This allows the code to compile without bun-types while still supporting Bun as secondary runtime
+declare const Bun:
+  | undefined
+  | {
+      spawn(
+        argv: string[],
+        options?: { cwd?: string; stdin?: string; stdout?: string; stderr?: string },
+      ): {
+        stdin: { write(data: string): number; end(): void } | undefined;
+        stdout: ReadableStream<Uint8Array> | undefined;
+        stderr: ReadableStream<Uint8Array> | undefined;
+        exited: Promise<number>;
+        kill(): void;
+      };
+    };
+
 import { spawn as nodeSpawn } from "node:child_process";
 import { Readable } from "node:stream";
 

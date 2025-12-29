@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { AnthropicMessagesProvider } from "./anthropic.js";
@@ -23,7 +23,7 @@ describe("AnthropicMessagesProvider", () => {
 
   describe("payload building", () => {
     it("extracts system messages correctly", async () => {
-      const createSpy = mock().mockReturnValue((async function* () {})());
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
 
       const mockClient = {
         messages: {
@@ -58,7 +58,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("joins multiple system messages", async () => {
-      const createSpy = mock().mockReturnValue((async function* () {})());
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
 
       const mockClient = {
         messages: {
@@ -95,7 +95,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("filters system messages from conversation", async () => {
-      const createSpy = mock().mockReturnValue((async function* () {})());
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
 
       const mockClient = {
         messages: {
@@ -133,7 +133,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("includes generation parameters", async () => {
-      const createSpy = mock().mockReturnValue((async function* () {})());
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
 
       const mockClient = {
         messages: {
@@ -167,7 +167,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("uses default max_tokens when not specified", async () => {
-      const createSpy = mock().mockReturnValue((async function* () {})());
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
 
       const mockClient = {
         messages: {
@@ -208,7 +208,7 @@ describe("AnthropicMessagesProvider", () => {
 
       const mockClient = {
         messages: {
-          create: mock().mockReturnValue(mockStream),
+          create: vi.fn().mockReturnValue(mockStream),
         },
       } as unknown as Anthropic;
 
@@ -247,7 +247,7 @@ describe("AnthropicMessagesProvider", () => {
 
       const mockClient = {
         messages: {
-          create: mock().mockReturnValue(mockStream),
+          create: vi.fn().mockReturnValue(mockStream),
         },
       } as unknown as Anthropic;
 
@@ -284,7 +284,7 @@ describe("AnthropicMessagesProvider", () => {
 
       const mockClient = {
         messages: {
-          create: mock().mockReturnValue(mockStream),
+          create: vi.fn().mockReturnValue(mockStream),
         },
       } as unknown as Anthropic;
 
@@ -320,7 +320,7 @@ describe("AnthropicMessagesProvider", () => {
 
       const mockClient = {
         messages: {
-          create: mock().mockReturnValue(mockStream),
+          create: vi.fn().mockReturnValue(mockStream),
         },
       } as unknown as Anthropic;
 
@@ -347,7 +347,7 @@ describe("AnthropicMessagesProvider", () => {
 
   describe("abort signal propagation", () => {
     it("passes abort signal to SDK when provided", async () => {
-      const createSpy = mock().mockReturnValue((async function* () {})());
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
 
       const mockClient = {
         messages: {
@@ -373,7 +373,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("does not pass signal options when signal is not provided", async () => {
-      const createSpy = mock().mockReturnValue((async function* () {})());
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
 
       const mockClient = {
         messages: {
@@ -397,7 +397,7 @@ describe("AnthropicMessagesProvider", () => {
 
   describe("countTokens", () => {
     it("counts tokens for simple messages", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         input_tokens: 10,
       });
 
@@ -429,7 +429,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("includes system messages in token count", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         input_tokens: 25,
       });
 
@@ -458,7 +458,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("joins multiple system messages", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         input_tokens: 30,
       });
 
@@ -487,7 +487,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("uses fallback estimation when API fails", async () => {
-      const mockCountTokens = mock().mockRejectedValue(new Error("API error"));
+      const mockCountTokens = vi.fn().mockRejectedValue(new Error("API error"));
 
       const mockClient = {
         messages: {
@@ -507,7 +507,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("handles empty content with defensive checks", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         input_tokens: 5,
       });
 
@@ -528,7 +528,7 @@ describe("AnthropicMessagesProvider", () => {
     });
 
     it("handles multiple messages correctly", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         input_tokens: 50,
       });
 

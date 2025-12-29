@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { mockLLM } from "./mock-builder.js";
 import { createMockClient } from "./mock-client.js";
 import { MockManager } from "./mock-manager.js";

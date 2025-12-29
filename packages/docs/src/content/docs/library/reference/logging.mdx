@@ -41,15 +41,6 @@ Each CLI session automatically creates its own log directory at `~/.llmist/logs/
 Use command-line flags:
 
 <Tabs>
-  <TabItem label="bun">
-    ```bash
-    # Set log level
-    bunx @llmist/cli agent "task" --log-level debug
-
-    # Enable trace for maximum verbosity
-    bunx @llmist/cli agent "task" --log-level trace
-    ```
-  </TabItem>
   <TabItem label="npm">
     ```bash
     # Set log level
@@ -57,6 +48,15 @@ Use command-line flags:
 
     # Enable trace for maximum verbosity
     npx @llmist/cli agent "task" --log-level trace
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    # Set log level
+    bunx @llmist/cli agent "task" --log-level debug
+
+    # Enable trace for maximum verbosity
+    bunx @llmist/cli agent "task" --log-level trace
     ```
   </TabItem>
 </Tabs>
@@ -132,14 +132,14 @@ File output (structured JSON):
 ### Capture LLM Interactions
 
 <Tabs>
-  <TabItem label="bun">
-    ```bash
-    LLMIST_LOG_LEVEL=trace bunx @llmist/cli agent "task" 2>&1 | tee debug.log
-    ```
-  </TabItem>
   <TabItem label="npm">
     ```bash
     LLMIST_LOG_LEVEL=trace npx @llmist/cli agent "task" 2>&1 | tee debug.log
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    LLMIST_LOG_LEVEL=trace bunx @llmist/cli agent "task" 2>&1 | tee debug.log
     ```
   </TabItem>
 </Tabs>

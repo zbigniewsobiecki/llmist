@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { LLMist } from "../core/client.js";
 import type { LLMMessage } from "../core/messages.js";

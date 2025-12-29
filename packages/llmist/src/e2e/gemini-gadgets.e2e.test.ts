@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Agent } from "../agent/agent.js";
 import { AgentBuilder } from "../agent/builder.js";
 import { GadgetRegistry } from "../gadgets/registry.js";

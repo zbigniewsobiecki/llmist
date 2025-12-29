@@ -1,4 +1,4 @@
-import { mock } from "bun:test";
+import { mock } from "vitest";
 import * as path from "node:path";
 import * as dotenv from "dotenv";
 import { z } from "zod";
@@ -217,9 +217,9 @@ export function suppressLogs(): () => void {
     error: console.error,
   };
 
-  console.log = mock();
-  console.warn = mock();
-  console.error = mock();
+  console.log = vi.fn();
+  console.warn = vi.fn();
+  console.error = vi.fn();
 
   return () => {
     console.log = originalConsole.log;

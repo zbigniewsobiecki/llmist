@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { Readable, Writable } from "node:stream";
 import type { LLMist } from "llmist";
 import type { ImageModelSpec, SpeechModelSpec } from "llmist";

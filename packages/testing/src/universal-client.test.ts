@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LLMist } from "llmist";
 import type { LLMGenerationOptions, LLMStreamChunk, ModelDescriptor } from "llmist";
 import type { ProviderAdapter } from "llmist";

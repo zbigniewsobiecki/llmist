@@ -8,7 +8,7 @@
  * - Vision namespace functionality
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AgentBuilder } from "../agent/builder.js";
 import { LLMist } from "../core/client.js";
