@@ -30,7 +30,6 @@ import type {
   HostExports,
   ParsedGadgetCall,
   SubagentConfigMap,
-  SubagentEvent,
 } from "./types.js";
 
 /**
@@ -66,7 +65,6 @@ export class GadgetExecutor {
     private readonly mediaStore?: MediaStore,
     private readonly agentConfig?: AgentContextConfig,
     private readonly subagentConfig?: SubagentConfigMap,
-    private readonly onSubagentEvent?: (event: SubagentEvent) => void,
     // Execution Tree context for gadget execution
     private readonly tree?: ExecutionTree,
     private readonly parentNodeId?: NodeId | null,
@@ -280,7 +278,6 @@ export class GadgetExecutor {
         agentConfig: this.agentConfig,
         subagentConfig: this.subagentConfig,
         invocationId: call.invocationId,
-        onSubagentEvent: this.onSubagentEvent,
         // Tree context for subagent support - use gadget's own node ID
         tree: this.tree,
         nodeId: gadgetNodeId,

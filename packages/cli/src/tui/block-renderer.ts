@@ -81,13 +81,13 @@ export class BlockRenderer {
   /** Threshold in pixels for detecting "at bottom" position */
   private static readonly AT_BOTTOM_THRESHOLD = 5;
 
-  /** Track main agent LLM calls by iteration to prevent duplicates */
+  /** Track main agent LLM calls by iteration for idempotency */
   private llmCallByIteration = new Map<number, string>();
 
-  /** Track gadgets by invocationId to prevent duplicates */
+  /** Track gadgets by invocationId for idempotency */
   private gadgetByInvocationId = new Map<string, string>();
 
-  /** Track nested LLM calls by parentId_iteration to prevent duplicates */
+  /** Track nested LLM calls by parentId_iteration for idempotency */
   private nestedLLMCallByKey = new Map<string, string>();
 
   constructor(
@@ -106,7 +106,7 @@ export class BlockRenderer {
 
   /**
    * Add an LLM call node (top-level or nested in gadget).
-   * For main agent calls (no parent), deduplicates by iteration number.
+   * Idempotent - returns existing block if already created for this iteration.
    *
    * @param iteration - 1-indexed iteration number
    * @param model - Model name (e.g., "anthropic:claude-sonnet-4-5")
@@ -120,21 +120,21 @@ export class BlockRenderer {
     parentGadgetId?: string,
     isNested?: boolean,
   ): string {
-    // Deduplicate main agent LLM calls by iteration (only if NOT a nested call)
-    // isNested flag prevents deduplication even when parentGadgetId lookup failed
+    // Idempotency check - return existing block if already created
+    // isNested flag differentiates root vs nested calls with same iteration number
     if (!parentGadgetId && !isNested) {
       const existingId = this.llmCallByIteration.get(iteration);
       if (existingId) {
-        // Return existing block instead of creating duplicate
+        // Idempotent - return existing block
         this.currentLLMCallId = existingId;
         return existingId;
       }
     } else if (parentGadgetId) {
-      // Deduplicate nested subagent LLM calls by parent + iteration
+      // Check nested subagent LLM calls by parent + iteration
       const nestedKey = `${parentGadgetId}_${iteration}`;
       const existingId = this.nestedLLMCallByKey.get(nestedKey);
       if (existingId) {
-        // Return existing block instead of creating duplicate
+        // Idempotent - return existing block
         this.currentLLMCallId = existingId;
         return existingId;
       }
@@ -161,11 +161,11 @@ export class BlockRenderer {
       // Nested LLM call - add to parent gadget's children
       const parent = this.getNode(parentGadgetId) as GadgetNode;
       parent.children.push(id);
-      // Track for deduplication
+      // Track for idempotency
       const nestedKey = `${parentGadgetId}_${iteration}`;
       this.nestedLLMCallByKey.set(nestedKey, id);
     } else {
-      // Top-level LLM call - track by iteration for deduplication
+      // Top-level LLM call - track by iteration for idempotency
       this.rootIds.push(id);
       this.llmCallByIteration.set(iteration, id);
     }
@@ -207,10 +207,10 @@ export class BlockRenderer {
    * They appear indented and are visible when the parent is rendered.
    */
   addGadget(invocationId: string, name: string, parameters?: Record<string, unknown>): string {
-    // Deduplicate gadgets by invocationId
+    // Idempotency check - return existing block if already created
     const existingId = this.gadgetByInvocationId.get(invocationId);
     if (existingId) {
-      // Return existing block instead of creating duplicate
+      // Idempotent - return existing block
       return existingId;
     }
 
@@ -249,7 +249,7 @@ export class BlockRenderer {
       this.rootIds.push(id);
     }
 
-    // Track for deduplication
+    // Track for idempotency
     this.gadgetByInvocationId.set(invocationId, id);
 
     this.rebuildBlocks();
@@ -1219,9 +1219,8 @@ export class BlockRenderer {
 
         // Create the LLM call block
         // Note: event.iteration is 0-indexed, but display uses 1-indexed
-        // The hook path already adds +1, so we do the same here for deduplication
-        // Pass isNested=true when depth > 0 to prevent false deduplication
-        // against top-level calls when parentBlockId lookup fails
+        // Pass isNested=true when depth > 0 to differentiate nested calls
+        // from root calls that happen to have the same iteration number
         const blockId = this.addLLMCall(
           event.iteration + 1,
           event.model,

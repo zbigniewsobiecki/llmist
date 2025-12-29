@@ -27,7 +27,7 @@ import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { ExecutionContext, SubagentConfigMap, SubagentEvent, TextOnlyHandler } from "../gadgets/types.js";
+import type { ExecutionContext, SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
@@ -94,7 +94,6 @@ export class AgentBuilder {
   private signal?: AbortSignal;
   private trailingMessage?: TrailingMessage;
   private subagentConfig?: SubagentConfigMap;
-  private subagentEventCallback?: (event: SubagentEvent) => void;
   // Tree context for subagent support - enables shared tree model
   // When a gadget calls withParentContext(ctx), it shares the parent's tree
   private parentContext?: {
@@ -687,46 +686,17 @@ export class AgentBuilder {
   }
 
   /**
-   * Set the callback for subagent events.
+   * Share parent agent's ExecutionTree for unified event visibility.
    *
-   * Subagent gadgets (like BrowseWeb) can use ExecutionContext.onSubagentEvent
-   * to report their internal LLM calls and gadget executions in real-time.
-   * This callback receives those events, enabling hierarchical progress display.
+   * When building a subagent inside a gadget, call this method to share the
+   * parent's ExecutionTree. This is the **single source of truth** for all
+   * execution events, enabling:
    *
-   * @param callback - Function to handle subagent events
-   * @returns This builder for chaining
-   *
-   * @example
-   * ```typescript
-   * .withSubagentEventCallback((event) => {
-   *   if (event.type === "llm_call_start") {
-   *     console.log(`  Subagent LLM #${event.event.iteration} starting...`);
-   *   } else if (event.type === "gadget_call") {
-   *     console.log(`    ⏵ ${event.event.call.gadgetName}...`);
-   *   }
-   * })
-   * ```
-   */
-  withSubagentEventCallback(callback: (event: SubagentEvent) => void): this {
-    this.subagentEventCallback = callback;
-    return this;
-  }
-
-  /**
-   * Enable automatic subagent event forwarding to parent agent.
-   *
-   * When building a subagent inside a gadget, call this method to automatically
-   * forward all LLM calls and gadget events to the parent agent. This enables
-   * hierarchical progress display without any manual event handling.
-   *
-   * The method extracts `invocationId` and `onSubagentEvent` from the execution
-   * context and sets up automatic forwarding via hooks and event wrapping.
-   *
-   * **NEW: Shared Tree Model** - When the parent provides an ExecutionTree via context,
-   * the subagent shares that tree instead of creating its own. This enables:
-   * - Unified cost tracking across all nesting levels
-   * - Automatic media aggregation via `tree.getSubtreeMedia(nodeId)`
-   * - Real-time visibility of nested execution in the parent
+   * - **Unified cost tracking** - All nested agent costs aggregate automatically
+   * - **Real-time visibility** - Parent's `tree.onAll()` subscribers see all events
+   * - **Depth tracking** - Events have correct `depth` (1 for child, 2 for grandchild, etc.)
+   * - **Parent linking** - Events have `parentId` pointing to spawning gadget
+   * - **Media aggregation** - Use `tree.getSubtreeMedia(nodeId)` after completion
    *
    * **Signal Forwarding** - When parent context includes a signal, it's automatically
    * forwarded to the subagent for proper cancellation propagation.
@@ -740,135 +710,37 @@ export class AgentBuilder {
    *
    * @example
    * ```typescript
-   * // In a subagent gadget like BrowseWeb - ONE LINE enables auto-forwarding:
+   * // In a subagent gadget like BrowseWeb:
    * execute: async (params, ctx) => {
    *   const agent = new AgentBuilder(client)
    *     .withModel(model)
    *     .withGadgets(Navigate, Click, Screenshot)
-   *     .withParentContext(ctx)  // <-- This is all you need!
+   *     .withParentContext(ctx)  // <-- Shares parent's tree
    *     .ask(params.task);
    *
    *   for await (const event of agent.run()) {
-   *     // Events automatically forwarded - just process normally
+   *     // Events automatically flow through shared tree
    *     if (event.type === "text") {
    *       result = event.content;
    *     }
    *   }
    *
-   *   // After subagent completes, costs are automatically aggregated
-   *   // No manual tracking needed - use tree methods:
+   *   // After subagent completes, access aggregated data:
    *   const totalCost = ctx.tree?.getSubtreeCost(ctx.nodeId!);
    *   const allMedia = ctx.tree?.getSubtreeMedia(ctx.nodeId!);
    * }
    * ```
    */
   withParentContext(ctx: ExecutionContext, depth = 1): this {
-    // Capture tree context for shared tree model
-    // This enables subagent events to flow through the parent's tree,
-    // giving the TUI (and any tree subscribers) visibility into nested activity
+    // Share parent's ExecutionTree for unified event visibility
+    // This is the SINGLE SOURCE OF TRUTH for all execution events.
+    // The TUI and other consumers subscribe via tree.onAll() to see all events
+    // including those from nested subagents (detected by event.depth > 0).
     if (ctx.tree) {
       this.parentContext = {
         tree: ctx.tree,
         nodeId: ctx.nodeId,
         depth,
-      };
-    }
-
-    // Set up subagent event forwarding to parent
-    // This enables the parent agent to create child sessions and display nested activity
-    if (ctx.onSubagentEvent && ctx.invocationId) {
-      const invocationId = ctx.invocationId;
-
-      // Forward nested subagent events (recursive case - when this subagent's gadgets also have subagents)
-      this.subagentEventCallback = (event) => {
-        ctx.onSubagentEvent!({
-          ...event,
-          gadgetInvocationId: invocationId,
-          // Add depths: parent's depth + event's depth (for recursive nesting)
-          depth: depth + (event.depth ?? 0),
-        });
-      };
-
-      // Set up observer hooks to forward THIS agent's own events as SubagentEvents
-      // This handles the non-recursive case where the subagent's own LLM calls and gadgets
-      // need to be reported to the parent
-      const existingHooks = this.hooks ?? {};
-      this.hooks = {
-        ...existingHooks,
-        observers: {
-          ...existingHooks.observers,
-          onLLMCallStart: async (info) => {
-            // Add subagentContext so hook implementations can detect subagent origin
-            const infoWithSubagent = {
-              ...info,
-              subagentContext: {
-                parentGadgetInvocationId: invocationId,
-                depth,
-              },
-            };
-            await existingHooks.observers?.onLLMCallStart?.(infoWithSubagent);
-            ctx.onSubagentEvent!({
-              type: "llm_call_start",
-              event: {
-                iteration: info.iteration,
-                model: info.options.model,
-              },
-              gadgetInvocationId: invocationId,
-              depth,
-              iteration: info.iteration,
-            });
-          },
-          onGadgetExecutionStart: async (gadgetCtx) => {
-            // Add subagentContext so hook implementations can detect subagent origin
-            const ctxWithSubagent = {
-              ...gadgetCtx,
-              subagentContext: {
-                parentGadgetInvocationId: invocationId,
-                depth,
-              },
-            };
-            await existingHooks.observers?.onGadgetExecutionStart?.(ctxWithSubagent);
-            // Convert ObserveGadgetStartContext to StreamEvent with type gadget_call
-            ctx.onSubagentEvent!({
-              type: "gadget_call",
-              event: {
-                type: "gadget_call",
-                call: {
-                  gadgetName: gadgetCtx.gadgetName,
-                  invocationId: gadgetCtx.invocationId,
-                  parametersRaw: JSON.stringify(gadgetCtx.parameters),
-                  parameters: gadgetCtx.parameters as Record<string, unknown>,
-                  dependencies: [],
-                },
-              },
-              gadgetInvocationId: invocationId,
-              depth,
-            });
-          },
-          onLLMCallComplete: async (info) => {
-            // Add subagentContext so hook implementations can detect subagent origin
-            const infoWithSubagent = {
-              ...info,
-              subagentContext: {
-                parentGadgetInvocationId: invocationId,
-                depth,
-              },
-            };
-            await existingHooks.observers?.onLLMCallComplete?.(infoWithSubagent);
-            // Convert ObserveLLMCompleteContext to LLMCallInfo for SubagentEvent
-            ctx.onSubagentEvent!({
-              type: "llm_call_end",
-              event: {
-                iteration: info.iteration,
-                model: info.options.model,
-                finishReason: info.finishReason ?? undefined,
-                usage: info.usage,
-              },
-              gadgetInvocationId: invocationId,
-              depth,
-            });
-          },
-        },
       };
     }
 
@@ -1112,7 +984,6 @@ export class AgentBuilder {
       retryConfig: this.retryConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
-      onSubagentEvent: this.subagentEventCallback,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,
       parentNodeId: this.parentContext?.nodeId,
@@ -1316,7 +1187,6 @@ export class AgentBuilder {
       retryConfig: this.retryConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
-      onSubagentEvent: this.subagentEventCallback,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,
       parentNodeId: this.parentContext?.nodeId,

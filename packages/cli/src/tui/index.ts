@@ -239,7 +239,7 @@ export class TUIApp {
 			// Text is append-only content not tracked by the tree
 			this.blockRenderer.addText(event.content);
 		}
-		// All other events (gadget_call, gadget_result, subagent_event, etc.)
+		// All other events (gadget_call, gadget_result, etc.)
 		// are handled automatically by tree subscription in subscribeToTree()
 	}
 

@@ -241,90 +241,7 @@ export type StreamEvent =
   | GadgetSkippedEvent
   | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string }
   | { type: "compaction"; event: CompactionEvent }
-  | SubagentStreamEvent
   | StreamCompletionEvent;
-
-/** Event for forwarding subagent activity through the stream */
-export interface SubagentStreamEvent {
-  type: "subagent_event";
-  subagentEvent: SubagentEvent;
-}
-
-// =============================================================================
-// Subagent Event Types
-// =============================================================================
-
-/**
- * Information about an LLM call within a subagent.
- * Used by parent agents to display real-time progress of subagent LLM calls.
- *
- * This interface provides full context about subagent LLM calls, enabling
- * first-class display with the same metrics as top-level agents (cached tokens, cost, etc.).
- */
-export interface LLMCallInfo {
-  /** Iteration number within the subagent loop */
-  iteration: number;
-  /** Model identifier (e.g., "sonnet", "gpt-4o") */
-  model: string;
-  /** Input tokens sent to the LLM (for backward compat, prefer usage.inputTokens) */
-  inputTokens?: number;
-  /** Output tokens received from the LLM (for backward compat, prefer usage.outputTokens) */
-  outputTokens?: number;
-  /** Reason the LLM stopped generating (e.g., "stop", "tool_use") */
-  finishReason?: string;
-  /** Elapsed time in milliseconds */
-  elapsedMs?: number;
-
-  /**
-   * Full token usage including cached token counts.
-   * This provides the same level of detail as top-level agent calls.
-   */
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    /** Number of input tokens served from cache (subset of inputTokens) */
-    cachedInputTokens?: number;
-    /** Number of input tokens written to cache (subset of inputTokens, Anthropic only) */
-    cacheCreationInputTokens?: number;
-  };
-
-  /**
-   * Cost of this LLM call in USD.
-   * Calculated by the subagent if it has access to model registry.
-   */
-  cost?: number;
-}
-
-/**
- * Event emitted by subagent gadgets to report internal agent activity.
- * Enables real-time display of subagent LLM calls and gadget executions.
- *
- * @example
- * ```typescript
- * // Forwarding events from subagent to parent
- * for await (const event of subagent.run()) {
- *   ctx.onSubagentEvent?.({
- *     type: event.type === "gadget_call" ? "gadget_call" : "gadget_result",
- *     gadgetInvocationId: parentInvocationId,
- *     depth: 1,
- *     event,
- *   });
- * }
- * ```
- */
-export interface SubagentEvent {
-  /** Type of subagent event */
-  type: "llm_call_start" | "llm_call_end" | "gadget_call" | "gadget_result";
-  /** Invocation ID of the parent gadget this subagent event belongs to */
-  gadgetInvocationId: string;
-  /** Nesting depth (1 = direct child, 2 = grandchild, etc.) */
-  depth: number;
-  /** LLM iteration number within the subagent (for gadget parenting in TUI) */
-  iteration?: number;
-  /** The actual event data - either a StreamEvent or LLMCallInfo */
-  event: StreamEvent | LLMCallInfo;
-}
 
 // Imports for text-only handlers
 import type { ILogObj, Logger } from "tslog";
@@ -675,34 +592,6 @@ export interface ExecutionContext {
    * nested events belong to.
    */
   invocationId?: string;
-
-  /**
-   * Callback for subagent gadgets to report internal events to the parent.
-   *
-   * When provided, subagent gadgets (like BrowseWeb) can use this callback
-   * to report their internal LLM calls and gadget executions in real-time.
-   * This enables the parent agent to display subagent progress indicators.
-   *
-   * **Recommended:** Use `builder.withParentContext(ctx)` instead of calling
-   * this directly - it handles all the forwarding automatically.
-   *
-   * @example
-   * ```typescript
-   * // In a subagent gadget like BrowseWeb - just ONE LINE needed:
-   * execute: async (params, ctx) => {
-   *   const agent = new AgentBuilder(client)
-   *     .withModel(model)
-   *     .withGadgets(Navigate, Click)
-   *     .withParentContext(ctx)  // <-- Enables automatic event forwarding!
-   *     .ask(task);
-   *
-   *   for await (const event of agent.run()) {
-   *     // Events automatically forwarded - just process normally
-   *   }
-   * }
-   * ```
-   */
-  onSubagentEvent?: (event: SubagentEvent) => void;
 
   // ==========================================================================
   // Execution Tree Access (for subagent support)
