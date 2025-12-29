@@ -25,7 +25,6 @@ import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
   AgentContextConfig,
-  LLMCallInfo,
   StreamCompletionEvent,
   StreamEvent,
   SubagentConfigMap,
@@ -369,69 +368,10 @@ export class Agent {
     // Store user callback and create combined callback that:
     // 1. Queues events for yielding in run()
     // 2. Calls user callback if provided
-    // 3. Fires hooks with subagentContext for consistent event handling
     this.userSubagentEventCallback = options.onSubagentEvent;
     this.onSubagentEvent = (event: SubagentEvent) => {
       this.pendingSubagentEvents.push(event);
       this.userSubagentEventCallback?.(event);
-
-      // Fire the SAME hooks with subagentContext - enables consistent hook-based handling
-      const subagentContext = {
-        parentGadgetInvocationId: event.gadgetInvocationId,
-        depth: event.depth,
-      };
-
-      // Fire hooks asynchronously but don't block
-      if (event.type === "llm_call_start") {
-        const info = event.event as LLMCallInfo;
-        void this.hooks?.observers?.onLLMCallStart?.({
-          iteration: info.iteration,
-          options: { model: info.model, messages: [] },
-          logger: this.logger,
-          subagentContext,
-        });
-      } else if (event.type === "llm_call_end") {
-        const info = event.event as LLMCallInfo;
-        // Use full usage object if available (preserves cached tokens), fallback to basic reconstruction
-        const usage = info.usage ?? (info.outputTokens
-          ? {
-              inputTokens: info.inputTokens ?? 0,
-              outputTokens: info.outputTokens,
-              totalTokens: (info.inputTokens ?? 0) + info.outputTokens,
-            }
-          : undefined);
-        void this.hooks?.observers?.onLLMCallComplete?.({
-          iteration: info.iteration,
-          options: { model: info.model, messages: [] },
-          finishReason: info.finishReason ?? null,
-          usage,
-          rawResponse: "",
-          finalMessage: "",
-          logger: this.logger,
-          subagentContext,
-        });
-      } else if (event.type === "gadget_call") {
-        const gadgetEvent = event.event as { call: { invocationId: string; gadgetName: string; parameters?: Record<string, unknown> } };
-        void this.hooks?.observers?.onGadgetExecutionStart?.({
-          iteration: 0,
-          gadgetName: gadgetEvent.call.gadgetName,
-          invocationId: gadgetEvent.call.invocationId,
-          parameters: gadgetEvent.call.parameters ?? {},
-          logger: this.logger,
-          subagentContext,
-        });
-      } else if (event.type === "gadget_result") {
-        const resultEvent = event.event as { result: { invocationId: string; gadgetName?: string; executionTimeMs?: number } };
-        void this.hooks?.observers?.onGadgetExecutionComplete?.({
-          iteration: 0,
-          gadgetName: resultEvent.result.gadgetName ?? "unknown",
-          invocationId: resultEvent.result.invocationId,
-          parameters: {},
-          executionTimeMs: resultEvent.result.executionTimeMs ?? 0,
-          logger: this.logger,
-          subagentContext,
-        });
-      }
     };
   }
 
