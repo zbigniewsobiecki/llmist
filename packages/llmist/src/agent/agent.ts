@@ -238,9 +238,7 @@ export class Agent {
 
   // Subagent event callback for subagent gadgets
   private readonly userSubagentEventCallback?: (event: SubagentEvent) => void;
-  // Internal queue for yielding subagent events in run()
-  private readonly pendingSubagentEvents: SubagentEvent[] = [];
-  // Combined callback that queues events AND calls user callback
+  // Callback passed to StreamProcessor - events flow through completedResultsQueue for real-time streaming
   private readonly onSubagentEvent: (event: SubagentEvent) => void;
   // Counter for generating synthetic invocation IDs for wrapped text content
   private syntheticInvocationCounter = 0;
@@ -365,27 +363,15 @@ export class Agent {
     this.parentNodeId = options.parentNodeId ?? null;
     this.baseDepth = options.baseDepth ?? 0;
 
-    // Store user callback and create combined callback that:
-    // 1. Queues events for yielding in run()
-    // 2. Calls user callback if provided
+    // Store user callback - events are now streamed via stream-processor's completedResultsQueue
+    // so we don't need to push to pendingSubagentEvents here. The callback is called
+    // by stream-processor's wrappedOnSubagentEvent after pushing to the queue.
     this.userSubagentEventCallback = options.onSubagentEvent;
     this.onSubagentEvent = (event: SubagentEvent) => {
-      this.pendingSubagentEvents.push(event);
+      // Just call the user callback if provided - don't push to pendingSubagentEvents
+      // since events flow through stream-processor's completedResultsQueue for real-time streaming
       this.userSubagentEventCallback?.(event);
     };
-  }
-
-  /**
-   * Flush pending subagent events as StreamEvents.
-   * Called from run() to yield queued subagent events from subagent gadgets.
-   */
-  private *flushPendingSubagentEvents(): Generator<StreamEvent> {
-    while (this.pendingSubagentEvents.length > 0) {
-      const event = this.pendingSubagentEvents.shift();
-      if (event) {
-        yield { type: "subagent_event", subagentEvent: event };
-      }
-    }
   }
 
   /**
@@ -702,11 +688,8 @@ export class Agent {
           }
 
           // Yield event to consumer in real-time
+          // (includes subagent events from completedResultsQueue for real-time streaming)
           yield event;
-
-          // Yield any subagent events that accumulated during gadget execution
-          // This enables real-time display of subagent activity (Navigate, Screenshot, etc.)
-          yield* this.flushPendingSubagentEvents();
         }
 
         // Ensure we received the completion metadata

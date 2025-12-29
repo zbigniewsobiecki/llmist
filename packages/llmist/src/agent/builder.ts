@@ -799,7 +799,6 @@ export class AgentBuilder {
           ...existingHooks.observers,
           onLLMCallStart: async (info) => {
             await existingHooks.observers?.onLLMCallStart?.(info);
-            // Convert ObserveLLMCallContext to LLMCallInfo for SubagentEvent
             ctx.onSubagentEvent!({
               type: "llm_call_start",
               event: {

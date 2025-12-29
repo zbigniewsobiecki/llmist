@@ -236,12 +236,15 @@ export class StreamProcessor {
       argPrefix: options.gadgetArgPrefix,
     });
 
-    // Wrap onSubagentEvent - just pass through to the callback.
-    // Agent's pendingSubagentEvents queue handles proper event ordering and streaming.
-    // Do NOT push to completedResultsQueue here - that causes duplicate events.
+    // Wrap onSubagentEvent to push to completedResultsQueue for real-time streaming.
+    // This allows waitForInFlightExecutions() to yield subagent events while gadgets execute.
+    // We still call the original callback so the Agent's userSubagentEventCallback fires.
     const onSubagentEvent = options.onSubagentEvent;
     const wrappedOnSubagentEvent = onSubagentEvent
       ? (event: SubagentEvent) => {
+          // Push to queue for real-time streaming via waitForInFlightExecutions()
+          this.completedResultsQueue.push({ type: "subagent_event", subagentEvent: event });
+          // Still call the callback for userSubagentEventCallback and any other listeners
           onSubagentEvent(event);
         }
       : undefined;
