@@ -225,12 +225,15 @@ export interface ObserveLLMErrorContext {
 /**
  * Context provided when a gadget execution starts.
  * Read-only observation point.
+ *
+ * Note: Observer hooks are derived from ExecutionTree events, ensuring consistent
+ * context (including subagentContext) for both main agent and nested subagent events.
  */
 export interface ObserveGadgetStartContext {
   iteration: number;
   gadgetName: string;
   invocationId: string;
-  /** Parameters after controller modifications */
+  /** Parameters after interceptor modifications (stored in ExecutionTree) */
   parameters: Readonly<Record<string, unknown>>;
   logger: Logger<ILogObj>;
   /** Present when event is from a subagent (undefined for top-level agent) */
@@ -240,15 +243,23 @@ export interface ObserveGadgetStartContext {
 /**
  * Context provided when a gadget execution completes.
  * Read-only observation point.
+ *
+ * Note: Observer hooks are derived from ExecutionTree events, ensuring consistent
+ * context (including subagentContext) for both main agent and nested subagent events.
  */
 export interface ObserveGadgetCompleteContext {
   iteration: number;
   gadgetName: string;
   invocationId: string;
   parameters: Readonly<Record<string, unknown>>;
-  /** Original result before interceptors */
+  /**
+   * Original result before interceptors.
+   * @deprecated No longer populated. Use `finalResult` instead.
+   * With the unified event architecture, observers receive the final (post-interceptor)
+   * result from the ExecutionTree.
+   */
   originalResult?: string;
-  /** Final result after interceptors */
+  /** Final result after interceptors (the value stored in ExecutionTree) */
   finalResult?: string;
   error?: string;
   executionTimeMs: number;
@@ -263,6 +274,9 @@ export interface ObserveGadgetCompleteContext {
 /**
  * Context provided when a gadget is skipped due to a failed dependency.
  * Read-only observation point.
+ *
+ * Note: Observer hooks are derived from ExecutionTree events, ensuring consistent
+ * context (including subagentContext) for both main agent and nested subagent events.
  */
 export interface ObserveGadgetSkippedContext {
   iteration: number;

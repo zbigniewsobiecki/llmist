@@ -198,10 +198,12 @@ async execute(params: this['params'], ctx?: ExecutionContext) {
 
 ## ExecutionTree Integration
 
-With `withParentContext(ctx)`, subagents inherit from the parent:
+With `withParentContext(ctx)`, subagents share the parent's ExecutionTree:
 
+- **Unified event stream** - All subagent events (LLM calls, gadget executions) flow through the shared tree
 - **Automatic cost aggregation** - No manual `reportCost()` needed
-- **Unified progress tracking** - Parent's TUI shows nested activity
+- **Unified progress tracking** - Parent's TUI shows nested activity in real-time
+- **Hook observer support** - Parent's `onGadgetExecutionComplete` receives subagent events with `subagentContext`
 - **Media collection** - Screenshots bubble up automatically
 - **Logger inheritance** - Subagent uses parent's logger for consistent structured logging
 - **Signal forwarding** - Abort signals propagate to nested agents
@@ -210,6 +212,22 @@ With `withParentContext(ctx)`, subagents inherit from the parent:
 // After subagent, get total cost
 const totalCost = ctx?.tree?.getSubtreeCost(ctx.nodeId!);
 ```
+
+:::tip[Subagent Events in Observers]
+When a subagent executes gadgets, your parent agent's observers receive those events with `subagentContext` set:
+
+```typescript
+.withHooks({
+  observers: {
+    onGadgetExecutionComplete: (ctx) => {
+      if (ctx.subagentContext) {
+        console.log(`Subagent gadget: ${ctx.gadgetName} (depth ${ctx.subagentContext.depth})`);
+      }
+    },
+  },
+})
+```
+:::
 
 ## Human Input Inheritance
 

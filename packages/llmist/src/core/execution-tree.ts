@@ -489,6 +489,21 @@ export class ExecutionTree {
   }
 
   /**
+   * Update a gadget's parameters (e.g., after interceptor modifies them).
+   * This is called after the gadget is added to the tree but before execution.
+   */
+  updateGadgetParameters(invocationId: string, parameters: Record<string, unknown>): void {
+    const nodeId = this.invocationIdToNodeId.get(invocationId);
+    if (!nodeId) {
+      return;
+    }
+    const node = this.nodes.get(nodeId);
+    if (node?.type === "gadget") {
+      (node as GadgetNode).parameters = parameters;
+    }
+  }
+
+  /**
    * Mark a gadget as started (running).
    */
   startGadget(nodeId: NodeId): void {
