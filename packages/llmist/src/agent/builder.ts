@@ -798,8 +798,15 @@ export class AgentBuilder {
         observers: {
           ...existingHooks.observers,
           onLLMCallStart: async (info) => {
-            await existingHooks.observers?.onLLMCallStart?.(info);
-            // Convert ObserveLLMCallContext to LLMCallInfo for SubagentEvent
+            // Add subagentContext so hook implementations can detect subagent origin
+            const infoWithSubagent = {
+              ...info,
+              subagentContext: {
+                parentGadgetInvocationId: invocationId,
+                depth,
+              },
+            };
+            await existingHooks.observers?.onLLMCallStart?.(infoWithSubagent);
             ctx.onSubagentEvent!({
               type: "llm_call_start",
               event: {
@@ -812,7 +819,15 @@ export class AgentBuilder {
             });
           },
           onGadgetExecutionStart: async (gadgetCtx) => {
-            await existingHooks.observers?.onGadgetExecutionStart?.(gadgetCtx);
+            // Add subagentContext so hook implementations can detect subagent origin
+            const ctxWithSubagent = {
+              ...gadgetCtx,
+              subagentContext: {
+                parentGadgetInvocationId: invocationId,
+                depth,
+              },
+            };
+            await existingHooks.observers?.onGadgetExecutionStart?.(ctxWithSubagent);
             // Convert ObserveGadgetStartContext to StreamEvent with type gadget_call
             ctx.onSubagentEvent!({
               type: "gadget_call",
@@ -831,7 +846,15 @@ export class AgentBuilder {
             });
           },
           onLLMCallComplete: async (info) => {
-            await existingHooks.observers?.onLLMCallComplete?.(info);
+            // Add subagentContext so hook implementations can detect subagent origin
+            const infoWithSubagent = {
+              ...info,
+              subagentContext: {
+                parentGadgetInvocationId: invocationId,
+                depth,
+              },
+            };
+            await existingHooks.observers?.onLLMCallComplete?.(infoWithSubagent);
             // Convert ObserveLLMCompleteContext to LLMCallInfo for SubagentEvent
             ctx.onSubagentEvent!({
               type: "llm_call_end",

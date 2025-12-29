@@ -236,18 +236,34 @@ export class StreamProcessor {
       argPrefix: options.gadgetArgPrefix,
     });
 
-    // Wrap onSubagentEvent to also push to completedResultsQueue for real-time streaming
-    // during parallel gadget execution. This ensures subagent events are yielded
-    // while waiting for gadgets to complete, not batched at the end.
-    const wrappedOnSubagentEvent = options.onSubagentEvent
+    /**
+     * Wrap onSubagentEvent for unified event streaming architecture.
+     *
+     * ARCHITECTURAL CONTEXT:
+     * Previously, subagent events flowed through a separate `pendingSubagentEvents` queue
+     * in the Agent class, which was flushed after each event in the main stream loop.
+     * This caused events to be batched at iteration boundaries rather than streamed in real-time.
+     *
+     * NEW ARCHITECTURE:
+     * Subagent events now flow through `completedResultsQueue`, the same queue used for
+     * gadget results. This creates a unified event bus where all runtime events (gadget
+     * results, subagent activity) are interleaved and yielded in real-time via
+     * `waitForInFlightExecutions()`.
+     *
+     * CALLBACK ORDERING:
+     * We call the user callback FIRST, then push to the queue. This ensures:
+     * 1. Synchronous state updates in userSubagentEventCallback complete before
+     *    external consumers (stream iterators) see the event
+     * 2. The perceived state from the stream aligns with actual Agent internal state
+     * 3. No race conditions between callback state updates and queue consumption
+     */
+    const onSubagentEvent = options.onSubagentEvent;
+    const wrappedOnSubagentEvent = onSubagentEvent
       ? (event: SubagentEvent) => {
-          // Push to queue for real-time streaming during parallel execution
-          this.completedResultsQueue.push({
-            type: "subagent_event",
-            subagentEvent: event,
-          });
-          // Also call the original callback (for Agent's queue and hooks)
-          options.onSubagentEvent?.(event);
+          // Call user callback first - allows synchronous state updates to complete
+          onSubagentEvent(event);
+          // Then push to queue for real-time streaming via waitForInFlightExecutions()
+          this.completedResultsQueue.push({ type: "subagent_event", subagentEvent: event });
         }
       : undefined;
 
