@@ -236,18 +236,13 @@ export class StreamProcessor {
       argPrefix: options.gadgetArgPrefix,
     });
 
-    // Wrap onSubagentEvent to also push to completedResultsQueue for real-time streaming
-    // during parallel gadget execution. This ensures subagent events are yielded
-    // while waiting for gadgets to complete, not batched at the end.
-    const wrappedOnSubagentEvent = options.onSubagentEvent
+    // Wrap onSubagentEvent - just pass through to the callback.
+    // Agent's pendingSubagentEvents queue handles proper event ordering and streaming.
+    // Do NOT push to completedResultsQueue here - that causes duplicate events.
+    const onSubagentEvent = options.onSubagentEvent;
+    const wrappedOnSubagentEvent = onSubagentEvent
       ? (event: SubagentEvent) => {
-          // Push to queue for real-time streaming during parallel execution
-          this.completedResultsQueue.push({
-            type: "subagent_event",
-            subagentEvent: event,
-          });
-          // Also call the original callback (for Agent's queue and hooks)
-          options.onSubagentEvent?.(event);
+          onSubagentEvent(event);
         }
       : undefined;
 
