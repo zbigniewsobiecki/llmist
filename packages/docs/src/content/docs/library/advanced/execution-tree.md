@@ -60,13 +60,19 @@ The ExecutionTree is the **single source of truth** for all agent events. Both t
 
 ```typescript
 tree.on("gadget_complete", (event) => {
-  console.log(`${event.name} completed in ${event.executionTimeMs}ms`);
+  // Check if this is from a subagent
+  if (event.depth > 0) {
+    console.log(`↳ Subagent gadget: ${event.name} (depth ${event.depth})`);
+  } else {
+    console.log(`${event.name} completed in ${event.executionTimeMs}ms`);
+  }
 });
 
-// Or iterate
+// Or iterate with full subagent awareness
 for await (const event of tree.events()) {
   if (event.type === 'llm_call_complete') {
-    console.log(`LLM #${event.iteration}: ${event.usage?.totalTokens} tokens`);
+    const prefix = event.depth > 0 ? `  ↳ [depth ${event.depth}]` : '';
+    console.log(`${prefix}LLM #${event.iteration}: ${event.usage?.totalTokens} tokens`);
   }
 }
 ```

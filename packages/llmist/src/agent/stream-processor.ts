@@ -682,9 +682,7 @@ export class StreamProcessor {
       }
     }
 
-    // Step 3: Mark gadget as running in execution tree
-    // NOTE: onGadgetExecutionStart observer is now triggered via tree-hook-bridge
-    // when the tree emits gadget_start event. This ensures consistent subagentContext.
+    // Step 3: Mark gadget as running in tree (triggers onGadgetExecutionStart via bridge)
     if (this.tree) {
       const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
       if (gadgetNode) {
@@ -750,9 +748,7 @@ export class StreamProcessor {
       }
     }
 
-    // Step 7: Complete gadget in execution tree
-    // NOTE: onGadgetExecutionComplete observer is now triggered via tree-hook-bridge
-    // when the tree emits gadget_complete event. This ensures consistent subagentContext.
+    // Step 7: Complete gadget in tree (triggers onGadgetExecutionComplete via bridge)
     if (this.tree) {
       const gadgetNode = this.tree.getNodeByInvocationId(result.invocationId);
       if (gadgetNode) {
@@ -944,8 +940,7 @@ export class StreamProcessor {
       };
       events.push(skipEvent);
 
-      // NOTE: onGadgetSkipped observer is now triggered via tree-hook-bridge
-      // when tree.skipGadget emits gadget_skipped event (see above).
+      // Observer triggered via tree-hook-bridge from gadget_skipped event above
 
       this.logger.info("Gadget skipped due to failed dependency", {
         gadgetName: call.gadgetName,

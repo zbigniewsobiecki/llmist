@@ -547,6 +547,14 @@ export class Agent {
    * Run the agent loop.
    * Clean, simple orchestration - all complexity is in StreamProcessor.
    *
+   * ## Event Architecture
+   *
+   * ExecutionTree is the single source of truth for all agent events.
+   * Gadget observer hooks (`onGadgetExecutionStart`, `onGadgetExecutionComplete`,
+   * `onGadgetSkipped`) are derived from tree events via `tree-hook-bridge.ts`.
+   * This ensures consistent `subagentContext` for nested agents - both the TUI
+   * and user hook observers receive identical event context.
+   *
    * @throws {Error} If no user prompt was provided (when using build() without ask())
    */
   async *run(): AsyncGenerator<StreamEvent> {

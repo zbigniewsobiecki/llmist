@@ -109,11 +109,14 @@
  * GADGET LIFECYCLE:
  * 1. interceptGadgetParameters (interceptor)
  * 2. beforeGadgetExecution (controller) - can skip
- * 3. onGadgetExecutionStart (observer)
+ * 3. tree.startGadget() -> onGadgetExecutionStart (observer via bridge)
  * 4. [Execute gadget]
  * 5. interceptGadgetResult (interceptor)
  * 6. afterGadgetExecution (controller) - can recover
- * 7. onGadgetExecutionComplete (observer)
+ * 7. tree.completeGadget() -> onGadgetExecutionComplete (observer via bridge)
+ *
+ * Note: Gadget observer hooks (steps 3, 7) are derived from ExecutionTree events
+ * via tree-hook-bridge.ts, ensuring consistent subagentContext for nested agents.
  * ```
  *
  * @module agent/hooks

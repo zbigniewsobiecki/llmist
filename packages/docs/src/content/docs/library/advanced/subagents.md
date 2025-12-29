@@ -229,6 +229,10 @@ When a subagent executes gadgets, your parent agent's observers receive those ev
 ```
 :::
 
+:::note[How It Works]
+The unified event flow is achieved through `tree-hook-bridge.ts`, which subscribes to ExecutionTree events and forwards them to hook observers. This ensures identical event context (including `subagentContext`) reaches both the TUI and your custom hooks.
+:::
+
 ## Human Input Inheritance
 
 Subagents created with `createSubagent()` automatically inherit the parent's human input handler. This enables nested agents to request user input (e.g., 2FA codes, CAPTCHAs) that bubbles up to the CLI.
