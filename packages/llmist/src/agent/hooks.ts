@@ -115,8 +115,9 @@
  * 6. afterGadgetExecution (controller) - can recover
  * 7. tree.completeGadget() -> onGadgetExecutionComplete (observer via bridge)
  *
- * Note: Gadget observer hooks (steps 3, 7) are derived from ExecutionTree events
- * via tree-hook-bridge.ts, ensuring consistent subagentContext for nested agents.
+ * Note: For subagent events, all observer hooks (LLM and gadget) are bridged
+ * from ExecutionTree events via tree-hook-bridge.ts. This ensures consistent
+ * subagentContext for nested agents and unified event handling.
  * ```
  *
  * @module agent/hooks
