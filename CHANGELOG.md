@@ -1,3 +1,8 @@
+## <small>11.1.1 (2025-12-29)</small>
+
+* Merge branch 'dev' ([c0ba72f](https://github.com/zbigniewsobiecki/llmist/commit/c0ba72f))
+* fix(agent): bridge subagent LLM events to parent hooks (#297) ([eca77bc](https://github.com/zbigniewsobiecki/llmist/commit/eca77bc)), closes [#297](https://github.com/zbigniewsobiecki/llmist/issues/297)
+
 ## 11.1.0 (2025-12-29)
 
 * Merge pull request #296 from zbigniewsobiecki/dev ([714823c](https://github.com/zbigniewsobiecki/llmist/commit/714823c)), closes [#296](https://github.com/zbigniewsobiecki/llmist/issues/296)
