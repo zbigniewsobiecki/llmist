@@ -40,10 +40,10 @@ import type {
   GadgetResultInterceptorContext,
   MessageInterceptorContext,
   ObserveChunkContext,
-  ObserveGadgetCompleteContext,
-  ObserveGadgetSkippedContext,
-  ObserveGadgetStartContext,
 } from "./hooks.js";
+// NOTE: Gadget observer hooks (onGadgetExecutionStart, onGadgetExecutionComplete,
+// onGadgetSkipped) are now triggered via tree-hook-bridge.ts which derives them
+// from ExecutionTree events. This ensures consistent subagentContext.
 
 /**
  * Configuration for the StreamProcessor.
@@ -650,6 +650,11 @@ export class StreamProcessor {
     // Update call with intercepted parameters
     call.parameters = parameters;
 
+    // Update tree node with intercepted parameters (so observers see the modified values)
+    if (this.tree) {
+      this.tree.updateGadgetParameters(call.invocationId, parameters);
+    }
+
     // Step 2: Controller - Before execution
     let shouldSkip = false;
     let syntheticResult: string | undefined;
@@ -677,23 +682,7 @@ export class StreamProcessor {
       }
     }
 
-    // Step 3: Observer - Execution start
-    const startObservers: Array<() => void | Promise<void>> = [];
-    if (this.hooks.observers?.onGadgetExecutionStart) {
-      startObservers.push(async () => {
-        const context: ObserveGadgetStartContext = {
-          iteration: this.iteration,
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-          parameters,
-          logger: this.logger,
-        };
-        await this.hooks.observers?.onGadgetExecutionStart?.(context);
-      });
-    }
-    await this.runObserversInParallel(startObservers);
-
-    // Mark gadget as running in execution tree
+    // Step 3: Mark gadget as running in tree (triggers onGadgetExecutionStart via bridge)
     if (this.tree) {
       const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
       if (gadgetNode) {
@@ -714,11 +703,6 @@ export class StreamProcessor {
     } else {
       result = await this.executor.execute(call);
     }
-
-    // Capture the raw result before any hook transformations.
-    // Used in onGadgetExecutionComplete to provide both pre-hook (originalResult)
-    // and post-hook (finalResult) values for observers that need to audit changes.
-    const originalResult = result.result;
 
     // Step 5: Interceptor - Transform result (modifies result.result)
     if (result.result && this.hooks.interceptors?.interceptGadgetResult) {
@@ -764,29 +748,7 @@ export class StreamProcessor {
       }
     }
 
-    // Step 7: Observer - Execution complete
-    const completeObservers: Array<() => void | Promise<void>> = [];
-    if (this.hooks.observers?.onGadgetExecutionComplete) {
-      completeObservers.push(async () => {
-        const context: ObserveGadgetCompleteContext = {
-          iteration: this.iteration,
-          gadgetName: result.gadgetName,
-          invocationId: result.invocationId,
-          parameters,
-          originalResult,
-          finalResult: result.result,
-          error: result.error,
-          executionTimeMs: result.executionTimeMs,
-          breaksLoop: result.breaksLoop,
-          cost: result.cost,
-          logger: this.logger,
-        };
-        await this.hooks.observers?.onGadgetExecutionComplete?.(context);
-      });
-    }
-    await this.runObserversInParallel(completeObservers);
-
-    // Complete gadget in execution tree
+    // Step 7: Complete gadget in tree (triggers onGadgetExecutionComplete via bridge)
     if (this.tree) {
       const gadgetNode = this.tree.getNodeByInvocationId(result.invocationId);
       if (gadgetNode) {
@@ -967,7 +929,7 @@ export class StreamProcessor {
         }
       }
 
-      // Emit skip event
+      // Emit skip event (for stream consumers)
       const skipEvent: GadgetSkippedEvent = {
         type: "gadget_skipped",
         gadgetName: call.gadgetName,
@@ -978,19 +940,7 @@ export class StreamProcessor {
       };
       events.push(skipEvent);
 
-      // Call observer
-      if (this.hooks.observers?.onGadgetSkipped) {
-        const observeContext: ObserveGadgetSkippedContext = {
-          iteration: this.iteration,
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-          parameters: call.parameters ?? {},
-          failedDependency: failedDep,
-          failedDependencyError: depError,
-          logger: this.logger,
-        };
-        await this.safeObserve(() => this.hooks.observers?.onGadgetSkipped?.(observeContext));
-      }
+      // Observer triggered via tree-hook-bridge from gadget_skipped event above
 
       this.logger.info("Gadget skipped due to failed dependency", {
         gadgetName: call.gadgetName,

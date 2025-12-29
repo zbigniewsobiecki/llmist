@@ -62,6 +62,7 @@ import type {
   ObserveLLMErrorContext,
 } from "./hooks.js";
 import { StreamProcessor } from "./stream-processor.js";
+import { bridgeTreeToHooks } from "./tree-hook-bridge.js";
 
 /**
  * Configuration options for the Agent.
@@ -546,6 +547,14 @@ export class Agent {
    * Run the agent loop.
    * Clean, simple orchestration - all complexity is in StreamProcessor.
    *
+   * ## Event Architecture
+   *
+   * ExecutionTree is the single source of truth for all agent events.
+   * Gadget observer hooks (`onGadgetExecutionStart`, `onGadgetExecutionComplete`,
+   * `onGadgetSkipped`) are derived from tree events via `tree-hook-bridge.ts`.
+   * This ensures consistent `subagentContext` for nested agents - both the TUI
+   * and user hook observers receive identical event context.
+   *
    * @throws {Error} If no user prompt was provided (when using build() without ask())
    */
   async *run(): AsyncGenerator<StreamEvent> {
@@ -555,6 +564,10 @@ export class Agent {
       );
     }
 
+    // Bridge ExecutionTree events to hook observers for gadget events.
+    // This is the single source of truth - tree events trigger hooks with proper subagentContext.
+    const unsubscribeBridge = bridgeTreeToHooks(this.tree, this.hooks, this.logger);
+
     let currentIteration = 0;
 
     this.logger.info("Starting agent loop", {
@@ -562,220 +575,225 @@ export class Agent {
       maxIterations: this.maxIterations,
     });
 
-    while (currentIteration < this.maxIterations) {
-      // Check abort signal at start of each iteration
-      if (await this.checkAbortAndNotify(currentIteration)) {
-        return;
+    try {
+      while (currentIteration < this.maxIterations) {
+        // Check abort signal at start of each iteration
+        if (await this.checkAbortAndNotify(currentIteration)) {
+          return;
+        }
+
+        // Process any injected user messages (from REPL mid-session input)
+        while (this.pendingUserMessages.length > 0) {
+          const msg = this.pendingUserMessages.shift()!;
+          this.conversation.addUserMessage(msg);
+          this.logger.info("Injected user message into conversation", {
+            iteration: currentIteration,
+            messageLength: msg.length,
+          });
+        }
+
+        this.logger.debug("Starting iteration", { iteration: currentIteration });
+
+        try {
+          // Check and perform context compaction if needed
+          const compactionEvent = await this.checkAndPerformCompaction(currentIteration);
+          if (compactionEvent) {
+            yield compactionEvent;
+          }
+
+          // Prepare LLM call with hooks
+          const prepared = await this.prepareLLMCall(currentIteration);
+          const llmOptions = prepared.options;
+
+          // Handle skip action from beforeLLMCall controller
+          if (prepared.skipWithSynthetic !== undefined) {
+            this.conversation.addAssistantMessage(prepared.skipWithSynthetic);
+            yield { type: "text", content: prepared.skipWithSynthetic };
+            break;
+          }
+
+          // Call LLM
+          this.logger.info("Calling LLM", { model: this.model });
+          this.logger.silly("LLM request details", {
+            model: llmOptions.model,
+            temperature: llmOptions.temperature,
+            maxTokens: llmOptions.maxTokens,
+            messageCount: llmOptions.messages.length,
+            messages: llmOptions.messages,
+          });
+
+          // Add LLM call to execution tree
+          const llmNode = this.tree.addLLMCall({
+            iteration: currentIteration,
+            model: llmOptions.model,
+            parentId: this.parentNodeId,
+            request: llmOptions.messages,
+          });
+          const currentLLMNodeId = llmNode.id;
+
+          // Create LLM stream with retry logic (if enabled)
+          const stream = await this.createStreamWithRetry(llmOptions, currentIteration);
+
+          // Process stream - ALL complexity delegated to StreamProcessor
+          const processor = new StreamProcessor({
+            iteration: currentIteration,
+            registry: this.registry,
+            gadgetStartPrefix: this.gadgetStartPrefix,
+            gadgetEndPrefix: this.gadgetEndPrefix,
+            gadgetArgPrefix: this.gadgetArgPrefix,
+            hooks: this.hooks,
+            logger: this.logger.getSubLogger({ name: "stream-processor" }),
+            requestHumanInput: this.requestHumanInput,
+            defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+            client: this.client,
+            mediaStore: this.mediaStore,
+            agentConfig: this.agentContextConfig,
+            subagentConfig: this.subagentConfig,
+            // Tree context for execution tracking
+            tree: this.tree,
+            parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
+            baseDepth: this.baseDepth,
+            // Cross-iteration dependency tracking
+            priorCompletedInvocations: this.completedInvocationIds,
+            priorFailedInvocations: this.failedInvocationIds,
+          });
+
+          // Consume the stream processor generator, yielding events in real-time
+          // The final event is a StreamCompletionEvent containing metadata
+          let streamMetadata: StreamCompletionEvent | null = null;
+          let gadgetCallCount = 0;
+
+          // Track outputs for conversation history (since we stream instead of batch)
+          const textOutputs: string[] = [];
+          const gadgetResults: StreamEvent[] = [];
+
+          for await (const event of processor.process(stream)) {
+            if (event.type === "stream_complete") {
+              // Completion event - extract metadata, don't yield to consumer
+              streamMetadata = event;
+              continue;
+            }
+
+            // Track outputs for later conversation history updates
+            if (event.type === "text") {
+              textOutputs.push(event.content);
+            } else if (event.type === "gadget_result") {
+              gadgetCallCount++;
+              gadgetResults.push(event);
+            }
+
+            // Yield event to consumer in real-time
+            // (includes subagent events from completedResultsQueue for real-time streaming)
+            yield event;
+          }
+
+          // Ensure we received the completion metadata
+          if (!streamMetadata) {
+            throw new Error("Stream processing completed without metadata event");
+          }
+
+          // Collect completed/failed invocation IDs for cross-iteration dependency tracking
+          for (const id of processor.getCompletedInvocationIds()) {
+            this.completedInvocationIds.add(id);
+          }
+          for (const id of processor.getFailedInvocationIds()) {
+            this.failedInvocationIds.add(id);
+          }
+
+          // Use streamMetadata as the result for remaining logic
+          const result = streamMetadata;
+
+          this.logger.info("LLM response completed", {
+            finishReason: result.finishReason,
+            usage: result.usage,
+            didExecuteGadgets: result.didExecuteGadgets,
+          });
+          this.logger.silly("LLM response details", {
+            rawResponse: result.rawResponse,
+          });
+
+          // Observer: LLM call complete
+          await this.safeObserve(async () => {
+            if (this.hooks.observers?.onLLMCallComplete) {
+              const context: ObserveLLMCompleteContext = {
+                iteration: currentIteration,
+                options: llmOptions,
+                finishReason: result.finishReason,
+                usage: result.usage,
+                rawResponse: result.rawResponse,
+                finalMessage: result.finalMessage,
+                logger: this.logger,
+              };
+              await this.hooks.observers.onLLMCallComplete(context);
+            }
+          });
+
+          // Complete LLM call in execution tree (with cost calculation)
+          this.completeLLMCallInTree(currentLLMNodeId, result);
+
+          // Process afterLLMCall controller (may modify finalMessage or append messages)
+          const finalMessage = await this.processAfterLLMCallController(
+            currentIteration,
+            llmOptions,
+            result,
+            gadgetCallCount,
+          );
+
+          // Update conversation with results (gadgets or text-only)
+          const shouldBreakFromTextOnly = await this.updateConversationWithResults(
+            result.didExecuteGadgets,
+            textOutputs,
+            gadgetResults,
+            finalMessage,
+          );
+          if (shouldBreakFromTextOnly) {
+            break;
+          }
+
+          // Check if loop should break
+          if (result.shouldBreakLoop) {
+            this.logger.info("Loop terminated by gadget or processor");
+            break;
+          }
+        } catch (error) {
+          // Handle LLM error
+          const errorHandled = await this.handleLLMError(error as Error, currentIteration);
+
+          // Observer: LLM error
+          await this.safeObserve(async () => {
+            if (this.hooks.observers?.onLLMCallError) {
+              const context: ObserveLLMErrorContext = {
+                iteration: currentIteration,
+                options: {
+                  model: this.model,
+                  messages: this.conversation.getMessages(),
+                  temperature: this.temperature,
+                  maxTokens: this.defaultMaxTokens,
+                },
+                error: error as Error,
+                recovered: errorHandled,
+                logger: this.logger,
+              };
+              await this.hooks.observers.onLLMCallError(context);
+            }
+          });
+
+          if (!errorHandled) {
+            throw error;
+          }
+        }
+
+        currentIteration++;
       }
 
-      // Process any injected user messages (from REPL mid-session input)
-      while (this.pendingUserMessages.length > 0) {
-        const msg = this.pendingUserMessages.shift()!;
-        this.conversation.addUserMessage(msg);
-        this.logger.info("Injected user message into conversation", {
-          iteration: currentIteration,
-          messageLength: msg.length,
-        });
-      }
-
-      this.logger.debug("Starting iteration", { iteration: currentIteration });
-
-      try {
-        // Check and perform context compaction if needed
-        const compactionEvent = await this.checkAndPerformCompaction(currentIteration);
-        if (compactionEvent) {
-          yield compactionEvent;
-        }
-
-        // Prepare LLM call with hooks
-        const prepared = await this.prepareLLMCall(currentIteration);
-        const llmOptions = prepared.options;
-
-        // Handle skip action from beforeLLMCall controller
-        if (prepared.skipWithSynthetic !== undefined) {
-          this.conversation.addAssistantMessage(prepared.skipWithSynthetic);
-          yield { type: "text", content: prepared.skipWithSynthetic };
-          break;
-        }
-
-        // Call LLM
-        this.logger.info("Calling LLM", { model: this.model });
-        this.logger.silly("LLM request details", {
-          model: llmOptions.model,
-          temperature: llmOptions.temperature,
-          maxTokens: llmOptions.maxTokens,
-          messageCount: llmOptions.messages.length,
-          messages: llmOptions.messages,
-        });
-
-        // Add LLM call to execution tree
-        const llmNode = this.tree.addLLMCall({
-          iteration: currentIteration,
-          model: llmOptions.model,
-          parentId: this.parentNodeId,
-          request: llmOptions.messages,
-        });
-        const currentLLMNodeId = llmNode.id;
-
-        // Create LLM stream with retry logic (if enabled)
-        const stream = await this.createStreamWithRetry(llmOptions, currentIteration);
-
-        // Process stream - ALL complexity delegated to StreamProcessor
-        const processor = new StreamProcessor({
-          iteration: currentIteration,
-          registry: this.registry,
-          gadgetStartPrefix: this.gadgetStartPrefix,
-          gadgetEndPrefix: this.gadgetEndPrefix,
-          gadgetArgPrefix: this.gadgetArgPrefix,
-          hooks: this.hooks,
-          logger: this.logger.getSubLogger({ name: "stream-processor" }),
-          requestHumanInput: this.requestHumanInput,
-          defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-          client: this.client,
-          mediaStore: this.mediaStore,
-          agentConfig: this.agentContextConfig,
-          subagentConfig: this.subagentConfig,
-          // Tree context for execution tracking
-          tree: this.tree,
-          parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
-          baseDepth: this.baseDepth,
-          // Cross-iteration dependency tracking
-          priorCompletedInvocations: this.completedInvocationIds,
-          priorFailedInvocations: this.failedInvocationIds,
-        });
-
-        // Consume the stream processor generator, yielding events in real-time
-        // The final event is a StreamCompletionEvent containing metadata
-        let streamMetadata: StreamCompletionEvent | null = null;
-        let gadgetCallCount = 0;
-
-        // Track outputs for conversation history (since we stream instead of batch)
-        const textOutputs: string[] = [];
-        const gadgetResults: StreamEvent[] = [];
-
-        for await (const event of processor.process(stream)) {
-          if (event.type === "stream_complete") {
-            // Completion event - extract metadata, don't yield to consumer
-            streamMetadata = event;
-            continue;
-          }
-
-          // Track outputs for later conversation history updates
-          if (event.type === "text") {
-            textOutputs.push(event.content);
-          } else if (event.type === "gadget_result") {
-            gadgetCallCount++;
-            gadgetResults.push(event);
-          }
-
-          // Yield event to consumer in real-time
-          // (includes subagent events from completedResultsQueue for real-time streaming)
-          yield event;
-        }
-
-        // Ensure we received the completion metadata
-        if (!streamMetadata) {
-          throw new Error("Stream processing completed without metadata event");
-        }
-
-        // Collect completed/failed invocation IDs for cross-iteration dependency tracking
-        for (const id of processor.getCompletedInvocationIds()) {
-          this.completedInvocationIds.add(id);
-        }
-        for (const id of processor.getFailedInvocationIds()) {
-          this.failedInvocationIds.add(id);
-        }
-
-        // Use streamMetadata as the result for remaining logic
-        const result = streamMetadata;
-
-        this.logger.info("LLM response completed", {
-          finishReason: result.finishReason,
-          usage: result.usage,
-          didExecuteGadgets: result.didExecuteGadgets,
-        });
-        this.logger.silly("LLM response details", {
-          rawResponse: result.rawResponse,
-        });
-
-        // Observer: LLM call complete
-        await this.safeObserve(async () => {
-          if (this.hooks.observers?.onLLMCallComplete) {
-            const context: ObserveLLMCompleteContext = {
-              iteration: currentIteration,
-              options: llmOptions,
-              finishReason: result.finishReason,
-              usage: result.usage,
-              rawResponse: result.rawResponse,
-              finalMessage: result.finalMessage,
-              logger: this.logger,
-            };
-            await this.hooks.observers.onLLMCallComplete(context);
-          }
-        });
-
-        // Complete LLM call in execution tree (with cost calculation)
-        this.completeLLMCallInTree(currentLLMNodeId, result);
-
-        // Process afterLLMCall controller (may modify finalMessage or append messages)
-        const finalMessage = await this.processAfterLLMCallController(
-          currentIteration,
-          llmOptions,
-          result,
-          gadgetCallCount,
-        );
-
-        // Update conversation with results (gadgets or text-only)
-        const shouldBreakFromTextOnly = await this.updateConversationWithResults(
-          result.didExecuteGadgets,
-          textOutputs,
-          gadgetResults,
-          finalMessage,
-        );
-        if (shouldBreakFromTextOnly) {
-          break;
-        }
-
-        // Check if loop should break
-        if (result.shouldBreakLoop) {
-          this.logger.info("Loop terminated by gadget or processor");
-          break;
-        }
-      } catch (error) {
-        // Handle LLM error
-        const errorHandled = await this.handleLLMError(error as Error, currentIteration);
-
-        // Observer: LLM error
-        await this.safeObserve(async () => {
-          if (this.hooks.observers?.onLLMCallError) {
-            const context: ObserveLLMErrorContext = {
-              iteration: currentIteration,
-              options: {
-                model: this.model,
-                messages: this.conversation.getMessages(),
-                temperature: this.temperature,
-                maxTokens: this.defaultMaxTokens,
-              },
-              error: error as Error,
-              recovered: errorHandled,
-              logger: this.logger,
-            };
-            await this.hooks.observers.onLLMCallError(context);
-          }
-        });
-
-        if (!errorHandled) {
-          throw error;
-        }
-      }
-
-      currentIteration++;
+      this.logger.info("Agent loop completed", {
+        totalIterations: currentIteration,
+        reason: currentIteration >= this.maxIterations ? "max_iterations" : "natural_completion",
+      });
+    } finally {
+      // Always clean up the bridge subscription
+      unsubscribeBridge();
     }
-
-    this.logger.info("Agent loop completed", {
-      totalIterations: currentIteration,
-      reason: currentIteration >= this.maxIterations ? "max_iterations" : "natural_completion",
-    });
   }
 
   /**

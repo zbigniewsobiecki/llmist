@@ -109,11 +109,14 @@
  * GADGET LIFECYCLE:
  * 1. interceptGadgetParameters (interceptor)
  * 2. beforeGadgetExecution (controller) - can skip
- * 3. onGadgetExecutionStart (observer)
+ * 3. tree.startGadget() -> onGadgetExecutionStart (observer via bridge)
  * 4. [Execute gadget]
  * 5. interceptGadgetResult (interceptor)
  * 6. afterGadgetExecution (controller) - can recover
- * 7. onGadgetExecutionComplete (observer)
+ * 7. tree.completeGadget() -> onGadgetExecutionComplete (observer via bridge)
+ *
+ * Note: Gadget observer hooks (steps 3, 7) are derived from ExecutionTree events
+ * via tree-hook-bridge.ts, ensuring consistent subagentContext for nested agents.
  * ```
  *
  * @module agent/hooks
@@ -225,12 +228,15 @@ export interface ObserveLLMErrorContext {
 /**
  * Context provided when a gadget execution starts.
  * Read-only observation point.
+ *
+ * Note: Observer hooks are derived from ExecutionTree events, ensuring consistent
+ * context (including subagentContext) for both main agent and nested subagent events.
  */
 export interface ObserveGadgetStartContext {
   iteration: number;
   gadgetName: string;
   invocationId: string;
-  /** Parameters after controller modifications */
+  /** Parameters after interceptor modifications (stored in ExecutionTree) */
   parameters: Readonly<Record<string, unknown>>;
   logger: Logger<ILogObj>;
   /** Present when event is from a subagent (undefined for top-level agent) */
@@ -240,15 +246,23 @@ export interface ObserveGadgetStartContext {
 /**
  * Context provided when a gadget execution completes.
  * Read-only observation point.
+ *
+ * Note: Observer hooks are derived from ExecutionTree events, ensuring consistent
+ * context (including subagentContext) for both main agent and nested subagent events.
  */
 export interface ObserveGadgetCompleteContext {
   iteration: number;
   gadgetName: string;
   invocationId: string;
   parameters: Readonly<Record<string, unknown>>;
-  /** Original result before interceptors */
+  /**
+   * Original result before interceptors.
+   * @deprecated No longer populated. Use `finalResult` instead.
+   * With the unified event architecture, observers receive the final (post-interceptor)
+   * result from the ExecutionTree.
+   */
   originalResult?: string;
-  /** Final result after interceptors */
+  /** Final result after interceptors (the value stored in ExecutionTree) */
   finalResult?: string;
   error?: string;
   executionTimeMs: number;
@@ -263,6 +277,9 @@ export interface ObserveGadgetCompleteContext {
 /**
  * Context provided when a gadget is skipped due to a failed dependency.
  * Read-only observation point.
+ *
+ * Note: Observer hooks are derived from ExecutionTree events, ensuring consistent
+ * context (including subagentContext) for both main agent and nested subagent events.
  */
 export interface ObserveGadgetSkippedContext {
   iteration: number;
