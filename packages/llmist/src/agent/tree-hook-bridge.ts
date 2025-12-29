@@ -13,12 +13,22 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { ExecutionTree, GadgetNode, LLMCallNode, NodeId } from "../core/execution-tree.js";
-import type { ExecutionEvent, GadgetCompleteEvent, GadgetStartEvent } from "../core/execution-events.js";
+import type {
+  ExecutionEvent,
+  GadgetCompleteEvent,
+  GadgetStartEvent,
+  LLMCallCompleteEvent,
+  LLMCallErrorEvent,
+  LLMCallStartEvent,
+} from "../core/execution-events.js";
 import type {
   AgentHooks,
   ObserveGadgetCompleteContext,
   ObserveGadgetSkippedContext,
   ObserveGadgetStartContext,
+  ObserveLLMCallContext,
+  ObserveLLMCompleteContext,
+  ObserveLLMErrorContext,
   SubagentContext,
 } from "./hooks.js";
 
@@ -272,8 +282,100 @@ export function bridgeTreeToHooks(
         break;
       }
 
-      // Other event types (llm_call_*, text, compaction, etc.) are not bridged
-      // because they are already handled directly in agent.ts with proper context
+      // LLM events - bridged for subagent visibility
+      // When a subagent makes LLM calls, these events propagate through the shared tree
+      // to the parent's hooks, enabling unified monitoring of all LLM activity
+      case "llm_call_start": {
+        // Only call hooks for subagent events (depth > 0)
+        // Root agent events are already handled directly in agent.ts
+        if (subagentContext && hooks.observers?.onLLMCallStart) {
+          const llmEvent = event as LLMCallStartEvent;
+
+          const context: ObserveLLMCallContext = {
+            iteration: llmEvent.iteration,
+            options: {
+              model: llmEvent.model,
+              messages: llmEvent.request ?? [],
+              // These fields are not available from tree events, use defaults
+              temperature: undefined,
+              maxTokens: undefined,
+            },
+            logger,
+            subagentContext,
+          };
+
+          safeObserve(
+            () => hooks.observers!.onLLMCallStart!(context),
+            logger,
+            "onLLMCallStart",
+          );
+        }
+        break;
+      }
+
+      case "llm_call_complete": {
+        // Only call hooks for subagent events (depth > 0)
+        if (subagentContext && hooks.observers?.onLLMCallComplete) {
+          const llmEvent = event as LLMCallCompleteEvent;
+          const llmNode = tree.getNode(event.nodeId) as LLMCallNode | undefined;
+
+          const context: ObserveLLMCompleteContext = {
+            iteration: llmNode?.iteration ?? 1,
+            options: {
+              model: llmNode?.model ?? "unknown",
+              messages: llmNode?.request ?? [],
+              temperature: undefined,
+              maxTokens: undefined,
+            },
+            finishReason: llmEvent.finishReason ?? null,
+            usage: llmEvent.usage,
+            rawResponse: llmEvent.response,
+            // Use rawResponse as finalMessage since interceptor modifications aren't available from tree events
+            finalMessage: llmEvent.response,
+            logger,
+            subagentContext,
+          };
+
+          safeObserve(
+            () => hooks.observers!.onLLMCallComplete!(context),
+            logger,
+            "onLLMCallComplete",
+          );
+        }
+        break;
+      }
+
+      case "llm_call_error": {
+        // Only call hooks for subagent events (depth > 0)
+        if (subagentContext && hooks.observers?.onLLMCallError) {
+          const llmEvent = event as LLMCallErrorEvent;
+          const llmNode = tree.getNode(event.nodeId) as LLMCallNode | undefined;
+
+          const context: ObserveLLMErrorContext = {
+            iteration: llmNode?.iteration ?? 1,
+            options: {
+              model: llmNode?.model ?? "unknown",
+              messages: llmNode?.request ?? [],
+              temperature: undefined,
+              maxTokens: undefined,
+            },
+            error: llmEvent.error,
+            recovered: llmEvent.recovered,
+            logger,
+            subagentContext,
+          };
+
+          safeObserve(
+            () => hooks.observers!.onLLMCallError!(context),
+            logger,
+            "onLLMCallError",
+          );
+        }
+        break;
+      }
+
+      // Other event types (text, compaction, etc.) are not bridged
+      // as they don't have corresponding hook observer interfaces
     }
   });
 }

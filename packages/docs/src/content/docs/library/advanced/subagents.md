@@ -214,11 +214,16 @@ const totalCost = ctx?.tree?.getSubtreeCost(ctx.nodeId!);
 ```
 
 :::tip[Subagent Events in Observers]
-When a subagent executes gadgets, your parent agent's observers receive those events with `subagentContext` set:
+When a subagent runs, your parent agent's observers receive all events—both gadget and LLM calls—with `subagentContext` set:
 
 ```typescript
 .withHooks({
   observers: {
+    onLLMCallStart: (ctx) => {
+      if (ctx.subagentContext) {
+        console.log(`Subagent LLM call at depth ${ctx.subagentContext.depth}`);
+      }
+    },
     onGadgetExecutionComplete: (ctx) => {
       if (ctx.subagentContext) {
         console.log(`Subagent gadget: ${ctx.gadgetName} (depth ${ctx.subagentContext.depth})`);
@@ -230,7 +235,7 @@ When a subagent executes gadgets, your parent agent's observers receive those ev
 :::
 
 :::note[How It Works]
-The unified event flow is achieved through `tree-hook-bridge.ts`, which subscribes to ExecutionTree events and forwards them to hook observers. This ensures identical event context (including `subagentContext`) reaches both the TUI and your custom hooks.
+The unified event flow is achieved through `tree-hook-bridge.ts`, which subscribes to ExecutionTree events and forwards them to hook observers. Both LLM events (`llm_call_start`, `llm_call_complete`, `llm_call_error`) and gadget events are bridged, ensuring identical event context (including `subagentContext`) reaches both the TUI and your custom hooks.
 :::
 
 ## Human Input Inheritance
