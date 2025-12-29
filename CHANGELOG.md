@@ -1,3 +1,8 @@
+## 11.1.0 (2025-12-29)
+
+* Merge pull request #296 from zbigniewsobiecki/dev ([714823c](https://github.com/zbigniewsobiecki/llmist/commit/714823c)), closes [#296](https://github.com/zbigniewsobiecki/llmist/issues/296)
+* feat(agent): add SubagentContext to LLM hook observers (#295) ([b04ca0d](https://github.com/zbigniewsobiecki/llmist/commit/b04ca0d)), closes [#295](https://github.com/zbigniewsobiecki/llmist/issues/295)
+
 ## <small>11.0.1 (2025-12-29)</small>
 
 * Merge pull request #294 from zbigniewsobiecki/dev ([d72bf28](https://github.com/zbigniewsobiecki/llmist/commit/d72bf28)), closes [#294](https://github.com/zbigniewsobiecki/llmist/issues/294)
