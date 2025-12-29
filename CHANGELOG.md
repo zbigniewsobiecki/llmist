@@ -1,3 +1,9 @@
+## 10.3.1 (2025-12-29)
+
+* fix(agent): pass subagentContext to existing hooks in configureForSubagent (#289)
+* refactor(agent): streamline subagent event flow via completedResultsQueue (#288)
+* fix(agent): remove duplicate subagent event emission (#287)
+
 ## 10.3.0 (2025-12-28)
 
 * Merge pull request #283 from zbigniewsobiecki/chore/bump-10.2.1 ([1f6d495](https://github.com/zbigniewsobiecki/llmist/commit/1f6d495)), closes [#283](https://github.com/zbigniewsobiecki/llmist/issues/283)
