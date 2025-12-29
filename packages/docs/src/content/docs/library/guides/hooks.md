@@ -215,7 +215,12 @@ observers: {
 ```
 
 :::note[Unified Event Architecture]
-All gadget observer hooks (`onGadgetExecutionStart`, `onGadgetExecutionComplete`, `onGadgetSkipped`) are derived from the [ExecutionTree](/library/advanced/execution-tree/). This ensures consistent `subagentContext` for nested agents and unified event handling across the TUI and user code.
+All observer hooks—both gadget hooks (`onGadgetExecutionStart`, `onGadgetExecutionComplete`, `onGadgetSkipped`) and LLM hooks (`onLLMCallStart`, `onLLMCallComplete`, `onLLMCallError`)—are bridged through the [ExecutionTree](/library/advanced/execution-tree/) for subagent events.
+
+This ensures:
+- Consistent `subagentContext` for all nested agent events
+- Unified event handling across the TUI and user code
+- Parent hooks automatically receive all subagent events when using `withParentContext()`
 :::
 
 ## Merging Hooks

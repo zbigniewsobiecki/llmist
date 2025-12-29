@@ -246,4 +246,107 @@ describe("bridgeTreeToHooks", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(callCount).toBe(1); // Still 1, not 2
   });
+
+  describe("LLM event bridging", () => {
+    it("subagent LLM calls should trigger onLLMCallStart hook with subagentContext", async () => {
+      const tree = new ExecutionTree();
+      const logger = createMockLogger();
+
+      const llmStartContexts: { iteration: number; model: string; subagentContext?: { parentGadgetInvocationId: string; depth: number } }[] = [];
+
+      const hooks: AgentHooks = {
+        observers: {
+          onLLMCallStart: (ctx) => {
+            llmStartContexts.push({
+              iteration: ctx.iteration,
+              model: ctx.options.model,
+              subagentContext: ctx.subagentContext,
+            });
+          },
+        },
+      };
+
+      bridgeTreeToHooks(tree, hooks, logger);
+
+      // Root LLM call (should NOT trigger bridge - it's handled directly in agent.ts)
+      const rootLLMCall = tree.addLLMCall({ iteration: 1, model: "root-model" });
+
+      // Parent gadget that spawns subagent
+      const parentGadgetNode = tree.addGadget({
+        invocationId: "browse-web-1",
+        name: "BrowseWeb",
+        parameters: {},
+        parentId: rootLLMCall.id,
+      });
+      tree.startGadget(parentGadgetNode.id);
+
+      // Subagent LLM call (should trigger bridge with subagentContext)
+      const subagentLLMCall = tree.addLLMCall({
+        iteration: 1,
+        model: "subagent-model",
+        parentId: parentGadgetNode.id,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Root LLM call should NOT be bridged (it has no subagentContext)
+      // Subagent LLM call SHOULD be bridged with correct subagentContext
+      expect(llmStartContexts.length).toBe(1);
+      expect(llmStartContexts[0].model).toBe("subagent-model");
+      expect(llmStartContexts[0].subagentContext).toBeDefined();
+      expect(llmStartContexts[0].subagentContext!.parentGadgetInvocationId).toBe("browse-web-1");
+      expect(llmStartContexts[0].subagentContext!.depth).toBeGreaterThan(0);
+    });
+
+    it("subagent LLM completion should trigger onLLMCallComplete hook", async () => {
+      const tree = new ExecutionTree();
+      const logger = createMockLogger();
+
+      const llmCompleteContexts: { finishReason: string | null; subagentContext?: { parentGadgetInvocationId: string } }[] = [];
+
+      const hooks: AgentHooks = {
+        observers: {
+          onLLMCallComplete: (ctx) => {
+            llmCompleteContexts.push({
+              finishReason: ctx.finishReason,
+              subagentContext: ctx.subagentContext,
+            });
+          },
+        },
+      };
+
+      bridgeTreeToHooks(tree, hooks, logger);
+
+      // Setup tree structure
+      const rootLLMCall = tree.addLLMCall({ iteration: 1, model: "root-model" });
+      const parentGadgetNode = tree.addGadget({
+        invocationId: "browse-web-1",
+        name: "BrowseWeb",
+        parameters: {},
+        parentId: rootLLMCall.id,
+      });
+      tree.startGadget(parentGadgetNode.id);
+
+      // Subagent LLM call
+      const subagentLLMCall = tree.addLLMCall({
+        iteration: 1,
+        model: "subagent-model",
+        parentId: parentGadgetNode.id,
+      });
+
+      // Complete the subagent LLM call
+      tree.completeLLMCall(subagentLLMCall.id, {
+        response: "Subagent response",
+        finishReason: "stop",
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Subagent LLM completion should be bridged
+      expect(llmCompleteContexts.length).toBe(1);
+      expect(llmCompleteContexts[0].finishReason).toBe("stop");
+      expect(llmCompleteContexts[0].subagentContext).toBeDefined();
+      expect(llmCompleteContexts[0].subagentContext!.parentGadgetInvocationId).toBe("browse-web-1");
+    });
+  });
 });
