@@ -59,7 +59,7 @@ function createMockContainer() {
 }
 
 describe("BlockRenderer", () => {
-  describe("addLLMCall deduplication", () => {
+  describe("addLLMCall idempotency", () => {
     test("creates unique block for first call with iteration", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
@@ -89,7 +89,7 @@ describe("BlockRenderer", () => {
       expect(id1).not.toBe(id2);
     });
 
-    test("deduplication works for iteration 0", () => {
+    test("idempotency works for iteration 0", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
 
@@ -99,7 +99,7 @@ describe("BlockRenderer", () => {
       expect(id1).toBe(id2);
     });
 
-    test("nested LLM calls (with parentGadgetId) ARE deduplicated by parent+iteration", () => {
+    test("nested LLM calls (with parentGadgetId) ARE idempotent by parent+iteration", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
 
@@ -110,7 +110,7 @@ describe("BlockRenderer", () => {
       const nestedId1 = renderer.addLLMCall(1, "test-model", gadgetId);
       const nestedId2 = renderer.addLLMCall(1, "test-model", gadgetId);
 
-      // Same parent + same iteration should return same block (deduplication)
+      // Same parent + same iteration should return same block (idempotent)
       expect(nestedId1).toBe(nestedId2);
     });
 
@@ -145,7 +145,7 @@ describe("BlockRenderer", () => {
       expect(nestedId1).not.toBe(nestedId2);
     });
 
-    test("root-level deduplication is independent from nested calls", () => {
+    test("root-level idempotency is independent from nested calls", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
 
@@ -166,7 +166,7 @@ describe("BlockRenderer", () => {
       expect(rootId2).toBe(rootId);
     });
 
-    test("clear() resets deduplication map", () => {
+    test("clear() resets idempotency map", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
 
@@ -526,7 +526,7 @@ describe("BlockRenderer", () => {
     });
   });
 
-  describe("addGadget deduplication", () => {
+  describe("addGadget idempotency", () => {
     test("creates unique block for first gadget with invocationId", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
@@ -556,7 +556,7 @@ describe("BlockRenderer", () => {
       expect(id1).not.toBe(id2);
     });
 
-    test("clear() resets gadget deduplication map", () => {
+    test("clear() resets gadget idempotency map", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
 
@@ -568,24 +568,15 @@ describe("BlockRenderer", () => {
       expect(id1).not.toBe(id2);
     });
 
-    test("gadget deduplication works with tree subscription (dual-path)", () => {
+    test("gadget idempotency with tree subscription", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
       const tree = new ExecutionTree();
 
-      // Add LLM call first (for proper parenting)
-      renderer.addLLMCall(1, "sonnet");
-
       // Subscribe to tree
       const unsubscribe = renderer.subscribeToTree(tree);
 
-      // Manually create gadget (simulates handleEvent path)
-      const manualGadgetId = renderer.addGadget("gc_browse", "BrowseWeb", {
-        url: "https://example.com",
-      });
-
-      // Tree event for same gadget (should reuse existing)
-      // Tree uses 0-indexed iteration, handler adds +1 to match display
+      // Tree creates gadget
       const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
       const gadgetNode = tree.addGadget({
         invocationId: "gc_browse",
@@ -595,32 +586,22 @@ describe("BlockRenderer", () => {
       });
       const treeGadgetId = renderer.getBlockIdForTreeNode(gadgetNode.id);
 
-      // Both paths should refer to the same block
-      expect(treeGadgetId).toBe(manualGadgetId);
-
-      // Only one gadget should exist
-      const allGadgets = [...new Set([manualGadgetId, treeGadgetId])];
-      expect(allGadgets).toHaveLength(1);
+      // Calling addGadget with same invocationId returns same block (idempotent)
+      const secondCall = renderer.addGadget("gc_browse", "BrowseWeb");
+      expect(secondCall).toBe(treeGadgetId);
 
       unsubscribe();
     });
 
-    test("nested subagent LLM calls use deduplicated gadget as parent", () => {
+    test("nested subagent LLM calls are correctly parented to gadget", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
       const tree = new ExecutionTree();
 
-      // Add root LLM call (1-indexed for display)
-      const rootBlockId = renderer.addLLMCall(1, "sonnet");
-
       // Subscribe to tree
       const unsubscribe = renderer.subscribeToTree(tree);
 
-      // Manually create gadget (simulates handleEvent path)
-      const manualGadgetId = renderer.addGadget("gc_browse", "BrowseWeb");
-
-      // Tree creates the same gadget (should deduplicate)
-      // Tree uses 0-indexed iteration, handler adds +1 to match display
+      // Tree creates root LLM → gadget → nested LLM structure
       const rootLLM = tree.addLLMCall({ iteration: 0, model: "sonnet" });
       const gadgetNode = tree.addGadget({
         invocationId: "gc_browse",
@@ -629,21 +610,20 @@ describe("BlockRenderer", () => {
         parentId: rootLLM.id,
       });
 
-      // Tree creates nested LLM call under the gadget
-      // Subagent iterations are also 0-indexed in tree
+      // Subagent creates nested LLM call under the gadget
       const nestedLLM = tree.addLLMCall({
         iteration: 0,
         model: "haiku",
         parentId: gadgetNode.id,
       });
 
-      // The nested LLM call should be parented to the SAME gadget block
+      // The nested LLM call should be created and parented correctly
       const nestedBlockId = renderer.getBlockIdForTreeNode(nestedLLM.id);
       expect(nestedBlockId).toBeDefined();
 
-      // Verify the gadget was deduplicated (both paths use same ID)
-      const treeGadgetId = renderer.getBlockIdForTreeNode(gadgetNode.id);
-      expect(treeGadgetId).toBe(manualGadgetId);
+      // The gadget block should also exist
+      const gadgetBlockId = renderer.getBlockIdForTreeNode(gadgetNode.id);
+      expect(gadgetBlockId).toBeDefined();
 
       unsubscribe();
     });

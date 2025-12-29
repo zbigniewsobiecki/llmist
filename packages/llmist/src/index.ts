@@ -267,8 +267,6 @@ export type {
   GadgetSkippedEvent,
   // Host exports for external gadgets
   HostExports,
-  // Subagent LLM call info (for CLI/TUI display)
-  LLMCallInfo,
   MediaKind,
   MediaMetadata,
   ParsedGadgetCall,
@@ -277,9 +275,6 @@ export type {
   // Subagent config types
   SubagentConfig,
   SubagentConfigMap,
-  // Subagent event types
-  SubagentEvent,
-  SubagentStreamEvent,
   TextOnlyAction,
   TextOnlyContext,
   TextOnlyCustomHandler,
