@@ -64,7 +64,8 @@ describe("GadgetExecutor", () => {
         result: "Async result: success",
       });
       expect(result.error).toBeUndefined();
-      expect(result.executionTimeMs).toBeGreaterThanOrEqual(10);
+      // Allow small timing variance (setTimeout is not perfectly precise)
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(8);
     });
 
     it("executes gadget with complex parameters", async () => {

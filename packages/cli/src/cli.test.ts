@@ -5,7 +5,13 @@ import type { ILogObj, Logger } from "tslog";
 import { z } from "zod";
 
 import type { CLIEnvironment } from "./environment.js";
-import { extractGadgetsFromModule, loadGadgets, resolveGadgetSpecifier } from "./gadgets.js";
+import {
+  createTypeScriptImporter,
+  extractGadgetsFromModule,
+  isTypeScriptFile,
+  loadGadgets,
+  resolveGadgetSpecifier,
+} from "./gadgets.js";
 import { runCLI } from "./program.js";
 import {
   createNumericParser,
@@ -408,5 +414,65 @@ describe("gadget loading edge cases", () => {
         default: BrokenGadget,
       })),
     ).rejects.toThrow("Failed to initialize gadgets");
+  });
+});
+
+describe("isTypeScriptFile", () => {
+  it("detects .ts files from file:// URLs", () => {
+    expect(isTypeScriptFile("file:///path/to/gadget.ts")).toBe(true);
+    expect(isTypeScriptFile("file:///home/user/.llmist/gadgets/todo/index.ts")).toBe(true);
+  });
+
+  it("detects .ts files from bare paths", () => {
+    expect(isTypeScriptFile("/path/to/gadget.ts")).toBe(true);
+    expect(isTypeScriptFile("./gadget.ts")).toBe(true);
+    expect(isTypeScriptFile("~/gadgets/index.ts")).toBe(true);
+  });
+
+  it("detects .tsx files", () => {
+    expect(isTypeScriptFile("file:///path/to/component.tsx")).toBe(true);
+    expect(isTypeScriptFile("/path/to/component.tsx")).toBe(true);
+  });
+
+  it("detects .mts files (ESM TypeScript)", () => {
+    expect(isTypeScriptFile("file:///path/to/module.mts")).toBe(true);
+    expect(isTypeScriptFile("/path/to/module.mts")).toBe(true);
+  });
+
+  it("detects .cts files (CommonJS TypeScript)", () => {
+    expect(isTypeScriptFile("file:///path/to/common.cts")).toBe(true);
+    expect(isTypeScriptFile("/path/to/common.cts")).toBe(true);
+  });
+
+  it("returns false for .js files", () => {
+    expect(isTypeScriptFile("file:///path/to/gadget.js")).toBe(false);
+    expect(isTypeScriptFile("/path/to/gadget.js")).toBe(false);
+    expect(isTypeScriptFile("./gadget.js")).toBe(false);
+  });
+
+  it("returns false for .mjs files", () => {
+    expect(isTypeScriptFile("file:///path/to/module.mjs")).toBe(false);
+    expect(isTypeScriptFile("/path/to/module.mjs")).toBe(false);
+  });
+
+  it("returns false for npm module specifiers", () => {
+    expect(isTypeScriptFile("some-package")).toBe(false);
+    expect(isTypeScriptFile("@scope/package")).toBe(false);
+    expect(isTypeScriptFile("dhalsim")).toBe(false);
+  });
+});
+
+describe("createTypeScriptImporter", () => {
+  it("returns a function", () => {
+    const importer = createTypeScriptImporter();
+    expect(typeof importer).toBe("function");
+  });
+
+  it("can be used as custom importer for loadGadgets", async () => {
+    // Test that loadGadgets accepts the TypeScript importer
+    const importer = createTypeScriptImporter();
+    await expect(
+      loadGadgets(["nonexistent-module"], process.cwd(), importer),
+    ).rejects.toThrow(); // Will fail, but proves the function signature is compatible
   });
 });
