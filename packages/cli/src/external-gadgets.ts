@@ -16,7 +16,11 @@ import os from "node:os";
 import { pathToFileURL } from "node:url";
 
 import type { AbstractGadget, LLMistPackageManifest } from "llmist";
-import { extractGadgetsFromModule } from "./gadgets.js";
+import {
+  createTypeScriptImporter,
+  extractGadgetsFromModule,
+  isTypeScriptFile,
+} from "./gadgets.js";
 
 /**
  * Check if a command is available in the system PATH.
@@ -459,11 +463,16 @@ export async function loadExternalGadgets(
     );
   }
 
-  // Import the module
+  // Import the module (use TypeScript importer for .ts files)
   const moduleUrl = pathToFileURL(resolvedEntryPoint).href;
   let exports: unknown;
   try {
-    exports = await import(moduleUrl);
+    if (isTypeScriptFile(resolvedEntryPoint)) {
+      const importer = createTypeScriptImporter();
+      exports = await importer(moduleUrl);
+    } else {
+      exports = await import(moduleUrl);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to import '${specifier}': ${message}`);
@@ -581,7 +590,13 @@ export async function listExternalGadgets(specifier: string): Promise<{
   if (fs.existsSync(resolvedEntryPoint)) {
     try {
       const moduleUrl = pathToFileURL(resolvedEntryPoint).href;
-      const exports = await import(moduleUrl);
+      let exports: unknown;
+      if (isTypeScriptFile(resolvedEntryPoint)) {
+        const importer = createTypeScriptImporter();
+        exports = await importer(moduleUrl);
+      } else {
+        exports = await import(moduleUrl);
+      }
       const gadgets = extractGadgetsFromModule(exports);
       gadgetInfo = gadgets.map((g) => ({
         name: g.name || "unnamed",

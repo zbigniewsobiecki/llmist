@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { createJiti } from "jiti";
+import type { Jiti } from "jiti";
 import { AbstractGadget } from "llmist";
 import { getBuiltinGadget, isBuiltinGadgetName } from "./builtins/index.js";
 import { isExternalPackageSpecifier, loadExternalGadgets } from "./external-gadgets.js";
@@ -14,6 +16,60 @@ export type GadgetImportFunction = (specifier: string) => Promise<unknown>;
 
 const PATH_PREFIXES = [".", "/", "~"];
 const BUILTIN_PREFIX = "builtin:";
+
+/**
+ * TypeScript file extensions that require runtime transpilation.
+ */
+const TYPESCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+
+/**
+ * Checks if a file path requires TypeScript transpilation.
+ *
+ * @param specifier - The file URL or path to check
+ * @returns True if the file is a TypeScript file
+ */
+export function isTypeScriptFile(specifier: string): boolean {
+  // Handle file:// URLs
+  const pathToCheck = specifier.startsWith("file://") ? new URL(specifier).pathname : specifier;
+  return TYPESCRIPT_EXTENSIONS.some((ext) => pathToCheck.endsWith(ext));
+}
+
+/**
+ * Lazy-initialized JITI instance (singleton per process).
+ * Uses filesystem caching for performance.
+ */
+let jitiInstance: Jiti | null = null;
+
+function getJiti(): Jiti {
+  if (!jitiInstance) {
+    jitiInstance = createJiti(import.meta.url, {
+      // Enable filesystem cache for performance (default location)
+      fsCache: true,
+      // Enable module cache to integrate with Node.js cache
+      moduleCache: true,
+      // Enable interop for CJS/ESM compatibility
+      interopDefault: true,
+    });
+  }
+  return jitiInstance;
+}
+
+/**
+ * Creates an importer function that handles both JavaScript and TypeScript files.
+ * JavaScript files use native import(), TypeScript files use JITI for transpilation.
+ *
+ * @returns Importer function for loadGadgets
+ */
+export function createTypeScriptImporter(): GadgetImportFunction {
+  return async (specifier: string): Promise<unknown> => {
+    if (isTypeScriptFile(specifier)) {
+      const jiti = getJiti();
+      return await jiti.import(specifier);
+    }
+    // JavaScript files use native import
+    return import(specifier);
+  };
+}
 
 /**
  * Duck-type check if a value looks like a Gadget instance.
@@ -243,7 +299,7 @@ export function extractGadgetsFromModule(moduleExports: unknown): AbstractGadget
 export async function loadGadgets(
   specifiers: string[],
   cwd: string,
-  importer: GadgetImportFunction = (specifier) => import(specifier),
+  importer: GadgetImportFunction = createTypeScriptImporter(),
 ): Promise<AbstractGadget[]> {
   const gadgets: AbstractGadget[] = [];
   // Track if we're using a custom importer (for testing) - skip external package resolution
