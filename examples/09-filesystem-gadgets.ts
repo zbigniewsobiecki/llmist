@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * Example: Using File System Gadgets
  *
@@ -7,7 +6,7 @@
  * working directory and its subdirectories.
  *
  * Run this example:
- *   bun run examples/09-filesystem-gadgets.ts
+ *   npx tsx examples/09-filesystem-gadgets.ts
  */
 
 import { LLMist } from "../src/index.js";

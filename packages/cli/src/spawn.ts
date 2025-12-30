@@ -1,37 +1,14 @@
 /**
- * Cross-runtime spawn utility.
+ * Spawn utility for Node.js child processes.
  *
- * Provides a consistent API for spawning child processes that works in both
- * Bun and Node.js environments. Uses Bun.spawn when available, falls back to
- * Node.js child_process.spawn otherwise.
+ * Provides a consistent API for spawning child processes using Node.js
+ * child_process module with ReadableStream output.
  *
  * @module cli/spawn
  */
 
-// Minimal type declaration for Bun runtime detection (used at runtime only)
-// This allows the code to compile without bun-types while still supporting Bun as secondary runtime
-declare const Bun:
-  | undefined
-  | {
-      spawn(
-        argv: string[],
-        options?: { cwd?: string; stdin?: string; stdout?: string; stderr?: string },
-      ): {
-        stdin: { write(data: string): number; end(): void } | undefined;
-        stdout: ReadableStream<Uint8Array> | undefined;
-        stderr: ReadableStream<Uint8Array> | undefined;
-        exited: Promise<number>;
-        kill(): void;
-      };
-    };
-
 import { spawn as nodeSpawn } from "node:child_process";
 import { Readable } from "node:stream";
-
-/**
- * Check if we're running in Bun runtime.
- */
-const isBun = typeof Bun !== "undefined";
 
 /**
  * Stdio configuration for spawn.
@@ -53,7 +30,7 @@ export interface SpawnOptions {
 }
 
 /**
- * Writable stdin interface compatible with both runtimes.
+ * Writable stdin interface for child processes.
  */
 export interface SpawnStdin {
   write(data: string): void;
@@ -61,7 +38,7 @@ export interface SpawnStdin {
 }
 
 /**
- * Result from spawn function, compatible with Bun.spawn return type.
+ * Result from spawn function with ReadableStream output.
  */
 export interface SpawnResult {
   /** Promise that resolves to exit code when process exits */
@@ -74,38 +51,6 @@ export interface SpawnResult {
   stdin: SpawnStdin | null;
   /** Kill the child process */
   kill(): void;
-}
-
-/**
- * Adapt Bun.Subprocess to SpawnResult interface.
- * This explicit mapping ensures type safety and makes the contract between
- * our code and Bun's API explicit, catching any future API changes at compile time.
- *
- * Note: Bun returns `undefined` for non-piped streams, we normalize to `null`.
- */
-function adaptBunProcess(proc: {
-  exited: Promise<number>;
-  stdout: ReadableStream<Uint8Array> | undefined;
-  stderr: ReadableStream<Uint8Array> | undefined;
-  stdin: { write(data: string): number; end(): void } | undefined;
-  kill(): void;
-}): SpawnResult {
-  return {
-    exited: proc.exited,
-    stdout: proc.stdout ?? null,
-    stderr: proc.stderr ?? null,
-    stdin: proc.stdin
-      ? {
-          write(data: string) {
-            proc.stdin?.write(data);
-          },
-          end() {
-            proc.stdin?.end();
-          },
-        }
-      : null,
-    kill: () => proc.kill(),
-  };
 }
 
 /**
@@ -133,19 +78,13 @@ function nodeStreamToReadableStream(nodeStream: Readable | null): ReadableStream
 }
 
 /**
- * Spawn a child process with a consistent API across Bun and Node.js.
+ * Spawn a child process with ReadableStream output.
  *
  * @param argv - Command and arguments as array (first element is the command)
  * @param options - Spawn options (cwd, stdin, stdout, stderr)
  * @returns SpawnResult with exited promise, streams, and kill function
  */
 export function spawn(argv: string[], options: SpawnOptions = {}): SpawnResult {
-  if (isBun) {
-    // Use Bun's native spawn with type-safe adapter
-    return adaptBunProcess(Bun.spawn(argv, options));
-  }
-
-  // Node.js fallback
   const [command, ...args] = argv;
   const proc = nodeSpawn(command, args, {
     cwd: options.cwd,

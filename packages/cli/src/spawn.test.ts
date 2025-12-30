@@ -129,8 +129,7 @@ describe("spawn utility", () => {
 
   describe("error handling", () => {
     test("handles command not found", async () => {
-      // Bun throws immediately when command not found
-      // Node.js spawns the process which then fails
+      // Node.js throws ENOENT when command is not found
       try {
         const proc = spawn(["nonexistent-command-xyz123"], {
           stdout: "pipe",
@@ -142,7 +141,7 @@ describe("spawn utility", () => {
         // Should have non-zero exit
         expect(exitCode).not.toBe(0);
       } catch (error) {
-        // Bun throws ENOENT immediately - this is expected
+        // ENOENT is thrown when command not found - this is expected
         expect(error).toBeDefined();
         expect((error as NodeJS.ErrnoException).code).toBe("ENOENT");
       }

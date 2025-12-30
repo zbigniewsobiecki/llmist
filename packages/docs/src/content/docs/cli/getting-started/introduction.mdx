@@ -36,9 +36,7 @@ The **llmist CLI** brings the power of AI agents directly to your terminal. Run 
 
 ## Quick Example
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     # Simple completion
     npx @llmist/cli complete "What is the capital of France?"
 
@@ -51,23 +49,6 @@ The **llmist CLI** brings the power of AI agents directly to your terminal. Run 
     # Custom command from config
     npx @llmist/cli code-review ./src/main.ts
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    # Simple completion
-    bunx @llmist/cli complete "What is the capital of France?"
-
-    # Interactive agent (TUI activates automatically in terminals)
-    bunx @llmist/cli agent "Help me organize my project"
-
-    # Generate an image
-    bunx @llmist/cli image "A sunset over mountains" -o sunset.png
-
-    # Custom command from config
-    bunx @llmist/cli code-review ./src/main.ts
-    ```
-  </TabItem>
-</Tabs>
 
 <Aside type="tip">
   The CLI automatically discovers API keys from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).

@@ -1,7 +1,7 @@
 /**
  * Basic llmist usage: Calculator agent
  *
- * Run: bunx tsx examples/01-basic-usage.ts
+ * Run: npx tsx examples/01-basic-usage.ts
  */
 
 import { Gadget, LLMist } from "llmist";

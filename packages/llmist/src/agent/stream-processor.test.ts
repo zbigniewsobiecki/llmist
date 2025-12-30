@@ -238,7 +238,7 @@ describe("StreamProcessor", () => {
 
   describe("Interceptor: interceptRawChunk", () => {
     it("transforms chunk when interceptor provided", async () => {
-      const interceptRawChunk = mock((chunk: string) => chunk.toUpperCase());
+      const interceptRawChunk = vi.fn((chunk: string) => chunk.toUpperCase());
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -254,7 +254,7 @@ describe("StreamProcessor", () => {
     });
 
     it("suppresses chunk when interceptor returns null", async () => {
-      const interceptRawChunk = mock(() => null);
+      const interceptRawChunk = vi.fn(() => null);
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -271,7 +271,7 @@ describe("StreamProcessor", () => {
 
     it("provides correct context", async () => {
       let capturedContext: unknown;
-      const interceptRawChunk = mock((chunk: string, ctx: unknown) => {
+      const interceptRawChunk = vi.fn((chunk: string, ctx: unknown) => {
         capturedContext = ctx;
         return chunk;
       });
@@ -295,7 +295,7 @@ describe("StreamProcessor", () => {
 
   describe("Observer: onStreamChunk", () => {
     it("calls observer for text chunks", async () => {
-      const onStreamChunk = mock(async () => {});
+      const onStreamChunk = vi.fn(async () => {});
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -310,7 +310,7 @@ describe("StreamProcessor", () => {
     });
 
     it("calls observer for usage updates even without text", async () => {
-      const onStreamChunk = mock(async () => {});
+      const onStreamChunk = vi.fn(async () => {});
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -329,7 +329,7 @@ describe("StreamProcessor", () => {
 
     it("provides correct context to observer", async () => {
       let capturedContext: unknown;
-      const onStreamChunk = mock(async (ctx: unknown) => {
+      const onStreamChunk = vi.fn(async (ctx: unknown) => {
         capturedContext = ctx;
       });
 
@@ -349,7 +349,7 @@ describe("StreamProcessor", () => {
     });
 
     it("continues processing if observer throws", async () => {
-      const onStreamChunk = mock(async () => {
+      const onStreamChunk = vi.fn(async () => {
         throw new Error("Observer error");
       });
 
@@ -435,7 +435,7 @@ describe("StreamProcessor", () => {
       });
       registry.registerByClass(testGadget);
 
-      const interceptGadgetParameters = mock((params: Record<string, unknown>) => ({
+      const interceptGadgetParameters = vi.fn((params: Record<string, unknown>) => ({
         ...params,
         message: "intercepted",
       }));
@@ -463,7 +463,7 @@ describe("StreamProcessor", () => {
       registry.registerByClass(testGadget);
 
       let capturedContext: unknown;
-      const interceptGadgetParameters = mock((params: Record<string, unknown>, ctx: unknown) => {
+      const interceptGadgetParameters = vi.fn((params: Record<string, unknown>, ctx: unknown) => {
         capturedContext = ctx;
         return params;
       });
@@ -490,7 +490,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", result: "executed" });
       registry.registerByClass(testGadget);
 
-      const beforeGadgetExecution = mock(async () => ({ action: "proceed" as const }));
+      const beforeGadgetExecution = vi.fn(async () => ({ action: "proceed" as const }));
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -513,7 +513,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", result: "executed" });
       registry.registerByClass(testGadget);
 
-      const beforeGadgetExecution = mock(async () => ({
+      const beforeGadgetExecution = vi.fn(async () => ({
         action: "skip" as const,
         syntheticResult: "skipped by controller",
       }));
@@ -538,7 +538,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", result: "executed", delayMs: 100 });
       registry.registerByClass(testGadget);
 
-      const beforeGadgetExecution = mock(async () => ({
+      const beforeGadgetExecution = vi.fn(async () => ({
         action: "skip" as const,
         syntheticResult: "skipped",
       }));
@@ -562,7 +562,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", result: "executed" });
       registry.registerByClass(testGadget);
 
-      const beforeGadgetExecution = mock(async () => ({
+      const beforeGadgetExecution = vi.fn(async () => ({
         action: "skip" as const,
         syntheticResult: "Custom skip message",
       }));
@@ -592,7 +592,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", result: "original" });
       registry.registerByClass(testGadget);
 
-      const interceptGadgetResult = mock((result: string) => `[modified] ${result}`);
+      const interceptGadgetResult = vi.fn((result: string) => `[modified] ${result}`);
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -614,7 +614,7 @@ describe("StreamProcessor", () => {
       registry.registerByClass(testGadget);
 
       let capturedContext: unknown;
-      const interceptGadgetResult = mock((result: string, ctx: unknown) => {
+      const interceptGadgetResult = vi.fn((result: string, ctx: unknown) => {
         capturedContext = ctx;
         return result;
       });
@@ -639,7 +639,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", result: "original" });
       registry.registerByClass(testGadget);
 
-      const afterGadgetExecution = mock(async () => ({ action: "continue" as const }));
+      const afterGadgetExecution = vi.fn(async () => ({ action: "continue" as const }));
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -661,7 +661,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", error: "Original error" });
       registry.registerByClass(testGadget);
 
-      const afterGadgetExecution = mock(async (ctx: { error?: string }) => {
+      const afterGadgetExecution = vi.fn(async (ctx: { error?: string }) => {
         if (ctx.error) {
           return { action: "recover" as const, fallbackResult: "recovered successfully" };
         }
@@ -690,7 +690,7 @@ describe("StreamProcessor", () => {
       const testGadget = createMockGadget({ name: "TestGadget", error: "Original error" });
       registry.registerByClass(testGadget);
 
-      const afterGadgetExecution = mock(async () => ({
+      const afterGadgetExecution = vi.fn(async () => ({
         action: "recover" as const,
         fallbackResult: "fallback",
       }));
@@ -732,7 +732,7 @@ describe("StreamProcessor", () => {
 
   describe("Interceptor: interceptTextChunk", () => {
     it("transforms text chunk", async () => {
-      const interceptTextChunk = mock((chunk: string) => chunk.toUpperCase());
+      const interceptTextChunk = vi.fn((chunk: string) => chunk.toUpperCase());
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -748,7 +748,7 @@ describe("StreamProcessor", () => {
     });
 
     it("suppresses text chunk when returns null", async () => {
-      const interceptTextChunk = mock(() => null);
+      const interceptTextChunk = vi.fn(() => null);
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -768,7 +768,7 @@ describe("StreamProcessor", () => {
 
   describe("Interceptor: interceptAssistantMessage", () => {
     it("transforms final message", async () => {
-      const interceptAssistantMessage = mock((msg: string) => `[TRANSFORMED] ${msg}`);
+      const interceptAssistantMessage = vi.fn((msg: string) => `[TRANSFORMED] ${msg}`);
 
       const processor = new StreamProcessor({
         iteration: 1,
@@ -786,7 +786,7 @@ describe("StreamProcessor", () => {
 
     it("provides correct context", async () => {
       let capturedContext: unknown;
-      const interceptAssistantMessage = mock((msg: string, ctx: unknown) => {
+      const interceptAssistantMessage = vi.fn((msg: string, ctx: unknown) => {
         capturedContext = ctx;
         return msg;
       });
@@ -1190,7 +1190,7 @@ test value
       registry.registerByClass(errorGadget);
       registry.registerByClass(dependentGadget);
 
-      const onDependencySkipped = mock(async () => ({ action: "skip" as const }));
+      const onDependencySkipped = vi.fn(async () => ({ action: "skip" as const }));
 
       const processor = new StreamProcessor({
         iteration: 1,

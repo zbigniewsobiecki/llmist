@@ -36,7 +36,7 @@ describe("RunCommand gadget", () => {
         argv: ["nonexistent-command-12345"],
         timeout: 30000,
       });
-      // spawn throws when command not found (both Bun and Node.js)
+      // spawn throws when command not found
       expect(result).toMatch(/status=1\n\nerror:/);
     });
 

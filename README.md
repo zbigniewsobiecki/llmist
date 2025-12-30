@@ -25,7 +25,6 @@
 
 ```bash
 npm install llmist
-# or: bun add llmist
 ```
 
 ## Packages
@@ -100,7 +99,6 @@ Full mocking for deterministic, LLM-free testing. [Learn more →](https://llmis
 
 ```bash
 npm install llmist
-# or: bun add llmist
 export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, GEMINI_API_KEY
 ```
 
@@ -129,7 +127,6 @@ const answer = await LLMist.createAgent()
 
 ```bash
 npm install -g @llmist/cli
-# or: bun add -g @llmist/cli
 
 # Quick completion
 llmist complete "Explain TypeScript generics"
@@ -147,7 +144,6 @@ See [Dhalsim](https://github.com/zbigniewsobiecki/dhalsim) for browser automatio
 
 ```bash
 npm install -D @llmist/testing
-# or: bun add -D @llmist/testing
 ```
 
 ```typescript

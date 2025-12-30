@@ -12,7 +12,7 @@ Reads the entire content of a file and returns it as text.
 
 **Example:**
 ```bash
-bun run src/cli.ts agent "Read the package.json file" --gadget ./examples/gadgets/filesystem.ts
+npx tsx src/cli.ts agent "Read the package.json file" --gadget ./examples/gadgets/filesystem.ts
 ```
 
 ### WriteFile
@@ -24,7 +24,7 @@ Writes content to a file. Creates parent directories if needed. Overwrites exist
 
 **Example:**
 ```bash
-bun run src/cli.ts agent "Write 'Hello World' to output.txt" --gadget ./examples/gadgets/filesystem.ts
+npx tsx src/cli.ts agent "Write 'Hello World' to output.txt" --gadget ./examples/gadgets/filesystem.ts
 ```
 
 ### EditFile
@@ -44,7 +44,7 @@ Edit files using ed commands. Ed is a line-oriented text editor that accepts com
 
 **Example:**
 ```bash
-bun run src/cli.ts agent "Replace all TODO with DONE in notes.txt" --gadget ./examples/gadgets/filesystem.ts
+npx tsx src/cli.ts agent "Replace all TODO with DONE in notes.txt" --gadget ./examples/gadgets/filesystem.ts
 ```
 
 **Security:** Shell escape commands (`!`) are filtered to prevent arbitrary command execution.
@@ -58,7 +58,7 @@ Lists files and directories with full metadata (type, name, size, modification d
 
 **Example:**
 ```bash
-bun run src/cli.ts agent "List the src directory recursively" --gadget ./examples/gadgets/filesystem.ts
+npx tsx src/cli.ts agent "List the src directory recursively" --gadget ./examples/gadgets/filesystem.ts
 ```
 
 ## Security: Path Sandboxing
@@ -73,7 +73,7 @@ All three gadgets implement strict path validation to ensure all file operations
 **Example - Security in action:**
 ```bash
 # This will be rejected by the path validator
-bun run src/cli.ts agent "Read /etc/passwd" --gadget ./examples/gadgets/filesystem.ts
+npx tsx src/cli.ts agent "Read /etc/passwd" --gadget ./examples/gadgets/filesystem.ts
 
 # Error: Path access denied: /etc/passwd. Path is outside the current working directory
 ```
@@ -135,7 +135,7 @@ const result = await agent.ask(
 
 ## Important Notes
 
-- Use `bun run src/cli.ts` (not `dist/cli.js`) when loading TypeScript gadget files
+- Use `npx tsx src/cli.ts` (not `dist/cli.js`) when loading TypeScript gadget files
 - File paths must be within the current working directory
 - Symlinks are resolved to their real paths for validation
 - Binary files will be decoded as UTF-8 (may produce garbled text)

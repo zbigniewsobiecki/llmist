@@ -9,18 +9,9 @@ Command-line interface for llmist.
 
 ## Installation
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli
-    ```
-  </TabItem>
-</Tabs>
 
 ## Commands
 
@@ -28,43 +19,21 @@ Command-line interface for llmist.
 
 Create a starter configuration file at `~/.llmist/cli.toml`:
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli init
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli init
-    ```
-  </TabItem>
-</Tabs>
 
 ### `config` - Inspect Configuration
 
 Display resolved configuration for profiles, including fully rendered system prompts:
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     # List all available profiles
     npx @llmist/cli config
 
     # Show resolved config for a specific profile
     npx @llmist/cli config code-review
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    # List all available profiles
-    bunx @llmist/cli config
-
-    # Show resolved config for a specific profile
-    bunx @llmist/cli config code-review
-    ```
-  </TabItem>
-</Tabs>
 
 Shows:
 - Inheritance chain
@@ -76,18 +45,9 @@ Shows:
 
 Stream a single response without agent loop:
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli complete "Explain TypeScript generics" --model haiku
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli complete "Explain TypeScript generics" --model haiku
-    ```
-  </TabItem>
-</Tabs>
 
 **Options:**
 
@@ -103,18 +63,9 @@ Stream a single response without agent loop:
 
 Run the full agent loop with tools:
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonnet
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli agent "How many floppies for DOOM.ZIP?" --gadget ./floppy.ts --model sonnet
-    ```
-  </TabItem>
-</Tabs>
 
 **Options:**
 
@@ -138,22 +89,11 @@ Run the full agent loop with tools:
 
 ### `gadget` - Test and Inspect Gadgets
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli gadget run ./floppy.ts
     npx @llmist/cli gadget info ./floppy.ts
     npx @llmist/cli gadget validate ./floppy.ts
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli gadget run ./floppy.ts
-    bunx @llmist/cli gadget info ./floppy.ts
-    bunx @llmist/cli gadget validate ./floppy.ts
-    ```
-  </TabItem>
-</Tabs>
 
 ## Configuration File
 
@@ -233,41 +173,19 @@ export LLMIST_LOG_LEVEL="debug"
 
 Pipe content to llmist:
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     cat code.ts | npx @llmist/cli complete "Review this code"
     git diff | npx @llmist/cli complete "Summarize changes"
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    cat code.ts | bunx @llmist/cli complete "Review this code"
-    git diff | bunx @llmist/cli complete "Summarize changes"
-    ```
-  </TabItem>
-</Tabs>
 
 ## Model Shortcuts
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli complete "Hello" --model haiku
     npx @llmist/cli complete "Hello" --model sonnet
     npx @llmist/cli complete "Hello" --model gpt4o
     npx @llmist/cli complete "Hello" --model flash
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli complete "Hello" --model haiku
-    bunx @llmist/cli complete "Hello" --model sonnet
-    bunx @llmist/cli complete "Hello" --model gpt4o
-    bunx @llmist/cli complete "Hello" --model flash
-    ```
-  </TabItem>
-</Tabs>
 
 ## Interactive TUI
 

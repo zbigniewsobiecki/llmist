@@ -5,7 +5,7 @@
  * during agentic execution. Hints provide coaching messages to help LLMs
  * work more efficiently.
  *
- * Run: bun examples/14-hints.ts
+ * Run: npx tsx examples/14-hints.ts
  */
 
 import {

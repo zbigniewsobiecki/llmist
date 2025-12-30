@@ -12,8 +12,6 @@
 
 ```bash
 npm install -D @llmist/testing
-# or
-bun add -D @llmist/testing
 ```
 
 Requires `llmist` as a peer dependency.

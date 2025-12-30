@@ -1,7 +1,7 @@
 /**
  * Streaming: Event handling patterns
  *
- * Run: bunx tsx examples/05-streaming.ts
+ * Run: npx tsx examples/05-streaming.ts
  */
 
 import { collectEvents, collectText, Gadget, LLMist, runWithHandlers } from "llmist";

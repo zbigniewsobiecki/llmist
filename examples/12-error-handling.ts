@@ -7,7 +7,7 @@
  * 3. LLM API error recovery with controllers
  * 4. Retry configuration for transient failures
  *
- * Run: bunx tsx examples/12-error-handling.ts
+ * Run: npx tsx examples/12-error-handling.ts
  */
 
 import {

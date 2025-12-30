@@ -5,7 +5,7 @@
  * - Root agent gadgets: subagentContext is undefined
  * - Subagent gadgets: subagentContext has parentGadgetInvocationId and depth
  */
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type { ILogObj, Logger } from "tslog";
 
 import { ExecutionTree } from "../core/execution-tree.js";
@@ -15,13 +15,13 @@ import { bridgeTreeToHooks } from "./tree-hook-bridge.js";
 // Create a minimal mock logger
 function createMockLogger(): Logger<ILogObj> {
   return {
-    warn: mock(() => {}),
-    debug: mock(() => {}),
-    info: mock(() => {}),
-    error: mock(() => {}),
-    trace: mock(() => {}),
-    fatal: mock(() => {}),
-    silly: mock(() => {}),
+    warn: vi.fn(() => {}),
+    debug: vi.fn(() => {}),
+    info: vi.fn(() => {}),
+    error: vi.fn(() => {}),
+    trace: vi.fn(() => {}),
+    fatal: vi.fn(() => {}),
+    silly: vi.fn(() => {}),
   } as unknown as Logger<ILogObj>;
 }
 

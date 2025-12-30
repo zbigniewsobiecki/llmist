@@ -33,24 +33,12 @@ Use short aliases instead of full model names:
 
 For explicit provider selection, use the `provider:model` format:
 
-<Tabs>
-  <TabItem label="npm">
-    ```bash
+```bash
     # Explicit provider selection
     npx @llmist/cli complete "Hello" --model openai:gpt-5
     npx @llmist/cli complete "Hello" --model anthropic:claude-sonnet-4-5
     npx @llmist/cli complete "Hello" --model gemini:gemini-2.5-flash
     ```
-  </TabItem>
-  <TabItem label="bun">
-    ```bash
-    # Explicit provider selection
-    bunx @llmist/cli complete "Hello" --model openai:gpt-5
-    bunx @llmist/cli complete "Hello" --model anthropic:claude-sonnet-4-5
-    bunx @llmist/cli complete "Hello" --model gemini:gemini-2.5-flash
-    ```
-  </TabItem>
-</Tabs>
 
 ## Model Capabilities
 
@@ -116,15 +104,6 @@ For explicit provider selection, use the `provider:model` format:
 
     # Using full name
     npx @llmist/cli complete "Hello" --model anthropic:claude-sonnet-4-5
-    ```
-  </TabItem>
-  <TabItem label="CLI (bun)">
-    ```bash
-    # Using alias
-    bunx @llmist/cli complete "Hello" --model sonnet
-
-    # Using full name
-    bunx @llmist/cli complete "Hello" --model anthropic:claude-sonnet-4-5
     ```
   </TabItem>
 </Tabs>

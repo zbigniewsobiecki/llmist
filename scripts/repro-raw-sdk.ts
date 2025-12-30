@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * Raw SDK reproduction script - sends exact request from llmist log.
  *
@@ -6,7 +6,7 @@
  * and sends them directly via OpenAI SDK, bypassing llmist entirely.
  *
  * Usage:
- *   bun scripts/repro-raw-sdk.ts [provider]
+ *   npx tsx scripts/repro-raw-sdk.ts [provider]
  *
  * Providers:
  *   openai  - Use OpenAI API (default, uses model from log)

@@ -1,7 +1,7 @@
 /**
  * Syntactic sugar: Fluent API showcase
  *
- * Run: bunx tsx examples/13-syntactic-sugar.ts
+ * Run: npx tsx examples/13-syntactic-sugar.ts
  */
 
 import { createGadget, Gadget, HookPresets, LLMist } from "llmist";

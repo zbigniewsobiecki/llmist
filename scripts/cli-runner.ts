@@ -1,6 +1,6 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
- * CLI runner script that runs CLI directly from source using Bun.
+ * CLI runner script that runs CLI directly from source using tsx.
  * This avoids module instance mismatches between dist/ and src/ when loading gadgets.
  */
 import { spawn } from "node:child_process";
@@ -9,12 +9,12 @@ const SRC_CLI = "src/cli.ts";
 
 async function main(): Promise<void> {
   // Get CLI args
-  // When run via `bun run cli arg1 arg2`, argv is:
-  // [bun, scripts/cli-runner.ts, arg1, arg2]
+  // When run via `npm run cli arg1 arg2`, argv is:
+  // [node, scripts/cli-runner.ts, arg1, arg2]
   const args = process.argv.slice(2);
 
-  // Run CLI directly from source - Bun handles TypeScript natively
-  const proc = spawn("bun", ["run", SRC_CLI, ...args], {
+  // Run CLI directly from source using tsx for TypeScript
+  const proc = spawn("npx", ["tsx", SRC_CLI, ...args], {
     stdio: "inherit",
   });
 

@@ -1,11 +1,11 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * Test script to verify subagent events flow through the ExecutionTree.
  *
  * This loads the Dhalsim BrowseWeb gadget and runs an agent that uses it,
  * logging all tree events to verify nested LLM calls and gadget calls appear.
  *
- * Run: bun scripts/test-subagent-events.ts
+ * Run: npx tsx scripts/test-subagent-events.ts
  */
 
 import { LLMist } from "../src/core/client.js";
