@@ -1,3 +1,9 @@
+## <small>12.0.1 (2025-12-30)</small>
+
+* Merge pull request #300 from zbigniewsobiecki/dev ([d97115e](https://github.com/zbigniewsobiecki/llmist/commit/d97115e)), closes [#300](https://github.com/zbigniewsobiecki/llmist/issues/300)
+* test: fix flaky timing test in stream-processor.test.ts ([0ada2d2](https://github.com/zbigniewsobiecki/llmist/commit/0ada2d2))
+* fix(cli): add runtime TypeScript support for local gadgets (#299) ([c61e602](https://github.com/zbigniewsobiecki/llmist/commit/c61e602)), closes [#299](https://github.com/zbigniewsobiecki/llmist/issues/299)
+
 ## 12.0.0 (2025-12-30)
 
 * Merge pull request #298 from zbigniewsobiecki/dev ([7a6c605](https://github.com/zbigniewsobiecki/llmist/commit/7a6c605)), closes [#298](https://github.com/zbigniewsobiecki/llmist/issues/298)
