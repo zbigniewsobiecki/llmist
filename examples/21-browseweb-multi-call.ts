@@ -6,7 +6,7 @@
  * cause a freeze when the second BrowseWeb started.
  *
  * Run with logging enabled to verify the fix:
- *   LLMIST_LOG_FILE=/tmp/llmist-test.log bunx tsx examples/21-browseweb-multi-call.ts
+ *   LLMIST_LOG_FILE=/tmp/llmist-test.log npx tsx examples/21-browseweb-multi-call.ts
  *
  * Or run via CLI (using git URL since dhalsim is not on npm yet):
  *   llmist agent "Summarize top article on edition.cnn.com and tvn24.pl" \

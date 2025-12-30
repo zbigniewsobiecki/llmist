@@ -37,18 +37,9 @@ export class FloppyDisk extends Gadget({
 
 Use it:
 
-<Tabs>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli agent "How many floppies for DOOM.ZIP at 50MB?" --gadget ./floppy.ts
-    ```
-  </TabItem>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli agent "How many floppies for DOOM.ZIP at 50MB?" --gadget ./floppy.ts
     ```
-  </TabItem>
-</Tabs>
 
 ## File Requirements
 
@@ -68,20 +59,7 @@ export default class ArcadeHighScore extends Gadget({ ... }) { ... }
 
 ## Loading Multiple Gadgets
 
-<Tabs>
-  <TabItem label="bun">
-    ```bash
-    # Multiple files
-    bunx @llmist/cli agent "Calculate floppies and connect to BBS" \
-      --gadget ./floppy.ts \
-      --gadget ./dialup.ts
-
-    # Single file with multiple exports
-    bunx @llmist/cli agent "Calculate floppies and dial up" --gadget ./retro-tools.ts
-    ```
-  </TabItem>
-  <TabItem label="npm">
-    ```bash
+```bash
     # Multiple files
     npx @llmist/cli agent "Calculate floppies and connect to BBS" \
       --gadget ./floppy.ts \
@@ -90,31 +68,12 @@ export default class ArcadeHighScore extends Gadget({ ... }) { ... }
     # Single file with multiple exports
     npx @llmist/cli agent "Calculate floppies and dial up" --gadget ./retro-tools.ts
     ```
-  </TabItem>
-</Tabs>
 
 ## Loading Specific Gadgets
 
 Load a specific gadget from a file or package using the appropriate suffix:
 
-<Tabs>
-  <TabItem label="bun">
-    ```bash
-    # Load only FloppyDisk from a file with multiple exports (colon separator)
-    bunx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts:FloppyDisk
-
-    # Load BrowseWeb subagent from npm package (slash separator)
-    bunx @llmist/cli agent "Browse apple.com" -g dhalsim/BrowseWeb
-
-    # Load from scoped npm package
-    bunx @llmist/cli agent "task" -g @myorg/my-gadgets/MyGadget
-
-    # Load from git URL (slash separator)
-    bunx @llmist/cli agent "task" -g git+https://github.com/user/repo#main/MyGadget
-    ```
-  </TabItem>
-  <TabItem label="npm">
-    ```bash
+```bash
     # Load only FloppyDisk from a file with multiple exports (colon separator)
     npx @llmist/cli agent "Calculate floppies" --gadget ./retro-tools.ts:FloppyDisk
 
@@ -127,8 +86,6 @@ Load a specific gadget from a file or package using the appropriate suffix:
     # Load from git URL (slash separator)
     npx @llmist/cli agent "task" -g git+https://github.com/user/repo#main/MyGadget
     ```
-  </TabItem>
-</Tabs>
 
 <Aside type="note">
   The gadget name must be PascalCase (e.g., `MyGadget`, `BrowseWeb`). Local file paths use a **colon** separator (`:GadgetName`) to avoid ambiguity with filesystem paths, while npm packages and git URLs use a **slash** separator (`/GadgetName`).
@@ -138,33 +95,7 @@ Load a specific gadget from a file or package using the appropriate suffix:
 
 Load gadgets from npm packages or git repositories:
 
-<Tabs>
-  <TabItem label="bun">
-    ```bash
-    # npm package (Dhalsim browser automation)
-    bunx @llmist/cli agent "Navigate to apple.com" -g dhalsim
-
-    # Use a preset
-    bunx @llmist/cli agent "Browse the web" -g dhalsim:minimal
-
-    # Load specific gadget from package
-    bunx @llmist/cli agent "Browse the web" -g dhalsim/BrowseWeb
-
-    # git URL
-    bunx @llmist/cli agent "task" -g git+https://github.com/user/repo.git
-
-    # git URL with specific gadget
-    bunx @llmist/cli agent "task" -g git+https://github.com/user/repo.git#main/MyGadget
-
-    # Combine sources
-    bunx @llmist/cli agent "Complex task" \
-      -g ./local-gadget.ts \
-      -g dhalsim/BrowseWeb \
-      -g builtin:ReadFile
-    ```
-  </TabItem>
-  <TabItem label="npm">
-    ```bash
+```bash
     # npm package (Dhalsim browser automation)
     npx @llmist/cli agent "Navigate to apple.com" -g dhalsim
 
@@ -186,8 +117,6 @@ Load gadgets from npm packages or git repositories:
       -g dhalsim/BrowseWeb \
       -g builtin:ReadFile
     ```
-  </TabItem>
-</Tabs>
 
 See [Gadget Ecosystem](/cli/gadgets/external-gadgets/) for detailed documentation on Dhalsim, presets, and creating your own packages.
 
@@ -195,24 +124,7 @@ See [Gadget Ecosystem](/cli/gadgets/external-gadgets/) for detailed documentatio
 
 Use the `gadget` command to test in isolation:
 
-<Tabs>
-  <TabItem label="bun">
-    ```bash
-    # Run interactively
-    bunx @llmist/cli gadget run ./floppy.ts
-
-    # View gadget info
-    bunx @llmist/cli gadget info ./floppy.ts
-
-    # Validate structure
-    bunx @llmist/cli gadget validate ./floppy.ts
-
-    # Pipe JSON input
-    echo '{"filename": "DOOM.ZIP", "megabytes": 50}' | bunx @llmist/cli gadget run ./floppy.ts
-    ```
-  </TabItem>
-  <TabItem label="npm">
-    ```bash
+```bash
     # Run interactively
     npx @llmist/cli gadget run ./floppy.ts
 
@@ -225,8 +137,6 @@ Use the `gadget` command to test in isolation:
     # Pipe JSON input
     echo '{"filename": "DOOM.ZIP", "megabytes": 50}' | npx @llmist/cli gadget run ./floppy.ts
     ```
-  </TabItem>
-</Tabs>
 
 ## Creating External Packages
 

@@ -4,7 +4,7 @@
  * Verifies speech generation routing to providers and model listing.
  */
 
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type { ProviderAdapter } from "../../providers/provider.js";
 import type {
   SpeechGenerationOptions,
@@ -33,7 +33,7 @@ function createMockAdapter(opts: {
       : undefined,
     getSpeechModelSpecs: speechModels.length > 0 ? () => speechModels : undefined,
     generateSpeech: supportsSpeech
-      ? mock(async (_options: SpeechGenerationOptions): Promise<SpeechGenerationResult> => {
+      ? vi.fn(async (_options: SpeechGenerationOptions): Promise<SpeechGenerationResult> => {
           return (
             generateSpeechResult ?? {
               audio: new ArrayBuffer(1000),

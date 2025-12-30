@@ -1,7 +1,7 @@
 /**
  * Speech generation (Text-to-Speech) with llmist
  *
- * Run: bunx tsx examples/17-speech-generation.ts
+ * Run: npx tsx examples/17-speech-generation.ts
  *
  * Demonstrates generating speech audio using:
  * - OpenAI TTS-1 (standard quality, fast)

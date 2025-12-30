@@ -72,23 +72,10 @@ Toggle between modes with `Ctrl+B`. In browse mode, you can:
 
 When running without a TTY (e.g., in scripts or CI), the TUI is disabled and output is streamed directly to stdout:
 
-<Tabs>
-  <TabItem label="bun">
-    ```bash
-    # Runs without TUI
-    echo "How many floppies for DOOM.ZIP?" | bunx @llmist/cli agent -g ./floppy.ts
-
-    # Use --quiet to suppress all output except gadget results
-    bunx @llmist/cli agent "Check my high score" -g ./arcade.ts --quiet
-    ```
-  </TabItem>
-  <TabItem label="npm">
-    ```bash
+```bash
     # Runs without TUI
     echo "How many floppies for DOOM.ZIP?" | npx @llmist/cli agent -g ./floppy.ts
 
     # Use --quiet to suppress all output except gadget results
     npx @llmist/cli agent "Check my high score" -g ./arcade.ts --quiet
     ```
-  </TabItem>
-</Tabs>

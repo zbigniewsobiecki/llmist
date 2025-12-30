@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { type ZodError, z } from "zod";
 import { GadgetExecutionErrorFormatter } from "./error-formatter.js";
 import { Gadget } from "./typed-gadget.js";

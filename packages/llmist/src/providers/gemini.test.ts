@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
 
 import { GeminiGenerativeProvider } from "./gemini.js";
@@ -6,7 +6,7 @@ import { GeminiGenerativeProvider } from "./gemini.js";
 describe("GeminiGenerativeProvider", () => {
   const createClient = () => {
     const stream = (async function* () {})();
-    const generateContentStream = mock().mockResolvedValue(stream);
+    const generateContentStream = vi.fn().mockResolvedValue(stream);
     const models = { generateContentStream };
     const client = { models } as unknown as GoogleGenAI;
 
@@ -239,7 +239,7 @@ describe("GeminiGenerativeProvider", () => {
 
   describe("countTokens", () => {
     it("counts tokens for simple messages", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         totalTokens: 15,
       });
 
@@ -266,7 +266,7 @@ describe("GeminiGenerativeProvider", () => {
     });
 
     it("includes system instruction in token count", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         totalTokens: 25,
       });
 
@@ -300,7 +300,7 @@ describe("GeminiGenerativeProvider", () => {
     });
 
     it("merges consecutive messages of same role", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         totalTokens: 30,
       });
 
@@ -332,7 +332,7 @@ describe("GeminiGenerativeProvider", () => {
     });
 
     it("uses fallback estimation when API fails", async () => {
-      const mockCountTokens = mock().mockRejectedValue(new Error("API error"));
+      const mockCountTokens = vi.fn().mockRejectedValue(new Error("API error"));
 
       const mockClient = {
         models: {
@@ -352,7 +352,7 @@ describe("GeminiGenerativeProvider", () => {
     });
 
     it("handles empty content with defensive checks", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         totalTokens: 5,
       });
 
@@ -373,7 +373,7 @@ describe("GeminiGenerativeProvider", () => {
     });
 
     it("handles system messages at different positions", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         totalTokens: 40,
       });
 
@@ -413,7 +413,7 @@ describe("GeminiGenerativeProvider", () => {
     });
 
     it("returns zero when totalTokens is undefined", async () => {
-      const mockCountTokens = mock().mockResolvedValue({
+      const mockCountTokens = vi.fn().mockResolvedValue({
         totalTokens: undefined,
       });
 

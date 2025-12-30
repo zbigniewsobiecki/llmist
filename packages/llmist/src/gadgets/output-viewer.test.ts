@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { GadgetOutputStore } from "../agent/gadget-output-store.js";
 import {
   applyLineLimit,

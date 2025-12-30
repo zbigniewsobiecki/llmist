@@ -6,7 +6,7 @@ Runnable examples demonstrating llmist features.
 
 ```bash
 # Install dependencies
-bun install
+npm install
 
 # Set API keys
 export OPENAI_API_KEY="sk-..."
@@ -16,7 +16,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ## Run Examples
 
 ```bash
-bunx tsx examples/01-basic-usage.ts
+npx tsx examples/01-basic-usage.ts
 ```
 
 ## Examples

@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
@@ -353,7 +353,7 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       const result = builder.withHooks({
         observers: {
-          onLLMCallStart: mock(() => {}),
+          onLLMCallStart: vi.fn(() => {}),
         },
       });
 
@@ -476,7 +476,7 @@ describe("AgentBuilder", () => {
   describe("onHumanInput", () => {
     it("sets human input handler", () => {
       const builder = new AgentBuilder();
-      const handler = mock(async () => "response");
+      const handler = vi.fn(async () => "response");
 
       const result = builder.onHumanInput(handler);
 
@@ -741,7 +741,7 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       const customHandler = {
         type: "custom" as const,
-        handler: mock(async () => ({ action: "continue" as const })),
+        handler: vi.fn(async () => ({ action: "continue" as const })),
       };
 
       const result = builder.withTextOnlyHandler(customHandler);
@@ -1115,7 +1115,7 @@ describe("AgentBuilder", () => {
     });
 
     it("preserves existing hooks when trailing message is added", () => {
-      const onLLMCallStart = mock(() => {});
+      const onLLMCallStart = vi.fn(() => {});
       const builder = new AgentBuilder();
       builder.withHooks({
         observers: { onLLMCallStart },
@@ -1137,7 +1137,7 @@ describe("AgentBuilder", () => {
     });
 
     it("composes with existing beforeLLMCall controller", async () => {
-      const existingController = mock(async () => ({
+      const existingController = vi.fn(async () => ({
         action: "proceed" as const,
         modifiedOptions: { temperature: 0.5 },
       }));
@@ -1183,7 +1183,7 @@ describe("AgentBuilder", () => {
     });
 
     it("does not add trailing message when existing controller returns skip", async () => {
-      const existingController = mock(async () => ({
+      const existingController = vi.fn(async () => ({
         action: "skip" as const,
         syntheticResponse: "Cached response",
       }));
@@ -1221,7 +1221,7 @@ describe("AgentBuilder", () => {
     });
 
     it("calls dynamic message function with correct context", async () => {
-      const messageFn = mock(
+      const messageFn = vi.fn(
         (ctx: { iteration: number; maxIterations: number }) =>
           `Iteration ${ctx.iteration}/${ctx.maxIterations}`,
       );

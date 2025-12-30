@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type OpenAI from "openai";
 
 import { OpenAIChatProvider } from "./openai.js";
@@ -23,7 +23,7 @@ describe("OpenAIChatProvider", () => {
 
   describe("stream", () => {
     it("maps messages correctly", async () => {
-      const createSpy = mock().mockResolvedValue(
+      const createSpy = vi.fn().mockResolvedValue(
         (async function* () {
           yield {
             choices: [{ delta: { content: "test" }, finish_reason: null }],
@@ -67,7 +67,7 @@ describe("OpenAIChatProvider", () => {
     });
 
     it("includes optional parameters", async () => {
-      const createSpy = mock().mockResolvedValue((async function* () {})());
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
 
       const mockClient = {
         chat: {
@@ -102,7 +102,7 @@ describe("OpenAIChatProvider", () => {
     });
 
     it("omits temperature when the model does not support it", async () => {
-      const createSpy = mock().mockResolvedValue((async function* () {})());
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
 
       const mockClient = {
         chat: {
@@ -161,7 +161,7 @@ describe("OpenAIChatProvider", () => {
       const mockClient = {
         chat: {
           completions: {
-            create: mock().mockResolvedValue(mockStream),
+            create: vi.fn().mockResolvedValue(mockStream),
           },
         },
       } as unknown as OpenAI;
@@ -200,7 +200,7 @@ describe("OpenAIChatProvider", () => {
       const mockClient = {
         chat: {
           completions: {
-            create: mock().mockResolvedValue(mockStream),
+            create: vi.fn().mockResolvedValue(mockStream),
           },
         },
       } as unknown as OpenAI;
@@ -236,7 +236,7 @@ describe("OpenAIChatProvider", () => {
       const mockClient = {
         chat: {
           completions: {
-            create: mock().mockResolvedValue(mockStream),
+            create: vi.fn().mockResolvedValue(mockStream),
           },
         },
       } as unknown as OpenAI;
@@ -262,7 +262,7 @@ describe("OpenAIChatProvider", () => {
 
   describe("abort signal propagation", () => {
     it("passes abort signal to SDK when provided", async () => {
-      const createSpy = mock().mockResolvedValue((async function* () {})());
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
 
       const mockClient = {
         chat: {
@@ -290,7 +290,7 @@ describe("OpenAIChatProvider", () => {
     });
 
     it("does not pass signal options when signal is not provided", async () => {
-      const createSpy = mock().mockResolvedValue((async function* () {})());
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
 
       const mockClient = {
         chat: {

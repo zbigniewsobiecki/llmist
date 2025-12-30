@@ -12,8 +12,8 @@
 
 ```bash
 npm install -g @llmist/cli
-# or
-bunx @llmist/cli
+# or run directly with npx:
+npx @llmist/cli
 ```
 
 ## Quick Start

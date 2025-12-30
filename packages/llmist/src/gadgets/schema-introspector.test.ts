@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { SchemaIntrospector } from "./schema-introspector.js";

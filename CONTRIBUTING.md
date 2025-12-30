@@ -2,9 +2,9 @@
 
 Contributions welcome! Please ensure:
 
-1. All tests pass: `bun test`
-2. Code is formatted: `bun run format`
-3. Linting passes: `bun run lint`
+1. All tests pass: `npm test`
+2. Code is formatted: `npm run format`
+3. Linting passes: `npm run lint`
 4. Types are properly defined
 5. Examples/docs updated for API changes
 

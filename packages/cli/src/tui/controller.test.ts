@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, vi, test } from "vitest";
 import { TUIController } from "./controller.js";
 
 describe("TUIController", () => {
@@ -32,7 +32,7 @@ describe("TUIController", () => {
 		});
 
 		test("toggleFocusMode fires callback", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController({
 				onFocusModeChange: callback,
 			});
@@ -43,7 +43,7 @@ describe("TUIController", () => {
 		});
 
 		test("setFocusMode fires callback on change", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController({
 				onFocusModeChange: callback,
 			});
@@ -54,7 +54,7 @@ describe("TUIController", () => {
 		});
 
 		test("setFocusMode does not fire callback when unchanged", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController({
 				onFocusModeChange: callback,
 			});
@@ -67,7 +67,7 @@ describe("TUIController", () => {
 
 	describe("content filter mode transitions", () => {
 		test("toggleContentFilterMode fires callback", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController({
 				onContentFilterModeChange: callback,
 			});
@@ -78,7 +78,7 @@ describe("TUIController", () => {
 		});
 
 		test("focused mode also fires focus mode callback", () => {
-			const focusCallback = mock(() => {});
+			const focusCallback = vi.fn(() => {});
 			const controller = new TUIController({
 				onFocusModeChange: focusCallback,
 			});
@@ -91,7 +91,7 @@ describe("TUIController", () => {
 
 	describe("AskUser mode stack", () => {
 		test("pushInputMode fires callback when mode changes", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController({
 				onFocusModeChange: callback,
 			});
@@ -103,7 +103,7 @@ describe("TUIController", () => {
 		});
 
 		test("popInputMode fires callback when restoring browse", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController({
 				onFocusModeChange: callback,
 			});
@@ -117,7 +117,7 @@ describe("TUIController", () => {
 		});
 
 		test("pushInputMode from input does not fire callback", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController({
 				onFocusModeChange: callback,
 			});
@@ -145,7 +145,7 @@ describe("TUIController", () => {
 		});
 
 		test("double press triggers onQuit callback", () => {
-			const onQuit = mock(() => {});
+			const onQuit = vi.fn(() => {});
 			const controller = new TUIController({ onQuit });
 
 			controller.handleCtrlC();
@@ -155,7 +155,7 @@ describe("TUIController", () => {
 		});
 
 		test("first press does not trigger onQuit callback", () => {
-			const onQuit = mock(() => {});
+			const onQuit = vi.fn(() => {});
 			const controller = new TUIController({ onQuit });
 
 			controller.handleCtrlC();
@@ -228,7 +228,7 @@ describe("TUIController", () => {
 		});
 
 		test("triggerCancel calls onCancel callback", () => {
-			const onCancel = mock(() => {});
+			const onCancel = vi.fn(() => {});
 			const controller = new TUIController();
 			controller.onCancel(onCancel);
 
@@ -238,7 +238,7 @@ describe("TUIController", () => {
 		});
 
 		test("triggerMidSessionInput calls callback with message", () => {
-			const callback = mock(() => {});
+			const callback = vi.fn(() => {});
 			const controller = new TUIController();
 			controller.onMidSessionInput(callback);
 

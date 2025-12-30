@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, vi, test } from "vitest";
 import { Readable, Writable } from "node:stream";
 import { Box, NodeRuntime, Screen, setRuntime, Text, Textbox } from "@unblessed/node";
 import { InputHandler } from "./input-handler.js";
@@ -81,7 +81,7 @@ afterAll(() => {
 describe("InputHandler", () => {
   describe("constructor", () => {
     test("initializes with idle prompt", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Initial state should show idle prompt in promptLabel
@@ -93,10 +93,10 @@ describe("InputHandler", () => {
 
   describe("Ctrl+C callback", () => {
     test("onCtrlC sets the callback", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      const ctrlCCallback = mock(() => {});
+      const ctrlCCallback = vi.fn(() => {});
       handler.onCtrlC(ctrlCCallback);
 
       // The callback is stored internally (we can verify by triggering Ctrl+C)
@@ -106,10 +106,10 @@ describe("InputHandler", () => {
 
   describe("Ctrl+B callback", () => {
     test("onCtrlB sets the callback", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      const ctrlBCallback = mock(() => {});
+      const ctrlBCallback = vi.fn(() => {});
       handler.onCtrlB(ctrlBCallback);
 
       // The callback is stored internally
@@ -119,8 +119,8 @@ describe("InputHandler", () => {
 
   describe("focus mode API", () => {
     test("activate shows input bar and preserves current state", () => {
-      const renderCallback = mock(() => {});
-      const renderNowCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
       const handler = new InputHandler(
         inputBar,
         promptLabel,
@@ -149,8 +149,8 @@ describe("InputHandler", () => {
     });
 
     test("deactivate hides input bar", () => {
-      const renderCallback = mock(() => {});
-      const renderNowCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
       const handler = new InputHandler(
         inputBar,
         promptLabel,
@@ -173,7 +173,7 @@ describe("InputHandler", () => {
     });
 
     test("isInputActive returns true when visible", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       handler.activate();
@@ -181,7 +181,7 @@ describe("InputHandler", () => {
     });
 
     test("isInputActive returns false when hidden", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       handler.deactivate();
@@ -189,7 +189,7 @@ describe("InputHandler", () => {
     });
 
     test("activate clears pending REPL prompt state", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Setup pending prompt state (internal state we're checking behavior)
@@ -202,7 +202,7 @@ describe("InputHandler", () => {
     });
 
     test("deactivate clears pending REPL prompt state", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       handler.deactivate();
@@ -214,14 +214,14 @@ describe("InputHandler", () => {
 
   describe("hasPendingInput", () => {
     test("returns false initially", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       expect(handler.hasPendingInput()).toBe(false);
     });
 
     test("returns true after waitForInput is called", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Start waiting for input (don't await - it won't resolve)
@@ -237,7 +237,7 @@ describe("InputHandler", () => {
 
   describe("cancelPending", () => {
     test("rejects pending input promise", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const inputPromise = handler.waitForInput("Test?", "TestGadget");
@@ -248,7 +248,7 @@ describe("InputHandler", () => {
     });
 
     test("sets input to idle state", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const inputPromise = handler.waitForInput("Test?", "TestGadget");
@@ -263,7 +263,7 @@ describe("InputHandler", () => {
     });
 
     test("clears pending input state", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const inputPromise = handler.waitForInput("Test?", "TestGadget");
@@ -278,7 +278,7 @@ describe("InputHandler", () => {
 
   describe("waitForPrompt", () => {
     test("sets up pending REPL prompt state", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const promptPromise = handler.waitForPrompt();
@@ -296,7 +296,7 @@ describe("InputHandler", () => {
 
   describe("activatePendingPrompt", () => {
     test("activates pending REPL prompt", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Start waiting for prompt
@@ -318,7 +318,7 @@ describe("InputHandler", () => {
     });
 
     test("does nothing when no pending prompt", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Call without any pending prompt
@@ -331,10 +331,10 @@ describe("InputHandler", () => {
 
   describe("setMidSessionHandler", () => {
     test("sets the mid-session handler callback", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      const midSessionCallback = mock(() => {});
+      const midSessionCallback = vi.fn(() => {});
       handler.setMidSessionHandler(midSessionCallback);
 
       // Handler should be stored (verified via behavior tests below)
@@ -342,11 +342,11 @@ describe("InputHandler", () => {
     });
 
     test("mid-session handler receives submitted value when no pending input", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       const receivedMessages: string[] = [];
-      const midSessionCallback = mock((msg: string) => {
+      const midSessionCallback = vi.fn((msg: string) => {
         receivedMessages.push(msg);
       });
       handler.setMidSessionHandler(midSessionCallback);
@@ -360,10 +360,10 @@ describe("InputHandler", () => {
     });
 
     test("mid-session handler is not called when there is pending input", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      const midSessionCallback = mock(() => {});
+      const midSessionCallback = vi.fn(() => {});
       handler.setMidSessionHandler(midSessionCallback);
 
       // Start waiting for input (creates pending input state)
@@ -381,11 +381,11 @@ describe("InputHandler", () => {
     });
 
     test("can be called multiple times to update handler", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      const firstHandler = mock(() => {});
-      const secondHandler = mock(() => {});
+      const firstHandler = vi.fn(() => {});
+      const secondHandler = vi.fn(() => {});
 
       handler.setMidSessionHandler(firstHandler);
       handler.setMidSessionHandler(secondHandler);
@@ -398,10 +398,10 @@ describe("InputHandler", () => {
 
   describe("setGetFocusMode", () => {
     test("stores focus mode callback", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      const focusModeCallback = mock(() => "input" as const);
+      const focusModeCallback = vi.fn(() => "input" as const);
       handler.setGetFocusMode(focusModeCallback);
 
       // Callback is stored (can't directly verify, but no error thrown)
@@ -409,11 +409,11 @@ describe("InputHandler", () => {
     });
 
     test("can be updated with new callback", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      const firstCallback = mock(() => "input" as const);
-      const secondCallback = mock(() => "browse" as const);
+      const firstCallback = vi.fn(() => "input" as const);
+      const secondCallback = vi.fn(() => "browse" as const);
 
       handler.setGetFocusMode(firstCallback);
       handler.setGetFocusMode(secondCallback);
@@ -426,7 +426,7 @@ describe("InputHandler", () => {
 
   describe("REPL prompt activation in browse mode", () => {
     test("waitForPrompt sets pending REPL state", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Start waiting for REPL prompt
@@ -442,7 +442,7 @@ describe("InputHandler", () => {
     });
 
     test("activatePendingPrompt requires REPL waiting state", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
       // Not waiting for prompt
@@ -456,8 +456,8 @@ describe("InputHandler", () => {
     });
 
     test("activatePendingPrompt clears REPL waiting state when activated", async () => {
-      const renderCallback = mock(() => {});
-      const renderNowCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
       const handler = new InputHandler(
         inputBar,
         promptLabel,

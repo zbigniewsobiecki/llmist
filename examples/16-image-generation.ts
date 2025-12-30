@@ -1,7 +1,7 @@
 /**
  * Image generation with llmist
  *
- * Run: bunx tsx examples/16-image-generation.ts
+ * Run: npx tsx examples/16-image-generation.ts
  *
  * Demonstrates generating images using:
  * - OpenAI DALL-E 3

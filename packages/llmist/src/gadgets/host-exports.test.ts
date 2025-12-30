@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { getHostExports } from "../index.js";
 import { AgentBuilder } from "../agent/builder.js";
 import { ExecutionTree } from "../core/execution-tree.js";

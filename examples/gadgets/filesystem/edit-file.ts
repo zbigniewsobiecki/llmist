@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { z } from "zod";
 import { createGadget } from "../../../src/index.js";
 import { validatePathIsWithinCwd } from "./utils.js";
@@ -70,33 +71,48 @@ q`,
     const safeCommands = filterDangerousCommands(commands);
 
     try {
-      const proc = Bun.spawn(["ed", validatedPath], {
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      const result = await new Promise<{ exitCode: number; stdout: string; stderr: string }>(
+        (resolve, reject) => {
+          const proc = spawn("ed", [validatedPath], {
+            stdio: ["pipe", "pipe", "pipe"],
+          });
 
-      // Write commands to ed's stdin
-      proc.stdin.write(`${safeCommands}\n`);
-      proc.stdin.end();
+          let stdout = "";
+          let stderr = "";
 
-      // Create timeout promise (30 seconds)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          proc.kill();
-          reject(new Error("ed command timed out after 30000ms"));
-        }, 30000);
-      });
+          proc.stdout?.on("data", (chunk: Buffer) => {
+            stdout += chunk.toString();
+          });
 
-      // Wait for process to complete or timeout
-      const exitCode = await Promise.race([proc.exited, timeoutPromise]);
+          proc.stderr?.on("data", (chunk: Buffer) => {
+            stderr += chunk.toString();
+          });
 
-      // Collect output
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
-      const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+          // Timeout after 30 seconds
+          const timeout = setTimeout(() => {
+            proc.kill();
+            reject(new Error("ed command timed out after 30000ms"));
+          }, 30000);
 
-      if (exitCode !== 0) {
+          proc.on("exit", (code) => {
+            clearTimeout(timeout);
+            resolve({ exitCode: code ?? 1, stdout, stderr });
+          });
+
+          proc.on("error", (err) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+
+          // Write commands to ed's stdin
+          proc.stdin?.write(`${safeCommands}\n`);
+          proc.stdin?.end();
+        },
+      );
+
+      const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+
+      if (result.exitCode !== 0) {
         return `path=${filePath}\n\n${output || "ed exited with non-zero status"}`;
       }
 

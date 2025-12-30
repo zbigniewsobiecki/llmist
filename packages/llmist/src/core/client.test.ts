@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderAdapter } from "../providers/provider.js";
 import { LLMist } from "./client.js";
 import type { LLMMessage } from "./messages.js";
@@ -14,14 +14,14 @@ describe("LLMist Client", () => {
   ): ProviderAdapter => ({
     providerId,
     supports: (descriptor: ModelDescriptor) => descriptor.provider === providerId,
-    stream: mock((_options: LLMGenerationOptions) => {
+    stream: vi.fn((_options: LLMGenerationOptions) => {
       return (async function* () {
         yield { type: "content_delta", text: "Hello" };
       })() as LLMStream;
     }),
     getModelSpecs: modelSpecs.length > 0 ? () => modelSpecs : undefined,
     countTokens: hasTokenCounting
-      ? mock(async (messages: LLMMessage[]) => {
+      ? vi.fn(async (messages: LLMMessage[]) => {
           return messages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0) * 2;
         })
       : undefined,

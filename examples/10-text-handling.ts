@@ -1,7 +1,7 @@
 /**
  * Text Handling Configuration: Control how text responses are managed
  *
- * Run: bunx tsx examples/10-text-handling.ts
+ * Run: npx tsx examples/10-text-handling.ts
  *
  * This example demonstrates:
  * - textOnlyHandler: What happens when LLM responds without gadget calls

@@ -8,7 +8,7 @@
  * - API clients with state
  * - Any resource that needs to be shared across multiple gadget calls
  *
- * Run: bunx tsx examples/23-session-manager.ts
+ * Run: npx tsx examples/23-session-manager.ts
  */
 
 import { BaseSessionManager, Gadget, gadgetSuccess, gadgetError, LLMist, SimpleSessionManager, z } from "llmist";

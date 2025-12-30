@@ -15,8 +15,6 @@ llmist implements its own tool calling syntax called "gadgets" - tools execute t
 
 ```bash
 npm install llmist
-# or
-bun add llmist
 ```
 
 ## Quick Start

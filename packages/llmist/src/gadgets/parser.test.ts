@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "vitest";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import { collectSyncEvents } from "../../../testing/src/helpers.js";
 import { resetGlobalInvocationCounter, GadgetCallParser } from "./parser.js";

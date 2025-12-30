@@ -1,7 +1,7 @@
 /**
  * Hooks: Presets, custom observers, interceptors, controllers
  *
- * Run: bunx tsx examples/03-hooks.ts
+ * Run: npx tsx examples/03-hooks.ts
  */
 
 import { Gadget, HookPresets, LLMist } from "llmist";

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LLMist } from "../../core/client.js";
 import type { LLMMessage } from "../../core/messages.js";
 import { createMockClient, MockManager, mockLLM } from "../../../../testing/src/index.js";
@@ -78,7 +78,7 @@ describe("CompactionManager", () => {
       const client = createMockClient();
       const customStrategy = {
         name: "custom",
-        compact: mock(async () => ({
+        compact: vi.fn(async () => ({
           messages: [],
           strategyName: "custom",
           metadata: { originalCount: 0, compactedCount: 0, tokensBefore: 0, tokensAfter: 0 },
@@ -227,7 +227,7 @@ describe("CompactionManager", () => {
     it("should call onCompaction callback", async () => {
       mockLLM().forAnyModel().returns("Summary").register();
 
-      const onCompaction = mock(() => {});
+      const onCompaction = vi.fn(() => {});
       const client = createClientWithLimits({
         countTokens: async () => 500,
       });
@@ -246,7 +246,7 @@ describe("CompactionManager", () => {
     it("should handle onCompaction callback errors gracefully", async () => {
       mockLLM().forAnyModel().returns("Summary").register();
 
-      const onCompaction = mock(() => {
+      const onCompaction = vi.fn(() => {
         throw new Error("Callback error");
       });
       const client = createClientWithLimits({

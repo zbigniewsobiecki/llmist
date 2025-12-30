@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, vi, test } from "vitest";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import type { ModelRegistry } from "llmist";
@@ -905,9 +905,9 @@ describe("StreamProgress nested operations", () => {
  */
 class MockStdin extends EventEmitter {
   isTTY = true;
-  setRawMode = mock(() => this);
-  resume = mock(() => this);
-  pause = mock(() => this);
+  setRawMode = vi.fn(() => this);
+  resume = vi.fn(() => this);
+  pause = vi.fn(() => this);
 
   /**
    * Simulates pressing a key by emitting a data event with the key's byte sequence.
@@ -964,7 +964,7 @@ describe("createEscKeyListener", () => {
       const stdin = new MockStdin();
       stdin.isTTY = false;
 
-      const onEsc = mock();
+      const onEsc = vi.fn();
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
       expect(cleanup).toBeNull();
@@ -975,11 +975,11 @@ describe("createEscKeyListener", () => {
       const stdin = {
         isTTY: true,
         setRawMode: undefined, // Missing setRawMode function
-        resume: mock(),
-        on: mock(),
+        resume: vi.fn(),
+        on: vi.fn(),
       };
 
-      const onEsc = mock();
+      const onEsc = vi.fn();
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
       expect(cleanup).toBeNull();
@@ -987,7 +987,7 @@ describe("createEscKeyListener", () => {
 
     test("returns cleanup function when stdin is valid TTY", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1003,7 +1003,7 @@ describe("createEscKeyListener", () => {
   describe("ESC key detection", () => {
     test("calls onEsc callback when standalone ESC key is pressed", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1024,7 +1024,7 @@ describe("createEscKeyListener", () => {
 
     test("does NOT call onEsc when escape sequence is detected (arrow key up)", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1042,7 +1042,7 @@ describe("createEscKeyListener", () => {
 
     test("does NOT call onEsc when another key arrives after ESC", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1067,7 +1067,7 @@ describe("createEscKeyListener", () => {
 
     test("handles multiple standalone ESC presses", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1089,7 +1089,7 @@ describe("createEscKeyListener", () => {
   describe("cleanup function", () => {
     test("removes data listener from stdin", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1105,7 +1105,7 @@ describe("createEscKeyListener", () => {
 
     test("restores raw mode to false", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1122,7 +1122,7 @@ describe("createEscKeyListener", () => {
 
     test("pauses stdin", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
       stdin.pause.mockClear();
@@ -1136,7 +1136,7 @@ describe("createEscKeyListener", () => {
 
     test("clears pending timeout", () => {
       const stdin = new MockStdin();
-      const onEsc = mock();
+      const onEsc = vi.fn();
 
       const cleanup = createEscKeyListener(stdin as unknown as NodeJS.ReadStream, onEsc);
 
@@ -1207,8 +1207,8 @@ describe("createSigintListener", () => {
 
   describe("operation active behavior", () => {
     test("calls onCancel when operation is active and SIGINT received", () => {
-      const onCancel = mock();
-      const onQuit = mock();
+      const onCancel = vi.fn();
+      const onQuit = vi.fn();
       const isOperationActive = () => true;
 
       const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
@@ -1222,8 +1222,8 @@ describe("createSigintListener", () => {
     });
 
     test("does NOT call onQuit when operation is active (even on double press)", () => {
-      const onCancel = mock();
-      const onQuit = mock();
+      const onCancel = vi.fn();
+      const onQuit = vi.fn();
       const isOperationActive = () => true;
 
       const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
@@ -1242,8 +1242,8 @@ describe("createSigintListener", () => {
 
   describe("operation inactive behavior", () => {
     test("shows hint message when no operation active and first SIGINT", () => {
-      const onCancel = mock();
-      const onQuit = mock();
+      const onCancel = vi.fn();
+      const onQuit = vi.fn();
       const isOperationActive = () => false;
 
       const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
@@ -1258,8 +1258,8 @@ describe("createSigintListener", () => {
     });
 
     test("calls onQuit on double SIGINT within timeout window", () => {
-      const onCancel = mock();
-      const onQuit = mock();
+      const onCancel = vi.fn();
+      const onQuit = vi.fn();
       const isOperationActive = () => false;
 
       const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
@@ -1279,8 +1279,8 @@ describe("createSigintListener", () => {
 
   describe("cleanup function", () => {
     test("removes SIGINT listener", () => {
-      const onCancel = mock();
-      const onQuit = mock();
+      const onCancel = vi.fn();
+      const onQuit = vi.fn();
       const isOperationActive = () => false;
 
       const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
@@ -1296,8 +1296,8 @@ describe("createSigintListener", () => {
     });
 
     test("SIGINT has no effect after cleanup", () => {
-      const onCancel = mock();
-      const onQuit = mock();
+      const onCancel = vi.fn();
+      const onQuit = vi.fn();
       const isOperationActive = () => false;
 
       const cleanup = createSigintListener(onCancel, onQuit, isOperationActive, mockStderr);
@@ -1314,8 +1314,8 @@ describe("createSigintListener", () => {
 
   describe("state transitions", () => {
     test("allows double-press quit after cancelling an operation", () => {
-      const onCancel = mock();
-      const onQuit = mock();
+      const onCancel = vi.fn();
+      const onQuit = vi.fn();
       let operationActive = true;
       const isOperationActive = () => operationActive;
 

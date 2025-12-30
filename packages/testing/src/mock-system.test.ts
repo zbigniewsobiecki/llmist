@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { LLMist } from "llmist";
 import { createMockAdapter } from "./mock-adapter.js";
 import { mockLLM } from "./mock-builder.js";

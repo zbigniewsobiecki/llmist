@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, vi, test } from "vitest";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import type { LLMist } from "llmist";
@@ -27,9 +27,9 @@ class MockWritableStream extends Writable {
  */
 class MockStdin extends EventEmitter {
   isTTY = true;
-  setRawMode = mock(() => this);
-  resume = mock(() => this);
-  pause = mock(() => this);
+  setRawMode = vi.fn(() => this);
+  resume = vi.fn(() => this);
+  pause = vi.fn(() => this);
 
   pressKey(bytes: number[]): void {
     this.emit("data", Buffer.from(bytes));
@@ -124,23 +124,23 @@ function createMockEnv(
     stdout,
     stderr,
     createClient: () => mockClient,
-    setExitCode: mock(),
+    setExitCode: vi.fn(),
     createLogger: () => {
       const mockLogger: Record<string, unknown> = {
-        silly: mock(),
-        trace: mock(),
-        debug: mock(),
-        info: mock(),
-        warn: mock(),
-        error: mock(),
-        fatal: mock(),
+        silly: vi.fn(),
+        trace: vi.fn(),
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        fatal: vi.fn(),
       };
       // getSubLogger returns the same mock logger
       mockLogger.getSubLogger = () => mockLogger;
       return mockLogger as never;
     },
     isTTY,
-    prompt: mock(async () => "test input"),
+    prompt: vi.fn(async () => "test input"),
   };
 }
 

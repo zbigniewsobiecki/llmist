@@ -1,7 +1,7 @@
 /**
  * Model catalog: Query models, estimate costs, find cheapest
  *
- * Run: bunx tsx examples/06-model-catalog.ts
+ * Run: npx tsx examples/06-model-catalog.ts
  */
 
 import { LLMist } from "llmist";

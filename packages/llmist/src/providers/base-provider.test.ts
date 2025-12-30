@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStreamChunk, ModelDescriptor } from "../core/options.js";
@@ -196,7 +196,7 @@ describe("BaseProviderAdapter", () => {
     });
 
     it("should pass model spec to buildApiRequest", async () => {
-      const buildApiRequestMock = mock(
+      const buildApiRequestMock = vi.fn(
         (
           _options: LLMGenerationOptions,
           _descriptor: ModelDescriptor,

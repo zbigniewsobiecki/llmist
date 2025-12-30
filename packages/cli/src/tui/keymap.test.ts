@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, vi, test } from "vitest";
 import { KeyboardManager, type KeyAction } from "./keymap.js";
 import type { FocusMode } from "./types.js";
 
@@ -48,7 +48,7 @@ function createKeyboardManager(
 describe("KeyboardManager", () => {
 	describe("Ctrl+C handling", () => {
 		test("dispatches ctrl_c action", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -60,7 +60,7 @@ describe("KeyboardManager", () => {
 
 	describe("focus mode toggle", () => {
 		test("Ctrl+B dispatches toggle_focus_mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -72,7 +72,7 @@ describe("KeyboardManager", () => {
 
 	describe("content filter toggle", () => {
 		test("Ctrl+K dispatches toggle_content_filter", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -84,7 +84,7 @@ describe("KeyboardManager", () => {
 
 	describe("profile cycling", () => {
 		test("Ctrl+P always dispatches cycle_profile", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -96,7 +96,7 @@ describe("KeyboardManager", () => {
 
 	describe("page scrolling", () => {
 		test("PageUp dispatches scroll_page with direction -1", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -106,7 +106,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("PageDown dispatches scroll_page with direction 1", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -116,7 +116,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("Ctrl+I dispatches scroll_page with direction -1", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -126,7 +126,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("Ctrl+J dispatches scroll_page with direction 1", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction);
 
@@ -136,7 +136,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("scroll works in input mode too", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "input" });
 
@@ -146,7 +146,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("Ctrl+I/J scroll works in input mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "input" });
 
@@ -161,7 +161,7 @@ describe("KeyboardManager", () => {
 
 	describe("navigation keys", () => {
 		test("up/k dispatches select_previous in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -174,7 +174,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("down/j dispatches select_next in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -187,7 +187,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("navigation keys are blocked in input mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "input" });
 
@@ -200,7 +200,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("enter/space dispatches toggle_expand in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -213,7 +213,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("h dispatches collapse in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -226,7 +226,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("home/g dispatches select_first in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -239,7 +239,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("end/G dispatches select_last in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -254,7 +254,7 @@ describe("KeyboardManager", () => {
 
 	describe("raw viewer keys", () => {
 		test("r dispatches raw_viewer request in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -267,7 +267,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("S-r dispatches raw_viewer response in browse mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "browse" });
 
@@ -280,7 +280,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("raw viewer keys are blocked in input mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { focusMode: "input" });
 
@@ -293,7 +293,7 @@ describe("KeyboardManager", () => {
 
 	describe("escape handling", () => {
 		test("escape dispatches cancel when not in pending input", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { hasPendingInput: false });
 
@@ -303,7 +303,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("escape is blocked when pending input", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, { hasPendingInput: true });
 
@@ -313,7 +313,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("escape dispatches collapse when block is expanded", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			createKeyboardManager(screen, onAction, {
 				focusMode: "browse",
@@ -331,7 +331,7 @@ describe("KeyboardManager", () => {
 
 	describe("forwarded keys from InputHandler", () => {
 		test("handleForwardedKey C-c dispatches ctrl_c", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			const manager = createKeyboardManager(screen, onAction);
 
@@ -341,7 +341,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("handleForwardedKey C-b dispatches toggle_focus_mode", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			const manager = createKeyboardManager(screen, onAction);
 
@@ -351,7 +351,7 @@ describe("KeyboardManager", () => {
 		});
 
 		test("handleForwardedKey C-k dispatches toggle_content_filter", () => {
-			const onAction = mock(() => {});
+			const onAction = vi.fn(() => {});
 			const screen = createMockScreen();
 			const manager = createKeyboardManager(screen, onAction);
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import { Readable, Writable } from "node:stream";
 import type { CLIEnvironment } from "../environment.js";
 import { ApprovalManager } from "./manager.js";
@@ -35,8 +35,8 @@ function createMockEnv(stdinData = ""): CLIEnvironment {
     stdin,
     stdout: process.stdout,
     stderr,
-    createClient: mock(() => ({}) as never),
-    createLogger: mock(() => ({}) as never),
+    createClient: vi.fn(() => ({}) as never),
+    createLogger: vi.fn(() => ({}) as never),
     getStderrOutput: () => stderrChunks.join(""),
   } as CLIEnvironment & { getStderrOutput: () => string };
 }
