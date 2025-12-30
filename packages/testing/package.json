@@ -47,11 +47,11 @@
   "license": "MIT",
   "sideEffects": false,
   "peerDependencies": {
-    "llmist": "^9.0.0"
+    "llmist": "^12.0.2"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
-    "llmist": "^9.1.0",
+    "llmist": "^12.0.2",
     "rimraf": "^5.0.5",
     "tslog": "^4.10.2",
     "tsup": "^8.3.5",
