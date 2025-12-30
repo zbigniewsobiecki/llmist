@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -35,6 +36,18 @@ export function isTypeScriptFile(specifier: string): boolean {
 }
 
 /**
+ * Resolves the path to an installed package from the CLI's node_modules.
+ * Uses Node's createRequire to leverage standard module resolution.
+ *
+ * This allows TypeScript gadgets in ~/.llmist/gadgets/ to import from
+ * 'llmist' without needing their own node_modules directory.
+ */
+function resolvePackagePath(packageName: string): string {
+  const require = createRequire(import.meta.url);
+  return require.resolve(packageName);
+}
+
+/**
  * Lazy-initialized JITI instance (singleton per process).
  * Uses filesystem caching for performance.
  */
@@ -49,6 +62,13 @@ function getJiti(): Jiti {
       moduleCache: true,
       // Enable interop for CJS/ESM compatibility
       interopDefault: true,
+      // Map 'llmist' and 'zod' to CLI's installed versions
+      // Allows TypeScript gadgets in ~/.llmist/gadgets/ to import
+      // without needing their own node_modules
+      alias: {
+        llmist: resolvePackagePath("llmist"),
+        zod: resolvePackagePath("zod"),
+      },
     });
   }
   return jitiInstance;
