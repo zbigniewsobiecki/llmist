@@ -1,3 +1,9 @@
+## <small>12.0.2 (2025-12-30)</small>
+
+* Merge pull request #301 from zbigniewsobiecki/fix/jiti-module-resolution ([cf0c8dc](https://github.com/zbigniewsobiecki/llmist/commit/cf0c8dc)), closes [#301](https://github.com/zbigniewsobiecki/llmist/issues/301)
+* Merge pull request #302 from zbigniewsobiecki/dev ([adf279a](https://github.com/zbigniewsobiecki/llmist/commit/adf279a)), closes [#302](https://github.com/zbigniewsobiecki/llmist/issues/302)
+* fix(cli): resolve llmist/zod imports for TypeScript gadgets in user directories ([991d58c](https://github.com/zbigniewsobiecki/llmist/commit/991d58c))
+
 ## <small>12.0.1 (2025-12-30)</small>
 
 * Merge pull request #300 from zbigniewsobiecki/dev ([d97115e](https://github.com/zbigniewsobiecki/llmist/commit/d97115e)), closes [#300](https://github.com/zbigniewsobiecki/llmist/issues/300)
