@@ -69,7 +69,7 @@ const result = await agent.ask("Find the latest TypeScript 5.0 features");
 ### CLI Usage
 
 ```bash
-bun run src/cli.ts agent "Search for React hooks tutorials" \
+npx tsx src/cli.ts agent "Search for React hooks tutorials" \
   --gadget ./examples/gadgets/web-search/index.ts
 ```
 

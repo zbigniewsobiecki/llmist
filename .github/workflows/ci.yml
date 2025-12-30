@@ -35,47 +35,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Build packages
-        run: bun run build
-
-      - name: Run typecheck
-        run: bun run typecheck
-
-      - name: Run linter
-        run: bun run lint
-
-      - name: Setup Node.js (for cross-runtime tests)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
 
-      - name: Run Node.js spawn integration test
-        # Verify spawn utility works in Node.js (not just Bun)
-        run: node --experimental-strip-types scripts/test-node-spawn.mjs
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run linter
+        run: npm run lint
 
       - name: Run unit tests
-        # Run tests directly (not via Turborepo) to avoid TTY output capture issues
-        # with @unblessed/node terminal tests
-        run: |
-          cd packages/llmist && bun test src --ignore-pattern='**/e2e/**'
-          cd ../testing && bun test src
-          cd ../cli && bun test src
+        run: npm run test
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Run unit tests with coverage
-        run: |
-          cd packages/llmist && bun test src --coverage --coverage-reporter=lcov
+        run: npm run test:coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -86,7 +72,7 @@ jobs:
         continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/llmist/coverage/lcov.info
+          files: ./coverage/lcov.info
           fail_ci_if_error: false
           verbose: true
 
@@ -100,16 +86,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Validate PR commits
-        run: bunx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
   e2e-tests:
     # E2E tests now use mocks, so they can run on all PRs without API costs
@@ -119,19 +106,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Build packages
-        run: bun run build
+        run: npm run build
 
       - name: Run E2E tests
-        run: bun run test:e2e
+        run: npm run test:e2e
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

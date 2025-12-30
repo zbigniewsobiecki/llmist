@@ -2,7 +2,7 @@
  * Tests for gadget media helper functions.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
   createMediaOutput,
   resultWithAudio,

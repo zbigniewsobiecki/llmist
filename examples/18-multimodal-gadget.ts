@@ -1,7 +1,7 @@
 /**
  * Multimodal gadget with automatic cost tracking
  *
- * Run: bunx tsx examples/18-multimodal-gadget.ts
+ * Run: npx tsx examples/18-multimodal-gadget.ts
  *
  * Demonstrates creating gadgets that use image and speech generation
  * with automatic cost tracking via the execution context.

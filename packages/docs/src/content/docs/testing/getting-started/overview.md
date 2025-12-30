@@ -10,9 +10,9 @@ The `@llmist/testing` package provides utilities for testing llmist agents witho
 ## Installation
 
 ```bash
-bun add -D @llmist/testing
-# or
 npm install --save-dev @llmist/testing
+# or
+npm install -D @llmist/testing
 ```
 
 ## Why Mock?
@@ -73,7 +73,7 @@ console.log(answer); // "Hello, world!"
 ## Test Setup Pattern
 
 ```typescript
-import { describe, test, beforeEach, expect } from 'bun:test';
+import { describe, test, beforeEach, expect } from 'vitest';
 import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
 
 describe('MyAgent', () => {

@@ -4,7 +4,7 @@
  * Demonstrates the format.* and timing.* utilities for gadget authors.
  * These utilities are especially useful for browser automation and external API calls.
  *
- * Run: bunx tsx examples/22-format-timing.ts
+ * Run: npx tsx examples/22-format-timing.ts
  */
 
 import {

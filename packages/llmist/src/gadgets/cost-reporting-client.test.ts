@@ -5,7 +5,7 @@
  * and reports costs via the callback.
  */
 
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LLMist } from "../core/client.js";
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { LLMGenerationOptions, LLMStreamChunk } from "../core/options.js";
@@ -16,7 +16,7 @@ import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
  */
 function createMockClient(chunks: LLMStreamChunk[]): LLMist {
   const mockRegistry = {
-    estimateCost: mock(
+    estimateCost: vi.fn(
       (
         _modelId: string,
         input: number,
@@ -411,7 +411,7 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             images: [{ url: "https://example.com/image.png" }],
             model: "dall-e-3",
             usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
@@ -419,7 +419,7 @@ describe("CostReportingLLMistWrapper", () => {
           })),
         },
         speech: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             audio: new ArrayBuffer(1000),
             model: "tts-1",
             usage: { characterCount: 100 },
@@ -444,7 +444,7 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             images: [{ url: "https://example.com/image.png" }],
             model: "test-model",
             usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
@@ -452,7 +452,7 @@ describe("CostReportingLLMistWrapper", () => {
           })),
         },
         speech: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             audio: new ArrayBuffer(0),
             model: "test",
             usage: { characterCount: 0 },
@@ -476,7 +476,7 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             images: [{ url: "https://example.com/image.png" }],
             model: "test-model",
             usage: { imagesGenerated: 1, size: "1024x1024", quality: "standard" },
@@ -484,7 +484,7 @@ describe("CostReportingLLMistWrapper", () => {
           })),
         },
         speech: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             audio: new ArrayBuffer(0),
             model: "test",
             usage: { characterCount: 0 },
@@ -509,7 +509,7 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             images: [],
             model: "test",
             usage: { imagesGenerated: 0, size: "", quality: "" },
@@ -517,7 +517,7 @@ describe("CostReportingLLMistWrapper", () => {
           })),
         },
         speech: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             audio: new ArrayBuffer(5000),
             model: "tts-1-hd",
             usage: { characterCount: 200 },
@@ -543,7 +543,7 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             images: [],
             model: "test",
             usage: { imagesGenerated: 0, size: "", quality: "" },
@@ -551,7 +551,7 @@ describe("CostReportingLLMistWrapper", () => {
           })),
         },
         speech: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             audio: new ArrayBuffer(100),
             model: "test-tts",
             usage: { characterCount: 10 },
@@ -576,14 +576,14 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             images: [],
             model: "test",
             usage: { imagesGenerated: 0, size: "", quality: "" },
           })),
         },
         speech: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             audio: new ArrayBuffer(100),
             model: "test-tts",
             usage: { characterCount: 10 },
@@ -604,7 +604,7 @@ describe("CostReportingLLMistWrapper", () => {
     });
 
     it("passes all options to underlying client", async () => {
-      const generateSpeechMock = mock(async () => ({
+      const generateSpeechMock = vi.fn(async () => ({
         audio: new ArrayBuffer(1000),
         model: "tts-1",
         usage: { characterCount: 50 },
@@ -616,7 +616,7 @@ describe("CostReportingLLMistWrapper", () => {
         modelRegistry: createMockClient([]).modelRegistry,
         stream: createMockClient([]).stream,
         image: {
-          generate: mock(async () => ({
+          generate: vi.fn(async () => ({
             images: [],
             model: "test",
             usage: { imagesGenerated: 0, size: "", quality: "" },

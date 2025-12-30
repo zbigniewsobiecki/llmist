@@ -1,7 +1,7 @@
 /**
  * Custom gadgets: Class-based vs functional, async, timeouts, schemas
  *
- * Run: bunx tsx examples/02-custom-gadgets.ts
+ * Run: npx tsx examples/02-custom-gadgets.ts
  */
 
 import {

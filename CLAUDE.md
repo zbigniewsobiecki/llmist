@@ -2,7 +2,7 @@
 
 ## Overview
 
-llmist is a streaming-first, multi-provider LLM client with a custom "gadget" tool-calling system. The project is a Bun Workspaces + Turborepo monorepo.
+llmist is a streaming-first, multi-provider LLM client with a custom "gadget" tool-calling system. The project is a npm workspaces + Turborepo monorepo.
 
 **Packages:**
 - `llmist` - Core library (npm: llmist)
@@ -59,28 +59,27 @@ git push origin dev
 
 ### Build & Test
 ```bash
-bun install              # Install dependencies
-bun run build            # Build all packages (uses Turborepo)
-bun run test             # Run all tests
-bun run typecheck        # Type-check all packages
-bun run lint             # Lint with Biome
-bun run format           # Format with Biome
-bun run check            # Lint + format
+npm install              # Install dependencies
+npm run build            # Build all packages (uses Turborepo)
+npm run test             # Run all tests (uses Vitest)
+npm run typecheck        # Type-check all packages
+npm run lint             # Lint with Biome
+npm run format           # Format with Biome
+npm run check            # Lint + format
 ```
 
 ### Package-Specific
 ```bash
-bun run test --filter=llmist           # Core library tests only
-bun run test --filter=@llmist/cli      # CLI tests only
-bun run test --filter=@llmist/testing  # Testing package tests
-bun run test:e2e --filter=llmist       # E2E tests (use mocks)
+npm run test             # Run all tests
+npm run test:e2e         # E2E tests (use mocks)
+npm run test:coverage    # Tests with coverage
 ```
 
 ### Documentation
 ```bash
-bun run docs:dev         # Start docs dev server
-bun run docs:build       # Build docs site
-bun run docs:preview     # Preview built docs
+npm run docs:dev         # Start docs dev server
+npm run docs:build       # Build docs site
+npm run docs:preview     # Preview built docs
 ```
 
 ## Project Structure
@@ -199,7 +198,7 @@ Git hooks validate commits locally via commitlint.
 ## Testing
 
 ### Unit Tests
-Co-located with source files (`*.test.ts`). Use Bun's built-in test runner.
+Co-located with source files (`*.test.ts`). Use Vitest test runner.
 
 ### E2E Tests
 In `packages/llmist/src/e2e/`. Use mocks by default (no API calls in CI).
@@ -266,8 +265,8 @@ Triggered on push to main:
 
 23 runnable examples in `examples/`:
 ```bash
-bunx tsx examples/01-basic-usage.ts
-bunx tsx examples/12-error-handling.ts
+npx tsx examples/01-basic-usage.ts
+npx tsx examples/12-error-handling.ts
 ```
 
 Key examples:

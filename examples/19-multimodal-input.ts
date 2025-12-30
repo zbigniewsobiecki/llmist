@@ -1,7 +1,7 @@
 /**
  * Multimodal Input: Images and Audio in Messages
  *
- * Run: bunx tsx examples/19-multimodal-input.ts
+ * Run: npx tsx examples/19-multimodal-input.ts
  *
  * Demonstrates sending images and audio alongside text in LLM messages.
  * This complements the multimodal OUTPUT examples (18-multimodal-gadget.ts).

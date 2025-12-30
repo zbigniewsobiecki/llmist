@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { Readable, Writable } from "node:stream";
 import { NodeRuntime, Screen, ScrollableBox, setRuntime } from "@unblessed/node";
 import { ExecutionTree } from "llmist";
@@ -66,7 +66,7 @@ describe("BlockRenderer", () => {
 
       const id1 = renderer.addLLMCall(1, "test-model");
 
-      expect(id1).toStartWith("llm_");
+      expect(id1).toMatch(/^llm_/);
     });
 
     test("returns existing block ID when same iteration is added twice", () => {
@@ -194,7 +194,7 @@ describe("BlockRenderer", () => {
       // Verify block was created
       const blockId = renderer.getBlockIdForTreeNode(llmNode.id);
       expect(blockId).toBeDefined();
-      expect(blockId).toStartWith("llm_");
+      expect(blockId).toMatch(/^llm_/);
 
       unsubscribe();
     });
@@ -533,7 +533,7 @@ describe("BlockRenderer", () => {
 
       const id1 = renderer.addGadget("gc_1", "ReadFile", { path: "/test.txt" });
 
-      expect(id1).toStartWith("gadget_");
+      expect(id1).toMatch(/^gadget_/);
     });
 
     test("returns existing block ID when same invocationId is added twice", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import type { LLMMessage } from "../../../core/messages.js";
 import type { ResolvedCompactionConfig } from "../config.js";
 import type { CompactionContext } from "../strategy.js";

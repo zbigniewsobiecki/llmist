@@ -2,7 +2,7 @@
  * Tests for ExecutionTree - the first-class model for nested subagent support.
  */
 
-import { describe, expect, test, beforeEach } from "bun:test";
+import { describe, expect, test, beforeEach } from "vitest";
 import { ExecutionTree } from "./execution-tree.js";
 import type { ExecutionEvent } from "./execution-events.js";
 

@@ -1,8 +1,8 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * Test script for the TUI implementation.
  *
- * Run with: bun scripts/test-tui.ts
+ * Run with: npx tsx scripts/test-tui.ts
  *
  * Press ESC or Ctrl+C twice to exit.
  *

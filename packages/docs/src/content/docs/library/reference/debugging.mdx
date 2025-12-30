@@ -76,20 +76,10 @@ const logger = createLogger({ minLevel: 'debug' });
 
 ## CLI Debugging
 
-<Tabs>
-  <TabItem label="bun">
-    ```bash
-    bunx @llmist/cli complete "test" --model haiku 2>&1 | tee debug.log
-    bunx @llmist/cli agent "test" --gadget ./tool.ts 2>&1
-    ```
-  </TabItem>
-  <TabItem label="npm">
-    ```bash
+```bash
     npx @llmist/cli complete "test" --model haiku 2>&1 | tee debug.log
     npx @llmist/cli agent "test" --gadget ./tool.ts 2>&1
     ```
-  </TabItem>
-</Tabs>
 
 ## See Also
 

@@ -4,7 +4,7 @@
  * Verifies image generation routing to providers and model listing.
  */
 
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type { ProviderAdapter } from "../../providers/provider.js";
 import type {
   ImageGenerationOptions,
@@ -33,7 +33,7 @@ function createMockAdapter(opts: {
       : undefined,
     getImageModelSpecs: imageModels.length > 0 ? () => imageModels : undefined,
     generateImage: supportsImage
-      ? mock(async (_options: ImageGenerationOptions): Promise<ImageGenerationResult> => {
+      ? vi.fn(async (_options: ImageGenerationOptions): Promise<ImageGenerationResult> => {
           return (
             generateImageResult ?? {
               images: [{ url: "https://example.com/image.png" }],

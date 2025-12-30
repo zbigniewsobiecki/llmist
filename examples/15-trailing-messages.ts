@@ -10,7 +10,7 @@
  * - Status injection: Current state that changes independently
  * - Format enforcement: "Always respond in JSON format"
  *
- * Run: bun examples/15-trailing-messages.ts
+ * Run: npx tsx examples/15-trailing-messages.ts
  */
 
 import { Gadget, HookPresets, LLMist, z } from "../src/index.js";

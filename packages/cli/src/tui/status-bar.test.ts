@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeAll, afterAll, mock } from "bun:test";
+import { describe, expect, test, beforeAll, afterAll, vi } from "vitest";
 import { Writable, Readable } from "node:stream";
 import { setRuntime, NodeRuntime, Screen, Box } from "@unblessed/node";
 import { StatusBar } from "./status-bar.js";
@@ -57,7 +57,7 @@ afterAll(() => {
 describe("StatusBar", () => {
   describe("constructor", () => {
     test("initializes with provided model", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       const metrics = bar.getMetrics();
@@ -65,7 +65,7 @@ describe("StatusBar", () => {
     });
 
     test("initializes with zero metrics", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       const metrics = bar.getMetrics();
@@ -77,7 +77,7 @@ describe("StatusBar", () => {
     });
 
     test("sets start time", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const before = Date.now();
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
       const after = Date.now();
@@ -88,7 +88,7 @@ describe("StatusBar", () => {
     });
 
     test("calls render callback on init", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       new StatusBar(statusBox, "test-model", renderCallback);
 
       expect(renderCallback).toHaveBeenCalled();
@@ -97,14 +97,14 @@ describe("StatusBar", () => {
 
   describe("focus mode", () => {
     test("defaults to browse mode", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       expect(bar.getFocusMode()).toBe("browse");
     });
 
     test("setFocusMode updates the mode", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setFocusMode("input");
@@ -115,8 +115,8 @@ describe("StatusBar", () => {
     });
 
     test("setFocusMode uses immediate render", () => {
-      const renderCallback = mock(() => {});
-      const renderNowCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
       const bar = new StatusBar(
         statusBox,
         "test-model",
@@ -132,7 +132,7 @@ describe("StatusBar", () => {
     });
 
     test("browse mode shows BROWSE indicator", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setFocusMode("browse");
@@ -142,7 +142,7 @@ describe("StatusBar", () => {
     });
 
     test("input mode shows INPUT indicator", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setFocusMode("input");
@@ -154,7 +154,7 @@ describe("StatusBar", () => {
 
   describe("call lifecycle", () => {
     test("startCall increments iteration", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       expect(bar.getMetrics().iteration).toBe(0);
@@ -167,7 +167,7 @@ describe("StatusBar", () => {
     });
 
     test("startCall updates model", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "old-model", renderCallback);
 
       bar.startCall("new-model", 100);
@@ -175,7 +175,7 @@ describe("StatusBar", () => {
     });
 
     test("endCall accumulates tokens and cost", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.endCall(100, 50, 20, 0.01);
@@ -188,7 +188,7 @@ describe("StatusBar", () => {
     });
 
     test("multiple endCalls accumulate metrics", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.endCall(100, 50, 10, 0.01);
@@ -204,8 +204,8 @@ describe("StatusBar", () => {
 
   describe("streaming updates", () => {
     test("updateStreaming uses immediate render", () => {
-      const renderCallback = mock(() => {});
-      const renderNowCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
       const bar = new StatusBar(
         statusBox,
         "test-model",
@@ -223,7 +223,7 @@ describe("StatusBar", () => {
 
   describe("gadget cost tracking", () => {
     test("addGadgetCost adds to total cost", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.addGadgetCost(0.05);
@@ -234,7 +234,7 @@ describe("StatusBar", () => {
     });
 
     test("addGadgetCost ignores zero or negative costs", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.addGadgetCost(0);
@@ -247,7 +247,7 @@ describe("StatusBar", () => {
 
   describe("activity tracking", () => {
     test("startLLMCall adds to active calls", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.startLLMCall("#1", "claude-sonnet");
@@ -257,7 +257,7 @@ describe("StatusBar", () => {
     });
 
     test("endLLMCall removes from active calls", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.startLLMCall("#1", "claude-sonnet");
@@ -270,7 +270,7 @@ describe("StatusBar", () => {
     });
 
     test("startGadget adds to active gadgets", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.startGadget("ReadFile");
@@ -280,7 +280,7 @@ describe("StatusBar", () => {
     });
 
     test("endGadget removes from active gadgets", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.startGadget("ReadFile");
@@ -291,7 +291,7 @@ describe("StatusBar", () => {
     });
 
     test("clearActivity removes all activity", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.startLLMCall("#1", "claude");
@@ -311,7 +311,7 @@ describe("StatusBar", () => {
 
   describe("getElapsedSeconds", () => {
     test("returns elapsed time in seconds", async () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       // Wait a bit
@@ -344,7 +344,7 @@ describe("StatusBar", () => {
 
   describe("setProfiles", () => {
     test("selects first profile when initialProfile is undefined", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setProfiles(["agent", "news", "code"]);
@@ -353,7 +353,7 @@ describe("StatusBar", () => {
     });
 
     test("selects correct profile when initialProfile matches", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setProfiles(["agent", "news", "code"], "news");
@@ -362,7 +362,7 @@ describe("StatusBar", () => {
     });
 
     test("selects first profile when initialProfile does not match any", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setProfiles(["agent", "news", "code"], "nonexistent");
@@ -371,7 +371,7 @@ describe("StatusBar", () => {
     });
 
     test("displays current profile in status bar", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setProfiles(["agent", "news", "code"], "code");
@@ -381,7 +381,7 @@ describe("StatusBar", () => {
     });
 
     test("cycles to next profile with cycleProfile", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setProfiles(["agent", "news", "code"], "agent");
@@ -400,7 +400,7 @@ describe("StatusBar", () => {
 
   describe("subscribeToTree", () => {
     test("clears all activity state when subscribing to new tree", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       // Add some activity
@@ -422,7 +422,7 @@ describe("StatusBar", () => {
     });
 
     test("previous tree subscription is unsubscribed when subscribing to new tree", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       const tree1 = new ExecutionTree();
@@ -451,7 +451,7 @@ describe("StatusBar", () => {
     });
 
     test("subscribeToTree returns unsubscribe function", () => {
-      const renderCallback = mock(() => {});
+      const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       const tree = new ExecutionTree();

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { ErrorGadget, MathGadget, TestGadget } from "../../../testing/src/helpers.js";
 import { GadgetRegistry } from "./registry.js";

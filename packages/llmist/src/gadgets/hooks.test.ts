@@ -9,7 +9,7 @@
  * The hooks system is the backbone of agent orchestration and must be thoroughly tested.
  */
 
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Agent } from "../agent/agent.js";
 import { AGENT_INTERNAL_KEY } from "../agent/agent-internal-key.js";
 import type {
@@ -179,7 +179,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
   describe("onLLMCallStart", () => {
     it("is called when LLM call starts", async () => {
-      const onLLMCallStart = mock<(context: ObserveLLMCallContext) => void>();
+      const onLLMCallStart = vi.fn<(context: ObserveLLMCallContext) => void>();
 
       const mockAdapter = new MockAdapter([[{ text: "Response", finishReason: "stop" }]]);
       const client = new LLMist([mockAdapter]);
@@ -211,7 +211,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
     it("is called for each iteration", async () => {
       registry.registerByClass(new TestGadget());
-      const onLLMCallStart = mock<(context: ObserveLLMCallContext) => void>();
+      const onLLMCallStart = vi.fn<(context: ObserveLLMCallContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -243,7 +243,7 @@ describe("Observers (Read-Only Hooks)", () => {
     });
 
     it("does not crash system if observer throws error", async () => {
-      const onLLMCallStart = mock(() => {
+      const onLLMCallStart = vi.fn(() => {
         throw new Error("Observer error");
       });
 
@@ -268,7 +268,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
     it("supports async observers", async () => {
       let observerCompleted = false;
-      const onLLMCallStart = mock(async () => {
+      const onLLMCallStart = vi.fn(async () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         observerCompleted = true;
       });
@@ -295,7 +295,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
   describe("onLLMCallComplete", () => {
     it("is called when LLM call completes successfully", async () => {
-      const onLLMCallComplete = mock<(context: ObserveLLMCompleteContext) => void>();
+      const onLLMCallComplete = vi.fn<(context: ObserveLLMCompleteContext) => void>();
 
       const mockAdapter = new MockAdapter([[{ text: "Success response", finishReason: "stop" }]]);
       const client = new LLMist([mockAdapter]);
@@ -326,7 +326,7 @@ describe("Observers (Read-Only Hooks)", () => {
     });
 
     it("includes complete accumulated text in rawResponse", async () => {
-      const onLLMCallComplete = mock<(context: ObserveLLMCompleteContext) => void>();
+      const onLLMCallComplete = vi.fn<(context: ObserveLLMCompleteContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [{ text: "Part 1" }, { text: " Part 2" }, { text: " Part 3", finishReason: "stop" }],
@@ -354,7 +354,7 @@ describe("Observers (Read-Only Hooks)", () => {
     });
 
     it("includes usage information when available", async () => {
-      const onLLMCallComplete = mock<(context: ObserveLLMCompleteContext) => void>();
+      const onLLMCallComplete = vi.fn<(context: ObserveLLMCompleteContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -390,7 +390,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
   describe("onLLMCallError", () => {
     it("is called when LLM call fails", async () => {
-      const onLLMCallError = mock<(context: ObserveLLMErrorContext) => void>();
+      const onLLMCallError = vi.fn<(context: ObserveLLMErrorContext) => void>();
 
       const errorAdapter = new ErrorAdapter("LLM API Error");
       const client = new LLMist([errorAdapter]);
@@ -421,7 +421,7 @@ describe("Observers (Read-Only Hooks)", () => {
     });
 
     it("indicates when error was recovered", async () => {
-      const onLLMCallError = mock<(context: ObserveLLMErrorContext) => void>();
+      const onLLMCallError = vi.fn<(context: ObserveLLMErrorContext) => void>();
 
       const errorAdapter = new ErrorAdapter("Recoverable error");
       const client = new LLMist([errorAdapter]);
@@ -458,7 +458,7 @@ describe("Observers (Read-Only Hooks)", () => {
   describe("onGadgetExecutionStart", () => {
     it("is called before gadget execution", async () => {
       registry.registerByClass(new TestGadget());
-      const onGadgetExecutionStart = mock<(context: ObserveGadgetStartContext) => void>();
+      const onGadgetExecutionStart = vi.fn<(context: ObserveGadgetStartContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -498,7 +498,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
     it("is called for each gadget execution", async () => {
       registry.registerByClass(new TestGadget());
-      const onGadgetExecutionStart = mock<(context: ObserveGadgetStartContext) => void>();
+      const onGadgetExecutionStart = vi.fn<(context: ObserveGadgetStartContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -544,7 +544,7 @@ describe("Observers (Read-Only Hooks)", () => {
   describe("onGadgetExecutionComplete", () => {
     it("is called after successful gadget execution", async () => {
       registry.registerByClass(new TestGadget());
-      const onGadgetExecutionComplete = mock<(context: ObserveGadgetCompleteContext) => void>();
+      const onGadgetExecutionComplete = vi.fn<(context: ObserveGadgetCompleteContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -586,7 +586,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
     it("is called after gadget error", async () => {
       registry.registerByClass(new ErrorGadget());
-      const onGadgetExecutionComplete = mock<(context: ObserveGadgetCompleteContext) => void>();
+      const onGadgetExecutionComplete = vi.fn<(context: ObserveGadgetCompleteContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -626,7 +626,7 @@ describe("Observers (Read-Only Hooks)", () => {
       // result from the tree event. The originalResult field is no longer populated since the
       // tree only stores the final result.
       registry.registerByClass(new TestGadget());
-      const onGadgetExecutionComplete = mock<(context: ObserveGadgetCompleteContext) => void>();
+      const onGadgetExecutionComplete = vi.fn<(context: ObserveGadgetCompleteContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -665,7 +665,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
   describe("onStreamChunk", () => {
     it("is called for each stream chunk", async () => {
-      const onStreamChunk = mock<(context: ObserveChunkContext) => void>();
+      const onStreamChunk = vi.fn<(context: ObserveChunkContext) => void>();
 
       const stream = createMockStream([
         { text: "Hello " },
@@ -704,7 +704,7 @@ describe("Observers (Read-Only Hooks)", () => {
     });
 
     it("sees chunk after interceptRawChunk transformation", async () => {
-      const onStreamChunk = mock<(context: ObserveChunkContext) => void>();
+      const onStreamChunk = vi.fn<(context: ObserveChunkContext) => void>();
 
       const stream = createMockStream([{ text: "**bold**" }, { text: "", finishReason: "stop" }]);
 
@@ -734,13 +734,13 @@ describe("Observers (Read-Only Hooks)", () => {
   describe("Observer Parallel Execution", () => {
     it("runs multiple observers in parallel within the same hook call", async () => {
       const executionOrder: string[] = [];
-      const observer1 = mock(async () => {
+      const observer1 = vi.fn(async () => {
         executionOrder.push("observer1-start");
         await new Promise((resolve) => setTimeout(resolve, 20));
         executionOrder.push("observer1-end");
       });
 
-      const observer2 = mock(async () => {
+      const observer2 = vi.fn(async () => {
         executionOrder.push("observer2-start");
         await new Promise((resolve) => setTimeout(resolve, 10));
         executionOrder.push("observer2-end");
@@ -771,8 +771,8 @@ describe("Observers (Read-Only Hooks)", () => {
     });
 
     it("continues execution even if one observer fails", async () => {
-      const successfulObserver = mock();
-      const failingObserver = mock(() => {
+      const successfulObserver = vi.fn();
+      const failingObserver = vi.fn(() => {
         throw new Error("Observer failed");
       });
 
@@ -811,7 +811,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
   describe("interceptRawChunk", () => {
     it("transforms raw chunks from LLM", async () => {
-      const interceptRawChunk = mock((chunk: string) => chunk.toUpperCase());
+      const interceptRawChunk = vi.fn((chunk: string) => chunk.toUpperCase());
 
       const stream = createMockStream([
         { text: "hello" },
@@ -835,7 +835,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
     });
 
     it("can suppress chunks by returning null", async () => {
-      const interceptRawChunk = mock((chunk: string) => {
+      const interceptRawChunk = vi.fn((chunk: string) => {
         if (chunk.includes("SECRET")) return null;
         return chunk;
       });
@@ -862,7 +862,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
     });
 
     it("receives context with iteration and accumulated text", async () => {
-      const interceptRawChunk = mock((chunk: string, context) => {
+      const interceptRawChunk = vi.fn((chunk: string, context) => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -891,7 +891,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
   describe("interceptTextChunk", () => {
     it("transforms text chunks before display", async () => {
-      const interceptTextChunk = mock((chunk: string) => `[${chunk}]`);
+      const interceptTextChunk = vi.fn((chunk: string) => `[${chunk}]`);
 
       const stream = createMockStream([
         { text: "Hello World" },
@@ -916,7 +916,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
     });
 
     it("can suppress text chunks by returning null", async () => {
-      const interceptTextChunk = mock((chunk: string) => {
+      const interceptTextChunk = vi.fn((chunk: string) => {
         // Suppress everything
         return null;
       });
@@ -947,7 +947,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
   describe("interceptAssistantMessage", () => {
     it("transforms final message before storing in conversation", async () => {
-      const interceptAssistantMessage = mock((message: string) => {
+      const interceptAssistantMessage = vi.fn((message: string) => {
         return message.replace(/secret_key=\w+/g, "secret_key=[REDACTED]");
       });
 
@@ -972,7 +972,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
     });
 
     it("receives context with raw response", async () => {
-      const interceptAssistantMessage = mock((message: string, context) => {
+      const interceptAssistantMessage = vi.fn((message: string, context) => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -1002,7 +1002,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
     });
 
     it("cannot suppress message (always returns transformed message)", async () => {
-      const interceptAssistantMessage = mock(() => "");
+      const interceptAssistantMessage = vi.fn(() => "");
 
       const stream = createMockStream([
         { text: "original message" },
@@ -1028,7 +1028,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
   describe("interceptGadgetParameters", () => {
     it("transforms gadget parameters before execution", async () => {
       registry.registerByClass(new TestGadget());
-      const interceptGadgetParameters = mock((params: Record<string, unknown>) => {
+      const interceptGadgetParameters = vi.fn((params: Record<string, unknown>) => {
         return { ...params, message: `[MODIFIED] ${params.message}` };
       });
 
@@ -1065,7 +1065,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
     // NOTE: This test uses Agent since onGadgetExecutionStart is now called via the tree-hook-bridge
     it("modified parameters are visible in subsequent hooks", async () => {
       registry.registerByClass(new TestGadget());
-      const onGadgetExecutionStart = mock<(context: ObserveGadgetStartContext) => void>();
+      const onGadgetExecutionStart = vi.fn<(context: ObserveGadgetStartContext) => void>();
 
       const mockAdapter = new MockAdapter([
         [
@@ -1103,7 +1103,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
     it("receives context with gadget name and invocation ID", async () => {
       registry.registerByClass(new TestGadget());
-      const interceptGadgetParameters = mock((params: Record<string, unknown>, context) => {
+      const interceptGadgetParameters = vi.fn((params: Record<string, unknown>, context) => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -1139,7 +1139,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
   describe("interceptGadgetResult", () => {
     it("transforms gadget result before returning to LLM", async () => {
       registry.registerByClass(new TestGadget());
-      const interceptGadgetResult = mock((result: string) => {
+      const interceptGadgetResult = vi.fn((result: string) => {
         return result.toUpperCase();
       });
 
@@ -1170,7 +1170,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
     it("receives context with execution details", async () => {
       registry.registerByClass(new TestGadget());
-      const interceptGadgetResult = mock((result: string, context) => {
+      const interceptGadgetResult = vi.fn((result: string, context) => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -1206,7 +1206,7 @@ describe("Interceptors (Synchronous Transformations)", () => {
 
     it("cannot suppress result (always returns transformed result)", async () => {
       registry.registerByClass(new TestGadget());
-      const interceptGadgetResult = mock(() => "");
+      const interceptGadgetResult = vi.fn(() => "");
 
       const stream = createMockStream([
         {
@@ -1238,12 +1238,12 @@ describe("Interceptors (Synchronous Transformations)", () => {
     it("runs interceptors in sequence for chunks", async () => {
       const executionOrder: string[] = [];
 
-      const interceptor1 = mock((chunk: string) => {
+      const interceptor1 = vi.fn((chunk: string) => {
         executionOrder.push("interceptor1");
         return `[1:${chunk}]`;
       });
 
-      const interceptor2 = mock((chunk: string) => {
+      const interceptor2 = vi.fn((chunk: string) => {
         executionOrder.push("interceptor2");
         return `[2:${chunk}]`;
       });
@@ -1289,7 +1289,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
   describe("beforeLLMCall", () => {
     it("can modify LLM options", async () => {
-      const beforeLLMCall = mock(async (): Promise<BeforeLLMCallAction> => {
+      const beforeLLMCall = vi.fn(async (): Promise<BeforeLLMCallAction> => {
         return {
           action: "proceed",
           modifiedOptions: { temperature: 0.9 },
@@ -1318,7 +1318,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     });
 
     it("can skip LLM call with synthetic response", async () => {
-      const beforeLLMCall = mock(async (): Promise<BeforeLLMCallAction> => {
+      const beforeLLMCall = vi.fn(async (): Promise<BeforeLLMCallAction> => {
         return {
           action: "skip",
           syntheticResponse: "Synthetic response from controller",
@@ -1354,7 +1354,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     });
 
     it("receives correct context", async () => {
-      const beforeLLMCall = mock(async (context): Promise<BeforeLLMCallAction> => {
+      const beforeLLMCall = vi.fn(async (context): Promise<BeforeLLMCallAction> => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -1390,7 +1390,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     it("can append messages to conversation", async () => {
       registry.registerByClass(new TestGadget());
       let callCount = 0;
-      const afterLLMCall = mock(async (): Promise<AfterLLMCallAction> => {
+      const afterLLMCall = vi.fn(async (): Promise<AfterLLMCallAction> => {
         callCount++;
         if (callCount === 1) {
           return {
@@ -1434,7 +1434,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     });
 
     it("can modify final message", async () => {
-      const afterLLMCall = mock(async (): Promise<AfterLLMCallAction> => {
+      const afterLLMCall = vi.fn(async (): Promise<AfterLLMCallAction> => {
         return {
           action: "modify_and_continue",
           modifiedMessage: "Modified by controller",
@@ -1465,7 +1465,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     it("can both append and modify", async () => {
       registry.registerByClass(new TestGadget());
       let callCount = 0;
-      const afterLLMCall = mock(async (): Promise<AfterLLMCallAction> => {
+      const afterLLMCall = vi.fn(async (): Promise<AfterLLMCallAction> => {
         callCount++;
         if (callCount === 1) {
           return {
@@ -1509,7 +1509,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     });
 
     it("receives correct context with usage info", async () => {
-      const afterLLMCall = mock(async (context): Promise<AfterLLMCallAction> => {
+      const afterLLMCall = vi.fn(async (context): Promise<AfterLLMCallAction> => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -1548,7 +1548,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
   describe("afterLLMError", () => {
     it("can recover from LLM error with fallback response", async () => {
-      const afterLLMError = mock(async (): Promise<AfterLLMErrorAction> => {
+      const afterLLMError = vi.fn(async (): Promise<AfterLLMErrorAction> => {
         return {
           action: "recover",
           fallbackResponse: "Fallback response",
@@ -1576,7 +1576,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     });
 
     it("can rethrow error", async () => {
-      const afterLLMError = mock(async (): Promise<AfterLLMErrorAction> => {
+      const afterLLMError = vi.fn(async (): Promise<AfterLLMErrorAction> => {
         return { action: "rethrow" };
       });
 
@@ -1598,7 +1598,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
     });
 
     it("receives correct error context", async () => {
-      const afterLLMError = mock(async (context): Promise<AfterLLMErrorAction> => {
+      const afterLLMError = vi.fn(async (context): Promise<AfterLLMErrorAction> => {
         expect(context.error.message).toBe("Test error");
         expect(context.options).toBeDefined();
         expect(context.logger).toBeDefined();
@@ -1630,7 +1630,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
   describe("beforeGadgetExecution", () => {
     it("can skip gadget execution with synthetic result", async () => {
       registry.registerByClass(new TestGadget());
-      const beforeGadgetExecution = mock(async (): Promise<BeforeGadgetExecutionAction> => {
+      const beforeGadgetExecution = vi.fn(async (): Promise<BeforeGadgetExecutionAction> => {
         return {
           action: "skip",
           syntheticResult: "Skipped execution",
@@ -1667,7 +1667,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
     it("can proceed with execution", async () => {
       registry.registerByClass(new TestGadget());
-      const beforeGadgetExecution = mock(async (): Promise<BeforeGadgetExecutionAction> => {
+      const beforeGadgetExecution = vi.fn(async (): Promise<BeforeGadgetExecutionAction> => {
         return { action: "proceed" };
       });
 
@@ -1699,7 +1699,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
     it("receives correct context with parameters", async () => {
       registry.registerByClass(new TestGadget());
-      const beforeGadgetExecution = mock(async (context): Promise<BeforeGadgetExecutionAction> => {
+      const beforeGadgetExecution = vi.fn(async (context): Promise<BeforeGadgetExecutionAction> => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -1736,7 +1736,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
   describe("afterGadgetExecution", () => {
     it("can recover from gadget error with fallback", async () => {
       registry.registerByClass(new ErrorGadget());
-      const afterGadgetExecution = mock(async (): Promise<AfterGadgetExecutionAction> => {
+      const afterGadgetExecution = vi.fn(async (): Promise<AfterGadgetExecutionAction> => {
         return {
           action: "recover",
           fallbackResult: "Recovered from error",
@@ -1773,7 +1773,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
     it("can continue after successful execution", async () => {
       registry.registerByClass(new TestGadget());
-      const afterGadgetExecution = mock(async (): Promise<AfterGadgetExecutionAction> => {
+      const afterGadgetExecution = vi.fn(async (): Promise<AfterGadgetExecutionAction> => {
         return { action: "continue" };
       });
 
@@ -1805,7 +1805,7 @@ describe("Controllers (Async Lifecycle Control)", () => {
 
     it("receives correct context with execution details", async () => {
       registry.registerByClass(new TestGadget());
-      const afterGadgetExecution = mock(async (context): Promise<AfterGadgetExecutionAction> => {
+      const afterGadgetExecution = vi.fn(async (context): Promise<AfterGadgetExecutionAction> => {
         expect(context).toEqual(
           expect.objectContaining({
             iteration: 0,
@@ -1861,48 +1861,48 @@ describe("Hook System Integration", () => {
 
       const hooks = {
         observers: {
-          onLLMCallStart: mock(() => executionOrder.push("onLLMCallStart")),
-          onLLMCallComplete: mock(() => executionOrder.push("onLLMCallComplete")),
-          onStreamChunk: mock(() => executionOrder.push("onStreamChunk")),
-          onGadgetExecutionStart: mock(() => executionOrder.push("onGadgetExecutionStart")),
-          onGadgetExecutionComplete: mock(() => executionOrder.push("onGadgetExecutionComplete")),
+          onLLMCallStart: vi.fn(() => executionOrder.push("onLLMCallStart")),
+          onLLMCallComplete: vi.fn(() => executionOrder.push("onLLMCallComplete")),
+          onStreamChunk: vi.fn(() => executionOrder.push("onStreamChunk")),
+          onGadgetExecutionStart: vi.fn(() => executionOrder.push("onGadgetExecutionStart")),
+          onGadgetExecutionComplete: vi.fn(() => executionOrder.push("onGadgetExecutionComplete")),
         },
         interceptors: {
-          interceptRawChunk: mock((chunk: string) => {
+          interceptRawChunk: vi.fn((chunk: string) => {
             executionOrder.push("interceptRawChunk");
             return chunk;
           }),
-          interceptTextChunk: mock((chunk: string) => {
+          interceptTextChunk: vi.fn((chunk: string) => {
             executionOrder.push("interceptTextChunk");
             return chunk;
           }),
-          interceptGadgetParameters: mock((params: Record<string, unknown>) => {
+          interceptGadgetParameters: vi.fn((params: Record<string, unknown>) => {
             executionOrder.push("interceptGadgetParameters");
             return params;
           }),
-          interceptGadgetResult: mock((result: string) => {
+          interceptGadgetResult: vi.fn((result: string) => {
             executionOrder.push("interceptGadgetResult");
             return result;
           }),
-          interceptAssistantMessage: mock((message: string) => {
+          interceptAssistantMessage: vi.fn((message: string) => {
             executionOrder.push("interceptAssistantMessage");
             return message;
           }),
         },
         controllers: {
-          beforeLLMCall: mock(async (): Promise<BeforeLLMCallAction> => {
+          beforeLLMCall: vi.fn(async (): Promise<BeforeLLMCallAction> => {
             executionOrder.push("beforeLLMCall");
             return { action: "proceed" };
           }),
-          afterLLMCall: mock(async (): Promise<AfterLLMCallAction> => {
+          afterLLMCall: vi.fn(async (): Promise<AfterLLMCallAction> => {
             executionOrder.push("afterLLMCall");
             return { action: "continue" };
           }),
-          beforeGadgetExecution: mock(async (): Promise<BeforeGadgetExecutionAction> => {
+          beforeGadgetExecution: vi.fn(async (): Promise<BeforeGadgetExecutionAction> => {
             executionOrder.push("beforeGadgetExecution");
             return { action: "proceed" };
           }),
-          afterGadgetExecution: mock(async (): Promise<AfterGadgetExecutionAction> => {
+          afterGadgetExecution: vi.fn(async (): Promise<AfterGadgetExecutionAction> => {
             executionOrder.push("afterGadgetExecution");
             return { action: "continue" };
           }),
@@ -1962,18 +1962,18 @@ describe("Hook System Integration", () => {
 
       const hooks = {
         observers: {
-          onLLMCallStart: mock(() => {
+          onLLMCallStart: vi.fn(() => {
             llmCallCount++;
           }),
-          onGadgetExecutionStart: mock(() => {
+          onGadgetExecutionStart: vi.fn(() => {
             gadgetExecutionCount++;
           }),
         },
         interceptors: {
-          interceptGadgetResult: mock((result: string) => `[INTERCEPTED] ${result}`),
+          interceptGadgetResult: vi.fn((result: string) => `[INTERCEPTED] ${result}`),
         },
         controllers: {
-          afterLLMCall: mock(async (context): Promise<AfterLLMCallAction> => {
+          afterLLMCall: vi.fn(async (context): Promise<AfterLLMCallAction> => {
             if (context.iteration === 0) {
               return {
                 action: "append_messages",
@@ -2034,8 +2034,8 @@ describe("Hook System Integration", () => {
   describe("Error Handling Across Hooks", () => {
     it("handles observer errors gracefully without breaking flow", async () => {
       registry.registerByClass(new TestGadget());
-      const successfulHook = mock();
-      const failingHook = mock(() => {
+      const successfulHook = vi.fn();
+      const failingHook = vi.fn(() => {
         throw new Error("Observer failed");
       });
 
@@ -2074,7 +2074,7 @@ describe("Hook System Integration", () => {
     it("uses controller to recover from gadget error", async () => {
       registry.registerByClass(new ErrorGadget());
 
-      const afterGadgetExecution = mock(async (context): Promise<AfterGadgetExecutionAction> => {
+      const afterGadgetExecution = vi.fn(async (context): Promise<AfterGadgetExecutionAction> => {
         if (context.error) {
           return {
             action: "recover",
@@ -2110,7 +2110,7 @@ describe("Hook System Integration", () => {
     });
 
     it("uses controller to recover from LLM error", async () => {
-      const afterLLMError = mock(async (): Promise<AfterLLMErrorAction> => {
+      const afterLLMError = vi.fn(async (): Promise<AfterLLMErrorAction> => {
         return {
           action: "recover",
           fallbackResponse: "LLM failed but recovered",
@@ -2144,9 +2144,9 @@ describe("Hook System Integration", () => {
       // Pipeline: uppercase raw chunk -> add prefix to text -> wrap result
       const hooks = {
         interceptors: {
-          interceptRawChunk: mock((chunk: string) => chunk.toUpperCase()),
-          interceptTextChunk: mock((chunk: string) => `>> ${chunk}`),
-          interceptGadgetResult: mock((result: string) => `[RESULT: ${result}]`),
+          interceptRawChunk: vi.fn((chunk: string) => chunk.toUpperCase()),
+          interceptTextChunk: vi.fn((chunk: string) => `>> ${chunk}`),
+          interceptGadgetResult: vi.fn((result: string) => `[RESULT: ${result}]`),
         },
       };
 
@@ -2189,11 +2189,11 @@ describe("Hook System Integration", () => {
       let executionTimeTracked = 0;
       let errorRecoveryTriggered = false;
 
-      const onGadgetExecutionComplete = mock((context: ObserveGadgetCompleteContext) => {
+      const onGadgetExecutionComplete = vi.fn((context: ObserveGadgetCompleteContext) => {
         executionTimeTracked = context.executionTimeMs;
       });
 
-      const afterGadgetExecution = mock(async (context): Promise<AfterGadgetExecutionAction> => {
+      const afterGadgetExecution = vi.fn(async (context): Promise<AfterGadgetExecutionAction> => {
         if (context.error) {
           errorRecoveryTriggered = true;
           return {

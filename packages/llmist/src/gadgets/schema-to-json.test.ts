@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defaultLogger } from "../logging/logger.js";
 import { schemaToJSONSchema } from "./schema-to-json.js";
@@ -111,10 +111,10 @@ describe("schemaToJSONSchema", () => {
   });
 
   describe("mismatch detection and fallback", () => {
-    let warnSpy: ReturnType<typeof spyOn>;
+    let warnSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-      warnSpy = spyOn(defaultLogger, "warn").mockImplementation(() => {});
+      warnSpy = vi.spyOn(defaultLogger, "warn").mockImplementation(() => {});
     });
 
     it("does not warn when descriptions are present", () => {

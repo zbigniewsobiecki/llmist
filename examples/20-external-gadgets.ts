@@ -7,7 +7,7 @@
  * - Use presets and individual gadget selection
  * - Access factory functions for dependency injection
  *
- * Run: bunx tsx examples/20-external-gadgets.ts
+ * Run: npx tsx examples/20-external-gadgets.ts
  */
 
 import { loadGadgets } from "../src/cli/gadgets.js";

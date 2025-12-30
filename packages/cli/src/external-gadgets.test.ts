@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { isExternalPackageSpecifier, parseGadgetSpecifier } from "./external-gadgets.js";
 
 describe("external-gadgets", () => {

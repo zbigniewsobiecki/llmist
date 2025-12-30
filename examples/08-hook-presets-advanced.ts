@@ -4,7 +4,7 @@
  * This file demonstrates advanced patterns for using HookPresets in production scenarios.
  * Each example shows a real-world use case with complete, working code.
  *
- * Run: bun examples/08-hook-presets-advanced.ts
+ * Run: npx tsx examples/08-hook-presets-advanced.ts
  */
 
 import { type AgentHooks, Gadget, HookPresets, LLMist, z } from "../src/index.js";

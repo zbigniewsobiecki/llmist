@@ -4,7 +4,7 @@
  * Demonstrates how LLMs can specify execution order between gadgets.
  * Independent gadgets run in parallel; dependent gadgets wait.
  *
- * Run: bunx tsx examples/11-gadget-dependencies.ts
+ * Run: npx tsx examples/11-gadget-dependencies.ts
  */
 
 import { Gadget, LLMist } from "llmist";

@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { _resetFileLoggingState, createLogger, stripAnsi } from "./logger.js";
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 describe("createLogger", () => {
   const originalEnv = { ...process.env };
@@ -271,7 +273,7 @@ describe("file logging", () => {
     // Restore original environment
     process.env = { ...originalEnv };
     // Clean up test log file
-    await Bun.sleep(50); // Give time for stream to close
+    await sleep(50); // Give time for stream to close
     if (existsSync(testLogFile)) {
       try {
         unlinkSync(testLogFile);
@@ -288,7 +290,7 @@ describe("file logging", () => {
       const logger = createLogger({ name: "test" });
 
       logger.info("test message");
-      await Bun.sleep(50); // Allow async write
+      await sleep(50); // Allow async write
 
       expect(existsSync(testLogFile)).toBe(true);
     });
@@ -299,7 +301,7 @@ describe("file logging", () => {
       const logger = createLogger({ name: "test" });
 
       logger.info("hello world");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       expect(content).toContain("hello world");
@@ -325,14 +327,14 @@ describe("file logging", () => {
       // Create initial content
       const logger1 = createLogger({ name: "first" });
       logger1.info("first message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       // Reset state and create new logger with reset
       _resetFileLoggingState();
       process.env.LLMIST_LOG_RESET = "true";
       const logger2 = createLogger({ name: "second" });
       logger2.info("second message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       expect(content).toContain("second message");
@@ -346,14 +348,14 @@ describe("file logging", () => {
 
       const logger1 = createLogger({ name: "first" });
       logger1.info("first message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       // Reset state but keep append mode
       _resetFileLoggingState();
       process.env.LLMIST_LOG_RESET = "false";
       const logger2 = createLogger({ name: "second" });
       logger2.info("second message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       expect(content).toContain("first message");
@@ -367,12 +369,12 @@ describe("file logging", () => {
 
       const logger1 = createLogger({ name: "first" });
       logger1.info("first message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       _resetFileLoggingState();
       const logger2 = createLogger({ name: "second" });
       logger2.info("second message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       expect(content).toContain("first message");
@@ -387,7 +389,7 @@ describe("file logging", () => {
       const logger = createLogger({ name: "test" });
 
       logger.info("clean message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       // Should not contain ANSI escape codes
@@ -404,7 +406,7 @@ describe("file logging", () => {
       const logger = createLogger({ name: "test" });
 
       logger.info("message", { foo: "bar", count: 42 });
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       expect(content).toContain('"foo":"bar"');
@@ -424,7 +426,7 @@ describe("file logging", () => {
       logger1.info("from logger1");
       logger2.info("from logger2");
       logger3.info("from logger3");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       expect(content).toContain("[logger1]");
@@ -448,7 +450,7 @@ describe("file logging", () => {
       for (let i = 0; i < 10; i++) {
         loggers[i].info(`message ${i}`);
       }
-      await Bun.sleep(100);
+      await sleep(100);
 
       const content = readFileSync(testLogFile, "utf-8");
       for (let i = 0; i < 10; i++) {
@@ -464,7 +466,7 @@ describe("file logging", () => {
       const logger = createLogger({ name: "format-test" });
 
       logger.warn("warning message");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       // Check format: timestamp\tLEVEL\t[name]\tmessage
@@ -481,7 +483,7 @@ describe("file logging", () => {
       const logger = createLogger({ name: "tab-test" });
 
       logger.info("test");
-      await Bun.sleep(50);
+      await sleep(50);
 
       const content = readFileSync(testLogFile, "utf-8");
       // Should have tabs as separators

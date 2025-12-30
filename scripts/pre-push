@@ -7,7 +7,7 @@ echo "Running pre-push checks..."
 
 # Run integration/E2E tests
 echo "→ Running integration tests..."
-bun run test:e2e
+npm run test:e2e
 TEST_EXIT=$?
 
 if [ $TEST_EXIT -ne 0 ]; then

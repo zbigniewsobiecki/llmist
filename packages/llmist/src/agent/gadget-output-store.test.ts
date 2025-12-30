@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { GadgetOutputStore } from "./gadget-output-store.js";
 
 describe("GadgetOutputStore", () => {

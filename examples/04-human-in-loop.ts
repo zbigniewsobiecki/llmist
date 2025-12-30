@@ -1,7 +1,7 @@
 /**
  * Human-in-the-loop: Interactive conversations with user input
  *
- * Run: bunx tsx examples/04-human-in-loop.ts
+ * Run: npx tsx examples/04-human-in-loop.ts
  */
 
 import * as readline from "node:readline";

@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import type { ExecutionContext, HostExports } from "../gadgets/types.js";
 import { AgentBuilder } from "./builder.js";
 import { LLMist } from "../core/client.js";
@@ -20,7 +20,7 @@ const mockHostExports: HostExports = {
 
 describe("createSubagent", () => {
   it("should inherit requestHumanInput from parent context", () => {
-    const mockCallback = mock(async (question: string) => `answer: ${question}`);
+    const mockCallback = vi.fn(async (question: string) => `answer: ${question}`);
 
     const ctx: ExecutionContext = {
       reportCost: () => {},

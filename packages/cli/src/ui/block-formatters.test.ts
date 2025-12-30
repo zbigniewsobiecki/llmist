@@ -1,9 +1,15 @@
-import { describe, expect, it } from "bun:test";
+import chalk from "chalk";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   formatGadgetCollapsed,
   formatGadgetExpanded,
 } from "./block-formatters.js";
 import type { GadgetNode } from "../tui/types.js";
+
+// Force chalk to output colors even in non-TTY test environments
+beforeAll(() => {
+  chalk.level = 3;
+});
 
 // Helper to create a mock GadgetNode
 function createGadgetNode(overrides: Partial<GadgetNode> = {}): GadgetNode {

@@ -36,8 +36,8 @@ let markedConfigured = false;
  *
  * We override marked-terminal's style functions with our own chalk instance
  * because marked-terminal bundles its own chalk that detects colors at module
- * load time. Bun's broken TTY detection causes that bundled chalk to detect
- * level 0 (no colors). See: https://github.com/oven-sh/bun/issues/1322
+ * load time. In some environments, the bundled chalk may detect level 0 (no colors)
+ * due to TTY detection issues.
  *
  * By forcing `chalk.level = 3` on our imported chalk and passing custom style
  * functions, we ensure colors work regardless of TTY detection.
@@ -52,7 +52,7 @@ function ensureMarkedConfigured(): void {
     chalk.level = process.env.NO_COLOR ? 0 : 3;
 
     // Override marked-terminal's style functions with our chalk instance
-    // to work around Bun's broken TTY detection
+    // to ensure consistent color output regardless of TTY detection
     marked.use(
       markedTerminal({
         // Text styling

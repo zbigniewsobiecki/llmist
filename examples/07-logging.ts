@@ -1,7 +1,7 @@
 /**
  * Logging and debugging: Verbose output, custom loggers
  *
- * Run: bunx tsx examples/07-logging.ts
+ * Run: npx tsx examples/07-logging.ts
  */
 
 import { createLogger, Gadget, HookPresets, LLMist, type ExecutionContext } from "llmist";

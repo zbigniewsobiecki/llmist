@@ -14,4 +14,4 @@ if grep -q "\[skip ci\]" "$1"; then
 fi
 
 # Run commitlint
-bunx commitlint --edit "$1"
+npx commitlint --edit "$1"

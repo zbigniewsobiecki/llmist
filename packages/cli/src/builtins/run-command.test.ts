@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { runCommand } from "./run-command.js";
 
 describe("RunCommand gadget", () => {
@@ -36,7 +36,7 @@ describe("RunCommand gadget", () => {
         argv: ["nonexistent-command-12345"],
         timeout: 30000,
       });
-      // spawn throws when command not found (both Bun and Node.js)
+      // spawn throws when command not found
       expect(result).toMatch(/status=1\n\nerror:/);
     });
 

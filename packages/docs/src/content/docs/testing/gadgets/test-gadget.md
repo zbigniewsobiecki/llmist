@@ -127,10 +127,10 @@ const mockArcade = createMockGadget({
 For gadgets with side effects, use spies or mocks:
 
 ```typescript
-import { mock, spyOn } from 'bun:test';
+import { vi } from 'vitest';
 
 test('WriteFile calls fs.writeFile', async () => {
-  const writeSpy = spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+  const writeSpy = vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
 
   await testGadget(WriteFile, {
     path: '/tmp/test.txt',

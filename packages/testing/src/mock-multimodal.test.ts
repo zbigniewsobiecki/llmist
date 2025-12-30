@@ -7,7 +7,7 @@
  * - Image and speech generation mocking
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { imageFromBase64, text } from "llmist";
 import { createMockClient, getMockManager, mockLLM } from "./index.js";
 

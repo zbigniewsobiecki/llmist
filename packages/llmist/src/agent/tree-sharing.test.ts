@@ -2,7 +2,7 @@
  * Integration test for tree sharing between parent agent and subagent gadgets.
  * This verifies that subagent events flow through the shared ExecutionTree.
  */
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { ExecutionTree } from "../core/execution-tree.js";
