@@ -1,3 +1,67 @@
+## 12.0.0 (2025-12-30)
+
+* Merge pull request #298 from zbigniewsobiecki/dev ([7a6c605](https://github.com/zbigniewsobiecki/llmist/commit/7a6c605)), closes [#298](https://github.com/zbigniewsobiecki/llmist/issues/298)
+* refactor!: migrate from Bun-first to Node-first architecture (#286) ([20a8347](https://github.com/zbigniewsobiecki/llmist/commit/20a8347)), closes [#286](https://github.com/zbigniewsobiecki/llmist/issues/286)
+
+
+### BREAKING CHANGE
+
+* Project now requires Node.js as the primary runtime.
+Bun remains as a secondary option but is no longer the default.
+
+Migration summary:
+- Replace bun:test with Vitest (96 test files migrated)
+- Replace bun/bunx with npm/npx in scripts and hooks
+- Update CI/CD workflows to use actions/setup-node@v4
+- Remove bun-types from TypeScript configs
+- Delete bun.lock and bunfig.toml
+- Update all documentation: npm primary, Bun secondary
+- Add minimal Bun type declaration in spawn.ts for runtime detection
+
+Test migration details:
+- mock() → vi.fn()
+- mock<T>() → vi.fn<T>()
+- spyOn → vi.spyOn
+- Bun.sleep() → custom sleep helper
+- toStartWith() → toMatch(/^prefix_/)
+- toBeArray() → Array.isArray()
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* chore: add package-lock.json for npm CI compatibility
+
+- Remove package-lock.json from .gitignore
+- Include package-lock.json for npm caching in GitHub Actions
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* refactor: complete Bun to Node.js migration
+
+Remove all Bun-specific code and dependencies to make llmist
+a Node.js-first project:
+
+- Remove Bun.spawn() code from spawn.ts (keep Node.js only)
+- Remove Bun package manager detection from external-gadgets.ts
+- Convert edit-file.ts gadget from Bun.spawn to child_process
+- Update all 23 examples from `bunx tsx` to `npx tsx`
+- Update script shebangs from `bun` to `node`/`npx tsx`
+- Remove "bun" keyword from package.json
+- Update all documentation to remove Bun tabs and alternatives
+- Update READMEs to remove `bun add` installation options
+
+This is a clean break from Bun - the project now uses:
+- npm as the package manager
+- Vitest as the test runner (migration done in prior commits)
+- Node.js child_process for spawning subprocesses
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## <small>11.1.1 (2025-12-29)</small>
 
 * Merge branch 'dev' ([c0ba72f](https://github.com/zbigniewsobiecki/llmist/commit/c0ba72f))
