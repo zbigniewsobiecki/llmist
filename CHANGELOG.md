@@ -1,3 +1,8 @@
+## <small>12.0.4 (2025-12-30)</small>
+
+* Merge pull request #306 from zbigniewsobiecki/dev ([104438d](https://github.com/zbigniewsobiecki/llmist/commit/104438d)), closes [#306](https://github.com/zbigniewsobiecki/llmist/issues/306)
+* fix(timing): prevent AbortSignal listener leak in withTimeout() (#305) ([2edfab3](https://github.com/zbigniewsobiecki/llmist/commit/2edfab3)), closes [#305](https://github.com/zbigniewsobiecki/llmist/issues/305)
+
 ## <small>12.0.3 (2025-12-30)</small>
 
 * Merge pull request #304 from zbigniewsobiecki/dev ([ff9db2b](https://github.com/zbigniewsobiecki/llmist/commit/ff9db2b)), closes [#304](https://github.com/zbigniewsobiecki/llmist/issues/304)
