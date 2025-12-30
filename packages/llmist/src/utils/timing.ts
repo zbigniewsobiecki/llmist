@@ -107,14 +107,8 @@ export async function withTimeout<T>(
     }
 
     let settled = false;
-    const timeoutId = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject(new Error(`Operation timed out after ${timeoutMs}ms`));
-      }
-    }, timeoutMs);
 
-    // Handle external abort
+    // Handle external abort - use { once: true } to auto-remove on fire
     const abortHandler = () => {
       if (!settled) {
         settled = true;
@@ -123,7 +117,15 @@ export async function withTimeout<T>(
       }
     };
 
-    signal?.addEventListener("abort", abortHandler);
+    signal?.addEventListener("abort", abortHandler, { once: true });
+
+    const timeoutId = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        signal?.removeEventListener("abort", abortHandler);
+        reject(new Error(`Operation timed out after ${timeoutMs}ms`));
+      }
+    }, timeoutMs);
 
     fn()
       .then((result) => {
