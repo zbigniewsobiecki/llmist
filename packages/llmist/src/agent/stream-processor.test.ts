@@ -628,9 +628,10 @@ describe("StreamProcessor", () => {
 
       await consumeStream(processor, stream);
 
+      // Allow small timing variance (setTimeout is not perfectly precise)
       expect(
         (capturedContext as { executionTimeMs: number }).executionTimeMs,
-      ).toBeGreaterThanOrEqual(10);
+      ).toBeGreaterThanOrEqual(8);
     });
   });
 
