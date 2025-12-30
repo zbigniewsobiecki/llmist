@@ -11,13 +11,16 @@
  *
  * This script:
  * 1. Updates all package versions to match
- * 2. Replaces `workspace:*` with actual version for publishing
+ * 2. Syncs internal llmist dependency versions across packages
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = process.cwd();
 const PACKAGES = ["packages/llmist", "packages/cli", "packages/testing"];
+
+// Internal packages that should be synced
+const INTERNAL_PACKAGES = ["llmist", "@llmist/cli", "@llmist/testing"];
 
 // Get version from command line argument or fallback to llmist package.json
 let version = process.argv[2];
@@ -35,11 +38,11 @@ for (const pkgPath of PACKAGES) {
   // Update version
   pkg.version = version;
 
-  // Replace workspace:* with actual version in dependencies
+  // Sync internal package dependencies to the new version
   for (const depType of ["dependencies", "devDependencies", "peerDependencies"]) {
     if (pkg[depType]) {
-      for (const [name, ver] of Object.entries(pkg[depType])) {
-        if (ver === "workspace:*") {
+      for (const name of Object.keys(pkg[depType])) {
+        if (INTERNAL_PACKAGES.includes(name)) {
           pkg[depType][name] = `^${version}`;
         }
       }
