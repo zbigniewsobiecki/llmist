@@ -1,3 +1,8 @@
+## <small>12.0.3 (2025-12-30)</small>
+
+* Merge pull request #304 from zbigniewsobiecki/dev ([ff9db2b](https://github.com/zbigniewsobiecki/llmist/commit/ff9db2b)), closes [#304](https://github.com/zbigniewsobiecki/llmist/issues/304)
+* fix(release): sync internal package versions during release (#303) ([cf60c23](https://github.com/zbigniewsobiecki/llmist/commit/cf60c23)), closes [#303](https://github.com/zbigniewsobiecki/llmist/issues/303)
+
 ## <small>12.0.2 (2025-12-30)</small>
 
 * Merge pull request #301 from zbigniewsobiecki/fix/jiti-module-resolution ([cf0c8dc](https://github.com/zbigniewsobiecki/llmist/commit/cf0c8dc)), closes [#301](https://github.com/zbigniewsobiecki/llmist/issues/301)
