@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "npm@10.9.2",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "engines": {
     "node": ">=22.0.0"
   },
@@ -18,7 +20,8 @@
     "format": "biome format --write .",
     "check": "biome check --write .",
     "clean": "turbo run clean",
-    "prepare": "node scripts/install-hooks.js || true",
+    "prepare": "lefthook install || true",
+    "postinstall": "node scripts/postinstall.js || true",
     "release:dry": "npx semantic-release --dry-run",
     "docs:dev": "turbo run dev --filter=@llmist/docs",
     "docs:build": "turbo run build --filter=@llmist/docs",
@@ -26,6 +29,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.2",
+    "lefthook": "^1.11.0",
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
     "@semantic-release/changelog": "^6.0.3",
