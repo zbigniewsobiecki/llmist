@@ -168,7 +168,7 @@ export const listDirectory = createGadget({
       .int()
       .min(1)
       .max(10)
-      .default(2)
+      .default(3)
       .describe(
         "Maximum depth to recurse (1 = immediate children only, 2 = include grandchildren, etc.)",
       ),
