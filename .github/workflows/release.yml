@@ -101,15 +101,12 @@ jobs:
           npm run build
           npm publish --access public
 
-  # Sync dev branch after release - failures are visible in GitHub Actions UI
+  # Sync dev branch after any successful CI on main
   sync-dev:
     name: Sync dev branch
     runs-on: ubuntu-latest
     needs: release
-    if: |
-      always() &&
-      needs.release.result == 'success' &&
-      needs.release.outputs.released == 'true'
+    if: always() && needs.release.result == 'success'
 
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +127,7 @@ jobs:
             echo "✅ Fast-forwarded dev to main"
           else
             echo "⚠️ Cannot fast-forward, creating merge commit..."
-            git merge origin/main --no-edit -m "chore: sync dev with main after release [skip ci]"
+            git merge origin/main --no-edit -m "chore: sync dev with main [skip ci]"
           fi
 
           git push origin dev
