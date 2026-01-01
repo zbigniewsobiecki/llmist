@@ -62,7 +62,8 @@ jobs:
 
           # Run semantic-release (publishes llmist package to npm)
           # The @semantic-release/exec plugin runs sync-versions.js to sync all package versions
-          npx semantic-release || RELEASE_EXIT_CODE=$?
+          # --branch main: Override branch detection (workflow_run events can report wrong branch)
+          npx semantic-release --branch main || RELEASE_EXIT_CODE=$?
 
           AFTER_SHA=$(git rev-parse HEAD)
           # Check if a release commit was made (HEAD changed)
