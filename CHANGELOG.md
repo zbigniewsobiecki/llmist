@@ -1,3 +1,19 @@
+## <small>12.0.5 (2026-01-01)</small>
+
+* fix(ci): add explicit branch check to release workflow ([438314a](https://github.com/zbigniewsobiecki/llmist/commit/438314a))
+* fix(ci): add workflow_dispatch trigger for manual releases ([70b39ee](https://github.com/zbigniewsobiecki/llmist/commit/70b39ee))
+* fix(ci): explicitly checkout main branch in release workflow ([c2c196d](https://github.com/zbigniewsobiecki/llmist/commit/c2c196d))
+* fix(ci): use --branch main to override semantic-release branch detection ([1d3cc63](https://github.com/zbigniewsobiecki/llmist/commit/1d3cc63))
+* build: trigger release for Node.js 22 engine requirement ([c62fe23](https://github.com/zbigniewsobiecki/llmist/commit/c62fe23))
+* Merge branch 'dev' ([b464a77](https://github.com/zbigniewsobiecki/llmist/commit/b464a77))
+* Merge pull request #308 from zbigniewsobiecki/dev ([fca2f11](https://github.com/zbigniewsobiecki/llmist/commit/fca2f11)), closes [#308](https://github.com/zbigniewsobiecki/llmist/issues/308)
+* chore: standardize on Node.js 22 (#310) ([389eab2](https://github.com/zbigniewsobiecki/llmist/commit/389eab2)), closes [#310](https://github.com/zbigniewsobiecki/llmist/issues/310)
+* chore(release): merge dev to main ([c623aa6](https://github.com/zbigniewsobiecki/llmist/commit/c623aa6))
+* ci: remove source branch validation for PRs to main (#309) ([f957dcc](https://github.com/zbigniewsobiecki/llmist/commit/f957dcc)), closes [#309](https://github.com/zbigniewsobiecki/llmist/issues/309)
+* ci(release): add environment to sync-dev job for secret access ([34bec86](https://github.com/zbigniewsobiecki/llmist/commit/34bec86))
+* ci(release): enforce PR-only releases by removing manual triggers (#307) ([8650a7c](https://github.com/zbigniewsobiecki/llmist/commit/8650a7c)), closes [#307](https://github.com/zbigniewsobiecki/llmist/issues/307)
+* ci(release): sync dev after any successful CI on main ([10357ea](https://github.com/zbigniewsobiecki/llmist/commit/10357ea))
+
 ## <small>12.0.4 (2025-12-30)</small>
 
 * Merge pull request #306 from zbigniewsobiecki/dev ([104438d](https://github.com/zbigniewsobiecki/llmist/commit/104438d)), closes [#306](https://github.com/zbigniewsobiecki/llmist/issues/306)
