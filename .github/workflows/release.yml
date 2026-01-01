@@ -57,9 +57,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Override GITHUB_REF to match checked-out branch (workflow_run sets wrong ref from triggering workflow)
-          GITHUB_REF: refs/heads/main
         run: |
+          # Force GITHUB_REF to main for semantic-release branch detection
+          # (workflow_run events incorrectly set GITHUB_REF from triggering workflow)
+          export GITHUB_REF=refs/heads/main
+
           BEFORE_SHA=$(git rev-parse HEAD)
 
           # Run semantic-release (publishes llmist package to npm)
