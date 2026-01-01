@@ -1,3 +1,13 @@
+## <small>12.0.6 (2026-01-01)</small>
+
+* fix(ci): add temporary workflow_dispatch for manual release ([9ea4077](https://github.com/zbigniewsobiecki/llmist/commit/9ea4077))
+* fix(ci): export GITHUB_REF within run script for semantic-release ([4d5eae9](https://github.com/zbigniewsobiecki/llmist/commit/4d5eae9))
+* fix(ci): override GITHUB_REF env var for semantic-release ([134b8cb](https://github.com/zbigniewsobiecki/llmist/commit/134b8cb))
+* fix(ci): remove head_branch condition, rely on GITHUB_REF override ([a9e7cd0](https://github.com/zbigniewsobiecki/llmist/commit/a9e7cd0))
+* fix(ci): use --ci false to detect branch from git checkout ([d80fc4d](https://github.com/zbigniewsobiecki/llmist/commit/d80fc4d))
+* build: add Node.js 22 engines field to all packages ([7763fa9](https://github.com/zbigniewsobiecki/llmist/commit/7763fa9))
+* build: trigger release with engines field ([79be416](https://github.com/zbigniewsobiecki/llmist/commit/79be416))
+
 ## <small>12.0.5 (2026-01-01)</small>
 
 * fix(ci): add explicit branch check to release workflow ([438314a](https://github.com/zbigniewsobiecki/llmist/commit/438314a))
