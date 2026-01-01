@@ -1,6 +1,6 @@
 {
   "name": "@llmist/testing",
-  "version": "12.1.0",
+  "version": "12.1.1",
   "description": "Testing utilities for llmist - mock LLM responses and test agents",
   "type": "module",
   "main": "dist/index.cjs",
@@ -50,11 +50,11 @@
     "node": ">=22.0.0"
   },
   "peerDependencies": {
-    "llmist": "^12.1.0"
+    "llmist": "^12.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
-    "llmist": "^12.1.0",
+    "llmist": "^12.1.1",
     "rimraf": "^5.0.5",
     "tslog": "^4.10.2",
     "tsup": "^8.3.5",

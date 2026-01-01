@@ -1,3 +1,7 @@
+## <small>12.1.1 (2026-01-01)</small>
+
+* build: migrate from custom hooks to Lefthook ([c60971c](https://github.com/zbigniewsobiecki/llmist/commit/c60971c))
+
 ## 12.1.0 (2026-01-01)
 
 * feat(cli): increase ListDirectory default maxDepth to 3 ([a884ee9](https://github.com/zbigniewsobiecki/llmist/commit/a884ee9))
