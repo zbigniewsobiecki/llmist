@@ -1,3 +1,7 @@
+## 12.1.0 (2026-01-01)
+
+* feat(cli): increase ListDirectory default maxDepth to 3 ([a884ee9](https://github.com/zbigniewsobiecki/llmist/commit/a884ee9))
+
 ## <small>12.0.6 (2026-01-01)</small>
 
 * fix(ci): add temporary workflow_dispatch for manual release ([9ea4077](https://github.com/zbigniewsobiecki/llmist/commit/9ea4077))
