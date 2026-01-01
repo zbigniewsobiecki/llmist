@@ -4,6 +4,9 @@
   "type": "module",
   "packageManager": "npm@10.9.2",
   "workspaces": ["packages/*"],
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "build": "turbo run build",
     "test": "vitest run",
