@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  # Manual trigger for testing
+  workflow_dispatch:
   # Trigger after CI passes on main branch (only way to release)
   workflow_run:
     workflows: ["CI"]
@@ -12,8 +14,8 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-latest
     environment: CI
-    # Only run if CI succeeded AND the triggering workflow was on main branch
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    # Only run if: manual trigger OR (CI succeeded AND on main branch)
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     permissions:
       contents: write
       issues: write
