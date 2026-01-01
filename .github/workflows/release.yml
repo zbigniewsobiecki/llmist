@@ -1,19 +1,7 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Run in dry-run mode (no publish)'
-        required: false
-        default: false
-        type: boolean
-      force_publish:
-        description: 'Force publish current versions (skip semantic-release)'
-        required: false
-        default: false
-        type: boolean
-  # Trigger after CI passes on main branch
+  # Trigger after CI passes on main branch (only way to release)
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -24,17 +12,15 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-latest
     environment: CI
-    # Only run if CI succeeded (for workflow_run trigger) or if manually triggered
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    # Only run if CI succeeded
+    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: write
       issues: write
       pull-requests: write
     outputs:
-      released: ${{ steps.semantic.outputs.released == 'true' || steps.force_publish.outputs.version != '' }}
-      version: ${{ steps.semantic.outputs.version || steps.force_publish.outputs.version }}
+      released: ${{ steps.semantic.outputs.released == 'true' }}
+      version: ${{ steps.semantic.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -66,59 +52,18 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config core.hooksPath /dev/null
 
-      - name: Force publish (skip semantic-release)
-        if: ${{ github.event.inputs.force_publish == 'true' }}
-        id: force_publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          VERSION=$(node -p "require('./packages/llmist/package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-          # Check if llmist@VERSION is already published
-          if npm view llmist@$VERSION version 2>/dev/null; then
-            echo "⏭️  llmist@$VERSION already published, skipping..."
-          else
-            echo "🚀 Force publishing llmist@$VERSION..."
-            cd packages/llmist && npm publish --access public
-            cd ../..
-          fi
-
-          # Check if @llmist/cli@VERSION is already published
-          if npm view @llmist/cli@$VERSION version 2>/dev/null; then
-            echo "⏭️  @llmist/cli@$VERSION already published, skipping..."
-          else
-            echo "🚀 Force publishing @llmist/cli@$VERSION..."
-            cd packages/cli && npm publish --access public
-            cd ../..
-          fi
-
-          # Check if @llmist/testing@VERSION is already published
-          if npm view @llmist/testing@$VERSION version 2>/dev/null; then
-            echo "⏭️  @llmist/testing@$VERSION already published, skipping..."
-          else
-            echo "🚀 Force publishing @llmist/testing@$VERSION..."
-            cd packages/testing && npm publish --access public
-          fi
-
-          echo "✅ Force publish complete!"
-
       - name: Run semantic-release
-        if: ${{ github.event.inputs.force_publish != 'true' }}
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           BEFORE_SHA=$(git rev-parse HEAD)
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Running in dry-run mode"
-            npx semantic-release --dry-run
-          else
-            # Run semantic-release (publishes llmist package to npm)
-            # The @semantic-release/exec plugin runs sync-versions.js to sync all package versions
-            npx semantic-release || RELEASE_EXIT_CODE=$?
-          fi
+
+          # Run semantic-release (publishes llmist package to npm)
+          # The @semantic-release/exec plugin runs sync-versions.js to sync all package versions
+          npx semantic-release || RELEASE_EXIT_CODE=$?
+
           AFTER_SHA=$(git rev-parse HEAD)
           # Check if a release commit was made (HEAD changed)
           if [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
@@ -135,7 +80,7 @@ jobs:
           exit ${RELEASE_EXIT_CODE:-0}
 
       - name: Publish @llmist/cli to npm
-        if: ${{ steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' && github.event.inputs.force_publish != 'true' }}
+        if: steps.semantic.outputs.released == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -146,7 +91,7 @@ jobs:
           npm publish --access public
 
       - name: Publish @llmist/testing to npm
-        if: ${{ steps.semantic.outputs.released == 'true' && github.event.inputs.dry_run != 'true' && github.event.inputs.force_publish != 'true' }}
+        if: steps.semantic.outputs.released == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -164,8 +109,7 @@ jobs:
     if: |
       always() &&
       needs.release.result == 'success' &&
-      needs.release.outputs.released == 'true' &&
-      (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true')
+      needs.release.outputs.released == 'true'
 
     steps:
       - uses: actions/checkout@v4
