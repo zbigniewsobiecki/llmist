@@ -52,6 +52,9 @@
   "author": "Zbigniew Sobiecki <zbigniew@sobiecki.name>",
   "license": "MIT",
   "sideEffects": false,
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "dependencies": {
     "llmist": "^12.0.5",
     "@unblessed/node": "^1.0.0-alpha.23",
