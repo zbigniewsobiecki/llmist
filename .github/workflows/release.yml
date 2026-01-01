@@ -105,6 +105,7 @@ jobs:
   sync-dev:
     name: Sync dev branch
     runs-on: ubuntu-latest
+    environment: CI
     needs: release
     if: always() && needs.release.result == 'success'
 
