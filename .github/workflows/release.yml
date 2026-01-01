@@ -30,8 +30,8 @@ jobs:
           fetch-depth: 0
           # Use PAT for authenticated pushes (allows triggering workflows and bypassing branch protection)
           token: ${{ secrets.GH_PAT }}
-          # For workflow_run, checkout the commit that triggered CI
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          # Always checkout main branch for releases (workflow only triggers on main CI)
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
