@@ -1,3 +1,9 @@
+## <small>12.2.3 (2026-01-02)</small>
+
+* fix: await gadget observer hooks for proper event ordering (#317) ([d47453b](https://github.com/zbigniewsobiecki/llmist/commit/d47453b)), closes [#317](https://github.com/zbigniewsobiecki/llmist/issues/317)
+* chore: sync dev with main [skip ci] ([2968a70](https://github.com/zbigniewsobiecki/llmist/commit/2968a70))
+* docs: add HuggingFace provider to documentation (#315) ([6d6eec5](https://github.com/zbigniewsobiecki/llmist/commit/6d6eec5)), closes [#315](https://github.com/zbigniewsobiecki/llmist/issues/315)
+
 ## <small>12.2.2 (2026-01-02)</small>
 
 * docs: add HuggingFace provider to documentation (#315) (#316) ([c6182ed](https://github.com/zbigniewsobiecki/llmist/commit/c6182ed)), closes [#315](https://github.com/zbigniewsobiecki/llmist/issues/315) [#316](https://github.com/zbigniewsobiecki/llmist/issues/316)
