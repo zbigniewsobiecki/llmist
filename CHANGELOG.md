@@ -1,3 +1,8 @@
+## <small>12.2.1 (2026-01-02)</small>
+
+* Merge pull request #314 from zbigniewsobiecki/dev ([27327b2](https://github.com/zbigniewsobiecki/llmist/commit/27327b2)), closes [#314](https://github.com/zbigniewsobiecki/llmist/issues/314)
+* fix(cli): prevent memory leak in REPL mode by clearing TUI state between turns (#313) ([fce9c55](https://github.com/zbigniewsobiecki/llmist/commit/fce9c55)), closes [#313](https://github.com/zbigniewsobiecki/llmist/issues/313)
+
 ## 12.2.0 (2026-01-02)
 
 * Merge pull request #311 from zbigniewsobiecki/feat/huggingface-provider ([282f119](https://github.com/zbigniewsobiecki/llmist/commit/282f119)), closes [#311](https://github.com/zbigniewsobiecki/llmist/issues/311)
