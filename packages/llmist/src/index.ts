@@ -1,14 +1,8 @@
 // Re-export Zod's z for schema definitions
 // Using llmist's z ensures .describe() metadata is preserved in JSON schemas
 export { z } from "zod";
-// Constants for gadget block format parsing
-export {
-  GADGET_ARG_PREFIX,
-  GADGET_END_PREFIX,
-  GADGET_START_PREFIX,
-} from "./core/constants.js";
-// Provider constants (for token estimation)
-export { FALLBACK_CHARS_PER_TOKEN } from "./providers/constants.js";
+// Agent class (for type references)
+export { Agent } from "./agent/agent.js";
 // Syntactic sugar: Agent builder and event handlers
 export type { HistoryMessage, TrailingMessage, TrailingMessageContext } from "./agent/builder.js";
 export { AgentBuilder } from "./agent/builder.js";
@@ -89,35 +83,14 @@ export {
 } from "./agent/index.js";
 export type { LLMistOptions } from "./core/client.js";
 export { LLMist } from "./core/client.js";
+// Constants for gadget block format parsing
+export {
+  GADGET_ARG_PREFIX,
+  GADGET_END_PREFIX,
+  GADGET_START_PREFIX,
+} from "./core/constants.js";
 // Error utilities
 export { isAbortError } from "./core/errors.js";
-// Agent class (for type references)
-export { Agent } from "./agent/agent.js";
-
-// Retry configuration for LLM API calls
-export type { RetryConfig, ResolvedRetryConfig } from "./core/retry.js";
-export {
-  DEFAULT_RETRY_CONFIG,
-  formatLLMError,
-  isRetryableError,
-  resolveRetryConfig,
-} from "./core/retry.js";
-
-// Execution Tree - first-class model for nested subagent support
-export type {
-  AddGadgetParams,
-  AddLLMCallParams,
-  CompleteGadgetParams,
-  CompleteLLMCallParams,
-  ExecutionNode,
-  ExecutionNodeType,
-  GadgetNode,
-  GadgetState,
-  LLMCallNode,
-  NodeId,
-} from "./core/execution-tree.js";
-export { ExecutionTree } from "./core/execution-tree.js";
-
 // Unified execution events with tree context
 export type {
   BaseExecutionEvent,
@@ -149,7 +122,20 @@ export {
   isRootEvent,
   isSubagentEvent,
 } from "./core/execution-events.js";
-
+// Execution Tree - first-class model for nested subagent support
+export type {
+  AddGadgetParams,
+  AddLLMCallParams,
+  CompleteGadgetParams,
+  CompleteLLMCallParams,
+  ExecutionNode,
+  ExecutionNodeType,
+  GadgetNode,
+  GadgetState,
+  LLMCallNode,
+  NodeId,
+} from "./core/execution-tree.js";
+export { ExecutionTree } from "./core/execution-tree.js";
 // Input content types for multimodal messages
 export type {
   AudioContentPart,
@@ -179,7 +165,15 @@ export {
   text,
   toBase64,
 } from "./core/input-content.js";
-
+// Media generation types (image, speech)
+export type {
+  ImageGenerationOptions,
+  ImageGenerationResult,
+  ImageModelSpec,
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+  SpeechModelSpec,
+} from "./core/media-types.js";
 export type { LLMMessage, MessageContent, MessageRole } from "./core/messages.js";
 export { extractMessageText, LLMMessageBuilder, normalizeMessageContent } from "./core/messages.js";
 // Model catalog
@@ -201,15 +195,6 @@ export {
 } from "./core/model-shortcuts.js";
 // Vision namespace for one-shot image analysis
 export type { VisionAnalyzeOptions, VisionAnalyzeResult } from "./core/namespaces/vision.js";
-// Media generation types (image, speech)
-export type {
-  ImageGenerationOptions,
-  ImageGenerationResult,
-  ImageModelSpec,
-  SpeechGenerationOptions,
-  SpeechGenerationResult,
-  SpeechModelSpec,
-} from "./core/media-types.js";
 export type {
   LLMGenerationOptions,
   LLMStream,
@@ -235,6 +220,14 @@ export {
 } from "./core/prompt-config.js";
 export type { TextGenerationOptions } from "./core/quick-methods.js";
 export { complete, stream } from "./core/quick-methods.js";
+// Retry configuration for LLM API calls
+export type { ResolvedRetryConfig, RetryConfig } from "./core/retry.js";
+export {
+  DEFAULT_RETRY_CONFIG,
+  formatLLMError,
+  isRetryableError,
+  resolveRetryConfig,
+} from "./core/retry.js";
 export type { CreateGadgetConfig } from "./gadgets/create-gadget.js";
 export { createGadget } from "./gadgets/create-gadget.js";
 // Gadget infrastructure
@@ -246,6 +239,21 @@ export {
 } from "./gadgets/exceptions.js";
 export { GadgetExecutor } from "./gadgets/executor.js";
 export { AbstractGadget } from "./gadgets/gadget.js";
+// Response and media output helpers for gadgets
+export {
+  // Media output
+  createMediaOutput,
+  // Response formatting
+  gadgetError,
+  gadgetSuccess,
+  getErrorMessage,
+  resultWithAudio,
+  resultWithFile,
+  resultWithImage,
+  resultWithImages,
+  resultWithMedia,
+  withErrorHandling,
+} from "./gadgets/helpers.js";
 // Gadget output viewer (for custom output store integration)
 export { createGadgetOutputViewer } from "./gadgets/output-viewer.js";
 export { GadgetCallParser } from "./gadgets/parser.js";
@@ -282,21 +290,8 @@ export type {
   TextOnlyHandler,
   TextOnlyStrategy,
 } from "./gadgets/types.js";
-// Response and media output helpers for gadgets
-export {
-  // Response formatting
-  gadgetError,
-  gadgetSuccess,
-  getErrorMessage,
-  withErrorHandling,
-  // Media output
-  createMediaOutput,
-  resultWithAudio,
-  resultWithFile,
-  resultWithImage,
-  resultWithImages,
-  resultWithMedia,
-} from "./gadgets/helpers.js";
+// Provider constants (for token estimation)
+export { FALLBACK_CHARS_PER_TOKEN } from "./providers/constants.js";
 
 // Host exports helper for external gadgets
 import type { ExecutionContext, HostExports } from "./gadgets/types.js";
@@ -347,70 +342,22 @@ export function getHostExports(ctx: ExecutionContext): HostExports {
   }
   return ctx.hostExports;
 }
-// Media storage for gadget outputs
-export { MediaStore } from "./gadgets/media-store.js";
-export type { ValidationIssue, ValidationResult } from "./gadgets/validation.js";
-export { validateAndApplyDefaults, validateGadgetParams } from "./gadgets/validation.js";
-// Schema utilities
-export { schemaToJSONSchema } from "./gadgets/schema-to-json.js";
-export { validateGadgetSchema } from "./gadgets/schema-validator.js";
-export type { LoggerOptions } from "./logging/logger.js";
-export { createLogger, defaultLogger } from "./logging/logger.js";
 // Re-export Logger type for external gadgets that need to type ctx.logger
 export type { ILogObj, Logger } from "tslog";
-
-// Utility functions for subagent gadgets
-export type { ResolveValueOptions } from "./utils/config-resolver.js";
-export {
-  resolveConfig,
-  resolveSubagentModel,
-  resolveSubagentTimeout,
-  resolveValue,
-} from "./utils/config-resolver.js";
-export {
-  AnthropicMessagesProvider,
-  createAnthropicProviderFromEnv,
-} from "./providers/anthropic.js";
-export { discoverProviderAdapters } from "./providers/discovery.js";
-export { createGeminiProviderFromEnv, GeminiGenerativeProvider } from "./providers/gemini.js";
-export { createOpenAIProviderFromEnv, OpenAIChatProvider } from "./providers/openai.js";
-export type { ProviderAdapter } from "./providers/provider.js";
-
-// ============================================================================
-// Formatting Utilities
-// ============================================================================
-export {
-  format,
-  formatBytes,
-  formatDate,
-  formatDuration,
-  truncate,
-} from "./utils/format.js";
-
-// ============================================================================
-// Timing Utilities
-// ============================================================================
-export type { RetryOptions } from "./utils/timing.js";
-export {
-  humanDelay,
-  randomDelay,
-  timing,
-  withRetry,
-  withTimeout,
-} from "./utils/timing.js";
-
-// ============================================================================
-// Session Management
-// ============================================================================
-export type { ISessionManager } from "./session/index.js";
-export { BaseSessionManager, SimpleSessionManager } from "./session/index.js";
-
 // ============================================================================
 // Subagent Helpers
 // ============================================================================
 export type { SubagentOptions } from "./agent/subagent.js";
 export { createSubagent, hasHostExports } from "./agent/subagent.js";
-
+// Media storage for gadget outputs
+export { MediaStore } from "./gadgets/media-store.js";
+// Schema utilities
+export { schemaToJSONSchema } from "./gadgets/schema-to-json.js";
+export { validateGadgetSchema } from "./gadgets/schema-validator.js";
+export type { ValidationIssue, ValidationResult } from "./gadgets/validation.js";
+export { validateAndApplyDefaults, validateGadgetParams } from "./gadgets/validation.js";
+export type { LoggerOptions } from "./logging/logger.js";
+export { createLogger, defaultLogger } from "./logging/logger.js";
 // ============================================================================
 // Package Manifest Types
 // ============================================================================
@@ -430,3 +377,49 @@ export {
   listSubagents,
   parseManifest,
 } from "./package/index.js";
+export {
+  AnthropicMessagesProvider,
+  createAnthropicProviderFromEnv,
+} from "./providers/anthropic.js";
+export { discoverProviderAdapters } from "./providers/discovery.js";
+export { createGeminiProviderFromEnv, GeminiGenerativeProvider } from "./providers/gemini.js";
+export {
+  createHuggingFaceProviderFromEnv,
+  HuggingFaceProvider,
+} from "./providers/huggingface.js";
+export { createOpenAIProviderFromEnv, OpenAIChatProvider } from "./providers/openai.js";
+export type { ProviderAdapter } from "./providers/provider.js";
+// ============================================================================
+// Session Management
+// ============================================================================
+export type { ISessionManager } from "./session/index.js";
+export { BaseSessionManager, SimpleSessionManager } from "./session/index.js";
+// Utility functions for subagent gadgets
+export type { ResolveValueOptions } from "./utils/config-resolver.js";
+export {
+  resolveConfig,
+  resolveSubagentModel,
+  resolveSubagentTimeout,
+  resolveValue,
+} from "./utils/config-resolver.js";
+// ============================================================================
+// Formatting Utilities
+// ============================================================================
+export {
+  format,
+  formatBytes,
+  formatDate,
+  formatDuration,
+  truncate,
+} from "./utils/format.js";
+// ============================================================================
+// Timing Utilities
+// ============================================================================
+export type { RetryOptions } from "./utils/timing.js";
+export {
+  humanDelay,
+  randomDelay,
+  timing,
+  withRetry,
+  withTimeout,
+} from "./utils/timing.js";

@@ -54,7 +54,7 @@ console.log(answer);
 ## Features
 
 - **Streaming-first** - Tools execute mid-stream, not after response completes
-- **Multi-provider** - OpenAI, Anthropic, Gemini with unified API
+- **Multi-provider** - OpenAI, Anthropic, Gemini, HuggingFace with unified API
 - **Type-safe** - Full TypeScript inference from Zod schemas
 - **Flexible hooks** - Observers, interceptors, and controllers for deep integration
 - **Built-in cost tracking** - Real-time token counting and cost estimation
@@ -68,6 +68,7 @@ Set one of these environment variables:
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 export GEMINI_API_KEY="..."
+export HF_TOKEN="hf_..."
 ```
 
 Use model aliases for convenience:

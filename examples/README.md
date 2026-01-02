@@ -11,6 +11,7 @@ npm install
 # Set API keys
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
+export HF_TOKEN="hf_..."
 ```
 
 ## Run Examples
@@ -43,6 +44,7 @@ npx tsx examples/01-basic-usage.ts
 | [18-multimodal-gadget.ts](./18-multimodal-gadget.ts) | Gadgets returning media (images, audio) with cost reporting |
 | [19-multimodal-input.ts](./19-multimodal-input.ts) | Vision and multimodal input support |
 | [20-external-gadgets.ts](./20-external-gadgets.ts) | External gadgets from npm packages and git URLs |
+| [24-huggingface-test.ts](./24-huggingface-test.ts) | HuggingFace provider with streaming and provider selection |
 | [cli.example.toml](./cli.example.toml) | CLI configuration file example |
 
 ## Quick Reference
