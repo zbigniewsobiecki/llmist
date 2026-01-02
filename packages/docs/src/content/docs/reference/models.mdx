@@ -38,6 +38,7 @@ For explicit provider selection, use the `provider:model` format:
     npx @llmist/cli complete "Hello" --model openai:gpt-5
     npx @llmist/cli complete "Hello" --model anthropic:claude-sonnet-4-5
     npx @llmist/cli complete "Hello" --model gemini:gemini-2.5-flash
+    npx @llmist/cli complete "Hello" --model huggingface:meta-llama/Llama-3.1-8B-Instruct
     ```
 
 ## Model Capabilities
@@ -52,17 +53,50 @@ For explicit provider selection, use the `provider:model` format:
 | Claude Haiku 4.5 | ✓ | ✓ | ✓ | 200K |
 | Gemini Flash | ✓ | ✓ | ✓ | 1M |
 | Gemini Pro | ✓ | ✓ | ✓ | 1M |
+| DeepSeek V3.2 | ✗ | ✓ | ✓ | 64K |
+| DeepSeek R1 | ✗ | ✓ | ✓ | 64K |
+| Llama 3.3 70B | ✗ | ✓ | ✗ | 128K |
+| Qwen 2.5 72B | ✗ | ✓ | ✗ | 128K |
+| Mixtral 8x7B | ✗ | ✓ | ✗ | 32K |
 
 ## Recommended Models by Use Case
 
 | Use Case | Recommended | Why |
 |----------|-------------|-----|
 | **General tasks** | `sonnet` | Best balance of quality and speed |
-| **Complex reasoning** | `opus` | Highest capability |
+| **Complex reasoning** | `opus`, DeepSeek R1 | Highest capability, step-by-step reasoning |
 | **High-volume tasks** | `haiku`, `flash` | Fast and cost-effective |
 | **Long documents** | `flash`, `pro` | 1M token context |
-| **Coding** | `sonnet`, `gpt5` | Strong code understanding |
+| **Coding** | `sonnet`, `gpt5`, DeepSeek V3.2 | Strong code understanding |
 | **Vision tasks** | `gpt4o`, `flash` | Excellent image analysis |
+| **Open-source/self-hosted** | Llama 3.3 70B, Qwen 2.5 72B | Free via HuggingFace |
+
+## HuggingFace Models
+
+llmist supports popular open-source models via HuggingFace's serverless inference:
+
+### DeepSeek Family
+- `deepseek-ai/DeepSeek-V3.2` - 685B MoE model for general reasoning and tool use
+- `deepseek-ai/DeepSeek-R1` - Reasoning model excelling at math, logic, and coding
+- `deepseek-ai/DeepSeek-Coder-V2-Instruct` - Specialized for code generation
+
+### Meta Llama
+- `meta-llama/Llama-3.3-70B-Instruct` - General-purpose flagship model
+- `meta-llama/Llama-3.1-8B-Instruct` - Efficient smaller variant
+- `meta-llama/Llama-3.2-11B-Vision-Instruct` - Vision-enabled model
+
+### Qwen (Alibaba)
+- `Qwen/Qwen2.5-72B-Instruct` - Strong general-purpose model
+- `Qwen/Qwen2.5-Coder-32B-Instruct` - Code-specialized
+- `Qwen/Qwen2-VL-72B-Instruct` - Vision-language model
+
+### Mistral AI
+- `mistralai/Mixtral-8x7B-Instruct-v0.1` - Mixture-of-experts architecture
+- `mistralai/Mistral-Nemo-Instruct-2407` - 12B efficient model
+
+<Aside type="note">
+  All HuggingFace models are **free to use** via serverless inference. Some models may have rate limits. Use `:fastest` or `:cheapest` routing for best availability.
+</Aside>
 
 ## Image Generation Models
 
@@ -95,6 +129,16 @@ For explicit provider selection, use the `provider:model` format:
     const answer2 = await LLMist.createAgent()
       .withModel('anthropic:claude-sonnet-4-5')
       .askAndCollect('Hello!');
+
+    // HuggingFace model
+    const answer3 = await LLMist.createAgent()
+      .withModel('huggingface:meta-llama/Llama-3.1-8B-Instruct')
+      .askAndCollect('Hello!');
+
+    // HuggingFace with provider routing
+    const answer4 = await LLMist.createAgent()
+      .withModel('hf:deepseek-ai/DeepSeek-V3.2:fastest')
+      .askAndCollect('Write a Python function to calculate factorial');
     ```
   </TabItem>
   <TabItem label="CLI (npm)">
@@ -104,6 +148,12 @@ For explicit provider selection, use the `provider:model` format:
 
     # Using full name
     npx @llmist/cli complete "Hello" --model anthropic:claude-sonnet-4-5
+
+    # HuggingFace model
+    npx @llmist/cli complete "Hello" --model huggingface:meta-llama/Llama-3.1-8B-Instruct
+
+    # HuggingFace with provider routing (use fastest endpoint)
+    npx @llmist/cli complete "Hello" --model hf:Qwen/Qwen2.5-72B-Instruct:fastest
     ```
   </TabItem>
 </Tabs>
@@ -117,5 +167,10 @@ llmist automatically discovers available providers based on environment variable
 | `OPENAI_API_KEY` | OpenAI |
 | `ANTHROPIC_API_KEY` | Anthropic |
 | `GEMINI_API_KEY` | Google Gemini |
+| `HF_TOKEN` | HuggingFace |
+
+<Aside type="tip">
+  HuggingFace models are **free** via serverless inference. Get your token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+</Aside>
 
 See [Environment Variables](/reference/environment/) for complete configuration.
