@@ -92,7 +92,7 @@ for await (const event of tree.events()) {
 | `compaction` | Context was compacted |
 
 :::tip[Hook Observers]
-Hook observers like `onGadgetExecutionStart` and `onGadgetExecutionComplete` are automatically derived from tree events. This means they include full context (`depth`, `subagentContext`) for subagent activity. See [Hooks Guide](/library/guides/hooks/) for details.
+Hook observers like `onGadgetExecutionStart` and `onGadgetExecutionComplete` derive their context (including `depth` and `subagentContext`) from the execution tree. Gadget observers are awaited to ensure proper ordering (Start → Execute → Complete). See [Hooks Guide](/library/guides/hooks/) for details.
 :::
 
 ## Subagent Integration

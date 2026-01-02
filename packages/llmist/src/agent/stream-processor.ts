@@ -40,10 +40,14 @@ import type {
   GadgetResultInterceptorContext,
   MessageInterceptorContext,
   ObserveChunkContext,
+  ObserveGadgetCompleteContext,
+  ObserveGadgetSkippedContext,
+  ObserveGadgetStartContext,
 } from "./hooks.js";
+import { getSubagentContextForNode } from "./tree-hook-bridge.js";
 // NOTE: Gadget observer hooks (onGadgetExecutionStart, onGadgetExecutionComplete,
-// onGadgetSkipped) are now triggered via tree-hook-bridge.ts which derives them
-// from ExecutionTree events. This ensures consistent subagentContext.
+// onGadgetSkipped) are called DIRECTLY here (awaited) to ensure proper ordering.
+// This guarantees that observer commands complete before gadget execution continues.
 
 /**
  * Configuration for the StreamProcessor.
@@ -496,15 +500,37 @@ export class StreamProcessor {
           invocationId: call.invocationId,
         });
         this.failedInvocations.add(call.invocationId);
+        const errorMessage = `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`;
         const skipEvent: GadgetSkippedEvent = {
           type: "gadget_skipped",
           gadgetName: call.gadgetName,
           invocationId: call.invocationId,
           parameters: call.parameters ?? {},
           failedDependency: call.invocationId,
-          failedDependencyError: `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`,
+          failedDependencyError: errorMessage,
         };
         yield skipEvent;
+
+        // Call onGadgetSkipped observer (AWAITED for proper ordering)
+        if (this.hooks.observers?.onGadgetSkipped) {
+          const gadgetNode = this.tree?.getNodeByInvocationId(call.invocationId);
+          const subagentContext =
+            this.tree && gadgetNode
+              ? getSubagentContextForNode(this.tree, gadgetNode.id)
+              : undefined;
+
+          const context: ObserveGadgetSkippedContext = {
+            iteration: this.iteration,
+            gadgetName: call.gadgetName,
+            invocationId: call.invocationId,
+            parameters: call.parameters ?? {},
+            failedDependency: call.invocationId,
+            failedDependencyError: errorMessage,
+            logger: this.logger,
+            subagentContext,
+          };
+          await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+        }
         return;
       }
 
@@ -682,12 +708,29 @@ export class StreamProcessor {
       }
     }
 
-    // Step 3: Mark gadget as running in tree (triggers onGadgetExecutionStart via bridge)
+    // Step 3: Mark gadget as running in tree
     if (this.tree) {
       const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
       if (gadgetNode) {
         this.tree.startGadget(gadgetNode.id);
       }
+    }
+
+    // Step 3b: Call onGadgetExecutionStart observer (AWAITED for proper ordering)
+    if (this.hooks.observers?.onGadgetExecutionStart) {
+      const gadgetNode = this.tree?.getNodeByInvocationId(call.invocationId);
+      const subagentContext =
+        this.tree && gadgetNode ? getSubagentContextForNode(this.tree, gadgetNode.id) : undefined;
+
+      const context: ObserveGadgetStartContext = {
+        iteration: this.iteration,
+        gadgetName: call.gadgetName,
+        invocationId: call.invocationId,
+        parameters,
+        logger: this.logger,
+        subagentContext,
+      };
+      await this.safeObserve(() => this.hooks.observers!.onGadgetExecutionStart!(context));
     }
 
     // Step 4: Execute or use synthetic result
@@ -748,7 +791,7 @@ export class StreamProcessor {
       }
     }
 
-    // Step 7: Complete gadget in tree (triggers onGadgetExecutionComplete via bridge)
+    // Step 7: Complete gadget in tree
     if (this.tree) {
       const gadgetNode = this.tree.getNodeByInvocationId(result.invocationId);
       if (gadgetNode) {
@@ -767,6 +810,27 @@ export class StreamProcessor {
           });
         }
       }
+    }
+
+    // Step 7b: Call onGadgetExecutionComplete observer (AWAITED for proper ordering)
+    if (this.hooks.observers?.onGadgetExecutionComplete) {
+      const gadgetNode = this.tree?.getNodeByInvocationId(result.invocationId);
+      const subagentContext =
+        this.tree && gadgetNode ? getSubagentContextForNode(this.tree, gadgetNode.id) : undefined;
+
+      const context: ObserveGadgetCompleteContext = {
+        iteration: this.iteration,
+        gadgetName: result.gadgetName,
+        invocationId: result.invocationId,
+        parameters,
+        finalResult: result.result,
+        error: result.error,
+        executionTimeMs: result.executionTimeMs,
+        cost: result.cost,
+        logger: this.logger,
+        subagentContext,
+      };
+      await this.safeObserve(() => this.hooks.observers!.onGadgetExecutionComplete!(context));
     }
 
     // Track completion for dependency resolution
@@ -940,7 +1004,24 @@ export class StreamProcessor {
       };
       events.push(skipEvent);
 
-      // Observer triggered via tree-hook-bridge from gadget_skipped event above
+      // Call onGadgetSkipped observer (AWAITED for proper ordering)
+      if (this.hooks.observers?.onGadgetSkipped) {
+        const gadgetNode = this.tree?.getNodeByInvocationId(call.invocationId);
+        const subagentContext =
+          this.tree && gadgetNode ? getSubagentContextForNode(this.tree, gadgetNode.id) : undefined;
+
+        const context: ObserveGadgetSkippedContext = {
+          iteration: this.iteration,
+          gadgetName: call.gadgetName,
+          invocationId: call.invocationId,
+          parameters: call.parameters ?? {},
+          failedDependency: failedDep,
+          failedDependencyError: depError,
+          logger: this.logger,
+          subagentContext,
+        };
+        await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+      }
 
       this.logger.info("Gadget skipped due to failed dependency", {
         gadgetName: call.gadgetName,
@@ -1104,6 +1185,27 @@ export class StreamProcessor {
           failedDependencyError: errorMessage,
         };
         yield skipEvent;
+
+        // Call onGadgetSkipped observer (AWAITED for proper ordering)
+        if (this.hooks.observers?.onGadgetSkipped) {
+          const gadgetNode = this.tree?.getNodeByInvocationId(invocationId);
+          const subagentContext =
+            this.tree && gadgetNode
+              ? getSubagentContextForNode(this.tree, gadgetNode.id)
+              : undefined;
+
+          const context: ObserveGadgetSkippedContext = {
+            iteration: this.iteration,
+            gadgetName: call.gadgetName,
+            invocationId,
+            parameters: call.parameters ?? {},
+            failedDependency: missingDeps[0],
+            failedDependencyError: errorMessage,
+            logger: this.logger,
+            subagentContext,
+          };
+          await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+        }
       }
       this.gadgetsAwaitingDependencies.clear();
     }
@@ -1136,9 +1238,7 @@ export class StreamProcessor {
 
     // Run all observers in parallel, waiting for completion
     // Errors are logged in safeObserve, no need to handle rejected promises
-    await Promise.allSettled(
-      observers.map((observer) => this.safeObserve(observer)),
-    );
+    await Promise.allSettled(observers.map((observer) => this.safeObserve(observer)));
   }
 
   // ==========================================================================
