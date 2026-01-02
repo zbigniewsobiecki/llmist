@@ -7,11 +7,12 @@ llmist supports multiple LLM providers out of the box.
 
 ## Supported Providers
 
-| Provider | Env Variable | Prefix |
-|----------|--------------|--------|
-| OpenAI | `OPENAI_API_KEY` | `openai:` |
-| Anthropic | `ANTHROPIC_API_KEY` | `anthropic:` |
-| Google Gemini | `GEMINI_API_KEY` | `gemini:` |
+| Provider | Env Variable | Prefix | Pricing |
+|----------|--------------|--------|---------|
+| OpenAI | `OPENAI_API_KEY` | `openai:` | Paid |
+| Anthropic | `ANTHROPIC_API_KEY` | `anthropic:` | Paid |
+| Google Gemini | `GEMINI_API_KEY` | `gemini:` | Paid |
+| HuggingFace | `HF_TOKEN` | `huggingface:` or `hf:` | **Free** |
 
 ## Auto-Discovery
 
@@ -21,14 +22,16 @@ llmist automatically discovers providers based on environment variables:
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 export GEMINI_API_KEY="..."
+export HF_TOKEN="hf_..."
 ```
 
 ```typescript
 const client = new LLMist();
 
-.withModel('gpt-5')              // OpenAI (auto-detected)
-.withModel('claude-sonnet-4-5')  // Anthropic (auto-detected)
-.withModel('gemini-2.5-flash')   // Gemini (auto-detected)
+.withModel('gpt-5')                                    // OpenAI (auto-detected)
+.withModel('claude-sonnet-4-5')                        // Anthropic (auto-detected)
+.withModel('gemini-2.5-flash')                         // Gemini (auto-detected)
+.withModel('meta-llama/Llama-3.1-8B-Instruct')         // HuggingFace (auto-detected)
 ```
 
 ## Explicit Provider Prefix
@@ -39,6 +42,8 @@ Use `provider:model` format:
 .withModel('openai:gpt-5')
 .withModel('anthropic:claude-sonnet-4-5-20250929')
 .withModel('gemini:gemini-2.5-flash')
+.withModel('huggingface:deepseek-ai/DeepSeek-V3.2')
+.withModel('hf:Qwen/Qwen2.5-72B-Instruct:fastest')  // With routing
 ```
 
 ## Manual Provider Setup
