@@ -5,6 +5,7 @@
  * making it a simple loop orchestrator with clear responsibilities.
  */
 
+import pRetry from "p-retry";
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import {
@@ -20,6 +21,8 @@ import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
+import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
+import { isRetryableError, resolveRetryConfig } from "../core/retry.js";
 import { MediaStore } from "../gadgets/media-store.js";
 import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
@@ -33,12 +36,8 @@ import type {
 import { createLogger } from "../logging/logger.js";
 import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.js";
 import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
-import type { RetryConfig, ResolvedRetryConfig } from "../core/retry.js";
-import { resolveRetryConfig, isRetryableError } from "../core/retry.js";
-import pRetry from "p-retry";
 import { CompactionManager } from "./compaction/manager.js";
 import { ConversationManager } from "./conversation-manager.js";
-import type { IConversationManager } from "./interfaces.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
 import { GadgetOutputStore } from "./gadget-output-store.js";
 import {
@@ -60,7 +59,9 @@ import type {
   ObserveLLMCallReadyContext,
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
+  Observers,
 } from "./hooks.js";
+import type { IConversationManager } from "./interfaces.js";
 import { StreamProcessor } from "./stream-processor.js";
 import { bridgeTreeToHooks, getSubagentContextForNode } from "./tree-hook-bridge.js";
 
@@ -172,6 +173,15 @@ export interface AgentOptions {
    * Root agents use 0; subagents use (parentDepth + 1).
    */
   baseDepth?: number;
+
+  /**
+   * Parent agent's observer hooks for subagent visibility.
+   *
+   * When a subagent is created with withParentContext(ctx), these observers
+   * are also called for gadget events (in addition to the subagent's own hooks),
+   * enabling the parent to observe subagent gadget activity.
+   */
+  parentObservers?: Observers;
 }
 
 /**
@@ -247,6 +257,9 @@ export class Agent {
   private readonly tree: ExecutionTree;
   private readonly parentNodeId: NodeId | null;
   private readonly baseDepth: number;
+
+  // Parent observer hooks for subagent visibility
+  private readonly parentObservers?: Observers;
 
   /**
    * Creates a new Agent instance.
@@ -355,6 +368,7 @@ export class Agent {
     this.tree = options.parentTree ?? new ExecutionTree();
     this.parentNodeId = options.parentNodeId ?? null;
     this.baseDepth = options.baseDepth ?? 0;
+    this.parentObservers = options.parentObservers;
   }
 
   /**
@@ -652,6 +666,8 @@ export class Agent {
             // Cross-iteration dependency tracking
             priorCompletedInvocations: this.completedInvocationIds,
             priorFailedInvocations: this.failedInvocationIds,
+            // Parent observer hooks for subagent visibility
+            parentObservers: this.parentObservers,
           });
 
           // Consume the stream processor generator, yielding events in real-time
@@ -815,13 +831,24 @@ export class Agent {
       return this.client.stream(llmOptions);
     }
 
-    const { retries, minTimeout, maxTimeout, factor, randomize, onRetry, onRetriesExhausted, shouldRetry } =
-      this.retryConfig;
+    const {
+      retries,
+      minTimeout,
+      maxTimeout,
+      factor,
+      randomize,
+      onRetry,
+      onRetriesExhausted,
+      shouldRetry,
+    } = this.retryConfig;
 
     try {
       return await pRetry(
         async (attemptNumber) => {
-          this.logger.debug("Creating LLM stream", { attempt: attemptNumber, maxAttempts: retries + 1 });
+          this.logger.debug("Creating LLM stream", {
+            attempt: attemptNumber,
+            maxAttempts: retries + 1,
+          });
           return this.client.stream(llmOptions);
         },
         {
@@ -1128,7 +1155,11 @@ export class Agent {
 
       if (action.action === "skip") {
         this.logger.info("Controller skipped LLM call, using synthetic response");
-        return { options: llmOptions, llmNodeId: llmNode.id, skipWithSynthetic: action.syntheticResponse };
+        return {
+          options: llmOptions,
+          llmNodeId: llmNode.id,
+          skipWithSynthetic: action.syntheticResponse,
+        };
       } else if (action.action === "proceed" && action.modifiedOptions) {
         llmOptions = { ...llmOptions, ...action.modifiedOptions };
       }
@@ -1155,10 +1186,7 @@ export class Agent {
   /**
    * Calculate cost and complete LLM call in execution tree.
    */
-  private completeLLMCallInTree(
-    nodeId: NodeId,
-    result: StreamCompletionEvent,
-  ): void {
+  private completeLLMCallInTree(nodeId: NodeId, result: StreamCompletionEvent): void {
     // Calculate cost using ModelRegistry (if available)
     const llmCost = this.client.modelRegistry?.estimateCost?.(
       this.model,

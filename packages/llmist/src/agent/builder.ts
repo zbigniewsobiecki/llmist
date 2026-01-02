@@ -25,15 +25,20 @@ import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
+import type { RetryConfig } from "../core/retry.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import type { ExecutionContext, SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
-import type { RetryConfig } from "../core/retry.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
-import type { AgentHooks, BeforeLLMCallAction, LLMCallControllerContext } from "./hooks.js";
+import type {
+  AgentHooks,
+  BeforeLLMCallAction,
+  LLMCallControllerContext,
+  Observers,
+} from "./hooks.js";
 
 /**
  * Message for conversation history.
@@ -101,6 +106,10 @@ export class AgentBuilder {
     tree?: ExecutionTree;
     nodeId?: NodeId;
   };
+  // Parent observer hooks for subagent visibility
+  // When a gadget calls withParentContext(ctx), these observers are
+  // also called for gadget events in the subagent
+  private parentObservers?: Observers;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -754,6 +763,14 @@ export class AgentBuilder {
       this.logger = ctx.logger;
     }
 
+    // Store parent's observer hooks for subagent visibility
+    // When this subagent executes gadgets, both local hooks and parent hooks
+    // will be called (via StreamProcessor), enabling the parent to monitor
+    // gadget activity in subagents with proper event ordering.
+    if (ctx.parentObservers && !this.parentObservers) {
+      this.parentObservers = ctx.parentObservers;
+    }
+
     return this;
   }
 
@@ -1191,6 +1208,8 @@ export class AgentBuilder {
       parentTree: this.parentContext?.tree,
       parentNodeId: this.parentContext?.nodeId,
       baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
+      // Parent observer hooks for subagent visibility
+      parentObservers: this.parentObservers,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

@@ -245,6 +245,7 @@ export type StreamEvent =
 
 // Imports for text-only handlers
 import type { ILogObj, Logger } from "tslog";
+import type { Observers } from "../agent/hooks.js";
 import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
 import type {
   ImageGenerationOptions,
@@ -772,6 +773,48 @@ export interface ExecutionContext {
    * ```
    */
   requestHumanInput?: (question: string) => Promise<string>;
+
+  // ==========================================================================
+  // Parent Observer Hooks (for subagent visibility)
+  // ==========================================================================
+
+  /**
+   * Parent agent's observer hooks for subagent visibility.
+   *
+   * When a subagent is created with `withParentContext(ctx)`, these observers
+   * are also called for gadget events (in addition to the subagent's own hooks),
+   * enabling the parent to observe subagent gadget activity.
+   *
+   * Only observer hooks are shared (for visibility), not interceptors (which
+   * modify behavior). This ensures subagents operate independently while
+   * parents can monitor their progress.
+   *
+   * The parent's observer hooks are called with `await` in stream-processor.ts
+   * after the subagent's own hooks, ensuring proper ordering of events
+   * (e.g., GadgetCall.Start always before GadgetCall.Complete).
+   *
+   * This is populated automatically by the parent agent's GadgetExecutor
+   * and should not be set manually.
+   *
+   * @example
+   * ```typescript
+   * // Parent agent's hooks will receive subagent gadget events:
+   * const parentHooks = {
+   *   observers: {
+   *     onGadgetExecutionStart: async (ctx) => {
+   *       if (ctx.subagentContext) {
+   *         // This is from a subagent (e.g., BrowseWeb's Navigate call)
+   *         console.log(`Subagent gadget: ${ctx.gadgetName}`);
+   *       }
+   *     }
+   *   }
+   * };
+   *
+   * // When BrowseWeb creates a subagent with withParentContext(ctx),
+   * // the subagent's gadget events will call parentHooks.observers
+   * ```
+   */
+  parentObservers?: Observers;
 }
 
 /**
