@@ -1,3 +1,7 @@
+## <small>12.2.2 (2026-01-02)</small>
+
+* docs: add HuggingFace provider to documentation (#315) (#316) ([c6182ed](https://github.com/zbigniewsobiecki/llmist/commit/c6182ed)), closes [#315](https://github.com/zbigniewsobiecki/llmist/issues/315) [#316](https://github.com/zbigniewsobiecki/llmist/issues/316)
+
 ## <small>12.2.1 (2026-01-02)</small>
 
 * Merge pull request #314 from zbigniewsobiecki/dev ([27327b2](https://github.com/zbigniewsobiecki/llmist/commit/27327b2)), closes [#314](https://github.com/zbigniewsobiecki/llmist/issues/314)
