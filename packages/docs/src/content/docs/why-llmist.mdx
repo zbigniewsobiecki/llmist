@@ -37,7 +37,7 @@ for await (const event of agent.run()) {
     llmist uses its own block format for tool calls—no JSON mode or native function calling required. Works with **any model** that can follow instructions.
   </Card>
   <Card title="Multi-Provider Support" icon="random">
-    First-class support for **OpenAI, Anthropic, and Gemini**. Auto-discovery from environment variables. Model shortcuts like `sonnet`, `gpt4o`, `flash`.
+    First-class support for **OpenAI, Anthropic, Gemini, and HuggingFace**. Auto-discovery from environment variables. Model shortcuts like `sonnet`, `gpt4o`, `flash`.
   </Card>
   <Card title="Full TypeScript Inference" icon="seti:typescript">
     Gadget parameters are fully typed from Zod schemas. No type assertions needed. Your IDE knows the exact shape of every parameter.
@@ -77,7 +77,7 @@ const answer = await LLMist.createAgent()
     If you need responsive, streaming AI experiences where users see tool execution in real-time.
   </Card>
   <Card title="Multi-Provider Applications" icon="random">
-    If you want to switch between OpenAI, Anthropic, and Gemini without code changes.
+    If you want to switch between OpenAI, Anthropic, Gemini, and HuggingFace without code changes.
   </Card>
   <Card title="Type-Safe AI Development" icon="seti:typescript">
     If you want full TypeScript inference for tool parameters and responses.
