@@ -1,25 +1,19 @@
 import chalk from "chalk";
 import type { Command } from "commander";
-import type { Agent } from "llmist";
-import { AgentBuilder } from "llmist";
-import { isAbortError } from "llmist";
-import type { ContentPart } from "llmist";
-import { text } from "llmist";
-import type { LLMMessage } from "llmist";
-import type { TokenUsage } from "llmist";
-import { GadgetRegistry } from "llmist";
+import type { Agent, ContentPart, LLMMessage, TokenUsage } from "llmist";
+import { AgentBuilder, GadgetRegistry, isAbortError, text } from "llmist";
 import type { ApprovalConfig } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
-import { loadConfig, getCustomCommandNames } from "./config.js";
-import { buildSubagentConfigMap } from "./subagent-config.js";
+import { getCustomCommandNames, loadConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
 import { formatCallNumber, formatLlmRequest, writeLogFile } from "./llm-logging.js";
-import { type CLIAgentOptions, addAgentOptions } from "./option-helpers.js";
-import { TUIApp, StatusBar } from "./tui/index.js";
+import { addAgentOptions, type CLIAgentOptions } from "./option-helpers.js";
+import { buildSubagentConfigMap } from "./subagent-config.js";
+import { StatusBar, TUIApp } from "./tui/index.js";
 import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
 
 /**
@@ -118,8 +112,6 @@ export async function executeAgent(
       // Config loading may fail (e.g., no config file) - profiles are optional
     }
 
-
-
     // If no initial prompt, start waiting for input early
     // This puts the REPL in "waiting" mode immediately, enabling Ctrl+P profile cycling
     // The Promise constructor runs synchronously, so isPendingREPLPrompt is set right away
@@ -161,10 +153,7 @@ export async function executeAgent(
   const userApprovals = options.gadgetApproval ?? {};
 
   // Apply defaults for dangerous gadgets if not explicitly configured
-  const gadgetApprovals: Record<
-    string,
-    "allowed" | "denied" | "approval-required"
-  > = {
+  const gadgetApprovals: Record<string, "allowed" | "denied" | "approval-required"> = {
     ...userApprovals,
   };
   for (const gadget of DEFAULT_APPROVAL_REQUIRED) {
@@ -400,8 +389,7 @@ export async function executeAgent(
   builder.withSyntheticGadgetCall(
     "TellUser",
     {
-      message:
-        "👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
+      message: "👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
       done: false,
       type: "info",
     },
@@ -519,6 +507,14 @@ export async function executeAgent(
     if (unsubscribeTree) {
       unsubscribeTree();
     }
+
+    // CRITICAL: Clear TUI state to prevent memory leak between REPL turns
+    // This resets all Maps (nodes, blocks, expandedStates, activity)
+    // Tree subscription will rebuild state cleanly on next turn
+    if (tui) {
+      tui.clearBlockRenderer();
+      tui.clearStatusBar();
+    }
   };
 
   // TUI mode: REPL loop - wait for input, run agent, repeat
@@ -586,10 +582,7 @@ export function registerAgentCommand(
   const cmd = program
     .command(COMMANDS.agent)
     .description("Run the llmist agent loop with optional gadgets.")
-    .argument(
-      "[prompt]",
-      "Prompt for the agent loop. Falls back to stdin when available.",
-    );
+    .argument("[prompt]", "Prompt for the agent loop. Falls back to stdin when available.");
 
   addAgentOptions(cmd, config);
 
