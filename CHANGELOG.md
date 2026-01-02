@@ -1,3 +1,10 @@
+## 12.2.0 (2026-01-02)
+
+* Merge pull request #311 from zbigniewsobiecki/feat/huggingface-provider ([282f119](https://github.com/zbigniewsobiecki/llmist/commit/282f119)), closes [#311](https://github.com/zbigniewsobiecki/llmist/issues/311)
+* Merge pull request #312 from zbigniewsobiecki/dev ([4178e72](https://github.com/zbigniewsobiecki/llmist/commit/4178e72)), closes [#312](https://github.com/zbigniewsobiecki/llmist/issues/312)
+* docs: add HuggingFace to provider documentation ([b64dcae](https://github.com/zbigniewsobiecki/llmist/commit/b64dcae))
+* feat(providers): add HuggingFace provider support ([3c96736](https://github.com/zbigniewsobiecki/llmist/commit/3c96736))
+
 ## <small>12.1.1 (2026-01-01)</small>
 
 * build: migrate from custom hooks to Lefthook ([c60971c](https://github.com/zbigniewsobiecki/llmist/commit/c60971c))
