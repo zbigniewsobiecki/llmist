@@ -37,7 +37,7 @@ Markers are fully [configurable](/library/guides/creating-gadgets/#customizing-m
 
 ### Multi-Provider Support
 
-OpenAI, Anthropic, and Gemini out of the box—extensible to any provider. Just set API keys as environment variables.
+OpenAI, Anthropic, Gemini, and HuggingFace out of the box—extensible to any provider. Just set API keys as environment variables.
 
 ```typescript
 .withModel('sonnet')   // Anthropic Claude

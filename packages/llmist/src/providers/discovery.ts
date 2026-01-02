@@ -1,5 +1,6 @@
 import { createAnthropicProviderFromEnv } from "./anthropic.js";
 import { createGeminiProviderFromEnv } from "./gemini.js";
+import { createHuggingFaceProviderFromEnv } from "./huggingface.js";
 import { createOpenAIProviderFromEnv } from "./openai.js";
 import type { ProviderAdapter } from "./provider.js";
 
@@ -9,6 +10,7 @@ const DISCOVERERS: ProviderDiscoverer[] = [
   createOpenAIProviderFromEnv,
   createAnthropicProviderFromEnv,
   createGeminiProviderFromEnv,
+  createHuggingFaceProviderFromEnv,
 ];
 
 export function discoverProviderAdapters(): ProviderAdapter[] {

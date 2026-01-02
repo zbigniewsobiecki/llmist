@@ -69,7 +69,7 @@ Use cases: observability, flow control, benchmarking, [human-in-the-loop](https:
 
 First-class support for multiple LLM providers with unified API. [Learn more →](https://llmist.dev/library/providers/overview/)
 
-- **[OpenAI, Anthropic, Gemini](https://llmist.dev/library/providers/overview/)** — Auto-discovery from environment variables
+- **[OpenAI, Anthropic, Gemini, HuggingFace](https://llmist.dev/library/providers/overview/)** — Auto-discovery from environment variables
 - **Caching-aware** — Tracks cached vs. uncached tokens for accurate metrics
 - **[Built-in cost calculation](https://llmist.dev/library/guides/cost-tracking/)** — Real-time token counting and cost estimation
 - **[Multimodal](https://llmist.dev/library/advanced/multimodal/)** — Vision and image input support
@@ -99,7 +99,7 @@ Full mocking for deterministic, LLM-free testing. [Learn more →](https://llmis
 
 ```bash
 npm install llmist
-export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, GEMINI_API_KEY
+export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, GEMINI_API_KEY, HF_TOKEN
 ```
 
 ```typescript
