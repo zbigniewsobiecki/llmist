@@ -1,3 +1,8 @@
+## <small>12.2.4 (2026-01-02)</small>
+
+* Merge pull request #319 from zbigniewsobiecki/dev ([ce9796e](https://github.com/zbigniewsobiecki/llmist/commit/ce9796e)), closes [#319](https://github.com/zbigniewsobiecki/llmist/issues/319)
+* test: improve coverage from 60% to 80% with 320+ new tests (#318) ([12daa56](https://github.com/zbigniewsobiecki/llmist/commit/12daa56)), closes [#318](https://github.com/zbigniewsobiecki/llmist/issues/318)
+
 ## <small>12.2.3 (2026-01-02)</small>
 
 * fix: await gadget observer hooks for proper event ordering (#317) ([d47453b](https://github.com/zbigniewsobiecki/llmist/commit/d47453b)), closes [#317](https://github.com/zbigniewsobiecki/llmist/issues/317)
