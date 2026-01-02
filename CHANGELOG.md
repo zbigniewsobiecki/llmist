@@ -1,3 +1,8 @@
+## 12.3.0 (2026-01-02)
+
+* Merge pull request #320 from zbigniewsobiecki/dev ([4a5d41b](https://github.com/zbigniewsobiecki/llmist/commit/4a5d41b)), closes [#320](https://github.com/zbigniewsobiecki/llmist/issues/320)
+* feat(agent): add subagent gadget visibility via parentObservers ([4157857](https://github.com/zbigniewsobiecki/llmist/commit/4157857))
+
 ## <small>12.2.5 (2026-01-02)</small>
 
 * feat(agent): add subagent gadget visibility via parentObservers
