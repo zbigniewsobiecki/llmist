@@ -43,6 +43,7 @@ import type {
   ObserveGadgetCompleteContext,
   ObserveGadgetSkippedContext,
   ObserveGadgetStartContext,
+  Observers,
 } from "./hooks.js";
 import { getSubagentContextForNode } from "./tree-hook-bridge.js";
 // NOTE: Gadget observer hooks (onGadgetExecutionStart, onGadgetExecutionComplete,
@@ -120,6 +121,19 @@ export interface StreamProcessorOptions {
    * Used to skip gadgets that depend on previously-failed gadgets.
    */
   priorFailedInvocations?: Set<string>;
+
+  // ==========================================================================
+  // Parent Observer Hooks (for subagent visibility)
+  // ==========================================================================
+
+  /**
+   * Parent agent's observer hooks for subagent visibility.
+   *
+   * When a subagent is created with withParentContext(ctx), these observers
+   * are also called for gadget events (in addition to the subagent's own hooks),
+   * enabling the parent to observe subagent gadget activity.
+   */
+  parentObservers?: Observers;
 }
 
 /**
@@ -212,6 +226,9 @@ export class StreamProcessor {
   /** Invocation IDs that failed in previous iterations (read-only reference from Agent) */
   private readonly priorFailedInvocations: Set<string>;
 
+  // Parent observer hooks for subagent visibility
+  private readonly parentObservers?: Observers;
+
   constructor(options: StreamProcessorOptions) {
     this.iteration = options.iteration;
     this.registry = options.registry;
@@ -229,6 +246,9 @@ export class StreamProcessor {
 
     // Store subagent config for concurrency limiting
     this.subagentConfig = options.subagentConfig;
+
+    // Store parent observers for subagent visibility
+    this.parentObservers = options.parentObservers;
 
     this.parser = new GadgetCallParser({
       startPrefix: options.gadgetStartPrefix,
@@ -250,6 +270,8 @@ export class StreamProcessor {
       options.tree,
       options.parentNodeId,
       options.baseDepth,
+      // Parent observer hooks for subagent visibility
+      options.parentObservers,
     );
   }
 
@@ -512,13 +534,13 @@ export class StreamProcessor {
         yield skipEvent;
 
         // Call onGadgetSkipped observer (AWAITED for proper ordering)
-        if (this.hooks.observers?.onGadgetSkipped) {
-          const gadgetNode = this.tree?.getNodeByInvocationId(call.invocationId);
-          const subagentContext =
-            this.tree && gadgetNode
-              ? getSubagentContextForNode(this.tree, gadgetNode.id)
-              : undefined;
+        const skippedGadgetNode = this.tree?.getNodeByInvocationId(call.invocationId);
+        const skippedSubagentContext =
+          this.tree && skippedGadgetNode
+            ? getSubagentContextForNode(this.tree, skippedGadgetNode.id)
+            : undefined;
 
+        if (this.hooks.observers?.onGadgetSkipped) {
           const context: ObserveGadgetSkippedContext = {
             iteration: this.iteration,
             gadgetName: call.gadgetName,
@@ -527,9 +549,24 @@ export class StreamProcessor {
             failedDependency: call.invocationId,
             failedDependencyError: errorMessage,
             logger: this.logger,
-            subagentContext,
+            subagentContext: skippedSubagentContext,
           };
           await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+        }
+
+        // Call parent observers for subagent visibility (AWAITED)
+        if (this.parentObservers?.onGadgetSkipped) {
+          const context: ObserveGadgetSkippedContext = {
+            iteration: this.iteration,
+            gadgetName: call.gadgetName,
+            invocationId: call.invocationId,
+            parameters: call.parameters ?? {},
+            failedDependency: call.invocationId,
+            failedDependencyError: errorMessage,
+            logger: this.logger,
+            subagentContext: skippedSubagentContext,
+          };
+          await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
         }
         return;
       }
@@ -717,20 +754,35 @@ export class StreamProcessor {
     }
 
     // Step 3b: Call onGadgetExecutionStart observer (AWAITED for proper ordering)
-    if (this.hooks.observers?.onGadgetExecutionStart) {
-      const gadgetNode = this.tree?.getNodeByInvocationId(call.invocationId);
-      const subagentContext =
-        this.tree && gadgetNode ? getSubagentContextForNode(this.tree, gadgetNode.id) : undefined;
+    const gadgetStartNode = this.tree?.getNodeByInvocationId(call.invocationId);
+    const gadgetStartSubagentContext =
+      this.tree && gadgetStartNode
+        ? getSubagentContextForNode(this.tree, gadgetStartNode.id)
+        : undefined;
 
+    if (this.hooks.observers?.onGadgetExecutionStart) {
       const context: ObserveGadgetStartContext = {
         iteration: this.iteration,
         gadgetName: call.gadgetName,
         invocationId: call.invocationId,
         parameters,
         logger: this.logger,
-        subagentContext,
+        subagentContext: gadgetStartSubagentContext,
       };
       await this.safeObserve(() => this.hooks.observers!.onGadgetExecutionStart!(context));
+    }
+
+    // Step 3c: Call parent observers for subagent visibility (AWAITED)
+    if (this.parentObservers?.onGadgetExecutionStart) {
+      const context: ObserveGadgetStartContext = {
+        iteration: this.iteration,
+        gadgetName: call.gadgetName,
+        invocationId: call.invocationId,
+        parameters,
+        logger: this.logger,
+        subagentContext: gadgetStartSubagentContext,
+      };
+      await this.safeObserve(() => this.parentObservers!.onGadgetExecutionStart!(context));
     }
 
     // Step 4: Execute or use synthetic result
@@ -813,11 +865,13 @@ export class StreamProcessor {
     }
 
     // Step 7b: Call onGadgetExecutionComplete observer (AWAITED for proper ordering)
-    if (this.hooks.observers?.onGadgetExecutionComplete) {
-      const gadgetNode = this.tree?.getNodeByInvocationId(result.invocationId);
-      const subagentContext =
-        this.tree && gadgetNode ? getSubagentContextForNode(this.tree, gadgetNode.id) : undefined;
+    const gadgetCompleteNode = this.tree?.getNodeByInvocationId(result.invocationId);
+    const gadgetCompleteSubagentContext =
+      this.tree && gadgetCompleteNode
+        ? getSubagentContextForNode(this.tree, gadgetCompleteNode.id)
+        : undefined;
 
+    if (this.hooks.observers?.onGadgetExecutionComplete) {
       const context: ObserveGadgetCompleteContext = {
         iteration: this.iteration,
         gadgetName: result.gadgetName,
@@ -828,9 +882,26 @@ export class StreamProcessor {
         executionTimeMs: result.executionTimeMs,
         cost: result.cost,
         logger: this.logger,
-        subagentContext,
+        subagentContext: gadgetCompleteSubagentContext,
       };
       await this.safeObserve(() => this.hooks.observers!.onGadgetExecutionComplete!(context));
+    }
+
+    // Step 7c: Call parent observers for subagent visibility (AWAITED)
+    if (this.parentObservers?.onGadgetExecutionComplete) {
+      const context: ObserveGadgetCompleteContext = {
+        iteration: this.iteration,
+        gadgetName: result.gadgetName,
+        invocationId: result.invocationId,
+        parameters,
+        finalResult: result.result,
+        error: result.error,
+        executionTimeMs: result.executionTimeMs,
+        cost: result.cost,
+        logger: this.logger,
+        subagentContext: gadgetCompleteSubagentContext,
+      };
+      await this.safeObserve(() => this.parentObservers!.onGadgetExecutionComplete!(context));
     }
 
     // Track completion for dependency resolution
@@ -1005,11 +1076,13 @@ export class StreamProcessor {
       events.push(skipEvent);
 
       // Call onGadgetSkipped observer (AWAITED for proper ordering)
-      if (this.hooks.observers?.onGadgetSkipped) {
-        const gadgetNode = this.tree?.getNodeByInvocationId(call.invocationId);
-        const subagentContext =
-          this.tree && gadgetNode ? getSubagentContextForNode(this.tree, gadgetNode.id) : undefined;
+      const gadgetNodeForSkip = this.tree?.getNodeByInvocationId(call.invocationId);
+      const skipSubagentContext =
+        this.tree && gadgetNodeForSkip
+          ? getSubagentContextForNode(this.tree, gadgetNodeForSkip.id)
+          : undefined;
 
+      if (this.hooks.observers?.onGadgetSkipped) {
         const context: ObserveGadgetSkippedContext = {
           iteration: this.iteration,
           gadgetName: call.gadgetName,
@@ -1018,9 +1091,24 @@ export class StreamProcessor {
           failedDependency: failedDep,
           failedDependencyError: depError,
           logger: this.logger,
-          subagentContext,
+          subagentContext: skipSubagentContext,
         };
         await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+      }
+
+      // Call parent observers for subagent visibility (AWAITED)
+      if (this.parentObservers?.onGadgetSkipped) {
+        const context: ObserveGadgetSkippedContext = {
+          iteration: this.iteration,
+          gadgetName: call.gadgetName,
+          invocationId: call.invocationId,
+          parameters: call.parameters ?? {},
+          failedDependency: failedDep,
+          failedDependencyError: depError,
+          logger: this.logger,
+          subagentContext: skipSubagentContext,
+        };
+        await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
       }
 
       this.logger.info("Gadget skipped due to failed dependency", {
@@ -1187,13 +1275,13 @@ export class StreamProcessor {
         yield skipEvent;
 
         // Call onGadgetSkipped observer (AWAITED for proper ordering)
-        if (this.hooks.observers?.onGadgetSkipped) {
-          const gadgetNode = this.tree?.getNodeByInvocationId(invocationId);
-          const subagentContext =
-            this.tree && gadgetNode
-              ? getSubagentContextForNode(this.tree, gadgetNode.id)
-              : undefined;
+        const gadgetNodeForTimeout = this.tree?.getNodeByInvocationId(invocationId);
+        const timeoutSubagentContext =
+          this.tree && gadgetNodeForTimeout
+            ? getSubagentContextForNode(this.tree, gadgetNodeForTimeout.id)
+            : undefined;
 
+        if (this.hooks.observers?.onGadgetSkipped) {
           const context: ObserveGadgetSkippedContext = {
             iteration: this.iteration,
             gadgetName: call.gadgetName,
@@ -1202,9 +1290,24 @@ export class StreamProcessor {
             failedDependency: missingDeps[0],
             failedDependencyError: errorMessage,
             logger: this.logger,
-            subagentContext,
+            subagentContext: timeoutSubagentContext,
           };
           await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+        }
+
+        // Call parent observers for subagent visibility (AWAITED)
+        if (this.parentObservers?.onGadgetSkipped) {
+          const context: ObserveGadgetSkippedContext = {
+            iteration: this.iteration,
+            gadgetName: call.gadgetName,
+            invocationId,
+            parameters: call.parameters ?? {},
+            failedDependency: missingDeps[0],
+            failedDependencyError: errorMessage,
+            logger: this.logger,
+            subagentContext: timeoutSubagentContext,
+          };
+          await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
         }
       }
       this.gadgetsAwaitingDependencies.clear();

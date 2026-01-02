@@ -2,6 +2,7 @@ import equal from "fast-deep-equal";
 import type { ILogObj, Logger } from "tslog";
 import { z } from "zod";
 import { AgentBuilder } from "../agent/builder.js";
+import type { Observers } from "../agent/hooks.js";
 import { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX } from "../core/constants.js";
 import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
@@ -12,7 +13,7 @@ import { createGadget } from "./create-gadget.js";
 import { type ErrorFormatterOptions, GadgetExecutionErrorFormatter } from "./error-formatter.js";
 import {
   AbortException,
-  HumanInputRequiredException,
+  type HumanInputRequiredException,
   TaskCompletionSignal,
   TimeoutException,
 } from "./exceptions.js";
@@ -69,6 +70,8 @@ export class GadgetExecutor {
     private readonly tree?: ExecutionTree,
     private readonly parentNodeId?: NodeId | null,
     private readonly baseDepth?: number,
+    // Parent observer hooks for subagent visibility
+    private readonly parentObservers?: Observers,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
@@ -108,9 +111,11 @@ export class GadgetExecutor {
    * Handles string returns (backwards compat), object returns with cost,
    * and object returns with media.
    */
-  private unifyExecuteResult(
-    raw: string | GadgetExecuteResult | GadgetExecuteResultWithMedia,
-  ): { result: string; media?: GadgetMediaOutput[]; cost: number } {
+  private unifyExecuteResult(raw: string | GadgetExecuteResult | GadgetExecuteResultWithMedia): {
+    result: string;
+    media?: GadgetMediaOutput[];
+    cost: number;
+  } {
     if (typeof raw === "string") {
       return { result: raw, cost: 0 };
     }
@@ -268,7 +273,7 @@ export class GadgetExecutor {
       // Look up the gadget's own node ID from the tree (not the parent LLM call's ID)
       const gadgetNodeId = this.tree?.getNodeByInvocationId(call.invocationId)?.id;
       const gadgetDepth = gadgetNodeId
-        ? this.tree?.getNode(gadgetNodeId)?.depth ?? this.baseDepth
+        ? (this.tree?.getNode(gadgetNodeId)?.depth ?? this.baseDepth)
         : this.baseDepth;
 
       const ctx: ExecutionContext = {
@@ -288,6 +293,10 @@ export class GadgetExecutor {
         logger: this.logger,
         // Human input callback for subagents to bubble up input requests
         requestHumanInput: this.requestHumanInput,
+        // Parent observer hooks for subagent visibility
+        // When a subagent uses withParentContext(ctx), it will receive these
+        // and call them for gadget events in addition to its own hooks
+        parentObservers: this.parentObservers,
       };
 
       // Execute gadget (handle both sync and async)
@@ -491,5 +500,4 @@ export class GadgetExecutor {
   async executeAll(calls: ParsedGadgetCall[]): Promise<GadgetExecutionResult[]> {
     return Promise.all(calls.map((call) => this.execute(call)));
   }
-
 }
