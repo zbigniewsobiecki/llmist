@@ -2,6 +2,7 @@ import equal from "fast-deep-equal";
 import type { ILogObj, Logger } from "tslog";
 import { z } from "zod";
 import { AgentBuilder } from "../agent/builder.js";
+import { mergeObservers } from "../agent/hook-utils.js";
 import type { Observers } from "../agent/hooks.js";
 import { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX } from "../core/constants.js";
@@ -299,8 +300,8 @@ export class GadgetExecutor {
         // Parent observer hooks for subagent visibility
         // When a subagent uses withParentContext(ctx), it will receive these
         // and call them for gadget events in addition to its own hooks
-        // Priority: currentObservers (this agent's hooks) > parentObservers (ancestor's hooks)
-        parentObservers: this.currentObservers ?? this.parentObservers,
+        // Merge child and parent observers so both get called (child first, then parent)
+        parentObservers: mergeObservers(this.currentObservers, this.parentObservers),
       };
 
       // Execute gadget (handle both sync and async)
