@@ -1,3 +1,7 @@
+## <small>12.3.4 (2026-01-03)</small>
+
+* fix: chain subagent observer calls to ensure proper event ordering ([f104fe8](https://github.com/zbigniewsobiecki/llmist/commit/f104fe8))
+
 ## <small>12.3.3 (2026-01-03)</small>
 
 * fix: bridge subagent gadget events to parent observers via ExecutionTree ([c29ff02](https://github.com/zbigniewsobiecki/llmist/commit/c29ff02))
