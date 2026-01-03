@@ -2,13 +2,16 @@
  * Bridge between ExecutionTree events and hook observers.
  *
  * This module handles:
- * - LLM call events for subagent visibility (fire-and-forget is OK)
+ * - LLM call events for subagent visibility (fire-and-forget)
+ * - Gadget events for subagent visibility (fire-and-forget)
  * - Exports `getSubagentContextForNode()` for deriving subagent context
  *
- * Gadget observer hooks (onGadgetExecutionStart, onGadgetExecutionComplete,
- * onGadgetSkipped) are handled DIRECTLY in stream-processor.ts to ensure they
- * are awaited before continuing execution. This guarantees proper ordering of
- * observer commands (e.g., GadgetCall.Start before GadgetCall.Complete).
+ * The ExecutionTree is the single source of truth for all execution events.
+ * For subagent events (depth > 0), this bridge propagates events to parent hooks.
+ *
+ * NOTE: For the ROOT agent's own events (depth === 0), gadget observer hooks
+ * are called DIRECTLY in stream-processor.ts with await to ensure proper ordering.
+ * This bridge only handles SUBAGENT events to avoid double-calling.
  *
  * @module agent/tree-hook-bridge
  */
@@ -16,6 +19,10 @@
 import type { ILogObj, Logger } from "tslog";
 import type {
   ExecutionEvent,
+  GadgetCompleteEvent,
+  GadgetErrorEvent,
+  GadgetSkippedEvent,
+  GadgetStartEvent,
   LLMCallCompleteEvent,
   LLMCallErrorEvent,
   LLMCallStartEvent,
@@ -23,6 +30,9 @@ import type {
 import type { ExecutionTree, GadgetNode, LLMCallNode, NodeId } from "../core/execution-tree.js";
 import type {
   AgentHooks,
+  ObserveGadgetCompleteContext,
+  ObserveGadgetSkippedContext,
+  ObserveGadgetStartContext,
   ObserveLLMCallContext,
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
@@ -157,11 +167,11 @@ async function safeObserve(
 /**
  * Bridge ExecutionTree events to hook observers.
  *
- * This bridge handles LLM call events for subagent visibility.
- * LLM events from subagents are fire-and-forget (they don't need strict ordering).
+ * This bridge handles both LLM and gadget events for subagent visibility.
+ * Events from subagents (depth > 0) are fire-and-forget to the parent's hooks.
  *
- * NOTE: Gadget observer hooks are NOT handled here. They are called directly
- * in stream-processor.ts with await to ensure proper ordering.
+ * Root agent events (depth === 0) are NOT handled here - they are called
+ * directly in stream-processor.ts with await to ensure proper ordering.
  *
  * @param tree - The ExecutionTree to subscribe to
  * @param hooks - Hook observers to call
@@ -185,13 +195,116 @@ export function bridgeTreeToHooks(
     const subagentContext = buildSubagentContext(tree, event);
 
     switch (event.type) {
-      // NOTE: gadget_start, gadget_complete, gadget_error, gadget_skipped are NOT
-      // handled here. They are called directly in stream-processor.ts with await
-      // to ensure proper ordering of observer commands.
+      // =================================================================
+      // GADGET EVENTS - Bridged for subagent visibility
+      // =================================================================
+      // When a subagent executes gadgets, these events propagate through
+      // the shared tree to the parent's hooks.
+      // Only bridged for subagent events (depth > 0) to avoid double-calling
+      // root agent events which are handled directly in stream-processor.ts
 
-      // LLM events - bridged for subagent visibility
-      // When a subagent makes LLM calls, these events propagate through the shared tree
-      // to the parent's hooks, enabling unified monitoring of all LLM activity
+      case "gadget_start": {
+        if (subagentContext && hooks.observers?.onGadgetExecutionStart) {
+          const gadgetEvent = event as GadgetStartEvent;
+          const gadgetNode = tree.getNode(event.nodeId) as GadgetNode | undefined;
+
+          const context: ObserveGadgetStartContext = {
+            iteration: getIterationFromTree(tree, event.nodeId),
+            gadgetName: gadgetEvent.name,
+            invocationId: gadgetEvent.invocationId,
+            parameters: gadgetNode?.parameters ?? {},
+            logger,
+            subagentContext,
+          };
+
+          safeObserve(
+            () => hooks.observers!.onGadgetExecutionStart!(context),
+            logger,
+            "onGadgetExecutionStart",
+          );
+        }
+        break;
+      }
+
+      case "gadget_complete": {
+        if (subagentContext && hooks.observers?.onGadgetExecutionComplete) {
+          const gadgetEvent = event as GadgetCompleteEvent;
+          const gadgetNode = tree.getNode(event.nodeId) as GadgetNode | undefined;
+
+          const context: ObserveGadgetCompleteContext = {
+            iteration: getIterationFromTree(tree, event.nodeId),
+            gadgetName: gadgetEvent.name,
+            invocationId: gadgetEvent.invocationId,
+            parameters: gadgetNode?.parameters ?? {},
+            finalResult: gadgetEvent.result,
+            executionTimeMs: gadgetEvent.executionTimeMs,
+            cost: gadgetEvent.cost,
+            logger,
+            subagentContext,
+          };
+
+          safeObserve(
+            () => hooks.observers!.onGadgetExecutionComplete!(context),
+            logger,
+            "onGadgetExecutionComplete",
+          );
+        }
+        break;
+      }
+
+      case "gadget_error": {
+        if (subagentContext && hooks.observers?.onGadgetExecutionComplete) {
+          const gadgetEvent = event as GadgetErrorEvent;
+          const gadgetNode = tree.getNode(event.nodeId) as GadgetNode | undefined;
+
+          // For errors, we call onGadgetExecutionComplete with error field set
+          const context: ObserveGadgetCompleteContext = {
+            iteration: getIterationFromTree(tree, event.nodeId),
+            gadgetName: gadgetEvent.name,
+            invocationId: gadgetEvent.invocationId,
+            parameters: gadgetNode?.parameters ?? {},
+            error: gadgetEvent.error,
+            executionTimeMs: gadgetEvent.executionTimeMs,
+            logger,
+            subagentContext,
+          };
+
+          safeObserve(
+            () => hooks.observers!.onGadgetExecutionComplete!(context),
+            logger,
+            "onGadgetExecutionComplete",
+          );
+        }
+        break;
+      }
+
+      case "gadget_skipped": {
+        if (subagentContext && hooks.observers?.onGadgetSkipped) {
+          const gadgetEvent = event as GadgetSkippedEvent;
+          const gadgetNode = tree.getNode(event.nodeId) as GadgetNode | undefined;
+
+          const context: ObserveGadgetSkippedContext = {
+            iteration: getIterationFromTree(tree, event.nodeId),
+            gadgetName: gadgetEvent.name,
+            invocationId: gadgetEvent.invocationId,
+            parameters: gadgetNode?.parameters ?? {},
+            failedDependency: gadgetEvent.failedDependency ?? "",
+            failedDependencyError: gadgetEvent.failedDependencyError ?? gadgetEvent.error,
+            logger,
+            subagentContext,
+          };
+
+          safeObserve(() => hooks.observers!.onGadgetSkipped!(context), logger, "onGadgetSkipped");
+        }
+        break;
+      }
+
+      // =================================================================
+      // LLM EVENTS - Bridged for subagent visibility
+      // =================================================================
+      // When a subagent makes LLM calls, these events propagate through
+      // the shared tree to the parent's hooks.
+
       case "llm_call_start": {
         // Only call hooks for subagent events (depth > 0)
         // Root agent events are already handled directly in agent.ts
