@@ -165,6 +165,37 @@ async function safeObserve(
 }
 
 /**
+ * Chain an observer call to ensure proper ordering for the same entity.
+ *
+ * This ensures that for a given key (invocationId for gadgets, nodeId for LLM calls),
+ * events are processed in order. For example, gadget_start must complete before
+ * gadget_complete for the same invocation.
+ *
+ * @param chainMap - Map to store promise chains by key
+ * @param key - Unique identifier for the entity (invocationId or nodeId)
+ * @param fn - The observer function to call
+ * @param logger - Logger for error reporting
+ * @param eventType - Event type name for logging
+ * @param cleanup - Whether to remove the map entry after completion
+ */
+function chainObserverCall(
+  chainMap: Map<string, Promise<void>>,
+  key: string,
+  fn: () => void | Promise<void>,
+  logger: Logger<ILogObj>,
+  eventType: string,
+  cleanup: boolean = false,
+): void {
+  const previousPromise = chainMap.get(key) ?? Promise.resolve();
+  const newPromise = previousPromise.then(() => safeObserve(fn, logger, eventType));
+  chainMap.set(key, newPromise);
+
+  if (cleanup) {
+    newPromise.finally(() => chainMap.delete(key));
+  }
+}
+
+/**
  * Bridge ExecutionTree events to hook observers.
  *
  * This bridge handles both LLM and gadget events for subagent visibility.
@@ -191,6 +222,12 @@ export function bridgeTreeToHooks(
   hooks: AgentHooks,
   logger: Logger<ILogObj>,
 ): () => void {
+  // Map invocationId -> Promise chain for ordered gadget execution
+  const gadgetPromiseChains = new Map<string, Promise<void>>();
+
+  // Map nodeId -> Promise chain for ordered LLM call execution
+  const llmPromiseChains = new Map<string, Promise<void>>();
+
   return tree.onAll((event) => {
     const subagentContext = buildSubagentContext(tree, event);
 
@@ -217,10 +254,14 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(
+          // Chain by invocationId to ensure start completes before complete/error/skipped
+          chainObserverCall(
+            gadgetPromiseChains,
+            gadgetEvent.invocationId,
             () => hooks.observers?.onGadgetExecutionStart?.(context),
             logger,
             "onGadgetExecutionStart",
+            false, // Don't cleanup - wait for completion event
           );
         }
         break;
@@ -243,10 +284,14 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(
+          // Chain by invocationId to ensure this runs after start, then cleanup
+          chainObserverCall(
+            gadgetPromiseChains,
+            gadgetEvent.invocationId,
             () => hooks.observers?.onGadgetExecutionComplete?.(context),
             logger,
             "onGadgetExecutionComplete",
+            true, // Cleanup after completion
           );
         }
         break;
@@ -269,10 +314,14 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(
+          // Chain by invocationId to ensure this runs after start, then cleanup
+          chainObserverCall(
+            gadgetPromiseChains,
+            gadgetEvent.invocationId,
             () => hooks.observers?.onGadgetExecutionComplete?.(context),
             logger,
             "onGadgetExecutionComplete",
+            true, // Cleanup after error
           );
         }
         break;
@@ -294,7 +343,15 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(() => hooks.observers?.onGadgetSkipped?.(context), logger, "onGadgetSkipped");
+          // Chain by invocationId to ensure this runs after start, then cleanup
+          chainObserverCall(
+            gadgetPromiseChains,
+            gadgetEvent.invocationId,
+            () => hooks.observers?.onGadgetSkipped?.(context),
+            logger,
+            "onGadgetSkipped",
+            true, // Cleanup after skipped
+          );
         }
         break;
       }
@@ -324,7 +381,15 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(() => hooks.observers?.onLLMCallStart?.(context), logger, "onLLMCallStart");
+          // Chain by nodeId to ensure start completes before complete/error
+          chainObserverCall(
+            llmPromiseChains,
+            event.nodeId,
+            () => hooks.observers?.onLLMCallStart?.(context),
+            logger,
+            "onLLMCallStart",
+            false, // Don't cleanup - wait for completion event
+          );
         }
         break;
       }
@@ -352,10 +417,14 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(
+          // Chain by nodeId to ensure this runs after start, then cleanup
+          chainObserverCall(
+            llmPromiseChains,
+            event.nodeId,
             () => hooks.observers?.onLLMCallComplete?.(context),
             logger,
             "onLLMCallComplete",
+            true, // Cleanup after completion
           );
         }
         break;
@@ -381,7 +450,15 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(() => hooks.observers?.onLLMCallError?.(context), logger, "onLLMCallError");
+          // Chain by nodeId to ensure this runs after start, then cleanup
+          chainObserverCall(
+            llmPromiseChains,
+            event.nodeId,
+            () => hooks.observers?.onLLMCallError?.(context),
+            logger,
+            "onLLMCallError",
+            true, // Cleanup after error
+          );
         }
         break;
       }
