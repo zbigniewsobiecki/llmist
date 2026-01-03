@@ -72,6 +72,9 @@ export class GadgetExecutor {
     private readonly baseDepth?: number,
     // Parent observer hooks for subagent visibility
     private readonly parentObservers?: Observers,
+    // Current agent's observers - passed to ExecutionContext.parentObservers
+    // so gadgets creating subagents can inherit them via withParentContext(ctx)
+    private readonly currentObservers?: Observers,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
@@ -296,7 +299,8 @@ export class GadgetExecutor {
         // Parent observer hooks for subagent visibility
         // When a subagent uses withParentContext(ctx), it will receive these
         // and call them for gadget events in addition to its own hooks
-        parentObservers: this.parentObservers,
+        // Priority: currentObservers (this agent's hooks) > parentObservers (ancestor's hooks)
+        parentObservers: this.currentObservers ?? this.parentObservers,
       };
 
       // Execute gadget (handle both sync and async)
