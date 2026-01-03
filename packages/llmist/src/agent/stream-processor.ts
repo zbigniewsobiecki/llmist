@@ -272,6 +272,8 @@ export class StreamProcessor {
       options.baseDepth,
       // Parent observer hooks for subagent visibility
       options.parentObservers,
+      // Current agent's observers for subagent inheritance
+      options.hooks?.observers,
     );
   }
 
