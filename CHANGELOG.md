@@ -1,3 +1,7 @@
+## <small>12.3.2 (2026-01-03)</small>
+
+* fix: merge subagent observers instead of replacing them (#322) ([0aa6e57](https://github.com/zbigniewsobiecki/llmist/commit/0aa6e57)), closes [#322](https://github.com/zbigniewsobiecki/llmist/issues/322)
+
 ## <small>12.3.1 (2026-01-03)</small>
 
 * fix(agent): pass current observers to ExecutionContext for subagent inheritance (#321) ([fe22c0e](https://github.com/zbigniewsobiecki/llmist/commit/fe22c0e)), closes [#321](https://github.com/zbigniewsobiecki/llmist/issues/321)
