@@ -1,3 +1,8 @@
+## <small>12.3.3 (2026-01-03)</small>
+
+* fix: bridge subagent gadget events to parent observers via ExecutionTree ([c29ff02](https://github.com/zbigniewsobiecki/llmist/commit/c29ff02))
+* fix: bridge subagent gadget events to parent observers via ExecutionTree ([f65ee49](https://github.com/zbigniewsobiecki/llmist/commit/f65ee49))
+
 ## <small>12.3.2 (2026-01-03)</small>
 
 * fix: merge subagent observers instead of replacing them (#322) ([0aa6e57](https://github.com/zbigniewsobiecki/llmist/commit/0aa6e57)), closes [#322](https://github.com/zbigniewsobiecki/llmist/issues/322)
