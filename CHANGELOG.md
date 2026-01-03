@@ -1,3 +1,7 @@
+## <small>12.3.1 (2026-01-03)</small>
+
+* fix(agent): pass current observers to ExecutionContext for subagent inheritance (#321) ([fe22c0e](https://github.com/zbigniewsobiecki/llmist/commit/fe22c0e)), closes [#321](https://github.com/zbigniewsobiecki/llmist/issues/321)
+
 ## 12.3.0 (2026-01-02)
 
 * Merge pull request #320 from zbigniewsobiecki/dev ([4a5d41b](https://github.com/zbigniewsobiecki/llmist/commit/4a5d41b)), closes [#320](https://github.com/zbigniewsobiecki/llmist/issues/320)
