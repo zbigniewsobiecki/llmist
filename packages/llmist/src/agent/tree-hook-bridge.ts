@@ -218,7 +218,7 @@ export function bridgeTreeToHooks(
           };
 
           safeObserve(
-            () => hooks.observers!.onGadgetExecutionStart!(context),
+            () => hooks.observers?.onGadgetExecutionStart?.(context),
             logger,
             "onGadgetExecutionStart",
           );
@@ -244,7 +244,7 @@ export function bridgeTreeToHooks(
           };
 
           safeObserve(
-            () => hooks.observers!.onGadgetExecutionComplete!(context),
+            () => hooks.observers?.onGadgetExecutionComplete?.(context),
             logger,
             "onGadgetExecutionComplete",
           );
@@ -270,7 +270,7 @@ export function bridgeTreeToHooks(
           };
 
           safeObserve(
-            () => hooks.observers!.onGadgetExecutionComplete!(context),
+            () => hooks.observers?.onGadgetExecutionComplete?.(context),
             logger,
             "onGadgetExecutionComplete",
           );
@@ -294,7 +294,7 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(() => hooks.observers!.onGadgetSkipped!(context), logger, "onGadgetSkipped");
+          safeObserve(() => hooks.observers?.onGadgetSkipped?.(context), logger, "onGadgetSkipped");
         }
         break;
       }
@@ -324,7 +324,7 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(() => hooks.observers!.onLLMCallStart!(context), logger, "onLLMCallStart");
+          safeObserve(() => hooks.observers?.onLLMCallStart?.(context), logger, "onLLMCallStart");
         }
         break;
       }
@@ -353,7 +353,7 @@ export function bridgeTreeToHooks(
           };
 
           safeObserve(
-            () => hooks.observers!.onLLMCallComplete!(context),
+            () => hooks.observers?.onLLMCallComplete?.(context),
             logger,
             "onLLMCallComplete",
           );
@@ -381,7 +381,7 @@ export function bridgeTreeToHooks(
             subagentContext,
           };
 
-          safeObserve(() => hooks.observers!.onLLMCallError!(context), logger, "onLLMCallError");
+          safeObserve(() => hooks.observers?.onLLMCallError?.(context), logger, "onLLMCallError");
         }
         break;
       }
