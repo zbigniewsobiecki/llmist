@@ -408,6 +408,23 @@ export class TUIApp {
     this.statusBar.clearActivity();
   }
 
+  /**
+   * Start a new session. Called at the start of each REPL turn.
+   * Increments the session counter so new blocks get the new sessionId.
+   */
+  startNewSession(): void {
+    this.blockRenderer.startNewSession();
+  }
+
+  /**
+   * Clear blocks from the previous session only.
+   * Called when the current session finishes, keeping its content visible.
+   * The previous session's content was kept visible during this session for context.
+   */
+  clearPreviousSession(): void {
+    this.blockRenderer.clearPreviousSession();
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Abort Control (delegated to controller)
   // ─────────────────────────────────────────────────────────────────────────────

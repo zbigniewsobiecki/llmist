@@ -90,6 +90,12 @@ export class BlockRenderer {
   /** Track nested LLM calls by parentId_iteration for idempotency */
   private nestedLLMCallByKey = new Map<string, string>();
 
+  /** Current session ID (increments each new REPL turn) */
+  private currentSessionId = 0;
+
+  /** Previous session ID (for deferred cleanup) */
+  private previousSessionId: number | null = null;
+
   constructor(
     container: ScrollableBox,
     renderCallback: () => void,
@@ -149,6 +155,7 @@ export class BlockRenderer {
       type: "llm_call",
       depth,
       parentId: parentGadgetId ?? null,
+      sessionId: this.currentSessionId,
       iteration,
       model,
       isComplete: false,
@@ -231,6 +238,7 @@ export class BlockRenderer {
       type: "gadget",
       depth,
       parentId: parentLLMCallId,
+      sessionId: this.currentSessionId,
       invocationId,
       name,
       isComplete: false,
@@ -324,6 +332,7 @@ export class BlockRenderer {
       type: "text",
       depth: 0,
       parentId: null,
+      sessionId: this.currentSessionId,
       content,
       children: [] as never[],
     };
@@ -353,6 +362,7 @@ export class BlockRenderer {
       type: "text",
       depth: 0,
       parentId: null,
+      sessionId: this.currentSessionId,
       content: message,
       children: [] as never[],
     };
@@ -432,6 +442,68 @@ export class BlockRenderer {
       child.detach();
     }
     this.renderCallback();
+  }
+
+  /**
+   * Start a new session. Called at the start of each REPL turn.
+   * Increments the session counter so new blocks get the new sessionId.
+   */
+  startNewSession(): void {
+    this.previousSessionId = this.currentSessionId;
+    this.currentSessionId++;
+  }
+
+  /**
+   * Clear blocks from the previous session only.
+   * Called when the current session finishes, keeping its content visible.
+   * The previous session's content was kept visible during this session for context.
+   */
+  clearPreviousSession(): void {
+    if (this.previousSessionId === null) return;
+
+    const prevSessionId = this.previousSessionId;
+
+    // Collect IDs of nodes from the previous session
+    const nodesToRemove: string[] = [];
+    for (const [id, node] of this.nodes.entries()) {
+      if (node.sessionId === prevSessionId) {
+        nodesToRemove.push(id);
+      }
+    }
+
+    // Remove nodes and their widgets
+    for (const id of nodesToRemove) {
+      this.nodes.delete(id);
+      const block = this.blocks.get(id);
+      if (block?.box) {
+        block.box.detach();
+      }
+      this.blocks.delete(id);
+      this.expandedStates.delete(id);
+    }
+
+    // Update rootIds - filter out removed nodes
+    this.rootIds = this.rootIds.filter((id) => !nodesToRemove.includes(id));
+
+    // Update selectableIds - filter out removed nodes
+    this.selectableIds = this.selectableIds.filter((id) => !nodesToRemove.includes(id));
+
+    // Adjust selection if needed
+    if (this.selectedIndex >= this.selectableIds.length) {
+      this.selectedIndex = this.selectableIds.length - 1;
+    }
+
+    // Clear the previous session marker
+    this.previousSessionId = null;
+
+    this.renderCallback();
+  }
+
+  /**
+   * Get the current session ID (for node creation).
+   */
+  getCurrentSessionId(): number {
+    return this.currentSessionId;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
