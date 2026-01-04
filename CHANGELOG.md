@@ -1,3 +1,8 @@
+## <small>12.3.5 (2026-01-04)</small>
+
+* Merge pull request #324 from zbigniewsobiecki/dev ([0ab3c68](https://github.com/zbigniewsobiecki/llmist/commit/0ab3c68)), closes [#324](https://github.com/zbigniewsobiecki/llmist/issues/324)
+* fix(cli): keep TUI session content visible after completion (#323) ([2092808](https://github.com/zbigniewsobiecki/llmist/commit/2092808)), closes [#323](https://github.com/zbigniewsobiecki/llmist/issues/323)
+
 ## <small>12.3.4 (2026-01-03)</small>
 
 * fix: chain subagent observer calls to ensure proper event ordering ([f104fe8](https://github.com/zbigniewsobiecki/llmist/commit/f104fe8))
