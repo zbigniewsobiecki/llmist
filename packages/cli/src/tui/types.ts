@@ -157,6 +157,8 @@ interface BaseBlockNode {
   depth: number;
   /** Parent node ID (null for top-level) */
   parentId: string | null;
+  /** Session ID - tracks which REPL session this node belongs to */
+  sessionId: number;
 }
 
 /**
