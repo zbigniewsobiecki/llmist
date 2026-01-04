@@ -1,3 +1,8 @@
+## <small>12.3.6 (2026-01-04)</small>
+
+* Merge pull request #326 from zbigniewsobiecki/dev ([1631c3c](https://github.com/zbigniewsobiecki/llmist/commit/1631c3c)), closes [#326](https://github.com/zbigniewsobiecki/llmist/issues/326)
+* fix(agent): emit llm_call_complete when generator terminates early (#325) ([a78d900](https://github.com/zbigniewsobiecki/llmist/commit/a78d900)), closes [#325](https://github.com/zbigniewsobiecki/llmist/issues/325)
+
 ## <small>12.3.5 (2026-01-04)</small>
 
 * Merge pull request #324 from zbigniewsobiecki/dev ([0ab3c68](https://github.com/zbigniewsobiecki/llmist/commit/0ab3c68)), closes [#324](https://github.com/zbigniewsobiecki/llmist/issues/324)
