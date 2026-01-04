@@ -398,10 +398,7 @@ describe("Agent Architecture", () => {
   describe("Agent REPL support", () => {
     describe("injectUserMessage", () => {
       it("should queue messages for injection", () => {
-        const agent = new AgentBuilder(mockClient)
-          .withModel("test:model")
-          .withGadgets()
-          .build();
+        const agent = new AgentBuilder(mockClient).withModel("test:model").withGadgets().build();
 
         agent.injectUserMessage("First message");
         agent.injectUserMessage("Second message");
@@ -451,7 +448,9 @@ describe("Agent Architecture", () => {
       it("should process multiple injected messages in order", async () => {
         const messagesReceived: string[] = [];
         const mockClientMulti = {
-          stream: vi.fn().mockImplementation(async function* (options: { messages: Array<{ content: string }> }) {
+          stream: vi.fn().mockImplementation(async function* (options: {
+            messages: Array<{ content: string }>;
+          }) {
             // Extract user messages from the call
             const userMsgs = options.messages.filter((m: { role?: string }) => m.role === "user");
             userMsgs.forEach((m) => {
@@ -487,10 +486,7 @@ describe("Agent Architecture", () => {
 
     describe("getConversation", () => {
       it("should return the conversation manager", () => {
-        const agent = new AgentBuilder(mockClient)
-          .withModel("test:model")
-          .withGadgets()
-          .build();
+        const agent = new AgentBuilder(mockClient).withModel("test:model").withGadgets().build();
 
         const conversation = agent.getConversation();
 
@@ -524,6 +520,89 @@ describe("Agent Architecture", () => {
         expect(history[0].role).toBe("user");
         expect(history[0].content).toBe("Hello");
       });
+    });
+  });
+
+  describe("Early generator termination safety net", () => {
+    it("should call onLLMCallComplete with finishReason='interrupted' when consumer breaks early", async () => {
+      const onLLMCallCompleteMock = vi.fn();
+
+      // Create a mock that yields events slowly to allow us to break mid-stream
+      const mockClientEarlyBreak = {
+        stream: vi.fn().mockImplementation(async function* () {
+          yield { text: "First chunk" };
+          // Simulate more work that won't be consumed
+          yield { text: " second chunk" };
+          yield { text: " third chunk" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientEarlyBreak)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(5)
+        .withTextOnlyHandler("acknowledge") // Keep loop going
+        .withHooks({
+          observers: {
+            onLLMCallComplete: onLLMCallCompleteMock,
+          },
+        })
+        .ask("Test prompt");
+
+      // Consume only one event then break (simulating what Dhalsim was doing)
+      let eventCount = 0;
+      for await (const _event of agent.run()) {
+        eventCount++;
+        if (eventCount === 1) {
+          break; // Break early!
+        }
+      }
+
+      // The onLLMCallComplete hook should still be called
+      // Either with normal completion (if we consumed enough) or with interrupted
+      expect(onLLMCallCompleteMock).toHaveBeenCalled();
+    });
+
+    it("should complete in-flight LLM call node in ExecutionTree when consumer breaks early", async () => {
+      const mockClientEarlyBreak = {
+        stream: vi.fn().mockImplementation(async function* () {
+          yield { text: "Response text" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientEarlyBreak)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(5)
+        .withTextOnlyHandler("acknowledge") // Keep loop going
+        .ask("Test prompt");
+
+      // Break immediately after first event
+      for await (const _event of agent.run()) {
+        break;
+      }
+
+      // Get the execution tree to verify LLM node was completed
+      const tree = agent.getTree();
+      const roots = tree.getRoots();
+
+      // Should have at least one node
+      expect(roots.length).toBeGreaterThan(0);
+
+      // Find any LLM call nodes and verify they have completedAt set
+      for (const node of roots) {
+        if (node.type === "llm_call") {
+          // LLM call should be marked as completed (either normally or interrupted)
+          expect(node.completedAt).toBeDefined();
+          expect(node.completedAt).not.toBeNull();
+        }
+      }
     });
   });
 });

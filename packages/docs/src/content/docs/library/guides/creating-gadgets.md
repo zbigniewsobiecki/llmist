@@ -273,7 +273,7 @@ This teaches the LLM:
 
 ### TaskCompletionSignal
 
-Stop the agent loop from within a gadget:
+Stop the agent loop from within a gadget. This is the **recommended way** to terminate an agent and return a final result:
 
 ```typescript
 import { Gadget, TaskCompletionSignal, z } from 'llmist';
@@ -287,6 +287,40 @@ class FinishTask extends Gadget({
 }) {
   execute(params: this['params']): never {
     throw new TaskCompletionSignal(params.summary);
+  }
+}
+```
+
+**How it works:**
+- The signal's message becomes the gadget's `result` field in the event
+- The executor sets `breaksLoop: true` on the gadget result
+- The LLM call completes naturally, emitting all events (including `llm_call_complete`)
+- The agent loop terminates after the current iteration
+
+**Important:** `TaskCompletionSignal` is NOT an error - it's a control flow signal. Use it for gadgets like `ReportResult`, `FinishTask`, or any gadget that should return data and terminate the loop:
+
+```typescript
+// Example: A subagent reporting its final result
+class ReportResult extends Gadget({
+  description: 'Report the final result to the caller',
+  schema: z.object({
+    result: z.string().describe('Your findings to return'),
+  }),
+}) {
+  execute(params: this['params']): string {
+    // The result string becomes the gadget's output AND signals completion
+    throw new TaskCompletionSignal(params.result);
+  }
+}
+```
+
+When consuming the agent's events, you can extract the result:
+
+```typescript
+for await (const event of agent.run()) {
+  if (event.type === 'gadget_result' && event.result.breaksLoop) {
+    const finalResult = event.result.result;
+    // Use the result...
   }
 }
 ```

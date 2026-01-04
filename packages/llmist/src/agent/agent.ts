@@ -589,6 +589,11 @@ export class Agent {
       maxIterations: this.maxIterations,
     });
 
+    // Declare outside while loop so they're accessible in the finally block
+    // for safety net completion of in-flight LLM calls
+    let currentLLMNodeId: string | undefined;
+    let llmOptions: LLMGenerationOptions | undefined;
+
     try {
       while (currentIteration < this.maxIterations) {
         // Check abort signal at start of each iteration
@@ -607,10 +612,6 @@ export class Agent {
         }
 
         this.logger.debug("Starting iteration", { iteration: currentIteration });
-
-        // Declare outside try so they're accessible in catch for error hooks
-        let currentLLMNodeId: string | undefined;
-        let llmOptions: LLMGenerationOptions | undefined;
 
         try {
           // Check and perform context compaction if needed
@@ -813,6 +814,41 @@ export class Agent {
         reason: currentIteration >= this.maxIterations ? "max_iterations" : "natural_completion",
       });
     } finally {
+      // Safety net: Complete any in-flight LLM call if generator terminated early
+      // This handles cases where consumers break from for-await loop prematurely
+      if (currentLLMNodeId) {
+        const node = this.tree.getNode(currentLLMNodeId);
+        if (node && node.type === "llm_call" && !node.completedAt) {
+          // Call observer hook for the interrupted request
+          await this.safeObserve(async () => {
+            if (this.hooks.observers?.onLLMCallComplete) {
+              const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
+              const context: ObserveLLMCompleteContext = {
+                iteration: currentIteration,
+                options: llmOptions ?? {
+                  model: this.model,
+                  messages: this.conversation.getMessages(),
+                  temperature: this.temperature,
+                  maxTokens: this.defaultMaxTokens,
+                },
+                finishReason: "interrupted",
+                usage: undefined,
+                rawResponse: "", // No response available for interrupted request
+                finalMessage: "", // No final message for interrupted request
+                logger: this.logger,
+                subagentContext,
+              };
+              await this.hooks.observers.onLLMCallComplete(context);
+            }
+          });
+
+          // Complete the LLM call in the execution tree
+          this.tree.completeLLMCall(currentLLMNodeId, {
+            finishReason: "interrupted",
+          });
+        }
+      }
+
       // Always clean up the bridge subscription
       unsubscribeBridge();
     }
