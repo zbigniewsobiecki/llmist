@@ -440,6 +440,7 @@ export async function executeAgent(
     // Reset abort controller for new iteration (TUI mode)
     if (tui) {
       tui.resetAbort();
+      tui.startNewSession(); // Increment session counter for new blocks
       builder.withSignal(tui.getAbortSignal());
     }
 
@@ -508,11 +509,11 @@ export async function executeAgent(
       unsubscribeTree();
     }
 
-    // CRITICAL: Clear TUI state to prevent memory leak between REPL turns
-    // This resets all Maps (nodes, blocks, expandedStates, activity)
-    // Tree subscription will rebuild state cleanly on next turn
+    // Clear PREVIOUS session's blocks (deferred cleanup)
+    // Current session content stays visible for user to read and for next session's context
+    // The previous session was kept visible during this session for context reference
     if (tui) {
-      tui.clearBlockRenderer();
+      tui.clearPreviousSession();
       tui.clearStatusBar();
     }
   };
