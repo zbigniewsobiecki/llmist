@@ -323,7 +323,7 @@ export function createHuggingFaceProviderFromEnv(): HuggingFaceProvider | null {
     apiKey: token.trim(),
     baseURL,
     timeout: 60_000, // 60s timeout - HF free tier can be slower than OpenAI
-    maxRetries: 3, // Retry failed requests
+    maxRetries: 0, // Disable SDK retries - llmist handles all retries at application level
   });
 
   return new HuggingFaceProvider(client, endpointType);

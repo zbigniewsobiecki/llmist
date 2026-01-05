@@ -76,6 +76,21 @@ export interface RetryConfig {
    * @returns true to retry, false to fail immediately
    */
   shouldRetry?: (error: Error) => boolean;
+
+  /**
+   * Whether to respect Retry-After headers from providers.
+   * When true, delays will be adjusted to honor server-requested wait times.
+   * Supported providers: Anthropic, OpenAI (HTTP headers), Gemini (error message parsing).
+   * @default true
+   */
+  respectRetryAfter?: boolean;
+
+  /**
+   * Maximum wait time to honor from Retry-After headers (in milliseconds).
+   * If a server requests a longer wait, this cap is used instead.
+   * @default 120000 (2 minutes)
+   */
+  maxRetryAfterMs?: number;
 }
 
 /**
@@ -91,11 +106,13 @@ export interface ResolvedRetryConfig {
   onRetry?: (error: Error, attempt: number) => void;
   onRetriesExhausted?: (error: Error, attempts: number) => void;
   shouldRetry?: (error: Error) => boolean;
+  respectRetryAfter: boolean;
+  maxRetryAfterMs: number;
 }
 
 /**
  * Default retry configuration values.
- * Conservative defaults: 3 retries with up to 30s delay.
+ * Conservative defaults: 3 retries with up to 30s delay, respecting Retry-After headers.
  */
 export const DEFAULT_RETRY_CONFIG: Omit<
   ResolvedRetryConfig,
@@ -107,6 +124,8 @@ export const DEFAULT_RETRY_CONFIG: Omit<
   maxTimeout: 30000,
   factor: 2,
   randomize: true,
+  respectRetryAfter: true,
+  maxRetryAfterMs: 120000, // 2 minutes cap
 };
 
 /**
@@ -130,6 +149,8 @@ export function resolveRetryConfig(config?: RetryConfig): ResolvedRetryConfig {
     onRetry: config.onRetry,
     onRetriesExhausted: config.onRetriesExhausted,
     shouldRetry: config.shouldRetry,
+    respectRetryAfter: config.respectRetryAfter ?? DEFAULT_RETRY_CONFIG.respectRetryAfter,
+    maxRetryAfterMs: config.maxRetryAfterMs ?? DEFAULT_RETRY_CONFIG.maxRetryAfterMs,
   };
 }
 
@@ -210,6 +231,21 @@ export function isRetryableError(error: Error): boolean {
     return true;
   }
 
+  // Gemini-specific retryable errors (gRPC status codes)
+  if (
+    message.includes("resource_exhausted") ||
+    message.includes("quota exceeded") ||
+    message.includes("unavailable") ||
+    message.includes("deadline_exceeded")
+  ) {
+    return true;
+  }
+
+  // Anthropic-specific retryable errors
+  if (message.includes("overloaded_error") || message.includes("api_error")) {
+    return true;
+  }
+
   // Don't retry authentication, bad requests, or content policy errors
   if (
     message.includes("401") ||
@@ -263,7 +299,10 @@ export function formatLLMError(error: Error): string {
   }
 
   // Rate limits
-  if (message.toLowerCase().includes("rate limit") || message.toLowerCase().includes("rate_limit")) {
+  if (
+    message.toLowerCase().includes("rate limit") ||
+    message.toLowerCase().includes("rate_limit")
+  ) {
     return "Rate limit exceeded - retry after a few seconds";
   }
 
@@ -303,10 +342,18 @@ export function formatLLMError(error: Error): string {
   }
 
   // Auth errors
-  if (message.includes("401") || message.toLowerCase().includes("unauthorized") || name === "AuthenticationError") {
+  if (
+    message.includes("401") ||
+    message.toLowerCase().includes("unauthorized") ||
+    name === "AuthenticationError"
+  ) {
     return "Authentication failed - check your API key";
   }
-  if (message.includes("403") || message.toLowerCase().includes("forbidden") || name === "PermissionDeniedError") {
+  if (
+    message.includes("403") ||
+    message.toLowerCase().includes("forbidden") ||
+    name === "PermissionDeniedError"
+  ) {
     return "Permission denied - your API key lacks required permissions";
   }
 
@@ -321,7 +368,10 @@ export function formatLLMError(error: Error): string {
   }
 
   // Content policy
-  if (message.toLowerCase().includes("content policy") || message.toLowerCase().includes("safety")) {
+  if (
+    message.toLowerCase().includes("content policy") ||
+    message.toLowerCase().includes("safety")
+  ) {
     return "Content policy violation - the request was blocked";
   }
 
@@ -351,9 +401,123 @@ export function formatLLMError(error: Error): string {
     if (firstPart && firstPart.length > 10 && firstPart.length < 150) {
       return firstPart.trim();
     }
-    return message.slice(0, 150).trim() + "...";
+    return `${message.slice(0, 150).trim()}...`;
   }
 
   // Return the original message if we couldn't simplify it
   return message;
+}
+
+/**
+ * Parses a Retry-After header value into milliseconds.
+ *
+ * Supports two formats:
+ * - Seconds: "30" → 30000ms
+ * - HTTP date: "Wed, 21 Oct 2015 07:28:00 GMT" → milliseconds until that time
+ *
+ * @param value - The Retry-After header value
+ * @returns Delay in milliseconds, or null if parsing fails
+ */
+export function parseRetryAfterHeader(value: string): number | null {
+  // Try as seconds first (most common)
+  const seconds = Number.parseFloat(value);
+  if (!Number.isNaN(seconds) && seconds > 0) {
+    return Math.ceil(seconds * 1000);
+  }
+
+  // Try as HTTP date
+  const date = Date.parse(value);
+  if (!Number.isNaN(date)) {
+    const delay = date - Date.now();
+    return delay > 0 ? delay : null;
+  }
+
+  return null;
+}
+
+/**
+ * Error with headers property (common in Anthropic/OpenAI SDK errors).
+ */
+interface ErrorWithHeaders extends Error {
+  headers?: Record<string, string> | Headers;
+  response?: {
+    headers?: Record<string, string> | Headers;
+  };
+}
+
+/**
+ * Extracts Retry-After delay from an error object.
+ *
+ * Supports multiple sources:
+ * - Anthropic/OpenAI: error.headers['retry-after'] or error.response.headers
+ * - Gemini: Parses "retry after Xs" from error message
+ *
+ * @param error - The error to extract Retry-After from
+ * @returns Delay in milliseconds, or null if not found
+ *
+ * @example
+ * ```typescript
+ * // Anthropic/OpenAI SDK error with headers
+ * const delay = extractRetryAfterMs(error); // e.g., 30000
+ *
+ * // Gemini RESOURCE_EXHAUSTED error
+ * // "Please retry in 45.283754998s"
+ * const delay = extractRetryAfterMs(error); // 45284
+ * ```
+ */
+export function extractRetryAfterMs(error: Error): number | null {
+  const errorWithHeaders = error as ErrorWithHeaders;
+
+  // Check for headers property (Anthropic/OpenAI SDK errors)
+  const headers = errorWithHeaders.headers || errorWithHeaders.response?.headers;
+
+  if (headers) {
+    // Handle both Record<string, string> and Headers objects
+    const retryAfter =
+      typeof headers.get === "function"
+        ? headers.get("retry-after")
+        : (headers as Record<string, string>)["retry-after"];
+
+    if (retryAfter) {
+      const parsed = parseRetryAfterHeader(retryAfter);
+      if (parsed !== null) {
+        return parsed;
+      }
+    }
+  }
+
+  // Parse Gemini-style error messages
+  // Examples:
+  // - "Please retry in 45.283754998s"
+  // - "retry after 30 seconds"
+  // - "Retry-After: 60"
+  const message = error.message;
+
+  // Match patterns like "retry in 45.28s", "retry after 30 seconds", "Retry-After: 60"
+  const patterns = [
+    /retry\s+(?:in|after)\s+(\d+(?:\.\d+)?)\s*s(?:econds?)?/i,
+    /retry-after:\s*(\d+(?:\.\d+)?)/i,
+    /wait\s+(\d+(?:\.\d+)?)\s*s(?:econds?)?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match) {
+      const seconds = Number.parseFloat(match[1]);
+      if (!Number.isNaN(seconds) && seconds > 0) {
+        return Math.ceil(seconds * 1000);
+      }
+    }
+  }
+
+  // Default delay for known rate limit errors without explicit timing
+  // This provides a reasonable backoff when no Retry-After is specified
+  if (
+    message.toLowerCase().includes("resource_exhausted") ||
+    message.toLowerCase().includes("quota exceeded")
+  ) {
+    return 60000; // 60 seconds default for Gemini quota errors
+  }
+
+  return null;
 }

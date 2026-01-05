@@ -25,6 +25,7 @@ import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
+import type { RateLimitConfig } from "../core/rate-limit.js";
 import type { RetryConfig } from "../core/retry.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
@@ -96,6 +97,7 @@ export class AgentBuilder {
   private gadgetOutputLimitPercent?: number;
   private compactionConfig?: CompactionConfig;
   private retryConfig?: RetryConfig;
+  private rateLimitConfig?: RateLimitConfig;
   private signal?: AbortSignal;
   private trailingMessage?: TrailingMessage;
   private subagentConfig?: SubagentConfigMap;
@@ -643,6 +645,43 @@ export class AgentBuilder {
   }
 
   /**
+   * Configure proactive rate limiting to prevent rate limit errors.
+   *
+   * Set limits based on your API tier to automatically throttle requests
+   * before hitting provider limits. Works in conjunction with reactive
+   * retry/backoff for comprehensive rate limit handling.
+   *
+   * @param config - Rate limit configuration
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Gemini free tier limits
+   * .withRateLimits({
+   *   requestsPerMinute: 15,
+   *   tokensPerMinute: 1_000_000,
+   *   safetyMargin: 0.8,  // Start throttling at 80%
+   * })
+   *
+   * // OpenAI Tier 1 limits
+   * .withRateLimits({
+   *   requestsPerMinute: 500,
+   *   tokensPerMinute: 200_000,
+   * })
+   *
+   * // With daily limit (Gemini free tier)
+   * .withRateLimits({
+   *   requestsPerMinute: 15,
+   *   tokensPerDay: 1_500_000,
+   * })
+   * ```
+   */
+  withRateLimits(config: RateLimitConfig): this {
+    this.rateLimitConfig = config;
+    return this;
+  }
+
+  /**
    * Set an abort signal for cancelling requests mid-flight.
    *
    * When the signal is aborted, the current LLM request will be cancelled
@@ -999,6 +1038,7 @@ export class AgentBuilder {
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
       retryConfig: this.retryConfig,
+      rateLimitConfig: this.rateLimitConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
       // Tree context for shared tree model (subagents share parent's tree)
@@ -1202,6 +1242,7 @@ export class AgentBuilder {
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
       retryConfig: this.retryConfig,
+      rateLimitConfig: this.rateLimitConfig,
       signal: this.signal,
       subagentConfig: this.subagentConfig,
       // Tree context for shared tree model (subagents share parent's tree)

@@ -220,12 +220,25 @@ export {
 } from "./core/prompt-config.js";
 export type { TextGenerationOptions } from "./core/quick-methods.js";
 export { complete, stream } from "./core/quick-methods.js";
+// Rate limit configuration for proactive throttling
+export type {
+  RateLimitConfig,
+  RateLimitStats,
+  ResolvedRateLimitConfig,
+} from "./core/rate-limit.js";
+export {
+  DEFAULT_RATE_LIMIT_CONFIG,
+  RateLimitTracker,
+  resolveRateLimitConfig,
+} from "./core/rate-limit.js";
 // Retry configuration for LLM API calls
 export type { ResolvedRetryConfig, RetryConfig } from "./core/retry.js";
 export {
   DEFAULT_RETRY_CONFIG,
+  extractRetryAfterMs,
   formatLLMError,
   isRetryableError,
+  parseRetryAfterHeader,
   resolveRetryConfig,
 } from "./core/retry.js";
 export type { CreateGadgetConfig } from "./gadgets/create-gadget.js";
