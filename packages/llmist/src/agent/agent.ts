@@ -21,8 +21,10 @@ import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
+import type { RateLimitConfig } from "../core/rate-limit.js";
+import { RateLimitTracker, resolveRateLimitConfig } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
-import { isRetryableError, resolveRetryConfig } from "../core/retry.js";
+import { extractRetryAfterMs, isRetryableError, resolveRetryConfig } from "../core/retry.js";
 import { MediaStore } from "../gadgets/media-store.js";
 import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
@@ -145,6 +147,9 @@ export interface AgentOptions {
   /** Retry configuration for LLM API calls (enabled by default) */
   retryConfig?: RetryConfig;
 
+  /** Rate limit configuration for proactive throttling */
+  rateLimitConfig?: RateLimitConfig;
+
   /** Optional abort signal for cancelling requests mid-flight */
   signal?: AbortSignal;
 
@@ -238,6 +243,9 @@ export class Agent {
 
   // Retry configuration
   private readonly retryConfig: ResolvedRetryConfig;
+
+  // Rate limit tracker for proactive throttling
+  private readonly rateLimitTracker?: RateLimitTracker;
 
   // Subagent configuration
   private readonly agentContextConfig: AgentContextConfig;
@@ -355,6 +363,12 @@ export class Agent {
 
     // Initialize retry configuration (enabled by default)
     this.retryConfig = resolveRetryConfig(options.retryConfig);
+
+    // Initialize rate limit tracker for proactive throttling (if configured)
+    const rateLimitConfig = resolveRateLimitConfig(options.rateLimitConfig);
+    if (rateLimitConfig.enabled) {
+      this.rateLimitTracker = new RateLimitTracker(options.rateLimitConfig);
+    }
 
     // Build agent context config for subagents to inherit
     this.agentContextConfig = {
@@ -855,13 +869,24 @@ export class Agent {
   }
 
   /**
-   * Create LLM stream with retry logic.
-   * Wraps the stream creation with exponential backoff for transient failures.
+   * Create LLM stream with two-layer rate limit protection:
+   *
+   * Layer 1 (Proactive): If rate limits are configured, delays requests to stay within limits.
+   * Layer 2 (Reactive): Exponential backoff with Retry-After header support for transient failures.
    */
   private async createStreamWithRetry(
     llmOptions: LLMGenerationOptions,
     iteration: number,
   ): Promise<ReturnType<LLMist["stream"]>> {
+    // Layer 1: Proactive rate limit throttling
+    if (this.rateLimitTracker) {
+      const throttleDelay = this.rateLimitTracker.getRequiredDelayMs();
+      if (throttleDelay > 0) {
+        this.logger.debug("Rate limit throttling", { delayMs: throttleDelay });
+        await this.sleep(throttleDelay);
+      }
+    }
+
     // If retry is disabled, return stream directly
     if (!this.retryConfig.enabled) {
       return this.client.stream(llmOptions);
@@ -876,11 +901,27 @@ export class Agent {
       onRetry,
       onRetriesExhausted,
       shouldRetry,
+      respectRetryAfter,
+      maxRetryAfterMs,
     } = this.retryConfig;
+
+    // Track Retry-After hint from last failed attempt
+    let retryAfterHintMs: number | null = null;
 
     try {
       return await pRetry(
         async (attemptNumber) => {
+          // If we have a Retry-After hint from previous attempt, wait for it
+          if (retryAfterHintMs !== null && respectRetryAfter) {
+            const cappedDelay = Math.min(retryAfterHintMs, maxRetryAfterMs);
+            this.logger.debug("Using Retry-After delay", {
+              retryAfterMs: retryAfterHintMs,
+              cappedDelay,
+            });
+            await this.sleep(cappedDelay);
+            retryAfterHintMs = null; // Clear after using
+          }
+
           this.logger.debug("Creating LLM stream", {
             attempt: attemptNumber,
             maxAttempts: retries + 1,
@@ -896,9 +937,24 @@ export class Agent {
           signal: this.signal,
           onFailedAttempt: (context) => {
             const { error, attemptNumber, retriesLeft } = context;
+
+            // Layer 2: Extract Retry-After for next attempt
+            if (respectRetryAfter) {
+              retryAfterHintMs = extractRetryAfterMs(error);
+              if (retryAfterHintMs !== null) {
+                this.logger.debug("Retry-After header detected", {
+                  delayMs: retryAfterHintMs,
+                });
+              }
+            }
+
             this.logger.warn(
               `LLM call failed (attempt ${attemptNumber}/${attemptNumber + retriesLeft}), retrying...`,
-              { error: error.message, retriesLeft },
+              {
+                error: error.message,
+                retriesLeft,
+                retryAfterMs: retryAfterHintMs,
+              },
             );
             onRetry?.(error, attemptNumber);
           },
@@ -920,6 +976,13 @@ export class Agent {
       onRetriesExhausted?.(error as Error, retries + 1);
       throw error;
     }
+  }
+
+  /**
+   * Simple sleep utility for rate limit delays.
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -1221,13 +1284,22 @@ export class Agent {
 
   /**
    * Calculate cost and complete LLM call in execution tree.
+   * Also records usage to rate limit tracker for proactive throttling.
    */
   private completeLLMCallInTree(nodeId: NodeId, result: StreamCompletionEvent): void {
+    const inputTokens = result.usage?.inputTokens ?? 0;
+    const outputTokens = result.usage?.outputTokens ?? 0;
+
+    // Record usage to rate limit tracker for proactive throttling
+    if (this.rateLimitTracker) {
+      this.rateLimitTracker.recordUsage(inputTokens, outputTokens);
+    }
+
     // Calculate cost using ModelRegistry (if available)
     const llmCost = this.client.modelRegistry?.estimateCost?.(
       this.model,
-      result.usage?.inputTokens ?? 0,
-      result.usage?.outputTokens ?? 0,
+      inputTokens,
+      outputTokens,
       result.usage?.cachedInputTokens ?? 0,
       result.usage?.cacheCreationInputTokens ?? 0,
     )?.totalCost;

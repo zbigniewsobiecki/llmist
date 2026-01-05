@@ -6,17 +6,19 @@
  * 2. Agent-level error observation with hooks
  * 3. LLM API error recovery with controllers
  * 4. Retry configuration for transient failures
+ * 5. Proactive rate limiting to prevent errors
+ * 6. Retry-After header support for graceful backoff
  *
  * Run: npx tsx examples/12-error-handling.ts
  */
 
 import {
+  type AgentHooks,
   Gadget,
-  LLMist,
   gadgetError,
   gadgetSuccess,
+  LLMist,
   withErrorHandling,
-  type AgentHooks,
 } from "llmist";
 import { z } from "zod";
 
@@ -145,7 +147,8 @@ const errorRecoveryHooks: AgentHooks = {
       // For other errors, provide a fallback
       return {
         action: "recover" as const,
-        fallbackResponse: "I apologize, but I'm experiencing technical difficulties. Please try again in a moment.",
+        fallbackResponse:
+          "I apologize, but I'm experiencing technical difficulties. Please try again in a moment.",
       };
     },
 
@@ -213,7 +216,93 @@ async function demonstrateRetry() {
 }
 
 // ============================================================================
-// 5. COMPLETE EXAMPLE WITH ALL PATTERNS
+// 5. PROACTIVE RATE LIMITING
+// ============================================================================
+
+/**
+ * Configure rate limits based on your API tier to prevent rate limit errors.
+ * The agent will automatically delay requests when approaching limits.
+ */
+async function demonstrateRateLimiting() {
+  console.log("\n=== Proactive Rate Limiting ===\n");
+
+  const _agent = LLMist.createAgent()
+    .withModel("flash") // Gemini
+    .withRateLimits({
+      // Configure for Gemini free tier
+      requestsPerMinute: 15,
+      tokensPerMinute: 1_000_000,
+      safetyMargin: 0.8, // Start throttling at 80% of limit
+
+      // Optional: daily token limit for Gemini free tier
+      // tokensPerDay: 1_500_000,
+    })
+    .withRetry({
+      retries: 3,
+      respectRetryAfter: true, // Honor Retry-After headers
+    });
+
+  console.log("Agent configured with rate limits:");
+  console.log("  - 15 RPM (requests per minute)");
+  console.log("  - 1M TPM (tokens per minute)");
+  console.log("  - Safety margin: 80%");
+  console.log("\nThe agent will automatically delay requests when approaching limits.\n");
+
+  // In production, you would use the agent like this:
+  // for (let i = 0; i < 20; i++) {
+  //   await agent.askAndCollect(`Question ${i}`);
+  //   // Agent automatically paces requests to stay within limits
+  // }
+
+  console.log("(Skipping actual requests in demo to avoid rate limits)\n");
+}
+
+// ============================================================================
+// 6. RETRY-AFTER HEADER SUPPORT
+// ============================================================================
+
+/**
+ * llmist automatically parses and respects Retry-After headers from providers.
+ * When a provider says "wait 30 seconds", llmist will wait before retrying.
+ */
+async function demonstrateRetryAfter() {
+  console.log("\n=== Retry-After Header Support ===\n");
+
+  const _agent = LLMist.createAgent()
+    .withModel("sonnet")
+    .withRetry({
+      retries: 3,
+      respectRetryAfter: true, // Default: true
+      maxRetryAfterMs: 60000, // Cap at 1 minute (default: 2 minutes)
+
+      onRetry: (error, attempt) => {
+        console.log(`[RETRY ${attempt}] ${error.message}`);
+
+        // Check if the error includes Retry-After info
+        // Anthropic/OpenAI: error.headers['retry-after']
+        // Gemini: Parsed from message like "retry in 45.2s"
+        const errorWithHeaders = error as Error & { headers?: Record<string, string> };
+        if (errorWithHeaders.headers?.["retry-after"]) {
+          console.log(
+            `  Provider requested: Retry-After ${errorWithHeaders.headers["retry-after"]}s`,
+          );
+        }
+      },
+    });
+
+  console.log("Retry-After is enabled by default.");
+  console.log("When providers send Retry-After headers, llmist will:");
+  console.log("  1. Parse the delay (seconds or HTTP date)");
+  console.log("  2. Wait the requested time (capped at maxRetryAfterMs)");
+  console.log("  3. Retry the request");
+  console.log("\nSupported providers:");
+  console.log("  - Anthropic: HTTP Retry-After header");
+  console.log("  - OpenAI: HTTP Retry-After header");
+  console.log("  - Gemini: Parsed from error message (e.g., 'retry in 45.2s')\n");
+}
+
+// ============================================================================
+// 7. COMPLETE EXAMPLE WITH ALL PATTERNS
 // ============================================================================
 
 async function main() {
@@ -243,15 +332,19 @@ async function main() {
     .withHooks(errorRecoveryHooks)
     .ask("Hello!");
 
-  console.log(
-    "Controller hooks can recover from LLM/gadget errors with fallback responses.\n"
-  );
+  console.log("Controller hooks can recover from LLM/gadget errors with fallback responses.\n");
 
   // Demo 4: Retry configuration
   await demonstrateRetry();
 
-  // Demo 5: Putting it all together
-  console.log("\n--- 5. Full Example ---\n");
+  // Demo 5: Proactive rate limiting
+  await demonstrateRateLimiting();
+
+  // Demo 6: Retry-After header support
+  await demonstrateRetryAfter();
+
+  // Demo 7: Putting it all together
+  console.log("\n--- 7. Full Example ---\n");
 
   try {
     const answer = await LLMist.createAgent()
