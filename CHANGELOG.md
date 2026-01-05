@@ -1,3 +1,8 @@
+## 12.4.0 (2026-01-05)
+
+* Merge pull request #328 from zbigniewsobiecki/dev ([0f70974](https://github.com/zbigniewsobiecki/llmist/commit/0f70974)), closes [#328](https://github.com/zbigniewsobiecki/llmist/issues/328)
+* feat(core): add two-layer rate limit protection system (#327) ([26265f1](https://github.com/zbigniewsobiecki/llmist/commit/26265f1)), closes [#327](https://github.com/zbigniewsobiecki/llmist/issues/327)
+
 ## <small>12.3.6 (2026-01-04)</small>
 
 * Merge pull request #326 from zbigniewsobiecki/dev ([1631c3c](https://github.com/zbigniewsobiecki/llmist/commit/1631c3c)), closes [#326](https://github.com/zbigniewsobiecki/llmist/issues/326)
