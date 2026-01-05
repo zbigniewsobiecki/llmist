@@ -45,7 +45,8 @@ export function createProviderFromEnv<TClient, TProvider>(
   }
 
   // Create client with API key and optional config
-  const client = new ClientClass({ apiKey: apiKey.trim(), ...clientOptions });
+  // Disable SDK-level retries - llmist handles all retries at application level for consistency
+  const client = new ClientClass({ apiKey: apiKey.trim(), maxRetries: 0, ...clientOptions });
 
   return new ProviderClass(client);
 }

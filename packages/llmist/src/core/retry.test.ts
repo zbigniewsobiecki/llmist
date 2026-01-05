@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RETRY_CONFIG,
+  extractRetryAfterMs,
   formatLLMError,
   isRetryableError,
-  resolveRetryConfig,
+  parseRetryAfterHeader,
   type RetryConfig,
+  resolveRetryConfig,
 } from "./retry.js";
 
 describe("retry configuration", () => {
@@ -17,6 +19,8 @@ describe("retry configuration", () => {
         maxTimeout: 30000,
         factor: 2,
         randomize: true,
+        respectRetryAfter: true,
+        maxRetryAfterMs: 120000,
       });
     });
   });
@@ -30,6 +34,8 @@ describe("retry configuration", () => {
       expect(resolved.maxTimeout).toBe(30000);
       expect(resolved.factor).toBe(2);
       expect(resolved.randomize).toBe(true);
+      expect(resolved.respectRetryAfter).toBe(true);
+      expect(resolved.maxRetryAfterMs).toBe(120000);
       expect(resolved.onRetry).toBeUndefined();
       expect(resolved.onRetriesExhausted).toBeUndefined();
       expect(resolved.shouldRetry).toBeUndefined();
@@ -206,79 +212,77 @@ describe("retry configuration", () => {
   describe("formatLLMError", () => {
     it("should format rate limit errors (429)", () => {
       expect(formatLLMError(new Error("429 Too Many Requests"))).toBe(
-        "Rate limit exceeded (429) - retry after a few seconds"
+        "Rate limit exceeded (429) - retry after a few seconds",
       );
       expect(formatLLMError(new Error("RESOURCE_EXHAUSTED: quota exceeded"))).toBe(
-        "Rate limit exceeded (429) - retry after a few seconds"
+        "Rate limit exceeded (429) - retry after a few seconds",
       );
     });
 
     it("should format rate limit errors by message", () => {
       expect(formatLLMError(new Error("Rate limit exceeded"))).toBe(
-        "Rate limit exceeded - retry after a few seconds"
+        "Rate limit exceeded - retry after a few seconds",
       );
       expect(formatLLMError(new Error("rate_limit_error"))).toBe(
-        "Rate limit exceeded - retry after a few seconds"
+        "Rate limit exceeded - retry after a few seconds",
       );
     });
 
     it("should format overloaded/capacity errors", () => {
       expect(formatLLMError(new Error("API is overloaded, please retry"))).toBe(
-        "API overloaded - retry later"
+        "API overloaded - retry later",
       );
-      expect(formatLLMError(new Error("At capacity"))).toBe(
-        "API overloaded - retry later"
-      );
+      expect(formatLLMError(new Error("At capacity"))).toBe("API overloaded - retry later");
     });
 
     it("should format server errors (5xx)", () => {
       expect(formatLLMError(new Error("500 Internal Server Error"))).toBe(
-        "Internal server error (500) - the API is experiencing issues"
+        "Internal server error (500) - the API is experiencing issues",
       );
       expect(formatLLMError(new Error("502 Bad Gateway"))).toBe(
-        "Bad gateway (502) - the API is temporarily unavailable"
+        "Bad gateway (502) - the API is temporarily unavailable",
       );
       expect(formatLLMError(new Error("503 Service Unavailable"))).toBe(
-        "Service unavailable (503) - the API is temporarily down"
+        "Service unavailable (503) - the API is temporarily down",
       );
       expect(formatLLMError(new Error("504 Gateway Timeout"))).toBe(
-        "Gateway timeout (504) - the request took too long"
+        "Gateway timeout (504) - the request took too long",
       );
     });
 
     it("should format timeout errors", () => {
       expect(formatLLMError(new Error("Request timeout"))).toBe(
-        "Request timed out - the API took too long to respond"
+        "Request timed out - the API took too long to respond",
       );
       expect(formatLLMError(new Error("Connection timed out"))).toBe(
-        "Request timed out - the API took too long to respond"
+        "Request timed out - the API took too long to respond",
       );
     });
 
     it("should format connection errors", () => {
       expect(formatLLMError(new Error("ECONNREFUSED"))).toBe(
-        "Connection refused - unable to reach the API"
+        "Connection refused - unable to reach the API",
       );
       expect(formatLLMError(new Error("ECONNRESET"))).toBe(
-        "Connection reset - the API closed the connection"
+        "Connection reset - the API closed the connection",
       );
       expect(formatLLMError(new Error("ENOTFOUND"))).toBe(
-        "DNS error - unable to resolve API hostname"
+        "DNS error - unable to resolve API hostname",
       );
     });
 
     it("should format auth errors", () => {
       expect(formatLLMError(new Error("401 Unauthorized"))).toBe(
-        "Authentication failed - check your API key"
+        "Authentication failed - check your API key",
       );
       expect(formatLLMError(new Error("403 Forbidden"))).toBe(
-        "Permission denied - your API key lacks required permissions"
+        "Permission denied - your API key lacks required permissions",
       );
     });
 
     it("should format bad request errors", () => {
       expect(formatLLMError(new Error("400 Bad Request"))).toBe(
-        "Bad request - check your input parameters"
+        "Bad request - check your input parameters",
       );
       // Try to extract message from JSON-like content
       const jsonError = new Error('{"status": 400, "message": "Invalid model specified"}');
@@ -287,7 +291,7 @@ describe("retry configuration", () => {
 
     it("should format content policy errors", () => {
       expect(formatLLMError(new Error("Content policy violation"))).toBe(
-        "Content policy violation - the request was blocked"
+        "Content policy violation - the request was blocked",
       );
     });
 
@@ -314,6 +318,122 @@ describe("retry configuration", () => {
 
     it("should pass through short unknown messages unchanged", () => {
       expect(formatLLMError(new Error("Unknown error"))).toBe("Unknown error");
+    });
+  });
+
+  describe("parseRetryAfterHeader", () => {
+    it("should parse seconds as integer", () => {
+      expect(parseRetryAfterHeader("30")).toBe(30000);
+      expect(parseRetryAfterHeader("60")).toBe(60000);
+    });
+
+    it("should parse seconds as float", () => {
+      expect(parseRetryAfterHeader("45.5")).toBe(45500);
+      expect(parseRetryAfterHeader("30.283754998")).toBe(30284); // Rounds up
+    });
+
+    it("should parse HTTP date format", () => {
+      const futureDate = new Date(Date.now() + 60000).toUTCString();
+      const result = parseRetryAfterHeader(futureDate);
+      expect(result).toBeGreaterThan(50000);
+      expect(result).toBeLessThanOrEqual(60000);
+    });
+
+    it("should return null for past HTTP dates", () => {
+      const pastDate = new Date(Date.now() - 10000).toUTCString();
+      expect(parseRetryAfterHeader(pastDate)).toBeNull();
+    });
+
+    it("should return null for invalid values", () => {
+      expect(parseRetryAfterHeader("invalid")).toBeNull();
+      expect(parseRetryAfterHeader("")).toBeNull();
+      expect(parseRetryAfterHeader("-10")).toBeNull();
+      expect(parseRetryAfterHeader("0")).toBeNull();
+    });
+  });
+
+  describe("extractRetryAfterMs", () => {
+    it("should extract from error.headers property (Anthropic/OpenAI style)", () => {
+      const error = new Error("Rate limited") as Error & {
+        headers: Record<string, string>;
+      };
+      error.headers = { "retry-after": "30" };
+      expect(extractRetryAfterMs(error)).toBe(30000);
+    });
+
+    it("should extract from error.response.headers (alternative SDK style)", () => {
+      const error = new Error("Rate limited") as Error & {
+        response: { headers: Record<string, string> };
+      };
+      error.response = { headers: { "retry-after": "45" } };
+      expect(extractRetryAfterMs(error)).toBe(45000);
+    });
+
+    it("should extract from Headers object with get method", () => {
+      const headers = new Headers({ "retry-after": "20" });
+      const error = new Error("Rate limited") as Error & { headers: Headers };
+      error.headers = headers;
+      expect(extractRetryAfterMs(error)).toBe(20000);
+    });
+
+    it("should parse Gemini RESOURCE_EXHAUSTED with retry timing", () => {
+      const error = new Error("RESOURCE_EXHAUSTED: quota exceeded. Please retry in 45.283754998s.");
+      expect(extractRetryAfterMs(error)).toBe(45284);
+    });
+
+    it("should parse 'retry after X seconds' pattern", () => {
+      const error = new Error("Rate limit hit, retry after 30 seconds");
+      expect(extractRetryAfterMs(error)).toBe(30000);
+    });
+
+    it("should parse 'wait X seconds' pattern", () => {
+      const error = new Error("Please wait 60s before trying again");
+      expect(extractRetryAfterMs(error)).toBe(60000);
+    });
+
+    it("should return default 60s for RESOURCE_EXHAUSTED without timing", () => {
+      const error = new Error("RESOURCE_EXHAUSTED: quota exceeded");
+      expect(extractRetryAfterMs(error)).toBe(60000);
+    });
+
+    it("should return default 60s for 'quota exceeded' without timing", () => {
+      const error = new Error("quota exceeded for metric");
+      expect(extractRetryAfterMs(error)).toBe(60000);
+    });
+
+    it("should return null for unrecognized errors", () => {
+      expect(extractRetryAfterMs(new Error("Unknown error"))).toBeNull();
+      expect(extractRetryAfterMs(new Error("Bad request"))).toBeNull();
+    });
+  });
+
+  describe("isRetryableError - Gemini specific", () => {
+    it("should retry RESOURCE_EXHAUSTED errors", () => {
+      expect(isRetryableError(new Error("RESOURCE_EXHAUSTED: quota exceeded"))).toBe(true);
+    });
+
+    it("should retry 'quota exceeded' errors", () => {
+      expect(isRetryableError(new Error("Quota exceeded for this model"))).toBe(true);
+    });
+
+    it("should retry UNAVAILABLE errors", () => {
+      expect(isRetryableError(new Error("UNAVAILABLE: service temporarily unavailable"))).toBe(
+        true,
+      );
+    });
+
+    it("should retry DEADLINE_EXCEEDED errors", () => {
+      expect(isRetryableError(new Error("DEADLINE_EXCEEDED: request timeout"))).toBe(true);
+    });
+  });
+
+  describe("isRetryableError - Anthropic specific", () => {
+    it("should retry overloaded_error", () => {
+      expect(isRetryableError(new Error("overloaded_error: API is at capacity"))).toBe(true);
+    });
+
+    it("should retry api_error", () => {
+      expect(isRetryableError(new Error("api_error: temporary issue"))).toBe(true);
     });
   });
 });
