@@ -4,6 +4,8 @@
  */
 
 export { editFile } from "./edit-file.js";
+// Export editfile matching utilities for advanced usage
+export * from "./editfile/index.js";
 export { listDirectory } from "./list-directory.js";
 export { readFile } from "./read-file.js";
 export { PathSandboxException, validatePathIsWithinCwd } from "./utils.js";

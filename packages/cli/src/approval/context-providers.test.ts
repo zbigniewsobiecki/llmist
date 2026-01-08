@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   DefaultContextProvider,
   EditFileContextProvider,
@@ -86,56 +86,53 @@ describe("EditFileContextProvider", () => {
     expect(provider.gadgetName).toBe("EditFile");
   });
 
-  it("returns diff context when content param provided for existing file", async () => {
-    const existingPath = join(testDir, "edit-existing.txt");
-    writeFileSync(existingPath, "Line 1\nLine 2\n");
+  it("shows search/replace preview for edit operations", async () => {
+    const filePath = join(testDir, "edit-search-replace.txt");
 
     const context = await provider.getContext({
-      filePath: existingPath,
-      content: "Line 1\nLine 2\nLine 3\n",
+      filePath,
+      search: "const DEBUG = false;",
+      replace: "const DEBUG = true;",
     });
 
     expect(context.summary).toContain("EditFile(");
     expect(context.summary).toContain("filePath=");
-    expect(context.details).toContain("+Line 3");
+    expect(context.summary).toContain("search=");
+    expect(context.summary).toContain("replace=");
+    expect(context.details).toContain("SEARCH:");
+    expect(context.details).toContain("const DEBUG = false;");
+    expect(context.details).toContain("REPLACE:");
+    expect(context.details).toContain("const DEBUG = true;");
   });
 
-  it("returns new file context when content param provided for non-existing file", async () => {
-    const newPath = join(testDir, "edit-new.txt");
-
-    const context = await provider.getContext({
-      filePath: newPath,
-      content: "New content",
-    });
-
-    expect(context.summary).toContain("EditFile(");
-    expect(context.details).toContain("(new file)");
-  });
-
-  it("shows commands when commands param provided", async () => {
-    const filePath = join(testDir, "edit-commands.txt");
+  it("shows (delete) when replace is empty", async () => {
+    const filePath = join(testDir, "edit-delete.txt");
 
     const context = await provider.getContext({
       filePath,
-      commands: "1d\n2a\nNew line\n.",
+      search: "line to delete",
+      replace: "",
     });
 
     expect(context.summary).toContain("EditFile(");
-    expect(context.summary).toContain("commands=");
-    expect(context.details).toContain("Commands:");
-    expect(context.details).toContain("1d");
-    expect(context.details).toContain("2a");
+    expect(context.details).toContain("SEARCH:");
+    expect(context.details).toContain("line to delete");
+    expect(context.details).toContain("REPLACE:");
+    expect(context.details).toContain("(delete)");
   });
 
-  it("returns fallback context when neither content nor commands provided", async () => {
-    const filePath = join(testDir, "edit-fallback.txt");
+  it("handles multiline search/replace content", async () => {
+    const filePath = join(testDir, "edit-multiline.txt");
 
     const context = await provider.getContext({
       filePath,
+      search: "function foo() {\n  return 1;\n}",
+      replace: "function bar() {\n  return 2;\n}",
     });
 
     expect(context.summary).toContain("EditFile(");
-    expect(context.details).toBeUndefined();
+    expect(context.details).toContain("function foo()");
+    expect(context.details).toContain("function bar()");
   });
 });
 
