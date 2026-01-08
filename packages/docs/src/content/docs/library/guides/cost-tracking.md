@@ -211,6 +211,41 @@ await LLMist.createAgent()
    - Combine related queries into single prompts
    - Use subagents for parallel work
 
+## Combining Cost and Rate Limit Tracking
+
+Monitor both cost and rate limiting together for comprehensive observability:
+
+```typescript
+let totalCost = 0;
+let throttleEvents = 0;
+
+const agent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withRateLimits({
+    requestsPerMinute: 50,
+    tokensPerMinute: 40_000,
+  })
+  .withHooks({
+    observers: {
+      onLLMCallComplete: (ctx) => {
+        totalCost += ctx.cost ?? 0;
+        console.log(`💰 Cost: $${totalCost.toFixed(4)}`);
+      },
+      onRateLimitThrottle: (ctx) => {
+        throttleEvents++;
+        console.log(`⏸ Throttled ${throttleEvents}x (RPM: ${ctx.stats.requestsInCurrentMinute}/${ctx.stats.requestsPerMinute})`);
+      },
+    },
+  });
+```
+
+This pattern is useful for:
+- Production monitoring dashboards
+- Budget enforcement with rate limiting
+- Identifying cost vs performance trade-offs
+
+See [Retry Strategies](/library/advanced/retry-strategies/) for rate limiting configuration.
+
 ## See Also
 
 - [Execution Tree](/library/advanced/execution-tree/) - Tree structure and navigation

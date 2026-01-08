@@ -262,6 +262,56 @@ const myHooks = HookPresets.merge(
 | `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger`, `subagentContext?` |
 | `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `finalResult`, `error`, `executionTimeMs`, `cost?`, `logger`, `subagentContext?` |
 | `onGadgetSkipped` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `failedDependency`, `failedDependencyError`, `logger`, `subagentContext?` |
+| `onRateLimitThrottle` | `iteration`, `delayMs`, `stats`, `logger`, `subagentContext?` |
+| `onRetryAttempt` | `iteration`, `attemptNumber`, `retriesLeft`, `error`, `retryAfterMs?`, `logger`, `subagentContext?` |
+
+## Rate Limiting & Retry Observers
+
+Track rate limiting throttling and retry attempts:
+
+```typescript
+.withHooks({
+  observers: {
+    onRateLimitThrottle: async (ctx) => {
+      console.log(`⏸ Rate limit: waiting ${ctx.delayMs}ms`);
+      console.log(`  RPM: ${ctx.stats.requestsInCurrentMinute}/${ctx.stats.requestsPerMinute}`);
+      console.log(`  TPM: ${ctx.stats.tokensInCurrentMinute}/${ctx.stats.tokensPerMinute}`);
+
+      // Check if this is a subagent
+      if (ctx.subagentContext) {
+        console.log(`  ↳ Subagent (depth ${ctx.subagentContext.depth})`);
+      }
+    },
+
+    onRetryAttempt: async (ctx) => {
+      console.log(`🔄 Retry attempt ${ctx.attemptNumber} (${ctx.retriesLeft} left)`);
+      console.log(`  Error: ${ctx.error.message}`);
+
+      // Server requested specific delay via Retry-After header
+      if (ctx.retryAfterMs) {
+        console.log(`  Retry-After: ${ctx.retryAfterMs}ms`);
+      }
+    },
+  },
+})
+```
+
+### Rate Limit Statistics
+
+The `stats` object in `onRateLimitThrottle` provides:
+
+```typescript
+interface RateLimitStats {
+  requestsInCurrentMinute: number;
+  tokensInCurrentMinute: number;
+  tokensInCurrentDay?: number;
+  requestsPerMinute?: number;
+  tokensPerMinute?: number;
+  tokensPerDay?: number;
+}
+```
+
+Use this for custom alerting, metrics, or UI feedback in production deployments.
 
 ## See Also
 

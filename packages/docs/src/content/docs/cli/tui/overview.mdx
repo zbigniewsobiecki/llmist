@@ -25,10 +25,40 @@ The status bar at the bottom shows:
 
 | Metric | Description |
 |--------|-------------|
-| Tokens | Input/output tokens used |
+| Mode | Current mode: `BROWSE`, `INPUT`, or `FOCUSED` |
+| Profile | Active profile name (when using custom profiles) |
+| Tokens | Input/output tokens used (↑ input, ↓ output, ⤿ cached) |
 | Cost | Estimated cost in USD |
 | Time | Elapsed time for current operation |
-| Model | Current model being used |
+| Throttled | Rate limiting active: `⏸ Throttled Xs` shows delay |
+| Retry | Retry in progress: `🔄 Retry N/M` shows attempt |
+| Activity | Active LLM calls and gadget executions with spinner |
+
+### Rate Limiting & Retry Indicators
+
+**Throttling Indicator:**
+When proactive rate limiting delays a request, you'll see:
+```
+⏸ Throttled 3s | ...
+```
+
+This appears when approaching configured rate limits (RPM/TPM). A conversation entry shows:
+```
+[Rate limit] Waiting 3s (RPM: 45/50, TPM: 38K/40K)
+```
+
+**Retry Indicator:**
+When automatic retry is active after an error, you'll see:
+```
+🔄 Retry 2/3 | ...
+```
+
+This shows the current attempt and total retries configured. Retry reason appears in conversation history.
+
+**Configuration:**
+- Control rate limits via TOML `[rate-limits]` section or `--rate-limit-rpm` flag
+- Control retry via TOML `[retry]` section or `--max-retries` flag
+- See [CLI Configuration](/cli/configuration/toml-reference/) for details
 
 ### Raw Request/Response Viewer
 

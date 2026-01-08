@@ -9,6 +9,7 @@ Practical recipes for building agents and gadgets with llmist.
 
 | Recipe | Description |
 |--------|-------------|
+| [Rate Limiting Patterns](/cookbook/rate-limiting-patterns/) | Best practices for managing API rate limits across different scenarios |
 | [Todo Gadgets](/cookbook/todo-gadgets/) | Build a todo list system for agent task planning with session-based YAML persistence |
 
 ## Contributing

@@ -399,6 +399,7 @@ it('handles API errors gracefully', async () => {
 
 ## See Also
 
+- [Retry Strategies](/library/advanced/retry-strategies/) - Detailed retry and rate limiting configuration
 - [Error Types Reference](/reference/errors/) - Complete list of error types
 - [Hooks Guide](/library/guides/hooks/) - Deep dive into the hook system
 - [Error Handling Example](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/12-error-handling.ts) - Runnable example
