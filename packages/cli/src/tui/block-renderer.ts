@@ -27,6 +27,7 @@ import type {
   GadgetNode,
   LLMCallNode,
   SelectableBlock,
+  SystemMessageNode,
   TextNode,
 } from "./types.js";
 
@@ -334,6 +335,39 @@ export class BlockRenderer {
       parentId: null,
       sessionId: this.currentSessionId,
       content,
+      children: [] as never[],
+    };
+
+    this.nodes.set(id, node);
+    this.rootIds.push(id);
+    this.rebuildBlocks();
+    return id;
+  }
+
+  /**
+   * Add a system message block (for rate limiting, retry notifications, etc.).
+   *
+   * Displays immediately with an icon and color based on category.
+   * Non-selectable like text blocks.
+   *
+   * @param message - The system message text
+   * @param category - Message category for styling
+   * @returns The block ID
+   */
+  addSystemMessage(
+    message: string,
+    category: "throttle" | "retry" | "info" | "warning" | "error",
+  ): string {
+    const id = this.generateId("system");
+
+    const node: SystemMessageNode = {
+      id,
+      type: "system_message",
+      depth: 0,
+      parentId: null,
+      sessionId: this.currentSessionId,
+      message,
+      category,
       children: [] as never[],
     };
 
@@ -820,6 +854,54 @@ export class BlockRenderer {
         }
         return this.abbreviateToLines(fullContent, 2, selected);
       }
+
+      case "system_message": {
+        const icon = this.getSystemMessageIcon(node.category);
+        const color = this.getSystemMessageColor(node.category);
+        const RESET = "\x1b[0m";
+        return `${indent}${color}${icon} ${node.message}${RESET}`;
+      }
+    }
+  }
+
+  /**
+   * Get icon for system message category.
+   */
+  private getSystemMessageIcon(category: SystemMessageNode["category"]): string {
+    switch (category) {
+      case "throttle":
+        return "⏸";
+      case "retry":
+        return "🔄";
+      case "info":
+        return "ℹ️";
+      case "warning":
+        return "⚠️";
+      case "error":
+        return "❌";
+    }
+  }
+
+  /**
+   * Get ANSI color code for system message category.
+   */
+  private getSystemMessageColor(category: SystemMessageNode["category"]): string {
+    const YELLOW = "\x1b[33m";
+    const BLUE = "\x1b[34m";
+    const GRAY = "\x1b[90m";
+    const RED = "\x1b[31m";
+
+    switch (category) {
+      case "throttle":
+        return YELLOW;
+      case "retry":
+        return BLUE;
+      case "info":
+        return GRAY;
+      case "warning":
+        return YELLOW;
+      case "error":
+        return RED;
     }
   }
 
