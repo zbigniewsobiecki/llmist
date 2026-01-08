@@ -65,6 +65,136 @@ Run with:
     npx @llmist/cli code-review "Review my PR"
     ```
 
+### Rate Limiting Configuration
+
+Control proactive rate limiting to prevent API errors before they occur.
+
+#### Global Rate Limits
+
+Apply to all commands:
+
+```toml
+[rate-limits]
+requests-per-minute = 50
+tokens-per-minute = 40000
+tokens-per-day = 1500000        # Optional daily cap
+safety-margin = 0.8             # Start throttling at 80% of limit
+enabled = true                  # Default: true if any limit is set
+```
+
+#### Per-Command Rate Limits
+
+Override global settings for specific commands:
+
+```toml
+[agent.rate-limits]
+requests-per-minute = 15        # More conservative for agent mode
+tokens-per-minute = 100000
+
+[complete.rate-limits]
+requests-per-minute = 100       # Higher limits for completion
+tokens-per-minute = 200000
+```
+
+#### Provider-Specific Examples
+
+**Gemini Free Tier:**
+```toml
+[agent.rate-limits]
+requests-per-minute = 15
+tokens-per-minute = 1000000
+tokens-per-day = 1500000
+```
+
+**Anthropic Tier 1:**
+```toml
+[agent.rate-limits]
+requests-per-minute = 50
+tokens-per-minute = 40000
+```
+
+**OpenAI Free Tier:**
+```toml
+[agent.rate-limits]
+requests-per-minute = 3
+tokens-per-minute = 40000
+```
+
+#### Disabling Rate Limiting
+
+```toml
+[rate-limits]
+enabled = false
+```
+
+Or per-command:
+
+```toml
+[agent.rate-limits]
+enabled = false
+```
+
+### Retry Configuration
+
+Control automatic retry behavior for transient failures.
+
+#### Global Retry Settings
+
+```toml
+[retry]
+enabled = true                  # Default: true
+retries = 3                     # Max retry attempts
+min-timeout = 1000             # Initial delay (ms)
+max-timeout = 30000            # Maximum delay (ms)
+factor = 2                     # Exponential backoff multiplier
+randomize = true               # Add jitter to prevent thundering herd
+respect-retry-after = true     # Honor Retry-After headers
+max-retry-after-ms = 120000    # Cap server-requested delays (2 minutes)
+```
+
+#### Per-Command Retry Settings
+
+```toml
+[agent.retry]
+retries = 5                    # More retries for long-running agents
+max-timeout = 60000           # Up to 1 minute between retries
+
+[complete.retry]
+retries = 1                   # Fast-fail for completions
+max-timeout = 5000
+```
+
+#### Configuration Precedence
+
+Settings are applied in this order (highest to lowest priority):
+1. CLI flags (`--rate-limit-rpm`, `--max-retries`, `--no-retry`, etc.)
+2. Profile-specific TOML config (`[agent.rate-limits]`, `[complete.retry]`)
+3. Global TOML config (`[rate-limits]`, `[retry]`)
+4. Provider defaults (auto-detected from model)
+5. Built-in defaults
+
+#### CLI Flags
+
+Override TOML configuration for individual runs:
+
+**Rate Limiting:**
+```bash
+llmist agent "prompt" --rate-limit-rpm 50 --rate-limit-tpm 40000
+llmist agent "prompt" --no-rate-limit
+```
+
+**Retry:**
+```bash
+llmist agent "prompt" --max-retries 5 --retry-max-timeout 60000
+llmist agent "prompt" --no-retry
+```
+
+For complete flag documentation, run:
+```bash
+llmist agent --help
+llmist complete --help
+```
+
 ### Prompt Templates
 
 Define reusable prompts with Eta templating:

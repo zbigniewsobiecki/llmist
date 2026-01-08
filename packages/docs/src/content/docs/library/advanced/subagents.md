@@ -284,6 +284,59 @@ if (ctx?.requestHumanInput) {
 ```
 :::
 
+## Rate Limiting & Retry Inheritance
+
+Subagents track rate limits independently from their parent agent.
+
+### Independent Rate Limit Tracking
+
+Each subagent maintains its own rate limit counters:
+
+```typescript
+// Parent agent: 50 RPM limit
+const parent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withRateLimits({ requestsPerMinute: 50 })
+  .withGadgets(BrowseWeb);
+
+// BrowseWeb subagent has separate 50 RPM limit
+// Total system throughput can be up to 100 RPM (50 parent + 50 subagent)
+```
+
+This prevents a subagent from consuming the parent's entire rate limit budget.
+
+### Rate Limit Observers
+
+When observing rate limit events, check `subagentContext`:
+
+```typescript
+.withHooks({
+  observers: {
+    onRateLimitThrottle: (ctx) => {
+      if (ctx.subagentContext) {
+        console.log(`↳ Subagent throttled (depth ${ctx.subagentContext.depth})`);
+      } else {
+        console.log('Main agent throttled');
+      }
+      console.log(`  Waiting ${ctx.delayMs}ms`);
+    },
+  },
+})
+```
+
+### Retry Configuration
+
+Subagents inherit retry configuration from their parent unless overridden via CLI config:
+
+```toml
+[subagents.BrowseWeb]
+model = "inherit"
+
+[subagents.BrowseWeb.retry]
+retries = 5              # More retries for browser automation
+max-timeout = 120000     # Up to 2 minutes for slow page loads
+```
+
 ## See Also
 
 - [Execution Tree](/library/advanced/execution-tree/) - Cost and hierarchy tracking
