@@ -319,6 +319,91 @@ describe("retry configuration", () => {
     it("should pass through short unknown messages unchanged", () => {
       expect(formatLLMError(new Error("Unknown error"))).toBe("Unknown error");
     });
+
+    describe("Enhanced error formatting with context", () => {
+      it("should provide guidance when retriesExhausted: true for rate limit errors", () => {
+        const error = new Error("429 Too Many Requests");
+        const result = formatLLMError(error, { retriesExhausted: true });
+
+        expect(result).toContain("Rate limit exceeded (429)");
+        expect(result).toContain("All retry attempts exhausted");
+        expect(result).toContain("Configure higher rate limits in ~/.llmist/cli.toml");
+        expect(result).toContain("Upgrade your API tier");
+        expect(result).toContain("Add delays between requests");
+      });
+
+      it("should include provider-specific documentation for Anthropic", () => {
+        const error = new Error("RESOURCE_EXHAUSTED");
+        const result = formatLLMError(error, {
+          retriesExhausted: true,
+          provider: "anthropic",
+        });
+
+        expect(result).toContain("Provider: anthropic");
+        expect(result).toContain("https://docs.anthropic.com/en/api/rate-limits");
+      });
+
+      it("should include provider-specific documentation for OpenAI", () => {
+        const error = new Error("429 Rate limited");
+        const result = formatLLMError(error, {
+          retriesExhausted: true,
+          provider: "openai",
+        });
+
+        expect(result).toContain("Provider: openai");
+        expect(result).toContain("https://platform.openai.com/docs/guides/rate-limits");
+      });
+
+      it("should include provider-specific documentation for Gemini", () => {
+        const error = new Error("RESOURCE_EXHAUSTED: quota exceeded");
+        const result = formatLLMError(error, {
+          retriesExhausted: true,
+          provider: "gemini",
+        });
+
+        expect(result).toContain("Provider: gemini");
+        expect(result).toContain("https://ai.google.dev/gemini-api/docs/quota");
+      });
+
+      it("should not include documentation for unknown providers", () => {
+        const error = new Error("429 Too Many Requests");
+        const result = formatLLMError(error, {
+          retriesExhausted: true,
+          provider: "unknown-provider" as any,
+        });
+
+        expect(result).toContain("All retry attempts exhausted");
+        expect(result).not.toContain("Provider:");
+        expect(result).not.toContain("Documentation:");
+      });
+
+      it("should not include retry guidance when retriesExhausted: false", () => {
+        const error = new Error("429 Too Many Requests");
+        const result = formatLLMError(error, { retriesExhausted: false });
+
+        expect(result).toBe("Rate limit exceeded (429) - retry after a few seconds");
+        expect(result).not.toContain("All retry attempts exhausted");
+      });
+
+      it("should handle rate_limit_error with guidance", () => {
+        const error = new Error("rate_limit_error");
+        const result = formatLLMError(error, {
+          retriesExhausted: true,
+          provider: "anthropic",
+        });
+
+        expect(result).toContain("Rate limit exceeded");
+        expect(result).toContain("All retry attempts exhausted");
+        expect(result).toContain("anthropic");
+      });
+
+      it("should work without context parameter (backwards compatible)", () => {
+        const error = new Error("429 Too Many Requests");
+        const result = formatLLMError(error);
+
+        expect(result).toBe("Rate limit exceeded (429) - retry after a few seconds");
+      });
+    });
   });
 
   describe("parseRetryAfterHeader", () => {

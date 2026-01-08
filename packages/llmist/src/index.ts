@@ -54,6 +54,8 @@ export type {
   ObserveLLMCallContext,
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
+  ObserveRateLimitThrottleContext,
+  ObserveRetryAttemptContext,
   Observers,
   ParallelGadgetHintOptions,
   ResolvedCompactionConfig,
@@ -232,7 +234,11 @@ export {
   resolveRateLimitConfig,
 } from "./core/rate-limit.js";
 // Retry configuration for LLM API calls
-export type { ResolvedRetryConfig, RetryConfig } from "./core/retry.js";
+export type {
+  FormatLLMErrorContext,
+  ResolvedRetryConfig,
+  RetryConfig,
+} from "./core/retry.js";
 export {
   DEFAULT_RETRY_CONFIG,
   extractRetryAfterMs,

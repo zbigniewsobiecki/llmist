@@ -63,7 +63,7 @@ export function formatBytes(bytes: number, decimals = 1): string {
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB", "PB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  const size = bytes / Math.pow(k, i);
+  const size = bytes / k ** i;
 
   // Use integer for whole numbers, decimals otherwise
   const formatted = size % 1 === 0 ? size.toString() : size.toFixed(decimals);
@@ -120,10 +120,7 @@ export function formatDate(
  * formatDuration(3725000);  // "1h 2m 5s"
  * ```
  */
-export function formatDuration(
-  ms: number,
-  options: { compact?: boolean } = {},
-): string {
+export function formatDuration(ms: number, options: { compact?: boolean } = {}): string {
   if (ms < 1000) {
     return `${Math.round(ms)}ms`;
   }
@@ -145,9 +142,7 @@ export function formatDuration(
 
   if (minutes > 0) {
     const remainingSeconds = seconds % 60;
-    return remainingSeconds > 0
-      ? `${minutes}m ${remainingSeconds}s`
-      : `${minutes}m`;
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
   }
 
   // Less than a minute - show seconds with one decimal if not whole

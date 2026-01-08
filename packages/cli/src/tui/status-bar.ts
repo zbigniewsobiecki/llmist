@@ -74,6 +74,12 @@ export class StatusBar {
   /** Tree subscription unsubscribe function */
   private treeUnsubscribe: (() => void) | null = null;
 
+  /** Rate limiting state */
+  private rateLimitState: { isThrottling: boolean; delayMs: number } | null = null;
+
+  /** Retry state */
+  private retryState: { attemptNumber: number; retriesLeft: number } | null = null;
+
   constructor(
     statusBox: Box,
     model: string,
@@ -235,6 +241,41 @@ export class StatusBar {
     this.nodeIdToGadgetName.clear();
     this.stopSpinner();
     this.render();
+  }
+
+  /**
+   * Show rate limiting throttle indicator.
+   * @param delayMs - Delay in milliseconds before next request
+   */
+  showThrottling(delayMs: number): void {
+    this.rateLimitState = { isThrottling: true, delayMs };
+    this.render(true);
+  }
+
+  /**
+   * Clear rate limiting throttle indicator.
+   */
+  clearThrottling(): void {
+    this.rateLimitState = null;
+    this.render(true);
+  }
+
+  /**
+   * Show retry attempt indicator.
+   * @param attemptNumber - Current attempt number (1-based)
+   * @param retriesLeft - Number of retries remaining after this attempt
+   */
+  showRetry(attemptNumber: number, retriesLeft: number): void {
+    this.retryState = { attemptNumber, retriesLeft };
+    this.render(true);
+  }
+
+  /**
+   * Clear retry attempt indicator.
+   */
+  clearRetry(): void {
+    this.retryState = null;
+    this.render(true);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -526,6 +567,19 @@ export class StatusBar {
       const debugStr = `sel:${debug.index}/${debug.total}`;
       const typeStr = debug.nodeType ? ` [${debug.nodeType}]` : "";
       parts.push(`${GRAY}${debugStr}${typeStr}${RESET}`);
+    }
+
+    // Rate limit throttling indicator (high priority - show before activity)
+    if (this.rateLimitState?.isThrottling) {
+      const seconds = Math.ceil(this.rateLimitState.delayMs / 1000);
+      parts.push(`${YELLOW}⏸ Throttled ${seconds}s${RESET}`);
+    }
+
+    // Retry attempt indicator (high priority - show before activity)
+    if (this.retryState) {
+      const { attemptNumber, retriesLeft } = this.retryState;
+      const totalAttempts = attemptNumber + retriesLeft;
+      parts.push(`${BLUE}🔄 Retry ${attemptNumber}/${totalAttempts}${RESET}`);
     }
 
     // Activity section at the end (if anything is running)

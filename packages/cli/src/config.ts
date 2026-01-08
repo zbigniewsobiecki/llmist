@@ -2,13 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { load as parseToml } from "js-toml";
-import type { SubagentConfig, SubagentConfigMap } from "llmist";
+import type { RateLimitConfig, RetryConfig, SubagentConfig, SubagentConfigMap } from "llmist";
 import { expandTildePath } from "./paths.js";
 import type { GlobalSubagentConfig } from "./subagent-config.js";
 
 // Re-export subagent config types for consumers
 export type { SubagentConfig, SubagentConfigMap } from "llmist";
 export type { GlobalSubagentConfig } from "./subagent-config.js";
+
 import {
   createTemplateEngine,
   hasTemplateSyntax,
@@ -55,6 +56,31 @@ export interface GlobalConfig {
 }
 
 /**
+ * Rate limiting configuration for the CLI.
+ */
+export interface RateLimitsConfig {
+  "requests-per-minute"?: number;
+  "tokens-per-minute"?: number;
+  "tokens-per-day"?: number;
+  "safety-margin"?: number;
+  enabled?: boolean;
+}
+
+/**
+ * Retry configuration for LLM API calls.
+ */
+export interface RetryConfigCLI {
+  enabled?: boolean;
+  retries?: number;
+  "min-timeout"?: number;
+  "max-timeout"?: number;
+  factor?: number;
+  randomize?: boolean;
+  "respect-retry-after"?: boolean;
+  "max-retry-after-ms"?: number;
+}
+
+/**
  * Shared options used by both complete and agent command configurations.
  */
 export interface SharedCommandConfig {
@@ -62,6 +88,10 @@ export interface SharedCommandConfig {
   system?: string;
   temperature?: number;
   inherits?: string | string[];
+  /** Rate limiting configuration */
+  "rate-limits"?: RateLimitsConfig;
+  /** Retry configuration */
+  retry?: RetryConfigCLI;
 }
 
 /**
@@ -161,6 +191,10 @@ export interface CLIConfig {
   prompts?: PromptsConfig;
   /** Global subagent configuration defaults */
   subagents?: GlobalSubagentConfig;
+  /** Global rate limiting configuration */
+  "rate-limits"?: RateLimitsConfig;
+  /** Global retry configuration */
+  retry?: RetryConfigCLI;
   [customCommand: string]:
     | CustomCommandConfig
     | CompleteConfig
@@ -170,6 +204,8 @@ export interface CLIConfig {
     | GlobalConfig
     | PromptsConfig
     | GlobalSubagentConfig
+    | RateLimitsConfig
+    | RetryConfigCLI
     | undefined;
 }
 
@@ -189,6 +225,8 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "inherits",
   "log-level",
   "log-llm-requests",
+  "rate-limits",
+  "retry",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -214,6 +252,8 @@ const AGENT_CONFIG_KEYS = new Set([
   "inherits",
   "log-level",
   "log-llm-requests",
+  "rate-limits",
+  "retry",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -402,8 +442,138 @@ function validateSubagentConfigMap(value: unknown, section: string): SubagentCon
 
   const result: SubagentConfigMap = {};
   for (const [subagentName, config] of Object.entries(value as Record<string, unknown>)) {
-    result[subagentName] = validateSingleSubagentConfig(config, subagentName, `${section}.subagents`);
+    result[subagentName] = validateSingleSubagentConfig(
+      config,
+      subagentName,
+      `${section}.subagents`,
+    );
   }
+  return result;
+}
+
+/**
+ * Valid keys for rate-limits configuration section.
+ */
+const RATE_LIMITS_CONFIG_KEYS = new Set([
+  "requests-per-minute",
+  "tokens-per-minute",
+  "tokens-per-day",
+  "safety-margin",
+  "enabled",
+]);
+
+/**
+ * Validates rate limits configuration.
+ */
+function validateRateLimitsConfig(value: unknown, section: string): RateLimitsConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(`[${section}] must be a table`);
+  }
+
+  const raw = value as Record<string, unknown>;
+  const result: RateLimitsConfig = {};
+
+  for (const [key, val] of Object.entries(raw)) {
+    if (!RATE_LIMITS_CONFIG_KEYS.has(key)) {
+      throw new ConfigError(`[${section}] has unknown key: ${key}`);
+    }
+
+    switch (key) {
+      case "requests-per-minute":
+        result["requests-per-minute"] = validateNumber(val, key, section, {
+          integer: true,
+          min: 1,
+        });
+        break;
+      case "tokens-per-minute":
+        result["tokens-per-minute"] = validateNumber(val, key, section, { integer: true, min: 1 });
+        break;
+      case "tokens-per-day":
+        result["tokens-per-day"] = validateNumber(val, key, section, { integer: true, min: 1 });
+        break;
+      case "safety-margin":
+        result["safety-margin"] = validateNumber(val, key, section, { min: 0, max: 1 });
+        break;
+      case "enabled":
+        result.enabled = validateBoolean(val, key, section);
+        break;
+    }
+  }
+
+  // Warn for suspiciously high limits
+  if (result["requests-per-minute"] && result["requests-per-minute"] > 10_000) {
+    console.warn(
+      `⚠️  Warning: [${section}].requests-per-minute is very high (${result["requests-per-minute"]}). Make sure your API tier supports this rate.`,
+    );
+  }
+
+  if (result["tokens-per-minute"] && result["tokens-per-minute"] > 5_000_000) {
+    console.warn(
+      `⚠️  Warning: [${section}].tokens-per-minute is very high (${result["tokens-per-minute"]}). Make sure your API tier supports this rate.`,
+    );
+  }
+
+  return result;
+}
+
+/**
+ * Valid keys for retry configuration section.
+ */
+const RETRY_CONFIG_KEYS = new Set([
+  "enabled",
+  "retries",
+  "min-timeout",
+  "max-timeout",
+  "factor",
+  "randomize",
+  "respect-retry-after",
+  "max-retry-after-ms",
+]);
+
+/**
+ * Validates retry configuration.
+ */
+function validateRetryConfig(value: unknown, section: string): RetryConfigCLI {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(`[${section}] must be a table`);
+  }
+
+  const raw = value as Record<string, unknown>;
+  const result: RetryConfigCLI = {};
+
+  for (const [key, val] of Object.entries(raw)) {
+    if (!RETRY_CONFIG_KEYS.has(key)) {
+      throw new ConfigError(`[${section}] has unknown key: ${key}`);
+    }
+
+    switch (key) {
+      case "enabled":
+        result.enabled = validateBoolean(val, key, section);
+        break;
+      case "retries":
+        result.retries = validateNumber(val, key, section, { integer: true, min: 0 });
+        break;
+      case "min-timeout":
+        result["min-timeout"] = validateNumber(val, key, section, { integer: true, min: 0 });
+        break;
+      case "max-timeout":
+        result["max-timeout"] = validateNumber(val, key, section, { integer: true, min: 0 });
+        break;
+      case "factor":
+        result.factor = validateNumber(val, key, section, { min: 1 });
+        break;
+      case "randomize":
+        result.randomize = validateBoolean(val, key, section);
+        break;
+      case "respect-retry-after":
+        result["respect-retry-after"] = validateBoolean(val, key, section);
+        break;
+      case "max-retry-after-ms":
+        result["max-retry-after-ms"] = validateNumber(val, key, section, { integer: true, min: 0 });
+        break;
+    }
+  }
+
   return result;
 }
 
@@ -481,7 +651,9 @@ function validateInitialGadgets(value: unknown, section: string): InitialGadget[
 
     // Validate required 'gadget' field
     if (!("gadget" in entryObj)) {
-      throw new ConfigError(`[${section}].initial-gadgets[${i}] is missing required field 'gadget'`);
+      throw new ConfigError(
+        `[${section}].initial-gadgets[${i}] is missing required field 'gadget'`,
+      );
     }
     if (typeof entryObj.gadget !== "string") {
       throw new ConfigError(`[${section}].initial-gadgets[${i}].gadget must be a string`);
@@ -499,7 +671,9 @@ function validateInitialGadgets(value: unknown, section: string): InitialGadget[
 
     // Validate required 'result' field
     if (!("result" in entryObj)) {
-      throw new ConfigError(`[${section}].initial-gadgets[${i}] is missing required field 'result'`);
+      throw new ConfigError(
+        `[${section}].initial-gadgets[${i}] is missing required field 'result'`,
+      );
     }
     if (typeof entryObj.result !== "string") {
       throw new ConfigError(`[${section}].initial-gadgets[${i}].result must be a string`);
@@ -617,7 +791,20 @@ function validateCompleteConfig(raw: unknown, section: string): CompleteConfig {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
   if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateBoolean(rawObj["log-llm-requests"], "log-llm-requests", section);
+    result["log-llm-requests"] = validateBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
+  }
+  if ("rate-limits" in rawObj) {
+    result["rate-limits"] = validateRateLimitsConfig(
+      rawObj["rate-limits"],
+      `${section}.rate-limits`,
+    );
+  }
+  if ("retry" in rawObj) {
+    result.retry = validateRetryConfig(rawObj.retry, `${section}.retry`);
   }
 
   return result;
@@ -713,7 +900,20 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
   if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateBoolean(rawObj["log-llm-requests"], "log-llm-requests", section);
+    result["log-llm-requests"] = validateBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
+  }
+  if ("rate-limits" in rawObj) {
+    result["rate-limits"] = validateRateLimitsConfig(
+      rawObj["rate-limits"],
+      `${section}.rate-limits`,
+    );
+  }
+  if ("retry" in rawObj) {
+    result.retry = validateRetryConfig(rawObj.retry, `${section}.retry`);
   }
 
   return result;
@@ -924,7 +1124,11 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
     result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
   }
   if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateBoolean(rawObj["log-llm-requests"], "log-llm-requests", section);
+    result["log-llm-requests"] = validateBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
   }
 
   // Logging options
@@ -981,6 +1185,10 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.prompts = validatePromptsConfig(value, key);
       } else if (key === "subagents") {
         result.subagents = validateGlobalSubagentConfig(value, key);
+      } else if (key === "rate-limits") {
+        result["rate-limits"] = validateRateLimitsConfig(value, key);
+      } else if (key === "retry") {
+        result.retry = validateRetryConfig(value, key);
       } else {
         // Custom command section
         result[key] = validateCustomConfig(value, key);
@@ -1046,6 +1254,8 @@ export function getCustomCommandNames(config: CLIConfig): string[] {
     "speech",
     "prompts",
     "subagents",
+    "rate-limits",
+    "retry",
   ]);
   return Object.keys(config).filter((key) => !reserved.has(key));
 }
@@ -1294,7 +1504,7 @@ export function resolveInheritance(config: CLIConfig, configPath?: string): CLIC
     }
 
     // Clean up legacy/modification fields from output
-    delete merged["gadget"];
+    delete merged.gadget;
     delete merged["gadget-add"];
     delete merged["gadget-remove"];
 

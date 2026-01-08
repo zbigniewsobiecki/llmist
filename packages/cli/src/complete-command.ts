@@ -1,11 +1,6 @@
 import type { Command } from "commander";
-
-import type { ContentPart } from "llmist";
-import { text } from "llmist";
-import { LLMMessageBuilder } from "llmist";
-import { resolveModel } from "llmist";
-import type { TokenUsage } from "llmist";
-import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
+import type { ContentPart, TokenUsage } from "llmist";
+import { FALLBACK_CHARS_PER_TOKEN, LLMMessageBuilder, resolveModel, text } from "llmist";
 import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
@@ -143,6 +138,8 @@ export function registerCompleteCommand(
   program: Command,
   env: CLIEnvironment,
   config?: CompleteConfig,
+  globalRateLimits?: import("./config.js").RateLimitsConfig,
+  globalRetry?: import("./config.js").RetryConfigCLI,
 ): void {
   const cmd = program
     .command(COMMANDS.complete)
@@ -152,6 +149,13 @@ export function registerCompleteCommand(
   addCompleteOptions(cmd, config);
 
   cmd.action((prompt, options) =>
-    executeAction(() => executeComplete(prompt, options as CLICompleteOptions, env), env),
+    executeAction(() => {
+      const mergedOptions: CLICompleteOptions = {
+        ...(options as CLICompleteOptions),
+        globalRateLimits,
+        globalRetry,
+      };
+      return executeComplete(prompt, mergedOptions, env);
+    }, env),
   );
 }

@@ -50,6 +50,17 @@ export const OPTION_FLAGS = {
   speechFormat: "--format <format>",
   speechSpeed: "--speed <value>",
   speechOutput: "-o, --output <path>",
+  // Rate limiting options
+  rateLimitRpm: "--rate-limit-rpm <count>",
+  rateLimitTpm: "--rate-limit-tpm <count>",
+  rateLimitDaily: "--rate-limit-daily <count>",
+  rateLimitSafetyMargin: "--rate-limit-safety-margin <value>",
+  noRateLimit: "--no-rate-limit",
+  // Retry options
+  maxRetries: "--max-retries <count>",
+  retryMinTimeout: "--retry-min-timeout <ms>",
+  retryMaxTimeout: "--retry-max-timeout <ms>",
+  noRetry: "--no-retry",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -79,6 +90,17 @@ export const OPTION_DESCRIPTIONS = {
   speechFormat: "Audio format: 'mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'.",
   speechSpeed: "Speech speed multiplier (0.25 to 4.0, default 1.0).",
   speechOutput: "Output path for audio file. Defaults to stdout if not specified.",
+  // Rate limiting descriptions
+  rateLimitRpm: "Maximum requests per minute (RPM). Overrides config and defaults.",
+  rateLimitTpm: "Maximum tokens per minute (TPM). Overrides config and defaults.",
+  rateLimitDaily: "Maximum tokens per day. Useful for Gemini free tier.",
+  rateLimitSafetyMargin: "Safety margin (0-1). Start throttling at this percentage of limit.",
+  noRateLimit: "Disable rate limiting entirely.",
+  // Retry descriptions
+  maxRetries: "Maximum retry attempts for failed API calls.",
+  retryMinTimeout: "Initial retry delay in milliseconds.",
+  retryMaxTimeout: "Maximum retry delay in milliseconds.",
+  noRetry: "Disable retry logic for API calls.",
 } as const;
 
 /** Prefix for summary output written to stderr */

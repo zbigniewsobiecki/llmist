@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import type { Command } from "commander";
 import type { Agent, ContentPart, LLMMessage, TokenUsage } from "llmist";
 import { AgentBuilder, GadgetRegistry, isAbortError, text } from "llmist";
@@ -12,6 +11,7 @@ import { readAudioFile, readImageFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
 import { formatCallNumber, formatLlmRequest, writeLogFile } from "./llm-logging.js";
 import { addAgentOptions, type CLIAgentOptions } from "./option-helpers.js";
+import { resolveRateLimitConfig, resolveRetryConfig } from "./rate-limit-resolver.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
 import { StatusBar, TUIApp } from "./tui/index.js";
 import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
@@ -123,7 +123,7 @@ export async function executeAgent(
 
   // Set up cancellation support
   const abortController = new AbortController();
-  let wasCancelled = false;
+  let _wasCancelled = false;
 
   // Quit handler - cleanup and exit
   const handleQuit = () => {
@@ -137,7 +137,7 @@ export async function executeAgent(
   if (tui) {
     tui.onQuit(handleQuit);
     tui.onCancel(() => {
-      wasCancelled = true;
+      _wasCancelled = true;
       abortController.abort();
     });
   }
@@ -174,7 +174,7 @@ export async function executeAgent(
   // - TUI mode: TUI's modal dialogs (in beforeGadgetExecution controller)
   // - Piped mode: auto-deny gadgets requiring approval (can't prompt)
 
-  let usage: TokenUsage | undefined;
+  let _usage: TokenUsage | undefined;
   let iterations = 0;
 
   // LLM request logging: use session directory if enabled
@@ -183,7 +183,7 @@ export async function executeAgent(
   let llmCallCounter = 0;
 
   // Count tokens for gadget output text
-  const countGadgetOutputTokens = async (
+  const _countGadgetOutputTokens = async (
     output: string | undefined,
   ): Promise<number | undefined> => {
     if (!output) return undefined;
@@ -259,7 +259,7 @@ export async function executeAgent(
           if (context.subagentContext) return;
 
           // Capture completion metadata for final summary
-          usage = context.usage;
+          _usage = context.usage;
           iterations = Math.max(iterations, context.iteration + 1);
 
           // Tree subscription handles block completion and raw response via handleTreeEvent()
@@ -268,6 +268,60 @@ export async function executeAgent(
           if (llmLogDir) {
             const filename = `${formatCallNumber(llmCallCounter)}.response`;
             await writeLogFile(llmLogDir, filename, context.rawResponse);
+          }
+
+          // Clear retry indicator on successful LLM call completion
+          if (tui) {
+            tui.clearRetry();
+          }
+        },
+
+        // onRateLimitThrottle: Show throttling delay in status bar and conversation
+        onRateLimitThrottle: async (context) => {
+          if (context.subagentContext) return; // Only main agent
+
+          if (tui) {
+            const seconds = Math.ceil(context.delayMs / 1000);
+
+            // Status bar indicator (will auto-clear after delay via timer below)
+            tui.showThrottling(context.delayMs);
+
+            // Conversation log entry with rate limit stats
+            const statsMsg: string[] = [];
+            if (context.stats.rpm > 0) statsMsg.push(`${context.stats.rpm} RPM`);
+            if (context.stats.tpm > 0)
+              statsMsg.push(`${Math.round(context.stats.tpm / 1000)}K TPM`);
+            const statsStr = statsMsg.length > 0 ? ` (${statsMsg.join(", ")})` : "";
+
+            tui.addSystemMessage(
+              `Rate limit approaching${statsStr}, waiting ${seconds}s...`,
+              "throttle",
+            );
+
+            // Auto-clear status bar indicator after delay
+            setTimeout(() => tui.clearThrottling(), context.delayMs);
+          }
+        },
+
+        // onRetryAttempt: Show retry attempt in status bar and conversation
+        onRetryAttempt: async (context) => {
+          if (context.subagentContext) return; // Only main agent
+
+          if (tui) {
+            const totalAttempts = context.attemptNumber + context.retriesLeft;
+
+            // Status bar indicator (cleared on next successful LLM call or final failure)
+            tui.showRetry(context.attemptNumber, context.retriesLeft);
+
+            // Conversation log entry with retry details
+            const retryAfterInfo = context.retryAfterMs
+              ? ` (server requested ${Math.ceil(context.retryAfterMs / 1000)}s wait)`
+              : "";
+
+            tui.addSystemMessage(
+              `Request failed (attempt ${context.attemptNumber}/${totalAttempts}), retrying...${retryAfterInfo}`,
+              "retry",
+            );
           }
         },
       },
@@ -343,6 +397,29 @@ export async function executeAgent(
         },
       },
     });
+
+  // Resolve rate limiting configuration
+  // Precedence: CLI flags > Profile config > Global config > Provider defaults
+  const rateLimitConfig = resolveRateLimitConfig(
+    options,
+    options.globalRateLimits,
+    options.profileRateLimits,
+    options.model,
+  );
+
+  // Resolve retry configuration
+  // Precedence: CLI flags > Profile config > Global config > Defaults
+  const retryConfig = resolveRetryConfig(options, options.globalRetry, options.profileRetry);
+
+  // Apply rate limiting if configured
+  if (rateLimitConfig) {
+    builder.withRateLimits(rateLimitConfig);
+  }
+
+  // Apply retry configuration
+  if (retryConfig) {
+    builder.withRetry(retryConfig);
+  }
 
   // Add optional configurations
   if (options.system) {
@@ -579,6 +656,8 @@ export function registerAgentCommand(
   env: CLIEnvironment,
   config?: AgentConfig,
   globalSubagents?: GlobalSubagentConfig,
+  globalRateLimits?: import("./config.js").RateLimitsConfig,
+  globalRetry?: import("./config.js").RetryConfigCLI,
 ): void {
   const cmd = program
     .command(COMMANDS.agent)
@@ -596,6 +675,10 @@ export function registerAgentCommand(
         subagents: config?.subagents,
         globalSubagents,
         initialGadgets: config?.["initial-gadgets"],
+        globalRateLimits,
+        globalRetry,
+        profileRateLimits: config?.["rate-limits"],
+        profileRetry: config?.retry,
       };
       return executeAgent(prompt, mergedOptions, env, "agent");
     }, env),

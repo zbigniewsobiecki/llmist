@@ -4,19 +4,18 @@ import packageJson from "../package.json";
 
 import { registerAgentCommand } from "./agent-command.js";
 import { registerCompleteCommand } from "./complete-command.js";
-import { registerConfigCommand } from "./config-command.js";
-import { registerInitCommand } from "./init-command.js";
 import {
   type CLIConfig,
   type CustomCommandConfig,
   getCustomCommandNames,
   loadConfig,
 } from "./config.js";
+import { registerConfigCommand } from "./config-command.js";
 import {
   CLI_DESCRIPTION,
   CLI_NAME,
-  LOG_LEVELS,
   type CLILogLevel,
+  LOG_LEVELS,
   OPTION_DESCRIPTIONS,
   OPTION_FLAGS,
 } from "./constants.js";
@@ -25,6 +24,7 @@ import type { CLIEnvironment, CLILoggerConfig } from "./environment.js";
 import { createDefaultEnvironment } from "./environment.js";
 import { registerGadgetCommand } from "./gadget-command.js";
 import { registerImageCommand } from "./image-command.js";
+import { registerInitCommand } from "./init-command.js";
 import { registerModelsCommand } from "./models-command.js";
 import { initSession } from "./session.js";
 import { registerSpeechCommand } from "./speech-command.js";
@@ -69,8 +69,15 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
     });
 
   // Register built-in commands with config defaults
-  registerCompleteCommand(program, env, config?.complete);
-  registerAgentCommand(program, env, config?.agent, config?.subagents);
+  registerCompleteCommand(program, env, config?.complete, config?.["rate-limits"], config?.retry);
+  registerAgentCommand(
+    program,
+    env,
+    config?.agent,
+    config?.subagents,
+    config?.["rate-limits"],
+    config?.retry,
+  );
   registerImageCommand(program, env, config?.image);
   registerSpeechCommand(program, env, config?.speech);
   registerVisionCommand(program, env);
@@ -84,7 +91,15 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
     const customNames = getCustomCommandNames(config);
     for (const name of customNames) {
       const cmdConfig = config[name] as CustomCommandConfig;
-      registerCustomCommand(program, name, cmdConfig, env, config.subagents);
+      registerCustomCommand(
+        program,
+        name,
+        cmdConfig,
+        env,
+        config.subagents,
+        config["rate-limits"],
+        config.retry,
+      );
     }
   }
 

@@ -270,13 +270,27 @@ export function isRetryableError(error: Error): boolean {
 }
 
 /**
+ * Context for enhanced error formatting.
+ */
+export interface FormatLLMErrorContext {
+  /** Provider name for provider-specific suggestions */
+  provider?: "anthropic" | "openai" | "gemini" | string;
+  /** Whether all retry attempts were exhausted */
+  retriesExhausted?: boolean;
+}
+
+/**
  * Formats an LLM API error into a clean, user-friendly message.
  *
  * Extracts the most relevant information from provider error objects,
  * hiding verbose JSON/stack traces while preserving actionable details.
  *
+ * When retries are exhausted and provider is known, includes actionable
+ * suggestions and links to provider documentation.
+ *
  * @param error - The error to format
- * @returns A clean, single-line error message
+ * @param context - Optional context for enhanced error messages
+ * @returns A clean error message, multi-line when retries exhausted
  *
  * @example
  * ```typescript
@@ -284,26 +298,78 @@ export function isRetryableError(error: Error): boolean {
  * formatLLMError(error);
  * // Returns: "Rate limit exceeded (429) - retry after a few seconds"
  *
- * // Anthropic overloaded error
- * formatLLMError(error);
- * // Returns: "API overloaded - retry later"
+ * // With context and exhausted retries
+ * formatLLMError(error, { provider: 'anthropic', retriesExhausted: true });
+ * // Returns multi-line message with suggestions and documentation link
  * ```
  */
-export function formatLLMError(error: Error): string {
+export function formatLLMError(error: Error, context?: FormatLLMErrorContext): string {
   const message = error.message;
   const name = error.name;
 
-  // Gemini RESOURCE_EXHAUSTED
+  // Gemini RESOURCE_EXHAUSTED or 429 errors
   if (message.includes("RESOURCE_EXHAUSTED") || message.includes("429")) {
-    return "Rate limit exceeded (429) - retry after a few seconds";
+    let formatted = "Rate limit exceeded (429)";
+
+    // Add provider-specific suggestions if retries exhausted
+    if (context?.retriesExhausted) {
+      formatted += "\n\nAll retry attempts exhausted. To resolve this:";
+      formatted += "\n1. Configure higher rate limits in ~/.llmist/cli.toml";
+      formatted += "\n2. Upgrade your API tier with the provider";
+      formatted += "\n3. Add delays between requests (--rate-limit-rpm option)";
+
+      // Provider-specific documentation
+      if (context?.provider) {
+        const docsUrls: Record<string, string> = {
+          anthropic: "https://docs.anthropic.com/en/api/rate-limits",
+          openai: "https://platform.openai.com/docs/guides/rate-limits",
+          gemini: "https://ai.google.dev/gemini-api/docs/quota",
+        };
+
+        const docsUrl = docsUrls[context.provider];
+        if (docsUrl) {
+          formatted += `\n\nProvider: ${context.provider}`;
+          formatted += `\nDocumentation: ${docsUrl}`;
+        }
+      }
+    } else {
+      formatted += " - retry after a few seconds";
+    }
+
+    return formatted;
   }
 
-  // Rate limits
+  // Generic rate limit errors
   if (
     message.toLowerCase().includes("rate limit") ||
     message.toLowerCase().includes("rate_limit")
   ) {
-    return "Rate limit exceeded - retry after a few seconds";
+    let formatted = "Rate limit exceeded";
+
+    if (context?.retriesExhausted) {
+      formatted += "\n\nAll retry attempts exhausted. To resolve this:";
+      formatted += "\n1. Configure higher rate limits in ~/.llmist/cli.toml";
+      formatted += "\n2. Upgrade your API tier with the provider";
+      formatted += "\n3. Add delays between requests (--rate-limit-rpm option)";
+
+      if (context?.provider) {
+        const docsUrls: Record<string, string> = {
+          anthropic: "https://docs.anthropic.com/en/api/rate-limits",
+          openai: "https://platform.openai.com/docs/guides/rate-limits",
+          gemini: "https://ai.google.dev/gemini-api/docs/quota",
+        };
+
+        const docsUrl = docsUrls[context.provider];
+        if (docsUrl) {
+          formatted += `\n\nProvider: ${context.provider}`;
+          formatted += `\nDocumentation: ${docsUrl}`;
+        }
+      }
+    } else {
+      formatted += " - retry after a few seconds";
+    }
+
+    return formatted;
   }
 
   // Overloaded/capacity errors

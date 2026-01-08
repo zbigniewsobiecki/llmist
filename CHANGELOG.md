@@ -1,3 +1,53 @@
+## UNRELEASED
+
+### 💥 BREAKING CHANGE: Rate Limiting Enabled by Default
+
+**What Changed:**
+llmist CLI now enables **conservative rate limiting by default** to prevent rate limit errors and agent crashes.
+
+**Default Limits:**
+- **Anthropic**: 50 RPM / 40K TPM
+- **OpenAI**: 3 RPM / 40K TPM
+- **Gemini**: 15 RPM / 1M TPM / 1.5M daily tokens
+
+**Who Is Affected:**
+
+✅ **Free tier users**: Protected from rate limits automatically. No action required.
+
+⚠️ **Paid tier users**: Your agents may run slower than necessary with conservative defaults.
+
+**Action Required for Paid Tiers:**
+
+Configure your actual tier limits in `~/.llmist/cli.toml`:
+
+```toml
+[rate-limits]
+requests-per-minute = 500  # Your actual tier limit
+tokens-per-minute = 200_000
+```
+
+Or disable rate limiting entirely:
+```bash
+llmist agent --no-rate-limit "your prompt"
+```
+
+**New Features:**
+
+- 🎯 Auto-detected rate limits based on model provider
+- 📊 TUI feedback: Status bar indicators (`⏸ Throttled`, `🔄 Retry`)
+- 📝 Conversation log entries for rate limit events
+- ⚙️ CLI flags: `--rate-limit-rpm`, `--rate-limit-tpm`, `--no-rate-limit`
+- 🔧 TOML configuration support (global and profile-specific)
+- ❌ Enhanced error messages with provider-specific guidance
+
+**Documentation:**
+- [CLI README - Rate Limiting](https://github.com/zbigniewsobiecki/llmist/blob/main/packages/cli/README.md#rate-limiting)
+- [Provider Rate Limits - Anthropic](https://docs.anthropic.com/en/api/rate-limits)
+- [Provider Rate Limits - OpenAI](https://platform.openai.com/docs/guides/rate-limits)
+- [Provider Rate Limits - Gemini](https://ai.google.dev/gemini-api/docs/quota)
+
+---
+
 ## 12.4.0 (2026-01-05)
 
 * Merge pull request #328 from zbigniewsobiecki/dev ([0f70974](https://github.com/zbigniewsobiecki/llmist/commit/0f70974)), closes [#328](https://github.com/zbigniewsobiecki/llmist/issues/328)
