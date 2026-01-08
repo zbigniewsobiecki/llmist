@@ -7,7 +7,8 @@
  * 3. LLM API error recovery with controllers
  * 4. Retry configuration for transient failures
  * 5. Proactive rate limiting to prevent errors
- * 6. Retry-After header support for graceful backoff
+ * 6. Rate limiting observers for monitoring
+ * 7. Retry-After header support for graceful backoff
  *
  * Run: npx tsx examples/12-error-handling.ts
  */
@@ -258,7 +259,52 @@ async function demonstrateRateLimiting() {
 }
 
 // ============================================================================
-// 6. RETRY-AFTER HEADER SUPPORT
+// 6. RATE LIMITING WITH OBSERVERS
+// ============================================================================
+
+/**
+ * Monitor rate limiting activity with observer hooks.
+ */
+async function demonstrateRateLimitingObservers() {
+  console.log("\n=== Rate Limiting Observers ===\n");
+
+  let throttleEvents = 0;
+
+  const _agent = LLMist.createAgent()
+    .withModel("sonnet")
+    .withRateLimits({
+      requestsPerMinute: 10, // Low limit to trigger throttling
+      tokensPerMinute: 20_000,
+      safetyMargin: 0.8,
+    })
+    .withHooks({
+      observers: {
+        onRateLimitThrottle: async (ctx) => {
+          throttleEvents++;
+          const seconds = Math.ceil(ctx.delayMs / 1000);
+          console.log(`[THROTTLE ${throttleEvents}] Waiting ${seconds}s`);
+          console.log(`  RPM: ${ctx.stats.requestsInCurrentMinute}/${ctx.stats.requestsPerMinute}`);
+          console.log(`  TPM: ${ctx.stats.tokensInCurrentMinute}/${ctx.stats.tokensPerMinute}`);
+        },
+        onRetryAttempt: async (ctx) => {
+          console.log(`[RETRY] Attempt ${ctx.attemptNumber} (${ctx.retriesLeft} retries left)`);
+          if (ctx.retryAfterMs) {
+            console.log(`  Respecting Retry-After: ${ctx.retryAfterMs}ms`);
+          }
+        },
+      },
+    });
+
+  console.log("Agent configured with 10 RPM limit and observer hooks.");
+  console.log("Multiple rapid calls would trigger throttling with detailed stats.\n");
+  console.log("Observer hooks provide:");
+  console.log("  - Real-time RPM/TPM statistics");
+  console.log("  - Throttle delay notifications");
+  console.log("  - Retry attempt tracking\n");
+}
+
+// ============================================================================
+// 7. RETRY-AFTER HEADER SUPPORT
 // ============================================================================
 
 /**
@@ -302,7 +348,7 @@ async function demonstrateRetryAfter() {
 }
 
 // ============================================================================
-// 7. COMPLETE EXAMPLE WITH ALL PATTERNS
+// 8. COMPLETE EXAMPLE WITH ALL PATTERNS
 // ============================================================================
 
 async function main() {
