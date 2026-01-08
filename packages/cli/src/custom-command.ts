@@ -4,9 +4,9 @@ import { executeComplete } from "./complete-command.js";
 import type { CustomCommandConfig, GlobalSubagentConfig } from "./config.js";
 import { type CLIEnvironment, type CLILoggerConfig, createLoggerFactory } from "./environment.js";
 import {
-  type CLIAgentOptions,
   addAgentOptions,
   addCompleteOptions,
+  type CLIAgentOptions,
   type CLICompleteOptions,
   configToAgentOptions,
   configToCompleteOptions,
@@ -59,6 +59,8 @@ export function registerCustomCommand(
   config: CustomCommandConfig,
   env: CLIEnvironment,
   globalSubagents?: GlobalSubagentConfig,
+  globalRateLimits?: import("./config.js").RateLimitsConfig,
+  globalRetry?: import("./config.js").RetryConfigCLI,
 ): void {
   const type = config.type ?? "agent";
   const description = config.description ?? `Custom ${type} command`;
@@ -81,6 +83,8 @@ export function registerCustomCommand(
         const options: CLICompleteOptions = {
           ...configDefaults,
           ...(cliOptions as Partial<CLICompleteOptions>),
+          globalRateLimits,
+          globalRetry,
         } as CLICompleteOptions;
         await executeComplete(prompt, options, cmdEnv);
       }, cmdEnv);
@@ -99,6 +103,8 @@ export function registerCustomCommand(
           ...configDefaults,
           ...(cliOptions as Partial<CLIAgentOptions>),
           globalSubagents,
+          globalRateLimits,
+          globalRetry,
         } as CLIAgentOptions;
         await executeAgent(prompt, options, cmdEnv, name);
       }, cmdEnv);

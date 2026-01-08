@@ -143,7 +143,7 @@ export type CtrlCCallback = () => void;
 /**
  * Node type discriminator.
  */
-export type BlockNodeType = "llm_call" | "gadget" | "text";
+export type BlockNodeType = "llm_call" | "gadget" | "text" | "system_message";
 
 /**
  * Base properties shared by all block nodes.
@@ -240,9 +240,23 @@ export interface TextNode extends BaseBlockNode {
 }
 
 /**
+ * System message node (not selectable).
+ * Shows system-level notifications like rate limiting, retries, etc.
+ */
+export interface SystemMessageNode extends BaseBlockNode {
+  type: "system_message";
+  /** Message text to display */
+  message: string;
+  /** Message category for styling */
+  category: "throttle" | "retry" | "info" | "warning" | "error";
+  /** System messages have no children */
+  children: never[];
+}
+
+/**
  * Union of all block node types.
  */
-export type BlockNode = LLMCallNode | GadgetNode | TextNode;
+export type BlockNode = LLMCallNode | GadgetNode | TextNode | SystemMessageNode;
 
 /**
  * A rendered block with UI state.

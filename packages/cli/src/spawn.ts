@@ -8,7 +8,7 @@
  */
 
 import { spawn as nodeSpawn } from "node:child_process";
-import { Readable } from "node:stream";
+import type { Readable } from "node:stream";
 
 /**
  * Stdio configuration for spawn.
@@ -56,7 +56,9 @@ export interface SpawnResult {
 /**
  * Convert a Node.js Readable stream to a web ReadableStream.
  */
-function nodeStreamToReadableStream(nodeStream: Readable | null): ReadableStream<Uint8Array> | null {
+function nodeStreamToReadableStream(
+  nodeStream: Readable | null,
+): ReadableStream<Uint8Array> | null {
   if (!nodeStream) return null;
 
   return new ReadableStream<Uint8Array>({
@@ -89,9 +91,9 @@ export function spawn(argv: string[], options: SpawnOptions = {}): SpawnResult {
   const proc = nodeSpawn(command, args, {
     cwd: options.cwd,
     stdio: [
-      options.stdin === "pipe" ? "pipe" : options.stdin ?? "ignore",
-      options.stdout === "pipe" ? "pipe" : options.stdout ?? "ignore",
-      options.stderr === "pipe" ? "pipe" : options.stderr ?? "ignore",
+      options.stdin === "pipe" ? "pipe" : (options.stdin ?? "ignore"),
+      options.stdout === "pipe" ? "pipe" : (options.stdout ?? "ignore"),
+      options.stderr === "pipe" ? "pipe" : (options.stderr ?? "ignore"),
     ],
   });
 

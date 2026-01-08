@@ -68,6 +68,8 @@ export type {
   ObserveLLMCallContext,
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
+  ObserveRateLimitThrottleContext,
+  ObserveRetryAttemptContext,
   Observers,
   // Subagent context for distinguishing subagent events in hooks
   SubagentContext,

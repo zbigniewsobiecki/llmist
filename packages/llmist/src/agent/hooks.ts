@@ -349,6 +349,12 @@ export interface Observers {
 
   /** Called when the agent loop is terminated by an abort signal */
   onAbort?: (context: ObserveAbortContext) => void | Promise<void>;
+
+  /** Called when rate limiting causes a throttle delay before an LLM call */
+  onRateLimitThrottle?: (context: ObserveRateLimitThrottleContext) => void | Promise<void>;
+
+  /** Called when a retry attempt is made after a failed LLM call */
+  onRetryAttempt?: (context: ObserveRetryAttemptContext) => void | Promise<void>;
 }
 
 /**
@@ -377,6 +383,44 @@ export interface ObserveAbortContext {
   iteration: number;
   /** Abort reason if provided via AbortController.abort(reason) */
   reason?: unknown;
+  /** Logger instance */
+  logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
+}
+
+/**
+ * Context provided when rate limiting causes a throttle delay.
+ * Read-only observation point.
+ */
+export interface ObserveRateLimitThrottleContext {
+  /** Current iteration */
+  iteration: number;
+  /** Delay in milliseconds before the next request can proceed */
+  delayMs: number;
+  /** Current rate limit statistics */
+  stats: import("../core/rate-limit.js").RateLimitStats;
+  /** Logger instance */
+  logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
+}
+
+/**
+ * Context provided when a retry attempt is made after a failed LLM call.
+ * Read-only observation point.
+ */
+export interface ObserveRetryAttemptContext {
+  /** Current iteration */
+  iteration: number;
+  /** Current attempt number (1-based) */
+  attemptNumber: number;
+  /** Number of retries remaining after this attempt */
+  retriesLeft: number;
+  /** The error that triggered the retry */
+  error: Error;
+  /** Delay in milliseconds suggested by Retry-After header (if present) */
+  retryAfterMs?: number;
   /** Logger instance */
   logger: Logger<ILogObj>;
   /** Present when event is from a subagent (undefined for top-level agent) */

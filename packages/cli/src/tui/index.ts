@@ -493,6 +493,50 @@ export class TUIApp {
     this.statusBar.clearActivity();
   }
 
+  /**
+   * Show rate limiting throttle indicator in status bar.
+   * @param delayMs - Delay in milliseconds before next request
+   */
+  showThrottling(delayMs: number): void {
+    this.statusBar.showThrottling(delayMs);
+  }
+
+  /**
+   * Clear rate limiting throttle indicator from status bar.
+   */
+  clearThrottling(): void {
+    this.statusBar.clearThrottling();
+  }
+
+  /**
+   * Show retry attempt indicator in status bar.
+   * @param attemptNumber - Current attempt number (1-based)
+   * @param retriesLeft - Number of retries remaining after this attempt
+   */
+  showRetry(attemptNumber: number, retriesLeft: number): void {
+    this.statusBar.showRetry(attemptNumber, retriesLeft);
+  }
+
+  /**
+   * Clear retry attempt indicator from status bar.
+   */
+  clearRetry(): void {
+    this.statusBar.clearRetry();
+  }
+
+  /**
+   * Add a system message to the conversation (for rate limiting, retry notifications, etc.).
+   * @param message - The system message text
+   * @param category - Message category for styling
+   * @returns The block ID
+   */
+  addSystemMessage(
+    message: string,
+    category: "throttle" | "retry" | "info" | "warning" | "error",
+  ): string {
+    return this.blockRenderer.addSystemMessage(message, category);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Profile Management
   // ─────────────────────────────────────────────────────────────────────────────

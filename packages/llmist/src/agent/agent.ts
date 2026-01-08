@@ -61,6 +61,8 @@ import type {
   ObserveLLMCallReadyContext,
   ObserveLLMCompleteContext,
   ObserveLLMErrorContext,
+  ObserveRateLimitThrottleContext,
+  ObserveRetryAttemptContext,
   Observers,
 } from "./hooks.js";
 import type { IConversationManager } from "./interfaces.js";
@@ -657,7 +659,11 @@ export class Agent {
           });
 
           // Create LLM stream with retry logic (if enabled)
-          const stream = await this.createStreamWithRetry(llmOptions, currentIteration);
+          const stream = await this.createStreamWithRetry(
+            llmOptions,
+            currentIteration,
+            currentLLMNodeId,
+          );
 
           // Process stream - ALL complexity delegated to StreamProcessor
           const processor = new StreamProcessor({
@@ -877,12 +883,29 @@ export class Agent {
   private async createStreamWithRetry(
     llmOptions: LLMGenerationOptions,
     iteration: number,
+    llmNodeId: string,
   ): Promise<ReturnType<LLMist["stream"]>> {
     // Layer 1: Proactive rate limit throttling
     if (this.rateLimitTracker) {
       const throttleDelay = this.rateLimitTracker.getRequiredDelayMs();
       if (throttleDelay > 0) {
         this.logger.debug("Rate limit throttling", { delayMs: throttleDelay });
+
+        // Emit observer hook for rate limit throttling
+        await this.safeObserve(async () => {
+          if (this.hooks.observers?.onRateLimitThrottle) {
+            const subagentContext = getSubagentContextForNode(this.tree, llmNodeId);
+            const context: ObserveRateLimitThrottleContext = {
+              iteration,
+              delayMs: throttleDelay,
+              stats: this.rateLimitTracker!.getUsageStats(),
+              logger: this.logger,
+              subagentContext,
+            };
+            await this.hooks.observers.onRateLimitThrottle(context);
+          }
+        });
+
         await this.sleep(throttleDelay);
       }
     }
@@ -957,6 +980,27 @@ export class Agent {
               },
             );
             onRetry?.(error, attemptNumber);
+
+            // Emit observer hook for retry attempt
+            this.safeObserve(async () => {
+              if (this.hooks.observers?.onRetryAttempt) {
+                const subagentContext = getSubagentContextForNode(this.tree, llmNodeId);
+                const hookContext: ObserveRetryAttemptContext = {
+                  iteration,
+                  attemptNumber,
+                  retriesLeft,
+                  error,
+                  retryAfterMs: retryAfterHintMs ?? undefined,
+                  logger: this.logger,
+                  subagentContext,
+                };
+                await this.hooks.observers.onRetryAttempt(hookContext);
+              }
+            }).catch((err) => {
+              // safeObserve already logs errors, but we need to catch here to avoid
+              // unhandled promise rejection since onFailedAttempt is synchronous
+              this.logger.error("Observer hook error", { hook: "onRetryAttempt", error: err });
+            });
           },
           shouldRetry: (context) => {
             // Use custom shouldRetry if provided, otherwise use default classification
