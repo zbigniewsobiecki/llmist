@@ -1,3 +1,16 @@
+## 15.0.0 (2026-01-08)
+
+* Merge pull request #334 from zbigniewsobiecki/dev ([aac55b5](https://github.com/zbigniewsobiecki/llmist/commit/aac55b5)), closes [#334](https://github.com/zbigniewsobiecki/llmist/issues/334)
+* feat(gadgets): replace EditFile ed-based implementation with search/replace (#333) ([2884a19](https://github.com/zbigniewsobiecki/llmist/commit/2884a19)), closes [#333](https://github.com/zbigniewsobiecki/llmist/issues/333)
+
+
+### BREAKING CHANGE
+
+* EditFile schema changed from { filePath, commands } to
+{ filePath, search, replace }
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com>
+
 ## 14.0.0 (2026-01-08)
 
 * Merge main into dev: resolve CHANGELOG conflict ([4dd586c](https://github.com/zbigniewsobiecki/llmist/commit/4dd586c))
