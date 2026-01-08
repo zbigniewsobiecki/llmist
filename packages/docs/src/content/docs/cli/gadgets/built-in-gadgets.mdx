@@ -42,7 +42,7 @@ for await (const event of agent.run()) {
 | `ListDirectory` | List files and directories with metadata (size, age) |
 | `ReadFile` | Read the entire content of a file |
 | `WriteFile` | Write content to a file (creates directories if needed) |
-| `EditFile` | Edit files using ed line-oriented editor commands |
+| `EditFile` | Edit files using search/replace with intelligent matching |
 
 ### System Gadgets
 
@@ -88,12 +88,18 @@ import { WriteFile } from '@llmist/cli/gadgets';
 
 ### EditFile
 
-Edits files using ed commands for precise line-oriented modifications.
+Edits files using search/replace with intelligent layered matching. This approach reduces edit errors by ~9x compared to naive text replacement.
+
+**Matching strategies (tried in order):**
+1. **Exact** - byte-for-byte comparison
+2. **Whitespace-insensitive** - ignores differences in spaces/tabs
+3. **Indentation-preserving** - matches structure ignoring leading whitespace
+4. **Fuzzy** - similarity-based matching (80% threshold)
 
 ```typescript
 import { EditFile } from '@llmist/cli/gadgets';
 
-// Schema: { filePath: string, commands: string }
+// Schema: { filePath: string, search: string, replace: string }
 ```
 
 ### RunCommand

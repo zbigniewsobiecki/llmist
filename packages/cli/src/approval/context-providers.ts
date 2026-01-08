@@ -53,48 +53,34 @@ export class WriteFileContextProvider implements ApprovalContextProvider {
 
 /**
  * Context provider for EditFile gadget.
- * Similar to WriteFile but handles edit-specific parameters.
+ * Shows search/replace preview for the new layered matching approach.
  */
 export class EditFileContextProvider implements ApprovalContextProvider {
   readonly gadgetName = "EditFile";
 
   async getContext(params: Record<string, unknown>): Promise<ApprovalContext> {
     const filePath = String(params.filePath ?? params.path ?? "");
-    const resolvedPath = resolve(process.cwd(), filePath);
+    const search = String(params.search ?? "");
+    const replace = String(params.replace ?? "");
 
-    // EditFile typically receives the full new content or edits
-    // Handle both content-based and patch-based edits
-    if ("content" in params) {
-      const newContent = String(params.content);
+    // Format as a search/replace preview
+    const details = [
+      `File: ${filePath}`,
+      "",
+      "SEARCH:",
+      "```",
+      search,
+      "```",
+      "",
+      "REPLACE:",
+      "```",
+      replace || "(delete)",
+      "```",
+    ].join("\n");
 
-      if (!existsSync(resolvedPath)) {
-        return {
-          summary: formatGadgetSummary(this.gadgetName, params),
-          details: formatNewFileDiff(filePath, newContent),
-        };
-      }
-
-      const oldContent = readFileSync(resolvedPath, "utf-8");
-      const diff = createPatch(filePath, oldContent, newContent, "original", "modified");
-
-      return {
-        summary: formatGadgetSummary(this.gadgetName, params),
-        details: diff,
-      };
-    }
-
-    // For ed-style commands, show the commands themselves
-    if ("commands" in params) {
-      const commands = String(params.commands);
-      return {
-        summary: formatGadgetSummary(this.gadgetName, params),
-        details: `Commands:\n${commands}`,
-      };
-    }
-
-    // Fallback
     return {
       summary: formatGadgetSummary(this.gadgetName, params),
+      details,
     };
   }
 }
