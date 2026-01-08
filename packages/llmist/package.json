@@ -1,6 +1,6 @@
 {
   "name": "llmist",
-  "version": "12.4.0",
+  "version": "13.0.0",
   "description": "TypeScript LLM client with streaming tool execution. Tools fire mid-stream. Built-in function calling works with any model—no structured outputs or native tool support required.",
   "type": "module",
   "main": "dist/index.cjs",
