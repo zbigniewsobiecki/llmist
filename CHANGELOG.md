@@ -1,3 +1,82 @@
+## 13.0.0 (2026-01-08)
+
+* feat(cli): integrate rate limiting with TUI feedback and auto-detection (#329) (#330) ([d70269f](https://github.com/zbigniewsobiecki/llmist/commit/d70269f)), closes [#329](https://github.com/zbigniewsobiecki/llmist/issues/329) [#330](https://github.com/zbigniewsobiecki/llmist/issues/330)
+
+
+### BREAKING CHANGE
+
+* Rate limiting now enabled by default with conservative
+limits to protect free tier users. Paid tier users should configure
+higher limits in ~/.llmist/cli.toml or use --no-rate-limit flag.
+
+## Features
+
+### Configuration Infrastructure
+- Add TOML schema for rate-limits and retry config sections
+- Add CLI flags: --rate-limit-rpm, --rate-limit-tpm, --rate-limit-daily,
+  --rate-limit-safety-margin, --no-rate-limit, --max-retries, --no-retry
+- Implement 4-layer precedence: CLI flags > Profile TOML > Global TOML > Provider defaults
+- Auto-detect provider from model string (anthropic, openai, gemini)
+
+### Provider-Specific Defaults
+- Anthropic: 50 RPM / 40K TPM (Tier 1 safe)
+- OpenAI: 3 RPM / 40K TPM (Free tier safe)
+- Gemini: 15 RPM / 1M TPM / 1.5M daily (Free tier safe)
+
+### TUI Feedback System
+- Add observer hooks: onRateLimitThrottle, onRetryAttempt
+- Status bar indicators: ⏸ Throttled Xs, 🔄 Retry N/M
+- Conversation log entries for rate limiting events
+- Auto-clearing indicators after completion
+
+### Enhanced Error Messages
+- Context-aware error formatting with FormatLLMErrorContext
+- Provider-specific documentation URLs when retries exhausted
+- Multi-line actionable guidance for rate limit errors
+
+### Documentation
+- Comprehensive rate limiting section in CLI README
+- Breaking change notice in CHANGELOG with migration guide
+- Configuration examples for all methods (CLI, TOML, auto-detect)
+
+## Implementation Details
+
+**New Files:**
+- packages/cli/src/rate-limit-resolver.ts: Provider detection & config resolution
+- packages/cli/src/rate-limit-resolver.test.ts: 33 comprehensive tests
+
+**Modified Files (16):**
+- Configuration: config.ts, constants.ts, option-helpers.ts, program.ts
+- Integration: agent-command.ts, complete-command.ts, custom-command.ts
+- Core: agent.ts, hooks.ts, retry.ts
+- TUI: status-bar.ts, types.ts, block-renderer.ts, index.ts
+- Exports: agent/index.ts, index.ts
+- Docs: README.md, CHANGELOG.md
+
+## Testing
+- Added 33 unit tests for rate limit resolver
+- Added 8 tests for enhanced error formatting
+- All 2894 tests passing across 107 test files
+- 100% TypeScript compilation successful
+
+## Migration Guide
+
+For paid tier users experiencing slower execution:
+
+```toml
+# ~/.llmist/cli.toml
+[rate-limits]
+requests-per-minute = 500  # Your actual tier limit
+tokens-per-minute = 200_000
+```
+
+Or disable entirely:
+```bash
+llmist agent --no-rate-limit "your prompt"
+```
+
+Co-authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>
+
 ## UNRELEASED
 
 ### 💥 BREAKING CHANGE: Rate Limiting Enabled by Default
