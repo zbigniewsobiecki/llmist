@@ -111,6 +111,18 @@ export function resolveRateLimitConfig(config?: RateLimitConfig): ResolvedRateLi
 }
 
 /**
+ * Information about a triggered rate limit.
+ */
+export interface TriggeredLimitInfo {
+  /** Current usage value */
+  current: number;
+  /** Configured limit value */
+  limit: number;
+  /** Effective limit after safety margin (limit × safetyMargin) */
+  effectiveLimit: number;
+}
+
+/**
  * Usage statistics from the rate limit tracker.
  */
 export interface RateLimitStats {
@@ -124,6 +136,12 @@ export interface RateLimitStats {
   isApproachingLimit: boolean;
   /** Delay required before next request (0 if none) */
   requiredDelayMs: number;
+  /** Which limit(s) triggered throttling, if any (present when requiredDelayMs > 0) */
+  triggeredBy?: {
+    rpm?: TriggeredLimitInfo;
+    tpm?: TriggeredLimitInfo;
+    daily?: TriggeredLimitInfo;
+  };
 }
 
 /**
@@ -297,12 +315,52 @@ export class RateLimitTracker {
     this.pruneOldEntries(now);
     this.checkDailyReset();
 
+    const currentRpm = this.requestTimestamps.length;
+    const currentTpm = this.tokenUsage.reduce((sum, entry) => sum + entry.tokens, 0);
+
+    // Determine which limits triggered throttling
+    const triggeredBy: RateLimitStats["triggeredBy"] = {};
+
+    if (this.config.requestsPerMinute !== undefined) {
+      const effectiveLimit = this.config.requestsPerMinute * this.config.safetyMargin;
+      if (currentRpm >= effectiveLimit) {
+        triggeredBy.rpm = {
+          current: currentRpm,
+          limit: this.config.requestsPerMinute,
+          effectiveLimit,
+        };
+      }
+    }
+
+    if (this.config.tokensPerMinute !== undefined) {
+      const effectiveLimit = this.config.tokensPerMinute * this.config.safetyMargin;
+      if (currentTpm >= effectiveLimit) {
+        triggeredBy.tpm = {
+          current: currentTpm,
+          limit: this.config.tokensPerMinute,
+          effectiveLimit,
+        };
+      }
+    }
+
+    if (this.config.tokensPerDay !== undefined) {
+      const effectiveLimit = this.config.tokensPerDay * this.config.safetyMargin;
+      if (this.dailyTokens >= effectiveLimit) {
+        triggeredBy.daily = {
+          current: this.dailyTokens,
+          limit: this.config.tokensPerDay,
+          effectiveLimit,
+        };
+      }
+    }
+
     return {
-      rpm: this.requestTimestamps.length,
-      tpm: this.tokenUsage.reduce((sum, entry) => sum + entry.tokens, 0),
+      rpm: currentRpm,
+      tpm: currentTpm,
       dailyTokens: this.dailyTokens,
       isApproachingLimit: this.isApproachingLimit(),
       requiredDelayMs: this.getRequiredDelayMs(),
+      triggeredBy: Object.keys(triggeredBy).length > 0 ? triggeredBy : undefined,
     };
   }
 

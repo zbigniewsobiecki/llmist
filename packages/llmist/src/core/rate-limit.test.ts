@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RATE_LIMIT_CONFIG,
-  type RateLimitConfig,
   RateLimitTracker,
   resolveRateLimitConfig,
 } from "./rate-limit.js";
@@ -265,6 +264,92 @@ describe("RateLimitTracker", () => {
       tracker.updateConfig({ requestsPerMinute: 100 });
 
       expect(tracker.isApproachingLimit()).toBe(false);
+    });
+  });
+
+  describe("triggeredBy", () => {
+    it("should not set triggeredBy when under all limits", () => {
+      tracker = new RateLimitTracker({
+        requestsPerMinute: 10,
+        tokensPerMinute: 10000,
+        safetyMargin: 0.9,
+      });
+
+      tracker.recordUsage(100, 50);
+
+      const stats = tracker.getUsageStats();
+      expect(stats.triggeredBy).toBeUndefined();
+    });
+
+    it("should set triggeredBy.rpm when RPM limit triggered", () => {
+      tracker = new RateLimitTracker({
+        requestsPerMinute: 10,
+        safetyMargin: 0.9,
+      });
+
+      // 9 requests = exactly at 90% safety margin
+      for (let i = 0; i < 9; i++) {
+        tracker.recordUsage(10, 10);
+      }
+
+      const stats = tracker.getUsageStats();
+      expect(stats.triggeredBy).toBeDefined();
+      expect(stats.triggeredBy?.rpm).toBeDefined();
+      expect(stats.triggeredBy?.rpm?.current).toBe(9);
+      expect(stats.triggeredBy?.rpm?.limit).toBe(10);
+      expect(stats.triggeredBy?.rpm?.effectiveLimit).toBe(9); // 10 * 0.9
+    });
+
+    it("should set triggeredBy.tpm when TPM limit triggered", () => {
+      tracker = new RateLimitTracker({
+        tokensPerMinute: 1000,
+        safetyMargin: 0.9,
+      });
+
+      // Use 900 tokens = exactly at 90% safety margin
+      tracker.recordUsage(800, 100);
+
+      const stats = tracker.getUsageStats();
+      expect(stats.triggeredBy).toBeDefined();
+      expect(stats.triggeredBy?.tpm).toBeDefined();
+      expect(stats.triggeredBy?.tpm?.current).toBe(900);
+      expect(stats.triggeredBy?.tpm?.limit).toBe(1000);
+      expect(stats.triggeredBy?.tpm?.effectiveLimit).toBe(900); // 1000 * 0.9
+    });
+
+    it("should set triggeredBy.daily when daily limit triggered", () => {
+      tracker = new RateLimitTracker({
+        tokensPerDay: 10000,
+        safetyMargin: 0.9,
+      });
+
+      // Use 9000 tokens = exactly at 90% daily limit
+      tracker.recordUsage(9000, 0);
+
+      const stats = tracker.getUsageStats();
+      expect(stats.triggeredBy).toBeDefined();
+      expect(stats.triggeredBy?.daily).toBeDefined();
+      expect(stats.triggeredBy?.daily?.current).toBe(9000);
+      expect(stats.triggeredBy?.daily?.limit).toBe(10000);
+      expect(stats.triggeredBy?.daily?.effectiveLimit).toBe(9000); // 10000 * 0.9
+    });
+
+    it("should set multiple triggeredBy fields when multiple limits hit", () => {
+      tracker = new RateLimitTracker({
+        requestsPerMinute: 10,
+        tokensPerMinute: 1000,
+        safetyMargin: 0.9,
+      });
+
+      // 9 requests with 100 tokens each = 900 tokens, hitting both limits
+      for (let i = 0; i < 9; i++) {
+        tracker.recordUsage(100, 0);
+      }
+
+      const stats = tracker.getUsageStats();
+      expect(stats.triggeredBy).toBeDefined();
+      expect(stats.triggeredBy?.rpm).toBeDefined();
+      expect(stats.triggeredBy?.tpm).toBeDefined();
     });
   });
 });
