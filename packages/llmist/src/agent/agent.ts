@@ -1451,15 +1451,10 @@ export class Agent {
       return false; // Don't break loop
     }
 
-    // No gadgets executed - wrap text as synthetic TellUser result
+    // No gadgets executed - add text as assistant message
+    // (Use textWithGadgetsHandler if gadget wrapping is needed)
     if (finalMessage.trim()) {
-      const syntheticId = `gc_tell_${++this.syntheticInvocationCounter}`;
-      this.conversation.addGadgetCallResult(
-        "TellUser",
-        { message: finalMessage, done: false, type: "info" },
-        `ℹ️  ${finalMessage}`,
-        syntheticId,
-      );
+      this.conversation.addAssistantMessage(finalMessage);
     }
 
     // Handle text-only responses
