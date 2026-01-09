@@ -1,3 +1,9 @@
+## 15.1.0 (2026-01-09)
+
+* Merge pull request #335 from zbigniewsobiecki/feat/rate-limit-triggered-by ([37827e9](https://github.com/zbigniewsobiecki/llmist/commit/37827e9)), closes [#335](https://github.com/zbigniewsobiecki/llmist/issues/335)
+* Merge pull request #336 from zbigniewsobiecki/dev ([9ea7549](https://github.com/zbigniewsobiecki/llmist/commit/9ea7549)), closes [#336](https://github.com/zbigniewsobiecki/llmist/issues/336)
+* feat(core): add triggeredBy to RateLimitStats for better throttle feedback ([d542b1b](https://github.com/zbigniewsobiecki/llmist/commit/d542b1b)), closes [#334](https://github.com/zbigniewsobiecki/llmist/issues/334)
+
 ## 15.0.0 (2026-01-08)
 
 * Merge pull request #334 from zbigniewsobiecki/dev ([aac55b5](https://github.com/zbigniewsobiecki/llmist/commit/aac55b5)), closes [#334](https://github.com/zbigniewsobiecki/llmist/issues/334)
