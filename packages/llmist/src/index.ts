@@ -227,6 +227,7 @@ export type {
   RateLimitConfig,
   RateLimitStats,
   ResolvedRateLimitConfig,
+  TriggeredLimitInfo,
 } from "./core/rate-limit.js";
 export {
   DEFAULT_RATE_LIMIT_CONFIG,

@@ -24,7 +24,7 @@
  * ```
  */
 
-import type { ExecutionTree, StreamEvent } from "llmist";
+import type { ExecutionTree, RateLimitStats, StreamEvent } from "llmist";
 import { BlockRenderer } from "./block-renderer.js";
 import { TUIController } from "./controller.js";
 import { InputHandler } from "./input-handler.js";
@@ -496,9 +496,10 @@ export class TUIApp {
   /**
    * Show rate limiting throttle indicator in status bar.
    * @param delayMs - Delay in milliseconds before next request
+   * @param triggeredBy - Which limit(s) triggered the throttle
    */
-  showThrottling(delayMs: number): void {
-    this.statusBar.showThrottling(delayMs);
+  showThrottling(delayMs: number, triggeredBy?: RateLimitStats["triggeredBy"]): void {
+    this.statusBar.showThrottling(delayMs, triggeredBy);
   }
 
   /**
