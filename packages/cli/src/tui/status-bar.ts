@@ -7,7 +7,7 @@
  */
 
 import type { Box } from "@unblessed/node";
-import type { ExecutionEvent, ExecutionTree, NodeId } from "llmist";
+import type { ExecutionEvent, ExecutionTree, NodeId, RateLimitStats } from "llmist";
 import { formatCost, formatTokens } from "../ui/formatters.js";
 import type { ContentFilterMode, FocusMode, TUIMetrics } from "./types.js";
 
@@ -75,7 +75,11 @@ export class StatusBar {
   private treeUnsubscribe: (() => void) | null = null;
 
   /** Rate limiting state */
-  private rateLimitState: { isThrottling: boolean; delayMs: number } | null = null;
+  private rateLimitState: {
+    isThrottling: boolean;
+    delayMs: number;
+    triggeredBy?: RateLimitStats["triggeredBy"];
+  } | null = null;
 
   /** Retry state */
   private retryState: { attemptNumber: number; retriesLeft: number } | null = null;
@@ -246,9 +250,10 @@ export class StatusBar {
   /**
    * Show rate limiting throttle indicator.
    * @param delayMs - Delay in milliseconds before next request
+   * @param triggeredBy - Which limit(s) triggered the throttle
    */
-  showThrottling(delayMs: number): void {
-    this.rateLimitState = { isThrottling: true, delayMs };
+  showThrottling(delayMs: number, triggeredBy?: RateLimitStats["triggeredBy"]): void {
+    this.rateLimitState = { isThrottling: true, delayMs, triggeredBy };
     this.render(true);
   }
 
@@ -571,8 +576,16 @@ export class StatusBar {
 
     // Rate limit throttling indicator (high priority - show before activity)
     if (this.rateLimitState?.isThrottling) {
-      const seconds = Math.ceil(this.rateLimitState.delayMs / 1000);
-      parts.push(`${YELLOW}⏸ Throttled ${seconds}s${RESET}`);
+      const { triggeredBy } = this.rateLimitState;
+      if (triggeredBy?.daily) {
+        // Daily limit shows a more descriptive message instead of countdown
+        parts.push(`${YELLOW}⏸ Daily limit, resets midnight UTC${RESET}`);
+      } else {
+        // RPM/TPM show countdown with optional reason
+        const seconds = Math.ceil(this.rateLimitState.delayMs / 1000);
+        const reason = triggeredBy?.rpm ? " (RPM)" : triggeredBy?.tpm ? " (TPM)" : "";
+        parts.push(`${YELLOW}⏸ Throttled ${seconds}s${reason}${RESET}`);
+      }
     }
 
     // Retry attempt indicator (high priority - show before activity)

@@ -282,21 +282,29 @@ export async function executeAgent(
 
           if (tui) {
             const seconds = Math.ceil(context.delayMs / 1000);
+            const { triggeredBy } = context.stats;
 
             // Status bar indicator (will auto-clear after delay via timer below)
-            tui.showThrottling(context.delayMs);
+            tui.showThrottling(context.delayMs, triggeredBy);
 
-            // Conversation log entry with rate limit stats
-            const statsMsg: string[] = [];
-            if (context.stats.rpm > 0) statsMsg.push(`${context.stats.rpm} RPM`);
-            if (context.stats.tpm > 0)
-              statsMsg.push(`${Math.round(context.stats.tpm / 1000)}K TPM`);
-            const statsStr = statsMsg.length > 0 ? ` (${statsMsg.join(", ")})` : "";
+            // Format conversation message based on which limit triggered
+            let message: string;
+            if (triggeredBy?.daily) {
+              // Daily limit: show token counts and wait until midnight
+              const current = Math.round(triggeredBy.daily.current / 1000);
+              const limit = Math.round(triggeredBy.daily.limit / 1000);
+              message = `Daily token limit reached (${current}K/${limit}K), waiting until midnight UTC...`;
+            } else {
+              // RPM/TPM: show current stats and countdown
+              const statsMsg: string[] = [];
+              if (context.stats.rpm > 0) statsMsg.push(`${context.stats.rpm} RPM`);
+              if (context.stats.tpm > 0)
+                statsMsg.push(`${Math.round(context.stats.tpm / 1000)}K TPM`);
+              const statsStr = statsMsg.length > 0 ? ` (${statsMsg.join(", ")})` : "";
+              message = `Rate limit approaching${statsStr}, waiting ${seconds}s...`;
+            }
 
-            tui.addSystemMessage(
-              `Rate limit approaching${statsStr}, waiting ${seconds}s...`,
-              "throttle",
-            );
+            tui.addSystemMessage(message, "throttle");
 
             // Auto-clear status bar indicator after delay
             setTimeout(() => tui.clearThrottling(), context.delayMs);

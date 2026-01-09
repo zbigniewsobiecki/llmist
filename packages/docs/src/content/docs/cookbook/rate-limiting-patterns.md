@@ -169,6 +169,31 @@ const parent = LLMist.createAgent()
 
 Rate limit statistics in `onRateLimitThrottle` hooks are per-agent (parent and subagent tracked separately).
 
+## Pattern 8: Understanding Which Limit Triggered
+
+The `triggeredBy` field in `RateLimitStats` tells you exactly which limit(s) caused throttling:
+
+```typescript
+.withHooks({
+  observers: {
+    onRateLimitThrottle: (ctx) => {
+      const { triggeredBy } = ctx.stats;
+
+      if (triggeredBy?.daily) {
+        // Daily token limit reached - wait until midnight UTC
+        console.log(`Daily limit hit: ${triggeredBy.daily.current}/${triggeredBy.daily.limit} tokens`);
+      } else if (triggeredBy?.rpm) {
+        // Request rate limit
+        console.log(`RPM limit: ${triggeredBy.rpm.current}/${triggeredBy.rpm.limit} requests`);
+      } else if (triggeredBy?.tpm) {
+        // Token rate limit
+        console.log(`TPM limit: ${triggeredBy.tpm.current}/${triggeredBy.tpm.limit} tokens`);
+      }
+    },
+  },
+})
+```
+
 ## Troubleshooting
 
 **Problem:** Still hitting rate limits despite configuration
@@ -178,9 +203,11 @@ Rate limit statistics in `onRateLimitThrottle` hooks are per-agent (parent and s
 .withHooks({
   observers: {
     onRateLimitThrottle: (ctx) => {
-      const rpm = ctx.stats.requestsInCurrentMinute;
-      const tpm = ctx.stats.tokensInCurrentMinute;
+      const { rpm, tpm, triggeredBy } = ctx.stats;
       console.log(`Current: RPM=${rpm}, TPM=${tpm}`);
+      if (triggeredBy) {
+        console.log(`Triggered by: ${Object.keys(triggeredBy).join(', ')}`);
+      }
       // If these are below your configured limits, increase safetyMargin
     },
   },
