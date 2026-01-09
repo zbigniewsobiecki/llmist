@@ -1,3 +1,8 @@
+## <small>15.1.1 (2026-01-09)</small>
+
+* Merge pull request #337 from zbigniewsobiecki/fix/remove-hardcoded-telluser ([ae2fc84](https://github.com/zbigniewsobiecki/llmist/commit/ae2fc84)), closes [#337](https://github.com/zbigniewsobiecki/llmist/issues/337)
+* fix(agent): remove hardcoded TellUser synthetic gadget ([18790e1](https://github.com/zbigniewsobiecki/llmist/commit/18790e1))
+
 ## 15.1.0 (2026-01-09)
 
 * Merge pull request #335 from zbigniewsobiecki/feat/rate-limit-triggered-by ([37827e9](https://github.com/zbigniewsobiecki/llmist/commit/37827e9)), closes [#335](https://github.com/zbigniewsobiecki/llmist/issues/335)
