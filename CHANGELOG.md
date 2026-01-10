@@ -1,3 +1,8 @@
+## <small>15.1.2 (2026-01-10)</small>
+
+* Merge pull request #339 from zbigniewsobiecki/dev ([3be7bd5](https://github.com/zbigniewsobiecki/llmist/commit/3be7bd5)), closes [#339](https://github.com/zbigniewsobiecki/llmist/issues/339)
+* fix(core): default temperature to 0 when not specified (#338) ([d1b35c5](https://github.com/zbigniewsobiecki/llmist/commit/d1b35c5)), closes [#338](https://github.com/zbigniewsobiecki/llmist/issues/338)
+
 ## <small>15.1.1 (2026-01-09)</small>
 
 * Merge pull request #337 from zbigniewsobiecki/fix/remove-hardcoded-telluser ([ae2fc84](https://github.com/zbigniewsobiecki/llmist/commit/ae2fc84)), closes [#337](https://github.com/zbigniewsobiecki/llmist/issues/337)
