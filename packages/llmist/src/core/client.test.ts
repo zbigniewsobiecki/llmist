@@ -203,6 +203,46 @@ describe("LLMist Client", () => {
 
       expect(() => client.stream(options)).toThrow("No adapter registered for provider unknown");
     });
+
+    it("should apply default temperature of 0 when not specified", async () => {
+      const options: LLMGenerationOptions = {
+        model: "test:test-model",
+        messages: [{ role: "user", content: "Hello" }],
+        // Note: no temperature specified
+      };
+
+      const stream = client.stream(options);
+      for await (const _chunk of stream) {
+        // consume stream
+      }
+
+      // Verify adapter received temperature: 0
+      expect(mockAdapter.stream).toHaveBeenCalledWith(
+        expect.objectContaining({ temperature: 0 }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("should preserve explicit temperature when specified", async () => {
+      const options: LLMGenerationOptions = {
+        model: "test:test-model",
+        messages: [{ role: "user", content: "Hello" }],
+        temperature: 0.7,
+      };
+
+      const stream = client.stream(options);
+      for await (const _chunk of stream) {
+        // consume stream
+      }
+
+      // Verify adapter received the explicit temperature
+      expect(mockAdapter.stream).toHaveBeenCalledWith(
+        expect.objectContaining({ temperature: 0.7 }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 
   describe("countTokens()", () => {
