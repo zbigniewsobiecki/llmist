@@ -12,8 +12,8 @@ import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "./options
 import { ModelIdentifierParser } from "./options.js";
 import {
   complete as completeHelper,
-  type TextGenerationOptions,
   stream as streamHelper,
+  type TextGenerationOptions,
 } from "./quick-methods.js";
 
 export interface LLMistOptions {
@@ -143,7 +143,14 @@ export class LLMist {
     const descriptor = this.parser.parse(options.model);
     const spec = this.modelRegistry.getModelSpec(descriptor.name);
     const adapter = this.resolveAdapter(descriptor);
-    return adapter.stream(options, descriptor, spec);
+
+    // Apply global default temperature of 0 (deterministic) when not specified
+    const optionsWithDefaults: LLMGenerationOptions = {
+      ...options,
+      temperature: options.temperature ?? 0,
+    };
+
+    return adapter.stream(optionsWithDefaults, descriptor, spec);
   }
 
   /**
