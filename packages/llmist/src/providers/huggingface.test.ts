@@ -297,16 +297,16 @@ describe("HuggingFaceProvider", () => {
   describe("endpoint types", () => {
     it("should default to serverless endpoint", () => {
       const mockClient = {} as OpenAI;
-      const provider = new HuggingFaceProvider(mockClient);
+      const provider = new HuggingFaceProvider(mockClient, { endpointType: "serverless" });
 
-      expect((provider as any).endpointType).toBe("serverless");
+      expect((provider as any).config.endpointType).toBe("serverless");
     });
 
     it("should support dedicated endpoint type", () => {
       const mockClient = {} as OpenAI;
-      const provider = new HuggingFaceProvider(mockClient, "dedicated");
+      const provider = new HuggingFaceProvider(mockClient, { endpointType: "dedicated" });
 
-      expect((provider as any).endpointType).toBe("dedicated");
+      expect((provider as any).config.endpointType).toBe("dedicated");
     });
   });
 });
@@ -374,7 +374,7 @@ describe("createHuggingFaceProviderFromEnv", () => {
     const provider = createHuggingFaceProviderFromEnv();
 
     expect(provider).toBeInstanceOf(HuggingFaceProvider);
-    expect((provider as any).endpointType).toBe("dedicated");
+    expect((provider as any).config.endpointType).toBe("dedicated");
   });
 
   it("should default to serverless if HF_ENDPOINT_URL not set", () => {
@@ -384,7 +384,7 @@ describe("createHuggingFaceProviderFromEnv", () => {
     const provider = createHuggingFaceProviderFromEnv();
 
     expect(provider).toBeInstanceOf(HuggingFaceProvider);
-    expect((provider as any).endpointType).toBe("serverless");
+    expect((provider as any).config.endpointType).toBe("serverless");
   });
 
   it("should warn if token doesn't start with hf_", () => {
