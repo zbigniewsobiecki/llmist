@@ -1,3 +1,7 @@
+## <small>15.2.2 (2026-01-11)</small>
+
+* test(coverage): add comprehensive test coverage improvements (#344) (#346) ([715ae3a](https://github.com/zbigniewsobiecki/llmist/commit/715ae3a)), closes [#344](https://github.com/zbigniewsobiecki/llmist/issues/344) [#346](https://github.com/zbigniewsobiecki/llmist/issues/346)
+
 ## <small>15.2.1 (2026-01-11)</small>
 
 * Merge pull request #345 from zbigniewsobiecki/dev ([ee3042a](https://github.com/zbigniewsobiecki/llmist/commit/ee3042a)), closes [#345](https://github.com/zbigniewsobiecki/llmist/issues/345)
