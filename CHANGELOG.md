@@ -1,3 +1,8 @@
+## 15.2.0 (2026-01-11)
+
+* Merge pull request #342 from zbigniewsobiecki/dev ([29e6341](https://github.com/zbigniewsobiecki/llmist/commit/29e6341)), closes [#342](https://github.com/zbigniewsobiecki/llmist/issues/342)
+* feat(providers): add pricing for DeepSeek-V3.2 and MiniMax-M2.1 on HuggingFace (#341) ([c5ba512](https://github.com/zbigniewsobiecki/llmist/commit/c5ba512)), closes [#341](https://github.com/zbigniewsobiecki/llmist/issues/341)
+
 ## <small>15.1.2 (2026-01-10)</small>
 
 * Merge pull request #339 from zbigniewsobiecki/dev ([3be7bd5](https://github.com/zbigniewsobiecki/llmist/commit/3be7bd5)), closes [#339](https://github.com/zbigniewsobiecki/llmist/issues/339)
