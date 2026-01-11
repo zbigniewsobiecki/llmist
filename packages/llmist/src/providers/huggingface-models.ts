@@ -12,7 +12,7 @@
  * - HF Inference Providers documentation
  * - Model cards and specifications
  *
- * Last updated: 2026-01-02 (based on current HF trending models)
+ * Last updated: 2026-01-11 (based on current HF trending models)
  */
 
 import type { ModelSpec } from "../core/model-catalog.js";
@@ -29,8 +29,9 @@ export const HUGGINGFACE_MODELS: ModelSpec[] = [
     contextWindow: 64_000,
     maxOutputTokens: 8_192,
     pricing: {
-      input: 0.0,
-      output: 0.0,
+      input: 0.269,
+      output: 0.4,
+      cachedInput: 0.1345,
     },
     knowledgeCutoff: "2024-12",
     features: {
@@ -44,7 +45,7 @@ export const HUGGINGFACE_MODELS: ModelSpec[] = [
       family: "DeepSeek V3",
       releaseDate: "2025-12",
       notes:
-        "685B MoE model optimized for faster, lower-cost inference with strong general reasoning and tool use.",
+        "685B MoE model optimized for faster, lower-cost inference with strong general reasoning and tool use. Pricing via Novita AI.",
     },
   },
 
@@ -794,6 +795,33 @@ export const HUGGINGFACE_MODELS: ModelSpec[] = [
       family: "GPT OSS",
       releaseDate: "2024-12",
       notes: "Open-source GPT-style model from OpenAI research.",
+    },
+  },
+
+  // ==========================================================================
+  // MiniMax Models
+  // ==========================================================================
+
+  {
+    provider: "huggingface",
+    modelId: "MiniMaxAI/MiniMax-M2.1",
+    displayName: "MiniMax M2.1",
+    contextWindow: 128_000,
+    maxOutputTokens: 8_192,
+    pricing: {
+      input: 0.3,
+      output: 1.2,
+    },
+    knowledgeCutoff: "2025-01",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: false,
+    },
+    metadata: {
+      family: "MiniMax",
+      releaseDate: "2025-01",
+      notes: "Large-scale model with strong multilingual and reasoning capabilities.",
     },
   },
 ];
