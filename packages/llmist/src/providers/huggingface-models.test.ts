@@ -25,10 +25,13 @@ describe("HUGGINGFACE_MODELS", () => {
       expect(typeof model.knowledgeCutoff).toBe("string");
     });
 
-    it.each(HUGGINGFACE_MODELS)("$modelId has free pricing (serverless)", (model) => {
-      // Hugging Face serverless inference is free
-      expect(model.pricing.input).toBe(0);
-      expect(model.pricing.output).toBe(0);
+    it.each(HUGGINGFACE_MODELS)("$modelId has valid pricing", (model) => {
+      // Pricing should be non-negative (0 for free serverless, or paid for third-party providers)
+      expect(model.pricing.input).toBeGreaterThanOrEqual(0);
+      expect(model.pricing.output).toBeGreaterThanOrEqual(0);
+      if (model.pricing.cachedInput !== undefined) {
+        expect(model.pricing.cachedInput).toBeGreaterThanOrEqual(0);
+      }
     });
 
     it.each(HUGGINGFACE_MODELS)("$modelId has valid features", (model) => {
@@ -73,6 +76,11 @@ describe("HUGGINGFACE_MODELS", () => {
     it("includes Google Gemma models", () => {
       const gemma = HUGGINGFACE_MODELS.filter((m) => m.modelId.startsWith("google/gemma"));
       expect(gemma.length).toBeGreaterThan(0);
+    });
+
+    it("includes MiniMax models", () => {
+      const minimax = HUGGINGFACE_MODELS.filter((m) => m.modelId.startsWith("MiniMaxAI/"));
+      expect(minimax.length).toBeGreaterThan(0);
     });
   });
 
