@@ -1,3 +1,8 @@
+## <small>15.2.1 (2026-01-11)</small>
+
+* Merge pull request #345 from zbigniewsobiecki/dev ([ee3042a](https://github.com/zbigniewsobiecki/llmist/commit/ee3042a)), closes [#345](https://github.com/zbigniewsobiecki/llmist/issues/345)
+* fix(providers): correct context windows for DeepSeek-V3.2 and MiniMax-M2.1 (#343) ([91eee86](https://github.com/zbigniewsobiecki/llmist/commit/91eee86)), closes [#343](https://github.com/zbigniewsobiecki/llmist/issues/343)
+
 ## 15.2.0 (2026-01-11)
 
 * Merge pull request #342 from zbigniewsobiecki/dev ([29e6341](https://github.com/zbigniewsobiecki/llmist/commit/29e6341)), closes [#342](https://github.com/zbigniewsobiecki/llmist/issues/342)
