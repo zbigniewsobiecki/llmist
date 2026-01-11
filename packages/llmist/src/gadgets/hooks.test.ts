@@ -10,6 +10,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { collectEvents, ErrorGadget, TestGadget } from "../../../testing/src/helpers.js";
 import { Agent } from "../agent/agent.js";
 import { AGENT_INTERNAL_KEY } from "../agent/agent-internal-key.js";
 import type {
@@ -35,7 +36,6 @@ import type {
   ProviderAdapter,
 } from "../core/options.js";
 import { createLogger } from "../logging/logger.js";
-import { collectEvents, ErrorGadget, TestGadget } from "../../../testing/src/helpers.js";
 import { GadgetRegistry } from "./registry.js";
 import type { StreamCompletionEvent, StreamEvent } from "./types.js";
 

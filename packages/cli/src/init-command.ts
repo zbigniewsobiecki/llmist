@@ -1,6 +1,6 @@
-import type { Command } from "commander";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import type { Command } from "commander";
 
 import { getConfigPath } from "./config.js";
 import { COMMANDS } from "./constants.js";

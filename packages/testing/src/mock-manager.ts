@@ -1,5 +1,5 @@
-import type { ILogObj, Logger } from "tslog";
 import { createLogger } from "llmist";
+import type { ILogObj, Logger } from "tslog";
 import type {
   MockMatcherContext,
   MockOptions,

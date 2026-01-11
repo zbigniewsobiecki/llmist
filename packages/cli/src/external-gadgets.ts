@@ -11,16 +11,12 @@
 
 import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { AbstractGadget, LLMistPackageManifest } from "llmist";
-import {
-  createTypeScriptImporter,
-  extractGadgetsFromModule,
-  isTypeScriptFile,
-} from "./gadgets.js";
+import { createTypeScriptImporter, extractGadgetsFromModule, isTypeScriptFile } from "./gadgets.js";
 
 /**
  * Check if a command is available in the system PATH.
@@ -62,7 +58,6 @@ export interface GadgetSpecifier {
   /** Individual gadget name (e.g., "Navigate") */
   gadgetName?: string;
 }
-
 
 /**
  * Check if a specifier is an external package (npm or git).
@@ -264,7 +259,7 @@ async function installNpmPackage(spec: GadgetSpecifier, cacheDir: string): Promi
   if (!isCommandAvailable("npm")) {
     throw new Error(
       `npm is not available to install '${packageSpec}'.\n` +
-        "Please install Node.js: https://nodejs.org/"
+        "Please install Node.js: https://nodejs.org/",
     );
   }
 
@@ -317,7 +312,7 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
       if (!hasNpm) {
         throw new Error(
           `npm is not available to install dependencies for '${spec.package}'.\n` +
-            "Please install Node.js: https://nodejs.org/"
+            "Please install Node.js: https://nodejs.org/",
         );
       }
 
@@ -331,7 +326,9 @@ async function installGitPackage(spec: GadgetSpecifier, cacheDir: string): Promi
         execSync(installCmd, { cwd: cacheDir, stdio: "inherit", env: quietEnv });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to install dependencies for '${spec.package}' using npm: ${message}`);
+        throw new Error(
+          `Failed to install dependencies for '${spec.package}' using npm: ${message}`,
+        );
       }
 
       // Run build if available (git packages need to be built)
@@ -487,17 +484,17 @@ export async function loadExternalGadgets(
     // Try factory functions in order of specificity
     if (spec.preset && typeof exportsObj.createGadgetsByPreset === "function") {
       // Use preset-specific factory
-      const result = await (exportsObj.createGadgetsByPreset as (preset: string) => Promise<unknown>)(
-        spec.preset,
-      );
+      const result = await (
+        exportsObj.createGadgetsByPreset as (preset: string) => Promise<unknown>
+      )(spec.preset);
       gadgets = extractGadgetsFromModule(result);
       // Clear gadgetNames since factory already handled the preset filtering
       gadgetNames = null;
     } else if (gadgetNames && typeof exportsObj.createGadgetsByName === "function") {
       // Use name-specific factory
-      const result = await (exportsObj.createGadgetsByName as (names: string[]) => Promise<unknown>)(
-        gadgetNames,
-      );
+      const result = await (
+        exportsObj.createGadgetsByName as (names: string[]) => Promise<unknown>
+      )(gadgetNames);
       gadgets = extractGadgetsFromModule(result);
       // Clear gadgetNames since factory already filtered
       gadgetNames = null;

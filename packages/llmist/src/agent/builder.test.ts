@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-
+import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 import { createGadget } from "../gadgets/create-gadget.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
-import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 import { AgentBuilder, type HistoryMessage } from "./builder.js";
 import { HookPresets } from "./hook-presets.js";
 
@@ -619,7 +618,12 @@ describe("AgentBuilder", () => {
   describe("withSyntheticGadgetCall", () => {
     it("returns this for chaining", () => {
       const builder = new AgentBuilder();
-      const result = builder.withSyntheticGadgetCall("TestGadget", { foo: "bar" }, "result", "gc_1");
+      const result = builder.withSyntheticGadgetCall(
+        "TestGadget",
+        { foo: "bar" },
+        "result",
+        "gc_1",
+      );
 
       expect(result).toBe(builder);
     });
@@ -990,10 +994,7 @@ describe("AgentBuilder", () => {
 
     it("chains correctly with other builder methods", () => {
       const builder = new AgentBuilder();
-      const result = builder
-        .withModel("sonnet")
-        .withRetry({ retries: 5 })
-        .withMaxIterations(10);
+      const result = builder.withModel("sonnet").withRetry({ retries: 5 }).withMaxIterations(10);
 
       expect(result).toBe(builder);
     });

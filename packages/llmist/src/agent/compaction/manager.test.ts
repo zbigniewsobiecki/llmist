@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createMockClient, MockManager, mockLLM } from "../../../../testing/src/index.js";
 import type { LLMist } from "../../core/client.js";
 import type { LLMMessage } from "../../core/messages.js";
-import { createMockClient, MockManager, mockLLM } from "../../../../testing/src/index.js";
 import type { IConversationManager } from "../interfaces.js";
 import { CompactionManager } from "./manager.js";
 

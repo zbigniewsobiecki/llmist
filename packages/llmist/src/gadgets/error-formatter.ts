@@ -68,7 +68,11 @@ export class GadgetExecutionErrorFormatter {
    * @param gadget - The gadget instance if found (for generating instructions)
    * @returns Formatted error message with format reference
    */
-  formatParseError(gadgetName: string, parseError: string, gadget: AbstractGadget | undefined): string {
+  formatParseError(
+    gadgetName: string,
+    parseError: string,
+    gadget: AbstractGadget | undefined,
+  ): string {
     const parts: string[] = [];
 
     // Error header

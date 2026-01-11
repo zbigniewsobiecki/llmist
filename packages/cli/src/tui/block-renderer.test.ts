@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { Readable, Writable } from "node:stream";
 import { NodeRuntime, Screen, ScrollableBox, setRuntime } from "@unblessed/node";
 import { ExecutionTree } from "llmist";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { BlockRenderer } from "./block-renderer.js";
 
 // TUI tests use mock streams - no real TTY needed
@@ -946,7 +946,10 @@ describe("BlockRenderer", () => {
 
       // Add LLM call and text via tree
       const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
-      tree.emitText("This is a long response that should be abbreviated when collapsed.", llmNode.id);
+      tree.emitText(
+        "This is a long response that should be abbreviated when collapsed.",
+        llmNode.id,
+      );
 
       // Select the LLM call
       renderer.selectFirst();
@@ -995,7 +998,7 @@ describe("BlockRenderer", () => {
       const llmNode = tree.addLLMCall({ iteration: 0, model: "sonnet" });
       tree.emitText(
         "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10",
-        llmNode.id
+        llmNode.id,
       );
 
       // Select the text block

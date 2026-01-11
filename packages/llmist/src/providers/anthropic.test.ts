@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
+import { describe, expect, it, vi } from "vitest";
 
 import { AnthropicMessagesProvider } from "./anthropic.js";
 

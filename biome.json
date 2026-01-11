@@ -32,6 +32,16 @@
     }
   },
   "files": {
-    "includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.json", "!**/dist", "!**/node_modules", "!**/coverage", "!**/.turbo"]
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.json",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/coverage",
+      "!**/.turbo"
+    ]
   }
 }

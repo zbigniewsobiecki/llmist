@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, vi, test } from "vitest";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
-import type { LLMist } from "llmist";
-import type { LLMStream, StreamChunk } from "llmist";
+import type { LLMist, LLMStream, StreamChunk } from "llmist";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { type CLIAgentOptions, executeAgent } from "./agent-command.js";
 import type { CLIEnvironment } from "./environment.js";
 
@@ -244,10 +243,7 @@ describe("executeAgent piped mode", () => {
     });
 
     test("SIGINT exits with code 130 in piped mode", async () => {
-      const chunks: StreamChunk[] = [
-        { text: "Response " },
-        { text: "text", finishReason: "stop" },
-      ];
+      const chunks: StreamChunk[] = [{ text: "Response " }, { text: "text", finishReason: "stop" }];
       const mockClient = createMockClient(chunks, { delayBetweenChunks: 500 });
       const env = createMockEnv(mockClient);
 

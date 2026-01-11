@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
 import { Readable, Writable } from "node:stream";
 import { InvalidArgumentError } from "commander";
+import type { LLMist, LLMStreamChunk, TokenUsage } from "llmist";
+import { createLogger, Gadget } from "llmist";
 import type { ILogObj, Logger } from "tslog";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
-
 import type { CLIEnvironment } from "./environment.js";
 import {
   createTypeScriptImporter,
@@ -20,10 +21,6 @@ import {
   resolvePrompt,
   StreamPrinter,
 } from "./utils.js";
-import type { LLMist } from "llmist";
-import type { LLMStreamChunk, TokenUsage } from "llmist";
-import { Gadget } from "llmist";
-import { createLogger } from "llmist";
 
 class TestGadget extends Gadget({
   name: "TestGadget",
@@ -471,8 +468,6 @@ describe("createTypeScriptImporter", () => {
   it("can be used as custom importer for loadGadgets", async () => {
     // Test that loadGadgets accepts the TypeScript importer
     const importer = createTypeScriptImporter();
-    await expect(
-      loadGadgets(["nonexistent-module"], process.cwd(), importer),
-    ).rejects.toThrow(); // Will fail, but proves the function signature is compatible
+    await expect(loadGadgets(["nonexistent-module"], process.cwd(), importer)).rejects.toThrow(); // Will fail, but proves the function signature is compatible
   });
 });

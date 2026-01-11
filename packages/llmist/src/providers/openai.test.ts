@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type OpenAI from "openai";
+import { describe, expect, it, vi } from "vitest";
 
 import { OpenAIChatProvider } from "./openai.js";
 
@@ -411,6 +411,406 @@ describe("OpenAIChatProvider", () => {
 
       // Long message should have more tokens
       expect(count).toBeGreaterThan(100);
+    });
+  });
+
+  describe("multimodal content conversion", () => {
+    it("should convert URL image to OpenAI image_url format", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const options = {
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "What is in this image?" },
+              {
+                type: "image" as const,
+                source: {
+                  type: "url" as const,
+                  url: "https://example.com/image.png",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      await provider.stream(options, { provider: "openai", name: "gpt-4o" }).next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "What is in this image?" },
+                {
+                  type: "image_url",
+                  image_url: { url: "https://example.com/image.png" },
+                },
+              ],
+            },
+          ],
+        }),
+        undefined,
+      );
+    });
+
+    it("should convert base64 image to data URL format", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const options = {
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Describe this" },
+              {
+                type: "image" as const,
+                source: {
+                  type: "base64" as const,
+                  mediaType: "image/png",
+                  data: "iVBORw0KGgoAAAANSUhEUg==",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      await provider.stream(options, { provider: "openai", name: "gpt-4o" }).next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Describe this" },
+                {
+                  type: "image_url",
+                  image_url: { url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==" },
+                },
+              ],
+            },
+          ],
+        }),
+        undefined,
+      );
+    });
+
+    it("should handle multiple images in one message", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const options = {
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Compare these images" },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/image1.png" },
+              },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/image2.png" },
+              },
+            ],
+          },
+        ],
+      };
+
+      await provider.stream(options, { provider: "openai", name: "gpt-4o" }).next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Compare these images" },
+                { type: "image_url", image_url: { url: "https://example.com/image1.png" } },
+                { type: "image_url", image_url: { url: "https://example.com/image2.png" } },
+              ],
+            },
+          ],
+        }),
+        undefined,
+      );
+    });
+
+    it("should throw error for audio content", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const options = {
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Transcribe this" },
+              {
+                type: "audio" as const,
+                source: {
+                  type: "base64" as const,
+                  mediaType: "audio/mp3",
+                  data: "SGVsbG8gV29ybGQ=",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const stream = provider.stream(options, { provider: "openai", name: "gpt-4o" });
+
+      await expect(stream.next()).rejects.toThrow(
+        "OpenAI chat completions do not support audio input",
+      );
+    });
+
+    it("should keep simple string content as-is for user messages", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const options = {
+        model: "gpt-4",
+        messages: [{ role: "user" as const, content: "Simple text message" }],
+      };
+
+      await provider.stream(options, { provider: "openai", name: "gpt-4" }).next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [{ role: "user", content: "Simple text message", name: undefined }],
+        }),
+        undefined,
+      );
+    });
+
+    it("should extract text from multimodal content for system messages", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const options = {
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system" as const,
+            content: [
+              { type: "text" as const, text: "You are helpful" },
+              { type: "text" as const, text: " and concise" },
+            ],
+          },
+        ],
+      };
+
+      await provider.stream(options, { provider: "openai", name: "gpt-4" }).next();
+
+      // System messages should have text extracted and concatenated
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [{ role: "system", content: "You are helpful and concise", name: undefined }],
+        }),
+        undefined,
+      );
+    });
+  });
+
+  describe("normalizeProviderStream with usage", () => {
+    it("should extract usage with cached tokens", async () => {
+      const mockStream = (async function* () {
+        yield {
+          choices: [{ delta: { content: "Hello" }, finish_reason: null }],
+        };
+        yield {
+          choices: [{ delta: {}, finish_reason: "stop" }],
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            prompt_tokens_details: { cached_tokens: 25 },
+          },
+        };
+      })();
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn().mockResolvedValue(mockStream),
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const stream = provider.stream(
+        {
+          model: "gpt-4",
+          messages: [{ role: "user" as const, content: "Test" }],
+        },
+        { provider: "openai", name: "gpt-4" },
+      );
+
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      const finalChunk = chunks.find((c) => c.usage);
+      expect(finalChunk).toBeDefined();
+      expect(finalChunk?.usage).toEqual({
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cachedInputTokens: 25,
+      });
+    });
+
+    it("should handle usage without cached tokens", async () => {
+      const mockStream = (async function* () {
+        yield {
+          choices: [{ delta: {}, finish_reason: "stop" }],
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            // No prompt_tokens_details
+          },
+        };
+      })();
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn().mockResolvedValue(mockStream),
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const stream = provider.stream(
+        {
+          model: "gpt-4",
+          messages: [{ role: "user" as const, content: "Test" }],
+        },
+        { provider: "openai", name: "gpt-4" },
+      );
+
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      const finalChunk = chunks.find((c) => c.usage);
+      expect(finalChunk?.usage).toEqual({
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cachedInputTokens: 0,
+      });
+    });
+
+    it("should handle empty choices array", async () => {
+      const mockStream = (async function* () {
+        yield {
+          choices: [],
+        };
+        yield {
+          choices: [{ delta: { content: "Hello" }, finish_reason: null }],
+        };
+      })();
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn().mockResolvedValue(mockStream),
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const stream = provider.stream(
+        {
+          model: "gpt-4",
+          messages: [{ role: "user" as const, content: "Test" }],
+        },
+        { provider: "openai", name: "gpt-4" },
+      );
+
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      // Should only get the chunk with actual content
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].text).toBe("Hello");
     });
   });
 });

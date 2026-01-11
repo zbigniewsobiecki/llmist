@@ -1,8 +1,8 @@
-import { describe, expect, test, beforeAll, afterAll } from "vitest";
-import { Writable, Readable } from "node:stream";
-import { setRuntime, NodeRuntime, Screen } from "@unblessed/node";
-import { showRawViewer, type RawViewerMode } from "./raw-viewer.js";
+import { Readable, Writable } from "node:stream";
+import { NodeRuntime, Screen, setRuntime } from "@unblessed/node";
 import type { LLMMessage } from "llmist";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { type RawViewerMode, showRawViewer } from "./raw-viewer.js";
 
 // TUI tests use mock streams - no real TTY needed
 
@@ -136,9 +136,7 @@ describe("Raw Viewer", () => {
 
   describe("message formatting", () => {
     test("handles string content", () => {
-      const messages: LLMMessage[] = [
-        { role: "user", content: "Simple string message" },
-      ];
+      const messages: LLMMessage[] = [{ role: "user", content: "Simple string message" }];
 
       const handle = showRawViewer({
         screen,
@@ -152,9 +150,7 @@ describe("Raw Viewer", () => {
     });
 
     test("handles multiline string content", () => {
-      const messages: LLMMessage[] = [
-        { role: "user", content: "Line 1\nLine 2\nLine 3" },
-      ];
+      const messages: LLMMessage[] = [{ role: "user", content: "Line 1\nLine 2\nLine 3" }];
 
       const handle = showRawViewer({
         screen,
@@ -328,9 +324,7 @@ describe("Raw Viewer", () => {
     });
 
     test("assistant role gets cyan color", () => {
-      const messages: LLMMessage[] = [
-        { role: "assistant", content: "Assistant" },
-      ];
+      const messages: LLMMessage[] = [{ role: "assistant", content: "Assistant" }];
 
       const handle = showRawViewer({
         screen,

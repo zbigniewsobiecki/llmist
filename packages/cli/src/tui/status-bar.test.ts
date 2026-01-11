@@ -1,8 +1,8 @@
-import { describe, expect, test, beforeAll, afterAll, vi } from "vitest";
-import { Writable, Readable } from "node:stream";
-import { setRuntime, NodeRuntime, Screen, Box } from "@unblessed/node";
-import { StatusBar } from "./status-bar.js";
+import { Readable, Writable } from "node:stream";
+import { Box, NodeRuntime, Screen, setRuntime } from "@unblessed/node";
 import { ExecutionTree } from "llmist";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { StatusBar } from "./status-bar.js";
 
 // TUI tests use mock streams - no real TTY needed
 
@@ -117,12 +117,7 @@ describe("StatusBar", () => {
     test("setFocusMode uses immediate render", () => {
       const renderCallback = vi.fn(() => {});
       const renderNowCallback = vi.fn(() => {});
-      const bar = new StatusBar(
-        statusBox,
-        "test-model",
-        renderCallback,
-        renderNowCallback,
-      );
+      const bar = new StatusBar(statusBox, "test-model", renderCallback, renderNowCallback);
 
       // Clear initial call counts
       renderNowCallback.mockClear();
@@ -206,12 +201,7 @@ describe("StatusBar", () => {
     test("updateStreaming uses immediate render", () => {
       const renderCallback = vi.fn(() => {});
       const renderNowCallback = vi.fn(() => {});
-      const bar = new StatusBar(
-        statusBox,
-        "test-model",
-        renderCallback,
-        renderNowCallback,
-      );
+      const bar = new StatusBar(statusBox, "test-model", renderCallback, renderNowCallback);
 
       // Clear initial call
       renderNowCallback.mockClear();

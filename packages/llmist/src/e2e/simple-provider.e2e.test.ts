@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
+import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 import { LLMist } from "../core/client.js";
 import type { LLMMessage } from "../core/messages.js";
-import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 
 /**
  * Simple E2E tests for the specified models using mock responses

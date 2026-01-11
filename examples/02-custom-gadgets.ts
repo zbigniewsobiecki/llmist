@@ -5,7 +5,6 @@
  */
 
 import {
-  TaskCompletionSignal,
   createGadget,
   type ExecutionContext,
   Gadget,
@@ -14,6 +13,7 @@ import {
   HookPresets,
   LLMist,
   ModelRegistry,
+  TaskCompletionSignal,
   withErrorHandling,
 } from "llmist";
 import { z } from "zod";

@@ -1,14 +1,13 @@
-import { mock } from "vitest";
 import * as path from "node:path";
 import * as dotenv from "dotenv";
+import { mock } from "vitest";
 import { z } from "zod";
-
+import { createMockClient } from "../../../testing/src/index.js";
 import { LLMist } from "../core/client.js";
-import { TaskCompletionSignal, HumanInputRequiredException } from "../gadgets/exceptions.js";
+import { HumanInputRequiredException, TaskCompletionSignal } from "../gadgets/exceptions.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import type { StreamEvent } from "../gadgets/types.js";
-import { createMockClient } from "../../../testing/src/index.js";
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });

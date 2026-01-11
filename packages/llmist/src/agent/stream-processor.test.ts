@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-
-import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
-import { TaskCompletionSignal } from "../gadgets/exceptions.js";
-import type { StreamCompletionEvent, StreamEvent } from "../gadgets/types.js";
-import { resetGlobalInvocationCounter } from "../gadgets/parser.js";
-import { GadgetRegistry } from "../gadgets/registry.js";
 import { createMockGadget, mockGadget } from "../../../testing/src/mock-gadget.js";
 import {
   createEmptyStream,
@@ -13,6 +7,11 @@ import {
   createTextStream,
 } from "../../../testing/src/stream-helpers.js";
 import type { LLMStreamChunk } from "../core/client.js";
+import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
+import { TaskCompletionSignal } from "../gadgets/exceptions.js";
+import { resetGlobalInvocationCounter } from "../gadgets/parser.js";
+import { GadgetRegistry } from "../gadgets/registry.js";
+import type { StreamCompletionEvent, StreamEvent } from "../gadgets/types.js";
 import type { AgentHooks } from "./hooks.js";
 import { StreamProcessor } from "./stream-processor.js";
 
@@ -1647,11 +1646,7 @@ test value
 
       const processor = new StreamProcessor({ iteration: 1, registry });
 
-      const gadgetCall = createGadgetCallString(
-        "ErrorGadget",
-        {},
-        { invocationId: "error_id" },
-      );
+      const gadgetCall = createGadgetCallString("ErrorGadget", {}, { invocationId: "error_id" });
       const stream = createTextStream(gadgetCall);
       await consumeStream(processor, stream);
 

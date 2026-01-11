@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PROMPTS,
-  type PromptTemplateConfig,
   type PromptContext,
+  type PromptTemplateConfig,
   resolvePromptTemplate,
   resolveRulesTemplate,
 } from "./prompt-config.js";

@@ -288,4 +288,3 @@ export class GadgetCallParser {
     this.lastEmittedTextOffset = 0;
   }
 }
-

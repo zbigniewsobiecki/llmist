@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import chalk from "chalk";
+import { describe, expect, it } from "vitest";
 import { formatNewFileDiff, renderColoredDiff } from "./diff-renderer.js";
 
 describe("renderColoredDiff", () => {

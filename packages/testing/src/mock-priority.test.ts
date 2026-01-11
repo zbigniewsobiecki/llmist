@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { LLMist } from "llmist";
 import type { ModelDescriptor } from "llmist";
+import { LLMist } from "llmist";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { getMockManager, mockLLM } from "./index.js";
 import { createMockAdapter } from "./mock-adapter.js";
 

@@ -11,7 +11,15 @@
  * Run: npx tsx examples/23-session-manager.ts
  */
 
-import { BaseSessionManager, Gadget, gadgetSuccess, gadgetError, LLMist, SimpleSessionManager, z } from "llmist";
+import {
+  BaseSessionManager,
+  Gadget,
+  gadgetError,
+  gadgetSuccess,
+  LLMist,
+  SimpleSessionManager,
+  z,
+} from "llmist";
 
 // =============================================================================
 // EXAMPLE 1: Database Session Manager
@@ -201,7 +209,9 @@ async function demoDatabaseSessionManager() {
   console.log(`   Result: ${result4}\n`);
 
   console.log("6. Sessions after close:");
-  console.log(`   Sessions: ${manager.listSessions().length === 0 ? "(none)" : manager.listSessions().join(", ")}\n`);
+  console.log(
+    `   Sessions: ${manager.listSessions().length === 0 ? "(none)" : manager.listSessions().join(", ")}\n`,
+  );
 }
 
 // =============================================================================
@@ -238,7 +248,9 @@ async function demoSimpleSessionManager() {
 
   console.log("4. Closing all sessions:");
   await manager.closeAll();
-  console.log(`   Sessions after closeAll(): ${manager.listSessions().length === 0 ? "(none)" : manager.listSessions().join(", ")}\n`);
+  console.log(
+    `   Sessions after closeAll(): ${manager.listSessions().length === 0 ? "(none)" : manager.listSessions().join(", ")}\n`,
+  );
 }
 
 // =============================================================================
