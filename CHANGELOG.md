@@ -1,3 +1,11 @@
+## 15.3.0 (2026-01-11)
+
+* Merge pull request #348 from zbigniewsobiecki/dev ([03c9bc0](https://github.com/zbigniewsobiecki/llmist/commit/03c9bc0)), closes [#348](https://github.com/zbigniewsobiecki/llmist/issues/348)
+* feat(providers): retry 400 errors for HuggingFace serverless inference (#347) ([0d1dbe1](https://github.com/zbigniewsobiecki/llmist/commit/0d1dbe1)), closes [#347](https://github.com/zbigniewsobiecki/llmist/issues/347)
+* chore: sync dev with main [skip ci] ([fa68209](https://github.com/zbigniewsobiecki/llmist/commit/fa68209))
+* chore: sync dev with main [skip ci] ([91824ec](https://github.com/zbigniewsobiecki/llmist/commit/91824ec))
+* test(coverage): add comprehensive test coverage improvements (#344) ([3529027](https://github.com/zbigniewsobiecki/llmist/commit/3529027)), closes [#344](https://github.com/zbigniewsobiecki/llmist/issues/344)
+
 ## <small>15.2.2 (2026-01-11)</small>
 
 * test(coverage): add comprehensive test coverage improvements (#344) (#346) ([715ae3a](https://github.com/zbigniewsobiecki/llmist/commit/715ae3a)), closes [#344](https://github.com/zbigniewsobiecki/llmist/issues/344) [#346](https://github.com/zbigniewsobiecki/llmist/issues/346)
