@@ -29,7 +29,9 @@ function demoFormatUtilities() {
 
   // Truncate long text (useful for limiting gadget output)
   console.log("Truncate examples:");
-  console.log(`  format.truncate("This is a very long message", 15) → "${format.truncate("This is a very long message", 15)}"`);
+  console.log(
+    `  format.truncate("This is a very long message", 15) → "${format.truncate("This is a very long message", 15)}"`,
+  );
   console.log(`  truncate("Short", 10) → "${truncate("Short", 10)}"`);
   console.log(`  truncate("Custom...", 6, "…") → "${truncate("Custom suffix", 6, "…")}"`);
   console.log();
@@ -57,7 +59,9 @@ function demoFormatUtilities() {
   console.log(`  format.duration(1500) → "${format.duration(1500)}"`);
   console.log(`  formatDuration(65000) → "${formatDuration(65000)}"`);
   console.log(`  formatDuration(3661000) → "${formatDuration(3661000)}"`);
-  console.log(`  formatDuration(3661000, { compact: true }) → "${formatDuration(3661000, { compact: true })}"`);
+  console.log(
+    `  formatDuration(3661000, { compact: true }) → "${formatDuration(3661000, { compact: true })}"`,
+  );
   console.log();
 }
 

@@ -4,12 +4,11 @@
  */
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-
-import { ExecutionTree } from "../core/execution-tree.js";
+import { createMockClient, getMockManager } from "../../../testing/src/index.js";
 import type { ExecutionEvent } from "../core/execution-events.js";
+import { ExecutionTree } from "../core/execution-tree.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import type { ExecutionContext } from "../gadgets/types.js";
-import { createMockClient, getMockManager } from "../../../testing/src/index.js";
 import { AgentBuilder } from "./builder.js";
 
 // A simple subagent gadget that creates its own agent using withParentContext
@@ -20,10 +19,7 @@ class SubagentGadget extends Gadget({
     task: z.string(),
   }),
 }) {
-  async execute(
-    params: { task: string },
-    ctx: ExecutionContext,
-  ): Promise<string> {
+  async execute(params: { task: string }, ctx: ExecutionContext): Promise<string> {
     const mockClient = createMockClient();
     const mockManager = getMockManager();
 
@@ -132,9 +128,7 @@ describe("Tree Sharing Integration", () => {
         });
 
         // NO withParentContext - subagent has its own tree!
-        const subagent = new AgentBuilder(subMockClient)
-          .withModel("mock:test")
-          .ask(params.task);
+        const subagent = new AgentBuilder(subMockClient).withModel("mock:test").ask(params.task);
 
         let result = "";
         for await (const event of subagent.run()) {
@@ -174,9 +168,7 @@ describe("Tree Sharing Integration", () => {
     mockManager.clear();
 
     // Only parent events should be captured (no subagent LLM calls at depth > 0)
-    const subagentLLMCalls = parentEvents.filter(
-      (e) => e.type === "llm_call_start" && e.depth > 0,
-    );
+    const subagentLLMCalls = parentEvents.filter((e) => e.type === "llm_call_start" && e.depth > 0);
 
     // Should have NO subagent LLM calls in parent tree (they're in separate tree)
     expect(subagentLLMCalls.length).toBe(0);

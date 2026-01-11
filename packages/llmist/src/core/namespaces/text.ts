@@ -19,7 +19,7 @@
  */
 
 import type { LLMist } from "../client.js";
-import { complete, type TextGenerationOptions, stream } from "../quick-methods.js";
+import { complete, stream, type TextGenerationOptions } from "../quick-methods.js";
 
 export class TextNamespace {
   constructor(private readonly client: LLMist) {}

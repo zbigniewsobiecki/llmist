@@ -2,9 +2,9 @@
  * Tests for MediaStore - session-scoped media storage with ID abstraction.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MediaStore } from "./media-store.js";
 import type { GadgetMediaOutput } from "./types.js";
 

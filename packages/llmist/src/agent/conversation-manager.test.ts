@@ -111,7 +111,12 @@ describe("ConversationManager", () => {
     it("should include gadget name and parameters", () => {
       const manager = new ConversationManager(createBaseMessages(), []);
 
-      manager.addGadgetCallResult("FileReader", { path: "/test.txt" }, "file contents", "gc_file_1");
+      manager.addGadgetCallResult(
+        "FileReader",
+        { path: "/test.txt" },
+        "file contents",
+        "gc_file_1",
+      );
 
       const history = manager.getHistoryMessages();
       const assistantMsg = history.find((m) => m.role === "assistant");

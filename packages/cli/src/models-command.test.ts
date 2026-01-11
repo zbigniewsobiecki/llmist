@@ -1,10 +1,7 @@
-import { describe, expect, it } from "vitest";
 import { Readable, Writable } from "node:stream";
-import type { LLMist } from "llmist";
-import type { ImageModelSpec, SpeechModelSpec } from "llmist";
-import type { ModelSpec } from "llmist";
-import { ModelRegistry } from "llmist";
-import { createLogger } from "llmist";
+import type { ImageModelSpec, LLMist, ModelSpec, SpeechModelSpec } from "llmist";
+import { createLogger, ModelRegistry } from "llmist";
+import { describe, expect, it } from "vitest";
 import type { CLIEnvironment } from "./environment.js";
 import { runCLI } from "./program.js";
 

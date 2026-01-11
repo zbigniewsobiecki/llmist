@@ -4,7 +4,7 @@
  * Run: npx tsx examples/07-logging.ts
  */
 
-import { createLogger, Gadget, HookPresets, LLMist, type ExecutionContext } from "llmist";
+import { createLogger, type ExecutionContext, Gadget, HookPresets, LLMist } from "llmist";
 import { z } from "zod";
 
 class Calculator extends Gadget({

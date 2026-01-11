@@ -1,6 +1,6 @@
-import { Eta } from "eta";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { Eta } from "eta";
 import { expandTildePath } from "./paths.js";
 
 /** Maximum file size for prompt files (1MB) */
@@ -106,9 +106,7 @@ export function createTemplateEngine(
   eta.__includeFileImpl = (path: string): string => {
     // Check for circular includes
     if (includeStack.includes(path)) {
-      throw new Error(
-        `Circular include detected: ${[...includeStack, path].join(" -> ")}`,
-      );
+      throw new Error(`Circular include detected: ${[...includeStack, path].join(" -> ")}`);
     }
 
     includeStack.push(path);

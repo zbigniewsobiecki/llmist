@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ExecutionContext, HostExports } from "../gadgets/types.js";
-import { AgentBuilder } from "./builder.js";
+import { z } from "zod";
 import { LLMist } from "../core/client.js";
 import { ExecutionTree } from "../core/execution-tree.js";
-import { Gadget } from "../gadgets/typed-gadget.js";
 import { createGadget } from "../gadgets/create-gadget.js";
-import { z } from "zod";
+import { Gadget } from "../gadgets/typed-gadget.js";
+import type { ExecutionContext, HostExports } from "../gadgets/types.js";
+import { AgentBuilder } from "./builder.js";
 import { createSubagent, hasHostExports } from "./subagent.js";
 
 // Mock host exports for testing

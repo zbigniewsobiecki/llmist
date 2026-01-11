@@ -38,7 +38,13 @@
 import type { ImageModelSpec } from "../core/media-types.js";
 
 /** GPT Image supported sizes */
-export const GPT_IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024", "1920x1080", "auto"] as const;
+export const GPT_IMAGE_SIZES = [
+  "1024x1024",
+  "1024x1536",
+  "1536x1024",
+  "1920x1080",
+  "auto",
+] as const;
 export type GptImageSize = (typeof GPT_IMAGE_SIZES)[number];
 
 /** GPT Image quality levels */

@@ -293,33 +293,19 @@ function isTextPart(part: unknown): part is { type: "text"; text: string } {
   );
 }
 
-function isImagePart(
-  part: unknown,
-): part is { type: "image"; source?: { media_type?: string } } {
-  return (
-    typeof part === "object" &&
-    part !== null &&
-    (part as { type?: string }).type === "image"
-  );
+function isImagePart(part: unknown): part is { type: "image"; source?: { media_type?: string } } {
+  return typeof part === "object" && part !== null && (part as { type?: string }).type === "image";
 }
 
-function isAudioPart(
-  part: unknown,
-): part is { type: "audio"; source?: { media_type?: string } } {
-  return (
-    typeof part === "object" &&
-    part !== null &&
-    (part as { type?: string }).type === "audio"
-  );
+function isAudioPart(part: unknown): part is { type: "audio"; source?: { media_type?: string } } {
+  return typeof part === "object" && part !== null && (part as { type?: string }).type === "audio";
 }
 
 function isToolUsePart(
   part: unknown,
 ): part is { type: "tool_use"; id: string; name: string; input: unknown } {
   return (
-    typeof part === "object" &&
-    part !== null &&
-    (part as { type?: string }).type === "tool_use"
+    typeof part === "object" && part !== null && (part as { type?: string }).type === "tool_use"
   );
 }
 
@@ -327,9 +313,7 @@ function isToolResultPart(
   part: unknown,
 ): part is { type: "tool_result"; tool_use_id: string; content: unknown } {
   return (
-    typeof part === "object" &&
-    part !== null &&
-    (part as { type?: string }).type === "tool_result"
+    typeof part === "object" && part !== null && (part as { type?: string }).type === "tool_result"
   );
 }
 

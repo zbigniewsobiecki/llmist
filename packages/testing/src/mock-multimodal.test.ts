@@ -7,8 +7,8 @@
  * - Image and speech generation mocking
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { imageFromBase64, text } from "llmist";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMockClient, getMockManager, mockLLM } from "./index.js";
 
 describe("Multimodal Mock Matchers", () => {

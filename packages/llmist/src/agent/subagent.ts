@@ -170,10 +170,7 @@ function getHostExports(ctx: ExecutionContext): HostExports {
  * // the parent's onHumanInput handler will be called
  * ```
  */
-export function createSubagent(
-  ctx: ExecutionContext,
-  options: SubagentOptions,
-): AgentBuilder {
+export function createSubagent(ctx: ExecutionContext, options: SubagentOptions): AgentBuilder {
   const {
     name,
     gadgets,

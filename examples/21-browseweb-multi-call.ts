@@ -18,8 +18,8 @@
  *     -g ~/Code/dhalsim:subagent --log-file /tmp/test.log
  */
 
-import { LLMist } from "../src/core/client.js";
 import { loadGadgets } from "../src/cli/gadgets.js";
+import { LLMist } from "../src/core/client.js";
 
 async function main() {
   console.log("=== Multi-BrowseWeb WriteStream Test ===\n");
@@ -42,7 +42,7 @@ async function main() {
       "I need you to do TWO browsing tasks:\n" +
         "1. First, browse edition.cnn.com, identify the top news article, and summarize it briefly.\n" +
         "2. Then, browse tvn24.pl, identify the top news article, and summarize it briefly.\n" +
-        "Report both summaries when done."
+        "Report both summaries when done.",
     );
 
   console.log("Starting agent with multiple BrowseWeb calls...\n");

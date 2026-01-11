@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, vi, test } from "vitest";
 import { Readable, Writable } from "node:stream";
 import { Box, NodeRuntime, Screen, setRuntime, Text, Textbox } from "@unblessed/node";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { InputHandler } from "./input-handler.js";
 
 // TUI tests use mock streams - no real TTY needed
@@ -464,7 +464,7 @@ describe("InputHandler", () => {
         body,
         screen,
         renderCallback,
-        renderNowCallback
+        renderNowCallback,
       );
 
       // Start waiting for REPL prompt

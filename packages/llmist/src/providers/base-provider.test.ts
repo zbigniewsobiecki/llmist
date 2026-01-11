@@ -65,7 +65,9 @@ class TestProviderAdapter extends BaseProviderAdapter {
     };
   }
 
-  protected async *normalizeProviderStream(rawStream: AsyncIterable<unknown>): AsyncGenerator<LLMStreamChunk> {
+  protected async *normalizeProviderStream(
+    rawStream: AsyncIterable<unknown>,
+  ): AsyncGenerator<LLMStreamChunk> {
     this.normalizeStreamCalled = true;
     for await (const chunk of rawStream) {
       yield chunk as LLMStreamChunk;

@@ -45,22 +45,32 @@ When asked to browse the web, use the Dhalsim gadget to navigate and interact wi
 
     switch (event.type) {
       case "llm_call_start":
-        console.log(`${timestamp} ${depth}🔵 LLM Call Start [depth=${event.depth}] model=${event.model}`);
+        console.log(
+          `${timestamp} ${depth}🔵 LLM Call Start [depth=${event.depth}] model=${event.model}`,
+        );
         break;
       case "llm_call_complete":
-        console.log(`${timestamp} ${depth}🟢 LLM Call Complete [depth=${event.depth}] tokens=${event.usage?.inputTokens ?? "?"}/${event.usage?.outputTokens ?? "?"}`);
+        console.log(
+          `${timestamp} ${depth}🟢 LLM Call Complete [depth=${event.depth}] tokens=${event.usage?.inputTokens ?? "?"}/${event.usage?.outputTokens ?? "?"}`,
+        );
         break;
       case "llm_call_error":
         console.log(`${timestamp} ${depth}🔴 LLM Call Error [depth=${event.depth}] ${event.error}`);
         break;
       case "gadget_call":
-        console.log(`${timestamp} ${depth}⚙️  Gadget Call [depth=${event.depth}] ${event.name} (${event.invocationId})`);
+        console.log(
+          `${timestamp} ${depth}⚙️  Gadget Call [depth=${event.depth}] ${event.name} (${event.invocationId})`,
+        );
         break;
       case "gadget_complete":
-        console.log(`${timestamp} ${depth}✅ Gadget Complete [depth=${event.depth}] ${event.name} cost=$${event.cost?.toFixed(4) ?? "0"}`);
+        console.log(
+          `${timestamp} ${depth}✅ Gadget Complete [depth=${event.depth}] ${event.name} cost=$${event.cost?.toFixed(4) ?? "0"}`,
+        );
         break;
       case "gadget_error":
-        console.log(`${timestamp} ${depth}❌ Gadget Error [depth=${event.depth}] ${event.name}: ${event.error}`);
+        console.log(
+          `${timestamp} ${depth}❌ Gadget Error [depth=${event.depth}] ${event.name}: ${event.error}`,
+        );
         break;
       case "text":
         // Skip text events to reduce noise
@@ -100,7 +110,9 @@ When asked to browse the web, use the Dhalsim gadget to navigate and interact wi
     console.log(`  LLM calls: ${llmStarts.length} starts, ${llmCompletes.length} completes`);
     console.log(`    - Parent (depth=0): ${parentLLMCalls.length}`);
     console.log(`    - Subagent (depth>0): ${subagentLLMCalls.length}`);
-    console.log(`  Gadget calls: ${gadgetCalls.length} starts, ${gadgetCompletes.length} completes`);
+    console.log(
+      `  Gadget calls: ${gadgetCalls.length} starts, ${gadgetCompletes.length} completes`,
+    );
     console.log(`    - Parent (depth=0): ${parentGadgets.length}`);
     console.log(`    - Subagent (depth>0): ${subagentGadgets.length}`);
 
@@ -122,9 +134,10 @@ When asked to browse the web, use the Dhalsim gadget to navigate and interact wi
     if (subagentGadgets.length > 0) {
       console.log("✅ SUCCESS: Subagent gadget calls ARE visible in parent tree!");
     } else {
-      console.log("⚠️  WARNING: No subagent gadget calls visible (may be expected if Dhalsim used no gadgets)");
+      console.log(
+        "⚠️  WARNING: No subagent gadget calls visible (may be expected if Dhalsim used no gadgets)",
+      );
     }
-
   } catch (error) {
     console.error("\n❌ Agent error:", error);
   }
