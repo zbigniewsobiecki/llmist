@@ -202,6 +202,13 @@ export class HuggingFaceProvider extends BaseProviderAdapter {
             `HF authentication failed. Check that HF_TOKEN or HUGGING_FACE_API_KEY is set correctly and starts with 'hf_'. Original error: ${error.message}`,
           );
         }
+        // HF serverless inference often returns 400 for transient capacity/loading issues
+        // Wrap these to make them identifiable and allow retry logic to treat them as rate limits
+        if (error.message.includes("400") || error.name === "BadRequestError") {
+          throw new Error(
+            `HF bad request (often transient on serverless). Original error: ${error.message}`,
+          );
+        }
       }
       throw error;
     }
