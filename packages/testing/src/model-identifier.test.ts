@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
-
 import { ModelIdentifierParser } from "llmist";
+import { describe, expect, it } from "vitest";
 
 describe("ModelIdentifierParser", () => {
   it("parses provider prefixes", () => {

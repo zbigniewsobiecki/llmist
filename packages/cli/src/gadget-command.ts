@@ -9,8 +9,7 @@ import chalk from "chalk";
 import type { Command } from "commander";
 
 import type { AbstractGadget } from "llmist";
-import { schemaToJSONSchema } from "llmist";
-import { validateGadgetSchema } from "llmist";
+import { schemaToJSONSchema, validateGadgetSchema } from "llmist";
 
 import type { CLIEnvironment } from "./environment.js";
 import { promptForParameters, readStdinJson } from "./gadget-prompts.js";

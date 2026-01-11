@@ -45,9 +45,7 @@ function showCliExamples() {
   console.log("llmist agent 'Go to apple.com' -g dhalsim/Navigate\n");
 
   console.log("# Load from git URL:");
-  console.log(
-    "llmist agent 'Browse the web' -g git+https://github.com/anthropics/dhalsim.git\n",
-  );
+  console.log("llmist agent 'Browse the web' -g git+https://github.com/anthropics/dhalsim.git\n");
 
   console.log("# Combine multiple sources:");
   console.log("llmist agent 'task' -g ./local.ts -g dhalsim:minimal -g builtin:ReadFile\n");
@@ -66,7 +64,9 @@ async function programmaticLoading() {
   try {
     // Load builtin gadgets
     const builtins = await loadGadgets(["builtin:ReadFile", "builtin:WriteFile"], process.cwd());
-    console.log(`Loaded ${builtins.length} builtin gadgets: ${builtins.map((g) => g.name).join(", ")}\n`);
+    console.log(
+      `Loaded ${builtins.length} builtin gadgets: ${builtins.map((g) => g.name).join(", ")}\n`,
+    );
 
     // Note: npm/git loading would work the same way:
     // const dhalsim = await loadGadgets(['dhalsim:minimal'], process.cwd());

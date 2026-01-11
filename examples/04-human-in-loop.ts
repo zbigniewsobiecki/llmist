@@ -5,7 +5,7 @@
  */
 
 import * as readline from "node:readline";
-import { TaskCompletionSignal, Gadget, HumanInputRequiredException, LLMist } from "llmist";
+import { Gadget, HumanInputRequiredException, LLMist, TaskCompletionSignal } from "llmist";
 import { z } from "zod";
 
 // =============================================================================

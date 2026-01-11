@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
+import { describe, expect, it, vi } from "vitest";
 
 import { GeminiGenerativeProvider } from "./gemini.js";
 
@@ -431,6 +431,336 @@ describe("GeminiGenerativeProvider", () => {
       });
 
       expect(count).toBe(0);
+    });
+
+    it("handles multimodal content with images in fallback estimation", async () => {
+      const mockCountTokens = vi.fn().mockRejectedValue(new Error("API error"));
+
+      const mockClient = {
+        models: {
+          countTokens: mockCountTokens,
+        },
+      } as unknown as GoogleGenAI;
+
+      const provider = new GeminiGenerativeProvider(mockClient);
+
+      // Suppress console.warn for this test
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const count = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "What is this?" }, // 13 chars
+              {
+                type: "image" as const,
+                source: { type: "base64" as const, mediaType: "image/png", data: "abc123" },
+              },
+            ],
+          },
+        ],
+        { provider: "gemini", name: "gemini-1.5-pro" },
+      );
+
+      // 13 chars / 4 = 3.25 → 4 tokens + 258 tokens for image = 262
+      expect(count).toBe(262);
+
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe("multimodal content conversion", () => {
+    it("should convert base64 image to Gemini inlineData format", async () => {
+      const { client, generateContentStream } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-1.5-flash",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "What is in this image?" },
+              {
+                type: "image" as const,
+                source: {
+                  type: "base64" as const,
+                  mediaType: "image/png",
+                  data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const stream = provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" });
+      await stream.next();
+
+      expect(generateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: "gemini-1.5-flash",
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: "What is in this image?" },
+                {
+                  inlineData: {
+                    mimeType: "image/png",
+                    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    });
+
+    it("should convert audio content to Gemini inlineData format", async () => {
+      const { client, generateContentStream } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-1.5-flash",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Transcribe this audio" },
+              {
+                type: "audio" as const,
+                source: {
+                  type: "base64" as const,
+                  mediaType: "audio/mp3",
+                  data: "SGVsbG8gV29ybGQ=",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const stream = provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" });
+      await stream.next();
+
+      expect(generateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: "Transcribe this audio" },
+                {
+                  inlineData: {
+                    mimeType: "audio/mp3",
+                    data: "SGVsbG8gV29ybGQ=",
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    });
+
+    it("should throw error for URL image (not supported by Gemini)", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-1.5-flash",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "What is this?" },
+              {
+                type: "image" as const,
+                source: {
+                  type: "url" as const,
+                  url: "https://example.com/image.png",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const stream = provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" });
+
+      await expect(stream.next()).rejects.toThrow("Gemini does not support image URLs directly");
+    });
+  });
+
+  describe("normalizeProviderStream", () => {
+    it("should extract text from Gemini chunks", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [{ content: { parts: [{ text: "Hello" }] } }],
+        },
+        {
+          candidates: [{ content: { parts: [{ text: " world" }] } }],
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(2);
+      expect(chunks[0].text).toBe("Hello");
+      expect(chunks[1].text).toBe(" world");
+    });
+
+    it("should extract finishReason and usage from final chunk", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [{ content: { parts: [{ text: "Done" }] } }],
+        },
+        {
+          candidates: [{ finishReason: "STOP" }],
+          usageMetadata: {
+            promptTokenCount: 10,
+            candidatesTokenCount: 5,
+            totalTokenCount: 15,
+            cachedContentTokenCount: 2,
+          },
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // First chunk has text
+      expect(chunks[0].text).toBe("Done");
+
+      // Second chunk has finishReason and usage
+      const finalChunk = chunks.find((c) => c.finishReason);
+      expect(finalChunk).toBeDefined();
+      expect(finalChunk.finishReason).toBe("STOP");
+      expect(finalChunk.usage).toEqual({
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        cachedInputTokens: 2,
+      });
+    });
+
+    it("should handle chunks without candidates gracefully", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {}, // Empty chunk
+        { candidates: null }, // Null candidates
+        { candidates: [] }, // Empty candidates array
+        { candidates: [{ content: { parts: [{ text: "Finally" }] } }] }, // Valid chunk
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // Only the last chunk with actual text should produce output
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].text).toBe("Finally");
+    });
+
+    it("should handle multiple parts in a single candidate", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "Part 1" }, { text: " Part 2" }, { text: " Part 3" }],
+              },
+            },
+          ],
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].text).toBe("Part 1 Part 2 Part 3");
+    });
+
+    it("should handle usage without cachedContentTokenCount", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [{ finishReason: "STOP" }],
+          usageMetadata: {
+            promptTokenCount: 10,
+            candidatesTokenCount: 5,
+            totalTokenCount: 15,
+            // cachedContentTokenCount is missing
+          },
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks[0].usage).toEqual({
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        cachedInputTokens: 0, // Defaults to 0
+      });
     });
   });
 });

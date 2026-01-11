@@ -2,9 +2,9 @@
  * Tests for ExecutionTree - the first-class model for nested subagent support.
  */
 
-import { describe, expect, test, beforeEach } from "vitest";
-import { ExecutionTree } from "./execution-tree.js";
+import { beforeEach, describe, expect, test } from "vitest";
 import type { ExecutionEvent } from "./execution-events.js";
+import { ExecutionTree } from "./execution-tree.js";
 
 describe("ExecutionTree", () => {
   let tree: ExecutionTree;
@@ -127,7 +127,9 @@ describe("ExecutionTree", () => {
 
       // Check that gadget is in LLM's children
       const updatedLlmNode = tree.getNode(llmNode.id);
-      expect(updatedLlmNode?.type === "llm_call" && updatedLlmNode.children).toContain(gadgetNode.id);
+      expect(updatedLlmNode?.type === "llm_call" && updatedLlmNode.children).toContain(
+        gadgetNode.id,
+      );
     });
 
     test("startGadget transitions state to running", () => {
@@ -176,7 +178,12 @@ describe("ExecutionTree", () => {
       });
 
       const media = [
-        { kind: "image" as const, data: "base64...", mimeType: "image/png", description: "Screenshot" },
+        {
+          kind: "image" as const,
+          data: "base64...",
+          mimeType: "image/png",
+          description: "Screenshot",
+        },
       ];
 
       tree.startGadget(node.id);

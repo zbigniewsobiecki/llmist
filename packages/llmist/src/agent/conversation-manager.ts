@@ -68,7 +68,14 @@ export class ConversationManager implements IConversationManager {
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
   ): void {
-    this.historyBuilder.addGadgetCallResult(gadgetName, parameters, result, invocationId, media, mediaIds);
+    this.historyBuilder.addGadgetCallResult(
+      gadgetName,
+      parameters,
+      result,
+      invocationId,
+      media,
+      mediaIds,
+    );
   }
 
   getMessages(): LLMMessage[] {

@@ -1,8 +1,7 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createTemplateEngine,
   hasTemplateSyntax,
@@ -348,10 +347,7 @@ describe("templates", () => {
         join(testDir, "prompts", "rules.txt"),
         "Rule 1: Be helpful.\nRule 2: Be concise.",
       );
-      await writeFile(
-        join(testDir, "with-vars.txt"),
-        "Value: <%= it.name %>",
-      );
+      await writeFile(join(testDir, "with-vars.txt"), "Value: <%= it.name %>");
     });
 
     afterAll(async () => {

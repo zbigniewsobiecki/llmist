@@ -5,7 +5,7 @@
  * Ensures proper terminal restoration on exit.
  */
 
-import { Screen, setRuntime, NodeRuntime } from "@unblessed/node";
+import { NodeRuntime, Screen, setRuntime } from "@unblessed/node";
 import type { TUIScreenContext } from "./types.js";
 
 // Initialize the Node.js runtime (required before any blessed widgets can be created)

@@ -1,10 +1,7 @@
 import chalk from "chalk";
 import { beforeAll, describe, expect, it } from "vitest";
-import {
-  formatGadgetCollapsed,
-  formatGadgetExpanded,
-} from "./block-formatters.js";
 import type { GadgetNode } from "../tui/types.js";
+import { formatGadgetCollapsed, formatGadgetExpanded } from "./block-formatters.js";
 
 // Force chalk to output colors even in non-TTY test environments
 beforeAll(() => {

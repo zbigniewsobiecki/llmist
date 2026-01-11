@@ -7,16 +7,9 @@
  *
  * Fix: Create symlink dist/data -> ../data
  */
-import {
-  existsSync,
-  symlinkSync,
-  mkdirSync,
-  readdirSync,
-  copyFileSync,
-  statSync,
-} from "node:fs";
-import { join, dirname } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, symlinkSync } from "node:fs";
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 
 // Use require.resolve to find @unblessed/core regardless of hoisting
 const require = createRequire(import.meta.url);
@@ -27,9 +20,7 @@ try {
   const coreDir = dirname(coreIndexPath);
 
   // Handle both dist/index.js and top-level index.js layouts
-  const packageRoot = coreDir.endsWith("dist")
-    ? dirname(coreDir)
-    : coreDir;
+  const packageRoot = coreDir.endsWith("dist") ? dirname(coreDir) : coreDir;
 
   const distDir = join(packageRoot, "dist");
   const dataDir = join(packageRoot, "data");

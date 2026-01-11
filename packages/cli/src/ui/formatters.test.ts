@@ -971,7 +971,7 @@ describe("formatLLMCallLine", () => {
         cachedInputTokens: 9100,
         outputTokens: 104,
         elapsedSeconds: 3.2,
-        cost: 0.00080,
+        cost: 0.0008,
         isStreaming: true,
         spinner: "⠧",
         contextPercent: 1,
@@ -1143,7 +1143,8 @@ describe("formatGadgetLine", () => {
     });
 
     it("truncates long error messages", () => {
-      const longError = "This is a very long error message that should be truncated to prevent display issues";
+      const longError =
+        "This is a very long error message that should be truncated to prevent display issues";
       const result = formatGadgetLine({
         name: "BadGadget",
         elapsedSeconds: 0.1,

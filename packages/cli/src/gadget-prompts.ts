@@ -8,9 +8,8 @@
 
 import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
-import type { ZodTypeAny } from "zod";
-
 import { schemaToJSONSchema } from "llmist";
+import type { ZodTypeAny } from "zod";
 
 /**
  * Context for interactive prompting.

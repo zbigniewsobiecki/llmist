@@ -6,7 +6,7 @@
  */
 
 import { Box, type Screen } from "@unblessed/node";
-import type { ApprovalResponse, ApprovalContext } from "./types.js";
+import type { ApprovalContext, ApprovalResponse } from "./types.js";
 
 /** Maximum lines to show in preview */
 const MAX_PREVIEW_LINES = 10;
