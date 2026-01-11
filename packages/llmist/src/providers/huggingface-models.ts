@@ -26,8 +26,8 @@ export const HUGGINGFACE_MODELS: ModelSpec[] = [
     provider: "huggingface",
     modelId: "deepseek-ai/DeepSeek-V3.2",
     displayName: "DeepSeek V3.2",
-    contextWindow: 64_000,
-    maxOutputTokens: 8_192,
+    contextWindow: 163_840,
+    maxOutputTokens: 65_536,
     pricing: {
       input: 0.269,
       output: 0.4,
@@ -806,8 +806,8 @@ export const HUGGINGFACE_MODELS: ModelSpec[] = [
     provider: "huggingface",
     modelId: "MiniMaxAI/MiniMax-M2.1",
     displayName: "MiniMax M2.1",
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
+    contextWindow: 204_800,
+    maxOutputTokens: 131_072,
     pricing: {
       input: 0.3,
       output: 1.2,
