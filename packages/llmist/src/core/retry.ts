@@ -246,6 +246,12 @@ export function isRetryableError(error: Error): boolean {
     return true;
   }
 
+  // HuggingFace-specific: 400 errors on serverless are often transient (model loading, capacity)
+  // These are wrapped by the HF provider with "hf bad request" prefix
+  if (message.includes("hf bad request")) {
+    return true;
+  }
+
   // Don't retry authentication, bad requests, or content policy errors
   if (
     message.includes("401") ||

@@ -125,7 +125,7 @@ By default, llmist retries these errors automatically:
 | Error Type | Examples |
 |------------|----------|
 | **Authentication** | 401, 403, "unauthorized", "forbidden" |
-| **Bad Request** | 400, "invalid" |
+| **Bad Request** | 400, "invalid" (except HuggingFace, see below) |
 | **Not Found** | 404 |
 | **Content Policy** | "content policy", "safety" |
 
@@ -138,6 +138,7 @@ llmist handles provider-specific error patterns:
 | **Gemini** | `RESOURCE_EXHAUSTED`, `UNAVAILABLE`, `DEADLINE_EXCEEDED`, "quota exceeded" |
 | **Anthropic** | `overloaded_error`, `api_error` |
 | **OpenAI** | `RateLimitError`, `ServiceUnavailableError`, `APITimeoutError` |
+| **HuggingFace** | 400 errors (often transient on serverless inference due to model loading/capacity) |
 
 ## Proactive Rate Limiting
 
