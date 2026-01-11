@@ -16,266 +16,75 @@
  */
 
 import OpenAI from "openai";
-import type {
-  ChatCompletionChunk,
-  ChatCompletionContentPart,
-  ChatCompletionMessageParam,
-} from "openai/resources/chat/completions";
-import type { ContentPart, ImageContentPart } from "../core/input-content.js";
-import type { LLMMessage, MessageContent } from "../core/messages.js";
-import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
-import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
-import { BaseProviderAdapter } from "./base-provider.js";
-import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
 import { HUGGINGFACE_MODELS } from "./huggingface-models.js";
+import {
+  type OpenAICompatibleConfig,
+  OpenAICompatibleProvider,
+} from "./openai-compatible-provider.js";
 import { isNonEmpty, readEnvVar } from "./utils.js";
 
-const ROLE_MAP: Record<LLMMessage["role"], "system" | "user" | "assistant"> = {
-  system: "system",
-  user: "user",
-  assistant: "assistant",
-};
+/**
+ * Configuration for HuggingFace provider.
+ */
+export interface HuggingFaceConfig extends OpenAICompatibleConfig {
+  /**
+   * Endpoint type for HuggingFace inference.
+   * - 'serverless': Use HF serverless inference (default)
+   * - 'dedicated': Use dedicated inference endpoint
+   */
+  endpointType?: "serverless" | "dedicated";
+}
 
-export class HuggingFaceProvider extends BaseProviderAdapter {
+export class HuggingFaceProvider extends OpenAICompatibleProvider<HuggingFaceConfig> {
   readonly providerId = "huggingface" as const;
-  private readonly endpointType: "serverless" | "dedicated";
+  protected readonly providerAlias = "hf";
 
-  constructor(client: OpenAI, endpointType: "serverless" | "dedicated" = "serverless") {
-    super(client);
-    this.endpointType = endpointType;
+  constructor(client: OpenAI, config: HuggingFaceConfig = {}) {
+    super(client, { endpointType: "serverless", ...config });
   }
 
-  supports(descriptor: ModelDescriptor): boolean {
-    // Accept both "huggingface" and "hf" as provider identifiers
-    return descriptor.provider === this.providerId || descriptor.provider === "hf";
-  }
-
-  getModelSpecs() {
+  getModelSpecs(): ModelSpec[] {
     return HUGGINGFACE_MODELS;
   }
 
-  protected buildApiRequest(
-    options: LLMGenerationOptions,
-    descriptor: ModelDescriptor,
-    _spec: ModelSpec | undefined,
-    messages: LLMMessage[],
-  ): Parameters<OpenAI["chat"]["completions"]["create"]>[0] {
-    const { maxTokens, temperature, topP, stopSequences, extra } = options;
-
-    // Model name is passed as-is to HF API
-    // Provider selection suffixes (:fastest, :cheapest, etc.) are handled by HF router
-    return {
-      model: descriptor.name,
-      messages: messages.map((message) => this.convertToHuggingFaceMessage(message)),
-      // HF accepts max_tokens (like many providers), though OpenAI uses max_completion_tokens
-      ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
-      temperature,
-      top_p: topP,
-      stop: stopSequences,
-      stream: true,
-      stream_options: { include_usage: true },
-      ...(extra ?? {}),
-    };
-  }
-
   /**
-   * Convert an LLMMessage to HuggingFace's ChatCompletionMessageParam.
-   * HF uses OpenAI-compatible format.
-   * Handles role-specific content type requirements:
-   * - system/assistant: string content only
-   * - user: string or multimodal array content (for vision models)
+   * Enhance error messages with HuggingFace-specific guidance.
    */
-  private convertToHuggingFaceMessage(message: LLMMessage): ChatCompletionMessageParam {
-    const role = ROLE_MAP[message.role];
-
-    // User messages support multimodal content
-    if (role === "user") {
-      const content = this.convertToHuggingFaceContent(message.content);
-      return {
-        role: "user",
-        content,
-        ...(message.name ? { name: message.name } : {}),
-      };
+  protected enhanceError(error: unknown): Error {
+    if (!(error instanceof Error)) {
+      return new Error(String(error));
     }
 
-    // System and assistant messages only support string content
-    const textContent =
-      typeof message.content === "string" ? message.content : extractMessageText(message.content);
+    const message = error.message.toLowerCase();
 
-    if (role === "system") {
-      return {
-        role: "system",
-        content: textContent,
-        ...(message.name ? { name: message.name } : {}),
-      };
+    // Rate limit exceeded
+    if (message.includes("rate limit") || message.includes("429")) {
+      return new Error(
+        `HF rate limit exceeded. Free tier has limits. Consider upgrading or using a dedicated endpoint.\n` +
+          `Original error: ${error.message}`,
+      );
     }
 
-    // Assistant role
-    return {
-      role: "assistant",
-      content: textContent,
-      ...(message.name ? { name: message.name } : {}),
-    };
-  }
-
-  /**
-   * Convert llmist content to HuggingFace's content format.
-   * Optimizes by returning string for text-only content, array for multimodal.
-   * Note: Multimodal support will be added in Phase 2.
-   */
-  private convertToHuggingFaceContent(
-    content: MessageContent,
-  ): string | ChatCompletionContentPart[] {
-    // Optimization: keep simple string content as-is
-    if (typeof content === "string") {
-      return content;
+    // Model not found
+    if (message.includes("model not found") || message.includes("404")) {
+      return new Error(
+        `Model not available on HF ${this.config.endpointType} inference. ` +
+          `Check model name or try a different endpoint type.\n` +
+          `Original error: ${error.message}`,
+      );
     }
 
-    // Convert array content to OpenAI-compatible format
-    return content.map((part) => {
-      if (part.type === "text") {
-        return { type: "text" as const, text: part.text };
-      }
-
-      if (part.type === "image") {
-        return this.convertImagePart(part);
-      }
-
-      if (part.type === "audio") {
-        throw new Error(
-          "Hugging Face chat completions do not currently support audio input in llmist. Audio support will be added in Phase 2.",
-        );
-      }
-
-      throw new Error(`Unsupported content type: ${(part as ContentPart).type}`);
-    });
-  }
-
-  /**
-   * Convert an image content part to HuggingFace's image_url format.
-   * Supports both URLs and base64 data URLs (OpenAI-compatible format).
-   * Note: Image support requires vision-capable models on HF.
-   */
-  private convertImagePart(part: ImageContentPart): ChatCompletionContentPart {
-    if (part.source.type === "url") {
-      return {
-        type: "image_url" as const,
-        image_url: { url: part.source.url },
-      };
+    // Authentication failed
+    if (message.includes("401") || message.includes("unauthorized")) {
+      return new Error(
+        `HF authentication failed. Check that HF_TOKEN or HUGGING_FACE_API_KEY ` +
+          `is set correctly and starts with 'hf_'.\n` +
+          `Original error: ${error.message}`,
+      );
     }
 
-    // Convert base64 to data URL format
-    return {
-      type: "image_url" as const,
-      image_url: {
-        url: `data:${part.source.mediaType};base64,${part.source.data}`,
-      },
-    };
-  }
-
-  protected async executeStreamRequest(
-    payload: Parameters<OpenAI["chat"]["completions"]["create"]>[0],
-    signal?: AbortSignal,
-  ): Promise<AsyncIterable<ChatCompletionChunk>> {
-    const client = this.client as OpenAI;
-
-    try {
-      // Pass abort signal to SDK via request options
-      const stream = await client.chat.completions.create(payload, signal ? { signal } : undefined);
-      return stream as unknown as AsyncIterable<ChatCompletionChunk>;
-    } catch (error) {
-      // Enhance error messages for HF-specific issues
-      if (error instanceof Error) {
-        if (error.message.includes("rate limit") || error.message.includes("429")) {
-          throw new Error(
-            `HF rate limit exceeded. Free tier has limits. Consider upgrading or using a dedicated endpoint. Original error: ${error.message}`,
-          );
-        }
-        if (error.message.includes("model not found") || error.message.includes("404")) {
-          throw new Error(
-            `Model not available on HF ${this.endpointType} inference. Check model name or try a different endpoint type. Original error: ${error.message}`,
-          );
-        }
-        if (error.message.includes("401") || error.message.includes("unauthorized")) {
-          throw new Error(
-            `HF authentication failed. Check that HF_TOKEN or HUGGING_FACE_API_KEY is set correctly and starts with 'hf_'. Original error: ${error.message}`,
-          );
-        }
-      }
-      throw error;
-    }
-  }
-
-  protected async *normalizeProviderStream(iterable: AsyncIterable<unknown>): LLMStream {
-    const stream = iterable as AsyncIterable<ChatCompletionChunk>;
-    for await (const chunk of stream) {
-      const text = chunk.choices.map((choice) => choice.delta?.content ?? "").join("");
-      if (text) {
-        yield { text, rawEvent: chunk };
-      }
-
-      const finishReason = chunk.choices.find((choice) => choice.finish_reason)?.finish_reason;
-
-      // Extract token usage if available (typically in the final chunk)
-      // HF follows OpenAI format for token usage
-      const usage = chunk.usage
-        ? {
-            inputTokens: chunk.usage.prompt_tokens,
-            outputTokens: chunk.usage.completion_tokens,
-            totalTokens: chunk.usage.total_tokens,
-            // HF doesn't currently support prompt caching, but structure is ready
-            cachedInputTokens: 0,
-          }
-        : undefined;
-
-      if (finishReason || usage) {
-        yield { text: "", finishReason, usage, rawEvent: chunk };
-      }
-    }
-  }
-
-  /**
-   * Count tokens in messages using character-based fallback estimation.
-   *
-   * Hugging Face doesn't provide a native token counting API yet, so we use
-   * a simple character-based heuristic (4 chars per token) which is reasonably
-   * accurate for most models.
-   *
-   * Future enhancement: Could integrate tiktoken for common model families
-   * (Llama, Mistral) that use known tokenizers.
-   *
-   * @param messages - The messages to count tokens for
-   * @param descriptor - Model descriptor containing the model name
-   * @param _spec - Optional model specification (currently unused)
-   * @returns Promise resolving to the estimated input token count
-   *
-   * @throws Never throws - returns 0 on error with warning
-   */
-  async countTokens(
-    messages: LLMMessage[],
-    descriptor: ModelDescriptor,
-    _spec?: ModelSpec,
-  ): Promise<number> {
-    try {
-      // Extract text content from all messages
-      let totalChars = 0;
-      for (const msg of messages) {
-        const parts = normalizeMessageContent(msg.content);
-        for (const part of parts) {
-          if (part.type === "text") {
-            totalChars += part.text.length;
-          }
-        }
-      }
-
-      // Use standard 4 chars/token estimate
-      // This is a reasonable heuristic for most LLMs
-      return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN);
-    } catch (error) {
-      console.warn(`Token counting failed for ${descriptor.name}, using zero estimate:`, error);
-      return 0;
-    }
+    return error;
   }
 }
 
@@ -318,6 +127,10 @@ export function createHuggingFaceProviderFromEnv(): HuggingFaceProvider | null {
   const baseURL = endpointUrl || "https://router.huggingface.co/v1";
   const endpointType = endpointUrl ? "dedicated" : "serverless";
 
+  const config: HuggingFaceConfig = {
+    endpointType,
+  };
+
   // Create OpenAI SDK client with HF base URL
   const client = new OpenAI({
     apiKey: token.trim(),
@@ -326,5 +139,5 @@ export function createHuggingFaceProviderFromEnv(): HuggingFaceProvider | null {
     maxRetries: 0, // Disable SDK retries - llmist handles all retries at application level
   });
 
-  return new HuggingFaceProvider(client, endpointType);
+  return new HuggingFaceProvider(client, config);
 }

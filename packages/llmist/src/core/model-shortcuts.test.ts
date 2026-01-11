@@ -30,6 +30,26 @@ describe("Model Shortcuts", () => {
       expect(MODEL_ALIASES["haiku"]).toBe("anthropic:claude-haiku-4-5");
       expect(MODEL_ALIASES["flash"]).toBe("gemini:gemini-2.5-flash");
     });
+
+    it("should contain OpenRouter aliases", () => {
+      expect(MODEL_ALIASES).toHaveProperty("or:sonnet");
+      expect(MODEL_ALIASES).toHaveProperty("or:opus");
+      expect(MODEL_ALIASES).toHaveProperty("or:haiku");
+      expect(MODEL_ALIASES).toHaveProperty("or:gpt4o");
+      expect(MODEL_ALIASES).toHaveProperty("or:llama");
+      expect(MODEL_ALIASES).toHaveProperty("or:deepseek");
+    });
+
+    it("should map OpenRouter aliases to correct full model IDs", () => {
+      expect(MODEL_ALIASES["or:sonnet"]).toBe("openrouter:anthropic/claude-sonnet-4-5");
+      expect(MODEL_ALIASES["or:opus"]).toBe("openrouter:anthropic/claude-opus-4-5");
+      expect(MODEL_ALIASES["or:haiku"]).toBe("openrouter:anthropic/claude-haiku-4-5");
+      expect(MODEL_ALIASES["or:gpt4o"]).toBe("openrouter:openai/gpt-4o");
+      expect(MODEL_ALIASES["or:gpt5"]).toBe("openrouter:openai/gpt-5.2");
+      expect(MODEL_ALIASES["or:flash"]).toBe("openrouter:google/gemini-2.5-flash");
+      expect(MODEL_ALIASES["or:llama"]).toBe("openrouter:meta-llama/llama-3.3-70b-instruct");
+      expect(MODEL_ALIASES["or:deepseek"]).toBe("openrouter:deepseek/deepseek-r1");
+    });
   });
 
   describe("resolveModel", () => {
@@ -62,6 +82,17 @@ describe("Model Shortcuts", () => {
         expect(resolveModel("GPT4")).toBe("openai:gpt-4o");
         expect(resolveModel("SONNET")).toBe("anthropic:claude-sonnet-4-5");
         expect(resolveModel("Flash")).toBe("gemini:gemini-2.5-flash");
+      });
+
+      it("should resolve OpenRouter or: aliases", () => {
+        expect(resolveModel("or:sonnet")).toBe("openrouter:anthropic/claude-sonnet-4-5");
+        expect(resolveModel("or:opus")).toBe("openrouter:anthropic/claude-opus-4-5");
+        expect(resolveModel("or:haiku")).toBe("openrouter:anthropic/claude-haiku-4-5");
+        expect(resolveModel("or:gpt4o")).toBe("openrouter:openai/gpt-4o");
+        expect(resolveModel("or:gpt5")).toBe("openrouter:openai/gpt-5.2");
+        expect(resolveModel("or:flash")).toBe("openrouter:google/gemini-2.5-flash");
+        expect(resolveModel("or:llama")).toBe("openrouter:meta-llama/llama-3.3-70b-instruct");
+        expect(resolveModel("or:deepseek")).toBe("openrouter:deepseek/deepseek-r1");
       });
     });
 

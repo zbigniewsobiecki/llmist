@@ -408,6 +408,15 @@ export {
   HuggingFaceProvider,
 } from "./providers/huggingface.js";
 export { createOpenAIProviderFromEnv, OpenAIChatProvider } from "./providers/openai.js";
+// OpenAI-compatible base class for meta-providers (HuggingFace, OpenRouter, etc.)
+export type { OpenAICompatibleConfig } from "./providers/openai-compatible-provider.js";
+export { OpenAICompatibleProvider } from "./providers/openai-compatible-provider.js";
+// OpenRouter meta-provider (400+ models via unified gateway)
+export type { OpenRouterConfig, OpenRouterRouting } from "./providers/openrouter.js";
+export {
+  createOpenRouterProviderFromEnv,
+  OpenRouterProvider,
+} from "./providers/openrouter.js";
 export type { ProviderAdapter } from "./providers/provider.js";
 // ============================================================================
 // Session Management
