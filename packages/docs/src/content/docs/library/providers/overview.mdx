@@ -27,6 +27,11 @@ llmist supports multiple LLM providers out of the box with automatic discovery a
     description="Gemini Pro, Flash, Imagen"
     href="/library/providers/gemini/"
   />
+  <LinkCard
+    title="OpenRouter"
+    description="400+ models, unified gateway"
+    href="/library/providers/openrouter/"
+  />
 </CardGrid>
 
 ## Auto-Discovery
@@ -38,6 +43,7 @@ llmist automatically discovers available providers from environment variables:
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
 export GEMINI_API_KEY=...
+export OPENROUTER_API_KEY=sk-or-...
 ```
 
 ```typescript
@@ -104,3 +110,4 @@ const client = new LLMist({
 - [OpenAI Provider](/library/providers/openai/) - GPT models, DALL-E, TTS
 - [Anthropic Provider](/library/providers/anthropic/) - Claude models
 - [Gemini Provider](/library/providers/gemini/) - Gemini models, Imagen
+- [OpenRouter Provider](/library/providers/openrouter/) - 400+ models via unified gateway

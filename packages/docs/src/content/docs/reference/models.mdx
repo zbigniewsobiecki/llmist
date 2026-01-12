@@ -139,6 +139,16 @@ llmist supports popular open-source models via HuggingFace's serverless inferenc
     const answer4 = await LLMist.createAgent()
       .withModel('hf:deepseek-ai/DeepSeek-V3.2:fastest')
       .askAndCollect('Write a Python function to calculate factorial');
+
+    // OpenRouter model (access 400+ models)
+    const answer5 = await LLMist.createAgent()
+      .withModel('openrouter:deepseek/deepseek-chat')
+      .askAndCollect('Explain quantum computing');
+
+    // OpenRouter with alias
+    const answer6 = await LLMist.createAgent()
+      .withModel('or:sonnet')
+      .askAndCollect('Hello!');
     ```
   </TabItem>
   <TabItem label="CLI (npm)">
@@ -154,6 +164,12 @@ llmist supports popular open-source models via HuggingFace's serverless inferenc
 
     # HuggingFace with provider routing (use fastest endpoint)
     npx @llmist/cli complete "Hello" --model hf:Qwen/Qwen2.5-72B-Instruct:fastest
+
+    # OpenRouter (access 400+ models via unified gateway)
+    npx @llmist/cli complete "Hello" --model openrouter:deepseek/deepseek-chat
+
+    # OpenRouter with alias
+    npx @llmist/cli agent "Review my code" --model or:sonnet
     ```
   </TabItem>
 </Tabs>
@@ -167,6 +183,7 @@ llmist automatically discovers available providers based on environment variable
 | `OPENAI_API_KEY` | OpenAI |
 | `ANTHROPIC_API_KEY` | Anthropic |
 | `GEMINI_API_KEY` | Google Gemini |
+| `OPENROUTER_API_KEY` | OpenRouter |
 | `HF_TOKEN` | HuggingFace |
 
 <Aside type="tip">

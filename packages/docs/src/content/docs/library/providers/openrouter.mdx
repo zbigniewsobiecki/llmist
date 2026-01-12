@@ -1,0 +1,253 @@
+---
+title: OpenRouter Provider
+description: Access 400+ AI models through OpenRouter's unified gateway
+sidebar:
+  order: 5
+---
+
+import { Aside, Badge, Tabs, TabItem } from '@astrojs/starlight/components';
+
+[OpenRouter](https://openrouter.ai) provides access to 400+ AI models from dozens of providers through a single API. This is ideal for:
+
+- **Multi-model workflows** - Switch between Claude, GPT, Llama, and more
+- **Cost optimization** - Route to the cheapest available provider
+- **Fallback resilience** - Automatic failover when models are unavailable
+- **Unified billing** - Single API key for all providers
+
+## Setup
+
+Set your OpenRouter API key:
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+```
+
+Optional analytics configuration:
+
+```bash
+export OPENROUTER_SITE_URL="https://myapp.com"    # Your app URL
+export OPENROUTER_APP_NAME="MyApp"                 # Your app name
+```
+
+<Aside type="tip">
+  Get your API key at [openrouter.ai/keys](https://openrouter.ai/keys). OpenRouter offers free credits for new accounts.
+</Aside>
+
+## Model Format
+
+OpenRouter models use the format `provider/model-name`:
+
+```bash
+openrouter:anthropic/claude-sonnet-4-5
+openrouter:openai/gpt-4o
+openrouter:deepseek/deepseek-chat
+openrouter:meta-llama/llama-3.3-70b-instruct
+```
+
+<Aside type="note">
+  Any valid OpenRouter model ID works—not just the ones in the catalog. Check [openrouter.ai/models](https://openrouter.ai/models) for the full list.
+</Aside>
+
+## Popular Models
+
+| Model | OpenRouter ID | Best For |
+|-------|---------------|----------|
+| Claude Sonnet 4.5 | `anthropic/claude-sonnet-4-5` | Balanced performance |
+| GPT-4o | `openai/gpt-4o` | General tasks, vision |
+| DeepSeek Chat (V3) | `deepseek/deepseek-chat` | Cost-effective coding |
+| DeepSeek R1 | `deepseek/deepseek-r1` | Complex reasoning |
+| Llama 3.3 70B | `meta-llama/llama-3.3-70b-instruct` | Open-source option |
+| Gemini 2.5 Flash | `google/gemini-2.5-flash` | Fast, long context |
+
+## Quick Aliases
+
+llmist provides shortcuts for common OpenRouter models:
+
+| Alias | Full Model |
+|-------|------------|
+| `or:sonnet` | `openrouter:anthropic/claude-sonnet-4-5` |
+| `or:opus` | `openrouter:anthropic/claude-opus-4-5` |
+| `or:haiku` | `openrouter:anthropic/claude-haiku-4-5` |
+| `or:gpt4o` | `openrouter:openai/gpt-4o` |
+| `or:gpt5` | `openrouter:openai/gpt-5.2` |
+| `or:flash` | `openrouter:google/gemini-2.5-flash` |
+| `or:llama` | `openrouter:meta-llama/llama-3.3-70b-instruct` |
+| `or:deepseek` | `openrouter:deepseek/deepseek-r1` |
+
+## Usage Examples
+
+<Tabs>
+  <TabItem label="Basic">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    const answer = await LLMist.createAgent()
+      .withModel('openrouter:deepseek/deepseek-chat')
+      .askAndCollect('Explain async/await in JavaScript');
+    ```
+  </TabItem>
+  <TabItem label="Using Aliases">
+    ```typescript
+    import { LLMist } from 'llmist';
+
+    // Use the or: prefix for quick access
+    const answer = await LLMist.createAgent()
+      .withModel('or:sonnet')
+      .askAndCollect('Write a haiku about coding');
+    ```
+  </TabItem>
+  <TabItem label="CLI">
+    ```bash
+    # Full model ID
+    npx @llmist/cli complete "Hello" --model openrouter:deepseek/deepseek-chat
+
+    # Using alias
+    npx @llmist/cli agent "Review my code" --model or:sonnet
+    ```
+  </TabItem>
+</Tabs>
+
+## Routing Options
+
+OpenRouter supports intelligent routing to optimize for cost, speed, or quality:
+
+```typescript
+import { LLMist } from 'llmist';
+
+const answer = await LLMist.createAgent()
+  .withModel('openrouter:deepseek/deepseek-chat')
+  .withExtra({
+    routing: {
+      route: 'cheapest',  // 'cheapest' | 'fastest' | 'quality'
+    },
+  })
+  .askAndCollect('Hello!');
+```
+
+### Route Options
+
+| Option | Description |
+|--------|-------------|
+| `quality` | Best quality provider (default) |
+| `cheapest` | Lowest cost provider |
+| `fastest` | Lowest latency provider |
+
+## Model Fallbacks
+
+Configure automatic fallback to alternative models:
+
+```typescript
+import { LLMist } from 'llmist';
+
+const answer = await LLMist.createAgent()
+  .withModel('openrouter:anthropic/claude-sonnet-4-5')
+  .withExtra({
+    routing: {
+      // Try these models in order if primary is unavailable
+      models: [
+        'anthropic/claude-sonnet-4-5',
+        'openai/gpt-4o',
+        'deepseek/deepseek-chat',
+      ],
+    },
+  })
+  .askAndCollect('Complex analysis task...');
+```
+
+<Aside type="tip">
+  Model fallbacks are great for production systems—they ensure your application keeps working even when a specific model has an outage.
+</Aside>
+
+## Provider Routing
+
+Route to a specific provider when a model is available from multiple sources:
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('openrouter:meta-llama/llama-3.3-70b-instruct')
+  .withExtra({
+    routing: {
+      provider: 'Together',  // Route to Together AI
+      // Or specify provider preference order:
+      // order: ['Together', 'Fireworks', 'Anyscale'],
+    },
+  })
+  .askAndCollect('Hello!');
+```
+
+## Manual Configuration
+
+For advanced setups, configure the provider manually:
+
+```typescript
+import { LLMist, OpenRouterProvider } from 'llmist';
+import OpenAI from 'openai';
+
+const openRouterClient = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: 'https://openrouter.ai/api/v1',
+});
+
+const client = new LLMist({
+  autoDiscoverProviders: false,
+  adapters: [
+    new OpenRouterProvider(openRouterClient, {
+      siteUrl: 'https://myapp.com',
+      appName: 'MyApp',
+    }),
+  ],
+});
+```
+
+## When to Use OpenRouter
+
+<Tabs>
+  <TabItem label="Use OpenRouter">
+    - Access models not directly supported (Llama, Mistral, Qwen, etc.)
+    - Need automatic failover between providers
+    - Want unified billing across multiple models
+    - Optimizing for cost with dynamic routing
+    - Testing different models quickly
+  </TabItem>
+  <TabItem label="Use Direct Provider">
+    - Maximum performance (lowest latency)
+    - Need provider-specific features
+    - Have negotiated enterprise pricing
+    - Compliance requires direct API access
+  </TabItem>
+</Tabs>
+
+## Cost Tracking
+
+OpenRouter passes through usage information:
+
+```typescript
+for await (const event of agent.run()) {
+  if (event.type === 'llm_call_complete') {
+    console.log('Input tokens:', event.usage?.promptTokens);
+    console.log('Output tokens:', event.usage?.completionTokens);
+    console.log('Estimated cost:', event.cost);
+  }
+}
+```
+
+<Aside type="note">
+  OpenRouter pricing is dynamic and varies by provider. Check the [OpenRouter pricing page](https://openrouter.ai/models) for current rates.
+</Aside>
+
+## Error Handling
+
+The OpenRouter provider includes enhanced error messages:
+
+| Error | Meaning |
+|-------|---------|
+| 401 | Invalid API key - check `OPENROUTER_API_KEY` |
+| 402 | Insufficient credits - add funds at openrouter.ai/credits |
+| 429 | Rate limit exceeded - reduce request frequency |
+| 503 | Model unavailable - try a different model or use fallbacks |
+
+## See Also
+
+- [OpenRouter Documentation](https://openrouter.ai/docs)
+- [Available Models](https://openrouter.ai/models)
+- [Providers Overview](/library/providers/overview/)
