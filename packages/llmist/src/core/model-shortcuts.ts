@@ -51,6 +51,16 @@ export const MODEL_ALIASES: Record<string, string> = {
   "flash-lite": "gemini:gemini-2.5-flash-lite",
   "gemini-pro": "gemini:gemini-3-pro-preview",
   pro: "gemini:gemini-3-pro-preview",
+
+  // OpenRouter aliases (or: prefix for short)
+  "or:sonnet": "openrouter:anthropic/claude-sonnet-4-5",
+  "or:opus": "openrouter:anthropic/claude-opus-4-5",
+  "or:haiku": "openrouter:anthropic/claude-haiku-4-5",
+  "or:gpt4o": "openrouter:openai/gpt-4o",
+  "or:gpt5": "openrouter:openai/gpt-5.2",
+  "or:flash": "openrouter:google/gemini-2.5-flash",
+  "or:llama": "openrouter:meta-llama/llama-3.3-70b-instruct",
+  "or:deepseek": "openrouter:deepseek/deepseek-r1",
 };
 
 /**
@@ -133,37 +143,35 @@ function isKnownModelPattern(model: string): boolean {
  * ```
  */
 export function resolveModel(model: string, options: ResolveModelOptions = {}): string {
-  // Already has provider prefix - pass through
-  if (model.includes(":")) {
-    return model;
-  }
-
-  // Check if it's a known alias
+  // Check if it's a known alias first (this handles or:* aliases too)
   const normalized = model.toLowerCase();
   if (MODEL_ALIASES[normalized]) {
     return MODEL_ALIASES[normalized];
   }
 
-  // Smart detection by model name patterns
-  const modelLower = model.toLowerCase();
+  // Already has provider prefix - pass through
+  if (model.includes(":")) {
+    return model;
+  }
 
+  // Smart detection by model name patterns
   // OpenAI models start with 'gpt'
-  if (modelLower.startsWith("gpt")) {
+  if (normalized.startsWith("gpt")) {
     return `openai:${model}`;
   }
 
   // Anthropic models start with 'claude'
-  if (modelLower.startsWith("claude")) {
+  if (normalized.startsWith("claude")) {
     return `anthropic:${model}`;
   }
 
   // Gemini models start with 'gemini'
-  if (modelLower.startsWith("gemini")) {
+  if (normalized.startsWith("gemini")) {
     return `gemini:${model}`;
   }
 
   // OpenAI o-series models (o1, o3, etc.)
-  if (modelLower.match(/^o\d/)) {
+  if (normalized.match(/^o\d/)) {
     return `openai:${model}`;
   }
 
