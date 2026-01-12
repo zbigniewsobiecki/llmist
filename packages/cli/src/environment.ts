@@ -2,7 +2,7 @@ import { join } from "node:path";
 import readline from "node:readline";
 import chalk from "chalk";
 import type { ILogObj, Logger, LoggerOptions } from "llmist";
-import { LLMist, createLogger } from "llmist";
+import { createLogger, LLMist } from "llmist";
 import type { Session } from "./session.js";
 
 /**

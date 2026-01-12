@@ -84,6 +84,14 @@ export class HuggingFaceProvider extends OpenAICompatibleProvider<HuggingFaceCon
       );
     }
 
+    // HF serverless inference often returns 400 for transient capacity/loading issues
+    // Wrap these to make them identifiable and allow retry logic to treat them as rate limits
+    if (message.includes("400") || message.includes("bad request")) {
+      return new Error(
+        `HF bad request (often transient on serverless). ` + `Original error: ${error.message}`,
+      );
+    }
+
     return error;
   }
 }

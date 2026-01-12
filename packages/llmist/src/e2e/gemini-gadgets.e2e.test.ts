@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mockLLM } from "../../../testing/src/index.js";
 import type { Agent } from "../agent/agent.js";
 import { AgentBuilder } from "../agent/builder.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { createLogger } from "../logging/logger.js";
-import { mockLLM } from "../../../testing/src/index.js";
 import { TEST_TIMEOUTS } from "./fixtures.js";
 import { clearAllMocks, createMockE2EClient } from "./mock-setup.js";
 import {

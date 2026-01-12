@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   AbortException,
-  TaskCompletionSignal,
   HumanInputRequiredException,
+  TaskCompletionSignal,
   TimeoutException,
 } from "./exceptions.js";
 

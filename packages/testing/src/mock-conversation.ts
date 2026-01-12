@@ -3,8 +3,7 @@
  * Implements IConversationManager interface with test-friendly features.
  */
 
-import type { IConversationManager } from "llmist";
-import type { LLMMessage } from "llmist";
+import type { IConversationManager, LLMMessage } from "llmist";
 
 /**
  * A mock implementation of IConversationManager for testing.
@@ -49,7 +48,12 @@ export class MockConversationManager implements IConversationManager {
     this.addedMessages.push(msg);
   }
 
-  addGadgetCallResult(gadgetName: string, parameters: Record<string, unknown>, result: string, invocationId: string): void {
+  addGadgetCallResult(
+    gadgetName: string,
+    parameters: Record<string, unknown>,
+    result: string,
+    invocationId: string,
+  ): void {
     // Simplified gadget call format for testing (including invocation ID)
     const assistantMsg: LLMMessage = {
       role: "assistant",

@@ -30,7 +30,9 @@ function formatParamsForBlockExample(
         const itemPath = `${fullPath}/${index}`;
         if (typeof item === "object" && item !== null) {
           // Nested object in array
-          lines.push(formatParamsForBlockExample(item as Record<string, unknown>, itemPath, argPrefix));
+          lines.push(
+            formatParamsForBlockExample(item as Record<string, unknown>, itemPath, argPrefix),
+          );
         } else {
           lines.push(`${argPrefix}${itemPath}`);
           lines.push(String(item));
@@ -38,7 +40,9 @@ function formatParamsForBlockExample(
       });
     } else if (typeof value === "object" && value !== null) {
       // Nested objects: recurse with path prefix
-      lines.push(formatParamsForBlockExample(value as Record<string, unknown>, fullPath, argPrefix));
+      lines.push(
+        formatParamsForBlockExample(value as Record<string, unknown>, fullPath, argPrefix),
+      );
     } else {
       // Simple values
       lines.push(`${argPrefix}${fullPath}`);
@@ -468,7 +472,11 @@ export abstract class AbstractGadget {
 
         // Render params in block format
         parts.push(
-          formatParamsForBlockExample(example.params as Record<string, unknown>, "", effectiveArgPrefix),
+          formatParamsForBlockExample(
+            example.params as Record<string, unknown>,
+            "",
+            effectiveArgPrefix,
+          ),
         );
 
         // Add GADGET_END marker
@@ -486,4 +494,3 @@ export abstract class AbstractGadget {
     return parts.join("\n");
   }
 }
-

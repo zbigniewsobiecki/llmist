@@ -521,4 +521,20 @@ describe("retry configuration", () => {
       expect(isRetryableError(new Error("api_error: temporary issue"))).toBe(true);
     });
   });
+
+  describe("isRetryableError - HuggingFace specific", () => {
+    it("should retry HF bad request errors (often transient on serverless)", () => {
+      expect(
+        isRetryableError(
+          new Error(
+            "HF bad request (often transient on serverless). Original error: 400 Bad Request",
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it("should NOT retry generic 400 errors (non-HF)", () => {
+      expect(isRetryableError(new Error("400 Bad Request"))).toBe(false);
+    });
+  });
 });

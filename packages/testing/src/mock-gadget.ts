@@ -7,8 +7,8 @@
  * @module testing/mock-gadget
  */
 
-import type { ZodType } from "zod";
 import { AbstractGadget } from "llmist";
+import type { ZodType } from "zod";
 
 /**
  * Recorded gadget call for tracking.

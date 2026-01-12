@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, vi, test } from "vitest";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import type { ModelRegistry } from "llmist";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { formatCost } from "./ui/formatters.js";
 import { createEscKeyListener, createSigintListener, StreamProgress } from "./utils.js";
 
@@ -360,7 +360,9 @@ describe("StreamProgress nested operations", () => {
       const stream = new MockWritableStream();
       const progress = new StreamProgress(stream, false);
 
-      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini-2.5-flash", 0, { inputTokens: 5000 });
+      progress.addNestedAgent("agent:0", "parent-123", 1, "gemini-2.5-flash", 0, {
+        inputTokens: 5000,
+      });
 
       const nestedAgents = (progress as any).nestedAgents;
       expect(nestedAgents.size).toBe(1);
@@ -506,7 +508,7 @@ describe("StreamProgress nested operations", () => {
     test("calculates cost using model registry when cost not provided", () => {
       const stream = new MockWritableStream();
       const registry = new MockModelRegistry();
-      registry.setCost("gemini-2.5-flash", 0.15, 0.60); // Per 1M tokens
+      registry.setCost("gemini-2.5-flash", 0.15, 0.6); // Per 1M tokens
 
       const progress = new StreamProgress(stream, false, registry as any);
 
@@ -812,7 +814,9 @@ describe("StreamProgress nested operations", () => {
       progress.addGadget("parent-gadget", "BrowseWeb");
 
       // Add nested agent under parent
-      progress.addNestedAgent("nested-agent:0", "parent-gadget", 1, "test-model", 0, { inputTokens: 1000 });
+      progress.addNestedAgent("nested-agent:0", "parent-gadget", 1, "test-model", 0, {
+        inputTokens: 1000,
+      });
 
       // Complete and clear
       progress.completeGadget("parent-gadget");

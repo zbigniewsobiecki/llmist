@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { _resetFileLoggingState, createLogger, stripAnsi } from "./logger.js";
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("createLogger", () => {
   const originalEnv = { ...process.env };
@@ -258,7 +258,10 @@ describe("file logging", () => {
 
   beforeEach(() => {
     // Create unique temp file for each test
-    testLogFile = join(tmpdir(), `llmist-test-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);
+    testLogFile = join(
+      tmpdir(),
+      `llmist-test-${Date.now()}-${Math.random().toString(36).slice(2)}.log`,
+    );
     // Reset file logging state before each test
     _resetFileLoggingState();
     // Clean up environment variables

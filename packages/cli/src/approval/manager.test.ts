@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { Readable, Writable } from "node:stream";
+import { describe, expect, it, vi } from "vitest";
 import type { CLIEnvironment } from "../environment.js";
 import { ApprovalManager } from "./manager.js";
 import type { ApprovalConfig, ApprovalContextProvider } from "./types.js";

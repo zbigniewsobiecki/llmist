@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getHostExports } from "../index.js";
-import { AgentBuilder } from "../agent/builder.js";
-import { ExecutionTree } from "../core/execution-tree.js";
-import { LLMist } from "../core/client.js";
-import { Gadget } from "./typed-gadget.js";
-import { createGadget } from "./create-gadget.js";
 import { z } from "zod";
+import { AgentBuilder } from "../agent/builder.js";
+import { LLMist } from "../core/client.js";
+import { ExecutionTree } from "../core/execution-tree.js";
+import { getHostExports } from "../index.js";
+import { createGadget } from "./create-gadget.js";
+import { Gadget } from "./typed-gadget.js";
 import type { ExecutionContext, HostExports } from "./types.js";
 
 describe("getHostExports", () => {

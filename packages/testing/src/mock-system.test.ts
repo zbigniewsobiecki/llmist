@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { LLMist } from "llmist";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createMockAdapter } from "./mock-adapter.js";
 import { mockLLM } from "./mock-builder.js";
 import { createMockClient } from "./mock-client.js";

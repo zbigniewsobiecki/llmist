@@ -1,14 +1,14 @@
+import type { LLMMessage, MessageContent } from "llmist";
 import {
   type AudioMimeType,
   detectAudioMimeType,
   detectImageMimeType,
+  extractMessageText,
   type ImageMimeType,
   isAudioPart,
   isImagePart,
   toBase64,
 } from "llmist";
-import type { LLMMessage, MessageContent } from "llmist";
-import { extractMessageText } from "llmist";
 import { getMockManager } from "./mock-manager.js";
 import type {
   MockMatcher,
@@ -176,7 +176,9 @@ export class MockBuilder {
    * mockLLM().whenMessageMatches(/calculate \d+/)
    */
   whenMessageMatches(regex: RegExp): this {
-    this.matchers.push((ctx) => ctx.messages.some((msg) => regex.test(extractMessageText(msg.content))));
+    this.matchers.push((ctx) =>
+      ctx.messages.some((msg) => regex.test(extractMessageText(msg.content))),
+    );
     return this;
   }
 
@@ -190,7 +192,8 @@ export class MockBuilder {
     this.matchers.push((ctx) =>
       ctx.messages.some(
         (msg) =>
-          msg.role === role && extractMessageText(msg.content).toLowerCase().includes(text.toLowerCase()),
+          msg.role === role &&
+          extractMessageText(msg.content).toLowerCase().includes(text.toLowerCase()),
       ),
     );
     return this;

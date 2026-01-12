@@ -188,11 +188,7 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
     // Use overwrite to redirect tslog's formatted output to file instead of console
     overwrite: useFileLogging
       ? {
-          transportFormatted: (
-            logMetaMarkup: string,
-            logArgs: unknown[],
-            _logErrors: string[],
-          ) => {
+          transportFormatted: (logMetaMarkup: string, logArgs: unknown[], _logErrors: string[]) => {
             // Skip if stream was disabled due to errors
             if (!sharedLogFileStream) return;
 

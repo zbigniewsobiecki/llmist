@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
+import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 import { AgentBuilder } from "../agent/builder.js";
 import { LLMist } from "../core/client.js";
 import {
@@ -20,7 +20,6 @@ import {
   text,
 } from "../core/input-content.js";
 import { LLMMessageBuilder } from "../core/messages.js";
-import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
 
 describe("E2E: Multimodal Input Support", () => {
   beforeEach(() => {

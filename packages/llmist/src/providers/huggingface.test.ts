@@ -309,6 +309,62 @@ describe("HuggingFaceProvider", () => {
       expect((provider as any).config.endpointType).toBe("dedicated");
     });
   });
+
+  describe("enhanceError", () => {
+    it("should enhance 429 (rate limit) errors", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const error = new Error("Request failed with status code 429");
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect(enhanced.message).toContain("rate limit exceeded");
+      expect(enhanced.message).toContain("dedicated endpoint");
+    });
+
+    it("should enhance 404 (model not found) errors", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const error = new Error("Model not found: test-model");
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect(enhanced.message).toContain("not available");
+      expect(enhanced.message).toContain("endpoint type");
+    });
+
+    it("should enhance 401 (auth) errors", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const error = new Error("401 Unauthorized");
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect(enhanced.message).toContain("authentication failed");
+      expect(enhanced.message).toContain("HF_TOKEN");
+    });
+
+    it("should enhance 400 (bad request) errors for serverless transient issues", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const error = new Error("Request failed with status code 400");
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect(enhanced.message).toContain("bad request");
+      expect(enhanced.message).toContain("transient");
+    });
+
+    it("should pass through other errors unchanged", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const error = new Error("Some other error");
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect(enhanced).toBe(error);
+    });
+  });
 });
 
 describe("createHuggingFaceProviderFromEnv", () => {

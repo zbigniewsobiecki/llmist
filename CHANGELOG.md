@@ -1,3 +1,30 @@
+## 15.3.0 (2026-01-11)
+
+* Merge pull request #348 from zbigniewsobiecki/dev ([03c9bc0](https://github.com/zbigniewsobiecki/llmist/commit/03c9bc0)), closes [#348](https://github.com/zbigniewsobiecki/llmist/issues/348)
+* feat(providers): retry 400 errors for HuggingFace serverless inference (#347) ([0d1dbe1](https://github.com/zbigniewsobiecki/llmist/commit/0d1dbe1)), closes [#347](https://github.com/zbigniewsobiecki/llmist/issues/347)
+* chore: sync dev with main [skip ci] ([fa68209](https://github.com/zbigniewsobiecki/llmist/commit/fa68209))
+* chore: sync dev with main [skip ci] ([91824ec](https://github.com/zbigniewsobiecki/llmist/commit/91824ec))
+* test(coverage): add comprehensive test coverage improvements (#344) ([3529027](https://github.com/zbigniewsobiecki/llmist/commit/3529027)), closes [#344](https://github.com/zbigniewsobiecki/llmist/issues/344)
+
+## <small>15.2.2 (2026-01-11)</small>
+
+* test(coverage): add comprehensive test coverage improvements (#344) (#346) ([715ae3a](https://github.com/zbigniewsobiecki/llmist/commit/715ae3a)), closes [#344](https://github.com/zbigniewsobiecki/llmist/issues/344) [#346](https://github.com/zbigniewsobiecki/llmist/issues/346)
+
+## <small>15.2.1 (2026-01-11)</small>
+
+* Merge pull request #345 from zbigniewsobiecki/dev ([ee3042a](https://github.com/zbigniewsobiecki/llmist/commit/ee3042a)), closes [#345](https://github.com/zbigniewsobiecki/llmist/issues/345)
+* fix(providers): correct context windows for DeepSeek-V3.2 and MiniMax-M2.1 (#343) ([91eee86](https://github.com/zbigniewsobiecki/llmist/commit/91eee86)), closes [#343](https://github.com/zbigniewsobiecki/llmist/issues/343)
+
+## 15.2.0 (2026-01-11)
+
+* Merge pull request #342 from zbigniewsobiecki/dev ([29e6341](https://github.com/zbigniewsobiecki/llmist/commit/29e6341)), closes [#342](https://github.com/zbigniewsobiecki/llmist/issues/342)
+* feat(providers): add pricing for DeepSeek-V3.2 and MiniMax-M2.1 on HuggingFace (#341) ([c5ba512](https://github.com/zbigniewsobiecki/llmist/commit/c5ba512)), closes [#341](https://github.com/zbigniewsobiecki/llmist/issues/341)
+
+## <small>15.1.2 (2026-01-10)</small>
+
+* Merge pull request #339 from zbigniewsobiecki/dev ([3be7bd5](https://github.com/zbigniewsobiecki/llmist/commit/3be7bd5)), closes [#339](https://github.com/zbigniewsobiecki/llmist/issues/339)
+* fix(core): default temperature to 0 when not specified (#338) ([d1b35c5](https://github.com/zbigniewsobiecki/llmist/commit/d1b35c5)), closes [#338](https://github.com/zbigniewsobiecki/llmist/issues/338)
+
 ## <small>15.1.1 (2026-01-09)</small>
 
 * Merge pull request #337 from zbigniewsobiecki/fix/remove-hardcoded-telluser ([ae2fc84](https://github.com/zbigniewsobiecki/llmist/commit/ae2fc84)), closes [#337](https://github.com/zbigniewsobiecki/llmist/issues/337)

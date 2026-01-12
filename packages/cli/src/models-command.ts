@@ -1,7 +1,6 @@
 import chalk from "chalk";
 import type { Command } from "commander";
-import type { ImageModelSpec, SpeechModelSpec } from "llmist";
-import type { ModelSpec } from "llmist";
+import type { ImageModelSpec, ModelSpec, SpeechModelSpec } from "llmist";
 import { MODEL_ALIASES } from "llmist";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";

@@ -1,10 +1,7 @@
 import chalk from "chalk";
 import { InvalidArgumentError } from "commander";
-
-import type { ModelRegistry } from "llmist";
-import type { TokenUsage } from "llmist";
-import { formatLLMError } from "llmist";
-import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
+import type { ModelRegistry, TokenUsage } from "llmist";
+import { FALLBACK_CHARS_PER_TOKEN, formatLLMError } from "llmist";
 import type { CLIEnvironment, TTYAwareStream } from "./environment.js";
 
 /**
@@ -955,7 +952,9 @@ export class StreamProgress {
           const elapsedSeconds = (Date.now() - op.startTime) / 1000;
 
           // Get aggregated subagent metrics (for nested gadgets that run LLM calls)
-          const nestedMetrics = op.id ? this.getAggregatedSubagentMetrics(op.id) : { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cost: 0, callCount: 0 };
+          const nestedMetrics = op.id
+            ? this.getAggregatedSubagentMetrics(op.id)
+            : { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cost: 0, callCount: 0 };
 
           // Use shared formatGadgetLine for consistent formatting
           // Pass maxWidth adjusted for indent to prevent line overflow
@@ -1354,8 +1353,7 @@ export async function executeAction(
     // Format error message - formatLLMError handles LLM API errors gracefully
     // and falls through to original message for other error types
     const rawMessage = error instanceof Error ? error.message : String(error);
-    const message =
-      error instanceof Error ? formatLLMError(error) : rawMessage;
+    const message = error instanceof Error ? formatLLMError(error) : rawMessage;
     env.stderr.write(`${chalk.red.bold("Error:")} ${message}\n`);
     env.setExitCode(1);
   }
