@@ -1,3 +1,11 @@
+## <small>15.4.1 (2026-01-12)</small>
+
+* Merge pull request #350 from zbigniewsobiecki/fix/retry-stream-iteration-errors ([4acf3a4](https://github.com/zbigniewsobiecki/llmist/commit/4acf3a4)), closes [#350](https://github.com/zbigniewsobiecki/llmist/issues/350)
+* Merge pull request #351 from zbigniewsobiecki/docs/openrouter-provider ([0f2eefd](https://github.com/zbigniewsobiecki/llmist/commit/0f2eefd)), closes [#351](https://github.com/zbigniewsobiecki/llmist/issues/351)
+* Merge pull request #352 from zbigniewsobiecki/dev ([265102c](https://github.com/zbigniewsobiecki/llmist/commit/265102c)), closes [#352](https://github.com/zbigniewsobiecki/llmist/issues/352)
+* docs(providers): add OpenRouter provider documentation ([2a3d12e](https://github.com/zbigniewsobiecki/llmist/commit/2a3d12e))
+* fix(agent): retry errors during stream iteration, not just initial connection ([5ccebee](https://github.com/zbigniewsobiecki/llmist/commit/5ccebee))
+
 ## 15.4.0 (2026-01-12)
 
 * Merge branch 'dev' into feat/openrouter-provider ([fc2d44a](https://github.com/zbigniewsobiecki/llmist/commit/fc2d44a)), closes [#347](https://github.com/zbigniewsobiecki/llmist/issues/347)
