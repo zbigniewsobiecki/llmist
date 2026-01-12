@@ -1,3 +1,10 @@
+## 15.4.0 (2026-01-12)
+
+* Merge branch 'dev' into feat/openrouter-provider ([fc2d44a](https://github.com/zbigniewsobiecki/llmist/commit/fc2d44a)), closes [#347](https://github.com/zbigniewsobiecki/llmist/issues/347)
+* Merge pull request #340 from zbigniewsobiecki/feat/openrouter-provider ([6748365](https://github.com/zbigniewsobiecki/llmist/commit/6748365)), closes [#340](https://github.com/zbigniewsobiecki/llmist/issues/340)
+* Merge pull request #349 from zbigniewsobiecki/dev ([d7f828a](https://github.com/zbigniewsobiecki/llmist/commit/d7f828a)), closes [#349](https://github.com/zbigniewsobiecki/llmist/issues/349)
+* feat(providers): add OpenRouter.ai provider with meta-provider architecture ([7c8151a](https://github.com/zbigniewsobiecki/llmist/commit/7c8151a))
+
 ## 15.3.0 (2026-01-11)
 
 * Merge pull request #348 from zbigniewsobiecki/dev ([03c9bc0](https://github.com/zbigniewsobiecki/llmist/commit/03c9bc0)), closes [#348](https://github.com/zbigniewsobiecki/llmist/issues/348)
