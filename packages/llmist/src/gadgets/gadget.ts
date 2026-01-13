@@ -225,6 +225,33 @@ export abstract class AbstractGadget {
   examples?: GadgetExample<unknown>[];
 
   /**
+   * Maximum number of concurrent executions allowed for this gadget.
+   * Use this to prevent race conditions in gadgets that modify shared state.
+   *
+   * - `1` = Sequential execution (only one instance runs at a time)
+   * - `0` or `undefined` = Unlimited concurrency (default)
+   * - `N > 1` = At most N concurrent executions
+   *
+   * This property sets a safety floor: external configuration (SubagentConfig)
+   * can only make concurrency MORE restrictive, never less. For example, if
+   * a gadget declares `maxConcurrent: 1`, external config cannot override it
+   * to allow parallel execution.
+   *
+   * @example
+   * ```typescript
+   * // File writer that must run sequentially to avoid race conditions
+   * class WriteFile extends Gadget({
+   *   description: 'Writes content to a file',
+   *   schema: z.object({ path: z.string(), content: z.string() }),
+   *   maxConcurrent: 1, // Sequential - prevents race conditions
+   * }) {
+   *   execute(params: this['params']) { ... }
+   * }
+   * ```
+   */
+  maxConcurrent?: number;
+
+  /**
    * Execute the gadget with the given parameters.
    * Can be synchronous or asynchronous.
    *

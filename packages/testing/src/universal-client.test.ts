@@ -34,6 +34,7 @@ describe("LLMist", () => {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     HF_TOKEN: process.env.HF_TOKEN,
     HUGGING_FACE_API_KEY: process.env.HUGGING_FACE_API_KEY,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
   };
 
   beforeEach(() => {
@@ -42,6 +43,7 @@ describe("LLMist", () => {
     delete process.env.GEMINI_API_KEY;
     delete process.env.HF_TOKEN;
     delete process.env.HUGGING_FACE_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
   });
 
   afterEach(() => {
@@ -73,6 +75,12 @@ describe("LLMist", () => {
       process.env.HUGGING_FACE_API_KEY = ORIGINAL_ENV.HUGGING_FACE_API_KEY;
     } else {
       delete process.env.HUGGING_FACE_API_KEY;
+    }
+
+    if (ORIGINAL_ENV.OPENROUTER_API_KEY !== undefined) {
+      process.env.OPENROUTER_API_KEY = ORIGINAL_ENV.OPENROUTER_API_KEY;
+    } else {
+      delete process.env.OPENROUTER_API_KEY;
     }
   });
 

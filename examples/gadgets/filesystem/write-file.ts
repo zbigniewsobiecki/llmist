@@ -13,6 +13,7 @@ export const writeFile = createGadget({
   name: "WriteFile",
   description:
     "Write content to a file. Creates parent directories if needed. Overwrites existing files. The file path must be within the current working directory or its subdirectories.",
+  maxConcurrent: 1, // Sequential execution to prevent race conditions
   schema: z.object({
     filePath: z.string().describe("Path to the file to write (relative or absolute)"),
     content: z.string().describe("Content to write to the file"),

@@ -637,12 +637,30 @@ export class StreamProcessor {
   }
 
   /**
-   * Get the concurrency limit for a gadget from subagent config.
-   * Returns 0 if no limit is set (unlimited).
+   * Get the effective concurrency limit for a gadget.
+   * Uses "most restrictive wins" strategy: the lowest non-zero value from
+   * external config (SubagentConfig) and gadget's intrinsic maxConcurrent.
+   *
+   * This ensures gadget authors can set safety floors (e.g., maxConcurrent: 1
+   * for file writers) that cannot be weakened by external configuration.
+   *
+   * @returns 0 if unlimited, otherwise the effective limit
    */
   private getConcurrencyLimit(gadgetName: string): number {
-    const config = this.subagentConfig?.[gadgetName];
-    return config?.maxConcurrent ?? 0;
+    // External config limit (SubagentConfig)
+    const configLimit = this.subagentConfig?.[gadgetName]?.maxConcurrent;
+
+    // Gadget's intrinsic limit
+    const gadget = this.registry.get(gadgetName);
+    const gadgetLimit = gadget?.maxConcurrent;
+
+    // Most restrictive wins: lowest non-zero value
+    // Treat 0 and undefined as "unlimited" (Infinity for comparison)
+    const config = configLimit || Number.POSITIVE_INFINITY;
+    const intrinsic = gadgetLimit || Number.POSITIVE_INFINITY;
+    const effective = Math.min(config, intrinsic);
+
+    return effective === Number.POSITIVE_INFINITY ? 0 : effective;
   }
 
   /**
