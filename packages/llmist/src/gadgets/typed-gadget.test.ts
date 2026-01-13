@@ -121,6 +121,50 @@ describe("Gadget", () => {
     expect(gadget.timeoutMs).toBe(3000);
   });
 
+  it("should support maxConcurrent for sequential execution", () => {
+    class SequentialGadget extends Gadget({
+      description: "Sequential gadget",
+      schema: z.object({}),
+      maxConcurrent: 1,
+    }) {
+      execute(): string {
+        return "Done";
+      }
+    }
+
+    const gadget = new SequentialGadget();
+    expect(gadget.maxConcurrent).toBe(1);
+  });
+
+  it("should support maxConcurrent with higher values", () => {
+    class LimitedGadget extends Gadget({
+      description: "Limited concurrency gadget",
+      schema: z.object({}),
+      maxConcurrent: 3,
+    }) {
+      execute(): string {
+        return "Done";
+      }
+    }
+
+    const gadget = new LimitedGadget();
+    expect(gadget.maxConcurrent).toBe(3);
+  });
+
+  it("should default maxConcurrent to undefined", () => {
+    class UnlimitedGadget extends Gadget({
+      description: "Unlimited gadget",
+      schema: z.object({}),
+    }) {
+      execute(): string {
+        return "Done";
+      }
+    }
+
+    const gadget = new UnlimitedGadget();
+    expect(gadget.maxConcurrent).toBeUndefined();
+  });
+
   it("should work with empty schema", () => {
     class EmptyGadget extends Gadget({
       description: "No params",

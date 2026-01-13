@@ -297,6 +297,7 @@ Uses layered matching strategies (in order):
 
 For multiple edits to the same file, call this gadget multiple times.
 Each call provides immediate feedback, allowing you to adjust subsequent edits.`,
+  maxConcurrent: 1, // Sequential execution to prevent race conditions
   schema: z.object({
     filePath: z.string().describe("Path to the file to edit (relative or absolute)"),
     search: z.string().describe("The content to search for in the file"),

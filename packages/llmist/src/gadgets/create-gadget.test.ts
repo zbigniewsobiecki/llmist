@@ -112,6 +112,38 @@ describe("createGadget", () => {
     expect(gadget.timeoutMs).toBe(5000);
   });
 
+  it("should support maxConcurrent for sequential execution", () => {
+    const gadget = createGadget({
+      description: "Sequential gadget",
+      schema: z.object({}),
+      execute: () => "Done",
+      maxConcurrent: 1,
+    });
+
+    expect(gadget.maxConcurrent).toBe(1);
+  });
+
+  it("should support maxConcurrent with higher values", () => {
+    const gadget = createGadget({
+      description: "Limited concurrency gadget",
+      schema: z.object({}),
+      execute: () => "Done",
+      maxConcurrent: 5,
+    });
+
+    expect(gadget.maxConcurrent).toBe(5);
+  });
+
+  it("should default maxConcurrent to undefined", () => {
+    const gadget = createGadget({
+      description: "Unlimited gadget",
+      schema: z.object({}),
+      execute: () => "Done",
+    });
+
+    expect(gadget.maxConcurrent).toBeUndefined();
+  });
+
   it("should work with empty schema", () => {
     const gadget = createGadget({
       description: "No params gadget",

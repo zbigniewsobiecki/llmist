@@ -1556,6 +1556,124 @@ test value
       expect(totalTime).toBeGreaterThanOrEqual(90); // At least 2 waves
       expect(totalTime).toBeLessThan(180); // Less than 4 sequential
     });
+
+    it("uses gadget's intrinsic maxConcurrent when no SubagentConfig is set", async () => {
+      const DELAY_MS = 50;
+
+      const slowGadget = createMockGadget({
+        name: "SequentialGadget",
+        result: "done",
+        delayMs: DELAY_MS,
+      });
+      // Set intrinsic maxConcurrent on the gadget itself
+      (slowGadget as { maxConcurrent?: number }).maxConcurrent = 1;
+
+      registry.registerByClass(slowGadget);
+
+      // No subagentConfig - should use gadget's intrinsic maxConcurrent
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        // No subagentConfig
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("SequentialGadget", {}, { invocationId: "s1" }),
+        createGadgetCallString("SequentialGadget", {}, { invocationId: "s2" }),
+        createGadgetCallString("SequentialGadget", {}, { invocationId: "s3" }),
+      ].join("\n");
+
+      const startTime = Date.now();
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+      const totalTime = Date.now() - startTime;
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(3);
+
+      // Sequential execution: ~150ms (3 × 50ms)
+      expect(totalTime).toBeGreaterThanOrEqual(140);
+    });
+
+    it("uses most restrictive limit when gadget has lower maxConcurrent than config", async () => {
+      const DELAY_MS = 50;
+
+      const slowGadget = createMockGadget({
+        name: "SafeGadget",
+        result: "done",
+        delayMs: DELAY_MS,
+      });
+      // Gadget declares maxConcurrent: 1 (safety requirement)
+      (slowGadget as { maxConcurrent?: number }).maxConcurrent = 1;
+
+      registry.registerByClass(slowGadget);
+
+      // Config tries to allow more concurrency - should be ignored
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        subagentConfig: {
+          SafeGadget: { maxConcurrent: 3 }, // Config tries to allow 3 parallel
+        },
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("SafeGadget", {}, { invocationId: "s1" }),
+        createGadgetCallString("SafeGadget", {}, { invocationId: "s2" }),
+        createGadgetCallString("SafeGadget", {}, { invocationId: "s3" }),
+      ].join("\n");
+
+      const startTime = Date.now();
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+      const totalTime = Date.now() - startTime;
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(3);
+
+      // Gadget's maxConcurrent:1 wins - sequential execution: ~150ms
+      expect(totalTime).toBeGreaterThanOrEqual(140);
+    });
+
+    it("uses most restrictive limit when config has lower maxConcurrent than gadget", async () => {
+      const DELAY_MS = 50;
+
+      const slowGadget = createMockGadget({
+        name: "FlexibleGadget",
+        result: "done",
+        delayMs: DELAY_MS,
+      });
+      // Gadget allows 3 concurrent
+      (slowGadget as { maxConcurrent?: number }).maxConcurrent = 3;
+
+      registry.registerByClass(slowGadget);
+
+      // Config restricts to 1
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        subagentConfig: {
+          FlexibleGadget: { maxConcurrent: 1 }, // Config restricts to sequential
+        },
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("FlexibleGadget", {}, { invocationId: "s1" }),
+        createGadgetCallString("FlexibleGadget", {}, { invocationId: "s2" }),
+        createGadgetCallString("FlexibleGadget", {}, { invocationId: "s3" }),
+      ].join("\n");
+
+      const startTime = Date.now();
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+      const totalTime = Date.now() - startTime;
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(3);
+
+      // Config's maxConcurrent:1 wins - sequential execution: ~150ms
+      expect(totalTime).toBeGreaterThanOrEqual(140);
+    });
   });
 
   describe("Cross-Iteration Dependency Resolution", () => {
