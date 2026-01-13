@@ -1,3 +1,7 @@
+## 15.5.0 (2026-01-13)
+
+* feat(gadgets): add maxConcurrent property for sequential execution (#353) (#354) ([4b37924](https://github.com/zbigniewsobiecki/llmist/commit/4b37924)), closes [#353](https://github.com/zbigniewsobiecki/llmist/issues/353) [#354](https://github.com/zbigniewsobiecki/llmist/issues/354)
+
 ## <small>15.4.1 (2026-01-12)</small>
 
 * Merge pull request #350 from zbigniewsobiecki/fix/retry-stream-iteration-errors ([4acf3a4](https://github.com/zbigniewsobiecki/llmist/commit/4acf3a4)), closes [#350](https://github.com/zbigniewsobiecki/llmist/issues/350)
