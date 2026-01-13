@@ -50,6 +50,14 @@ export interface GadgetConfig<TSchema extends ZodType> {
 
   /** Optional usage examples to help LLMs understand proper invocation */
   examples?: GadgetExample<InferSchema<TSchema>>[];
+
+  /**
+   * Maximum concurrent executions. Use to prevent race conditions.
+   * - `1` = Sequential (one at a time)
+   * - `0` or `undefined` = Unlimited (default)
+   * - `N > 1` = At most N concurrent
+   */
+  maxConcurrent?: number;
 }
 
 /**
@@ -114,6 +122,7 @@ export function Gadget<TSchema extends ZodType>(config: GadgetConfig<TSchema>) {
     name = config.name;
     timeoutMs = config.timeoutMs;
     examples = config.examples;
+    maxConcurrent = config.maxConcurrent;
 
     /**
      * Type helper property for accessing inferred parameter type.
