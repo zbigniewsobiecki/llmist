@@ -59,11 +59,20 @@ export class InputHandler {
   /** Callback when Ctrl+P is pressed (cycle profiles) */
   private ctrlPCallback: (() => void) | null = null;
 
+  /** Callback when Arrow Up is pressed (scroll up in focused mode) */
+  private arrowUpCallback: (() => void) | null = null;
+
+  /** Callback when Arrow Down is pressed (scroll down in focused mode) */
+  private arrowDownCallback: (() => void) | null = null;
+
   /** Callback for mid-session input (user submits while agent is running) */
   private midSessionHandler: ((message: string) => void) | null = null;
 
   /** Callback to check current focus mode (to avoid conflicts with browse mode) */
   private getFocusModeCallback: (() => "input" | "browse") | null = null;
+
+  /** Callback to check current content filter mode */
+  private getContentFilterModeCallback: (() => "full" | "focused") | null = null;
 
   /** Body height when input bar is visible */
   private bodyHeightWithInput: string;
@@ -160,6 +169,23 @@ export class InputHandler {
       }
     });
 
+    // Handle Arrow Up on the input bar - scroll up in focused mode
+    // In focused mode, we want arrows to scroll; in full mode, they move cursor
+    this.inputBar.key(["up"], () => {
+      if (this.getContentFilterModeCallback?.() === "focused" && this.arrowUpCallback) {
+        this.arrowUpCallback();
+      }
+      // Otherwise, let the default textbox behavior handle cursor movement
+    });
+
+    // Handle Arrow Down on the input bar - scroll down in focused mode
+    this.inputBar.key(["down"], () => {
+      if (this.getContentFilterModeCallback?.() === "focused" && this.arrowDownCallback) {
+        this.arrowDownCallback();
+      }
+      // Otherwise, let the default textbox behavior handle cursor movement
+    });
+
     // Handle Ctrl+S on the input bar - open $EDITOR for multiline input
     this.inputBar.key(["C-s"], () => {
       const currentValue = this.inputBar.getValue();
@@ -223,6 +249,29 @@ export class InputHandler {
    */
   onCtrlP(callback: () => void): void {
     this.ctrlPCallback = callback;
+  }
+
+  /**
+   * Set callback for Arrow Up events (scroll up in focused mode).
+   */
+  onArrowUp(callback: () => void): void {
+    this.arrowUpCallback = callback;
+  }
+
+  /**
+   * Set callback for Arrow Down events (scroll down in focused mode).
+   */
+  onArrowDown(callback: () => void): void {
+    this.arrowDownCallback = callback;
+  }
+
+  /**
+   * Set callback to check content filter mode.
+   * Used to determine if arrow keys should scroll (focused mode)
+   * or move cursor (full mode).
+   */
+  setGetContentFilterMode(callback: () => "full" | "focused"): void {
+    this.getContentFilterModeCallback = callback;
   }
 
   /**
