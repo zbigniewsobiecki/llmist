@@ -1,3 +1,8 @@
+## <small>15.7.1 (2026-01-14)</small>
+
+* Merge pull request #361 from zbigniewsobiecki/dev ([982e33d](https://github.com/zbigniewsobiecki/llmist/commit/982e33d)), closes [#361](https://github.com/zbigniewsobiecki/llmist/issues/361)
+* fix(tui): forward arrow keys from input bar for scrolling in focused mode (#360) ([28c8940](https://github.com/zbigniewsobiecki/llmist/commit/28c8940)), closes [#360](https://github.com/zbigniewsobiecki/llmist/issues/360)
+
 ## 15.7.0 (2026-01-14)
 
 * Merge pull request #359 from zbigniewsobiecki/dev ([981d1f4](https://github.com/zbigniewsobiecki/llmist/commit/981d1f4)), closes [#359](https://github.com/zbigniewsobiecki/llmist/issues/359)
