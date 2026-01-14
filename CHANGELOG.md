@@ -1,3 +1,8 @@
+## <small>15.8.1 (2026-01-14)</small>
+
+* Merge pull request #365 from zbigniewsobiecki/dev ([7b4f20d](https://github.com/zbigniewsobiecki/llmist/commit/7b4f20d)), closes [#365](https://github.com/zbigniewsobiecki/llmist/issues/365)
+* fix: concurrent subagent rate limiting (#364) ([14ad6a4](https://github.com/zbigniewsobiecki/llmist/commit/14ad6a4)), closes [#364](https://github.com/zbigniewsobiecki/llmist/issues/364)
+
 ## 15.8.0 (2026-01-14)
 
 * Merge pull request #363 from zbigniewsobiecki/dev ([c415b86](https://github.com/zbigniewsobiecki/llmist/commit/c415b86)), closes [#363](https://github.com/zbigniewsobiecki/llmist/issues/363)
