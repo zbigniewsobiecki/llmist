@@ -163,6 +163,8 @@ export interface AgentConfig extends SharedCommandConfig {
   quiet?: boolean;
   "log-level"?: LogLevel;
   "log-llm-requests"?: boolean;
+  /** Show keyboard shortcuts hints bar in TUI (default: true) */
+  "show-hints"?: boolean;
 }
 
 /**

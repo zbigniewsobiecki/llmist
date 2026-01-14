@@ -80,6 +80,7 @@ max-iterations = 15                      # Max agent loop iterations
 # builtins = true                        # Enable built-in gadgets (AskUser, TellUser)
 # builtin-interaction = true             # Enable AskUser (set false for non-interactive)
 # quiet = false                          # Suppress all output except content and TellUser
+# show-hints = true                      # Show keyboard shortcuts hints bar in TUI
 #
 # Custom gadget markers (defaults shown):
 # gadget-start-prefix = "!!!GADGET_START:"

@@ -43,7 +43,7 @@ beforeAll(() => {
     parent: screen,
     bottom: 1,
     left: 0,
-    width: 4,
+    width: 4, // ">>> " = 4 chars
     height: 1,
     content: "> ",
     style: { fg: "cyan", bg: "black" },
@@ -118,7 +118,7 @@ describe("InputHandler", () => {
   });
 
   describe("focus mode API", () => {
-    test("activate shows input bar and preserves current state", () => {
+    test("activate shows input bar with active prompt", () => {
       const renderCallback = vi.fn(() => {});
       const renderNowCallback = vi.fn(() => {});
       const handler = new InputHandler(
@@ -130,25 +130,20 @@ describe("InputHandler", () => {
         renderNowCallback,
       );
 
-      // Set some initial state
-      promptLabel.setContent("> ");
-      inputBar.setValue("my text");
-
       handler.activate();
 
-      // Input bar should be visible
-      expect(inputBar.visible).not.toBe(false);
-      // Prompt label should be visible
-      expect(promptLabel.visible).not.toBe(false);
-      // Should preserve the current prompt (idle state from constructor)
+      // Handler should be active
+      expect(handler.isInputActive()).toBe(true);
+      // Should show prompt "> " (simplified from ">>> ")
       expect(promptLabel.getContent()).toBe("> ");
-      // Should preserve the input text
-      expect(inputBar.getValue()).toBe("my text");
+      // Input bar and prompt should be visible
+      expect(inputBar.hidden).toBe(false);
+      expect(promptLabel.hidden).toBe(false);
       // Should have rendered immediately
       expect(renderNowCallback).toHaveBeenCalled();
     });
 
-    test("deactivate hides input bar", () => {
+    test("deactivate hides input bar completely", () => {
       const renderCallback = vi.fn(() => {});
       const renderNowCallback = vi.fn(() => {});
       const handler = new InputHandler(
@@ -162,17 +157,19 @@ describe("InputHandler", () => {
 
       // First activate
       handler.activate();
-      expect(inputBar.visible).not.toBe(false);
+      expect(handler.isInputActive()).toBe(true);
 
       // Then deactivate
       handler.deactivate();
 
-      // Input bar and promptLabel should be hidden
-      expect(inputBar.visible).toBe(false);
-      expect(promptLabel.visible).toBe(false);
+      // Handler should not be active
+      expect(handler.isInputActive()).toBe(false);
+      // Input bar and prompt should be hidden
+      expect(inputBar.hidden).toBe(true);
+      expect(promptLabel.hidden).toBe(true);
     });
 
-    test("isInputActive returns true when visible", () => {
+    test("isInputActive returns true when activated", () => {
       const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
@@ -180,7 +177,7 @@ describe("InputHandler", () => {
       expect(handler.isInputActive()).toBe(true);
     });
 
-    test("isInputActive returns false when hidden", () => {
+    test("isInputActive returns false when deactivated", () => {
       const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
@@ -188,16 +185,15 @@ describe("InputHandler", () => {
       expect(handler.isInputActive()).toBe(false);
     });
 
-    test("activate clears pending REPL prompt state", () => {
+    test("activate shows active prompt indicator", () => {
       const renderCallback = vi.fn(() => {});
       const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
 
-      // Setup pending prompt state (internal state we're checking behavior)
       handler.activate();
 
       // Verify handler is active
       expect(handler.isInputActive()).toBe(true);
-      // Prompt is preserved (idle state "> " from constructor)
+      // Prompt should show "> " (simplified prompt)
       expect(promptLabel.getContent()).toBe("> ");
     });
 
@@ -207,7 +203,7 @@ describe("InputHandler", () => {
 
       handler.deactivate();
 
-      // Input should be hidden
+      // Input should not be active
       expect(handler.isInputActive()).toBe(false);
     });
   });

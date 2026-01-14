@@ -136,14 +136,16 @@ describe("StatusBar", () => {
       expect(content).toContain("BROWSE");
     });
 
-    test("input mode shows INPUT indicator", () => {
+    test("input mode shows no indicator (default state)", () => {
       const renderCallback = vi.fn(() => {});
       const bar = new StatusBar(statusBox, "test-model", renderCallback);
 
       bar.setFocusMode("input");
 
+      // Input mode is the default - no badge shown
       const content = statusBox.getContent();
-      expect(content).toContain("INPUT");
+      expect(content).not.toContain("INPUT");
+      expect(content).not.toContain("BROWSE");
     });
   });
 

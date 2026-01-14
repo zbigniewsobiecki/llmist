@@ -394,7 +394,37 @@ export class ExecutionTree {
   }
 
   /**
-   * Complete an LLM call node.
+   * Mark an LLM call's response as ended (tokens stopped).
+   *
+   * Called when the LLM stream ends, before gadget execution completes.
+   * Use this event to track "LLM thinking time" separately from gadget execution.
+   *
+   * @param nodeId - The LLM call node ID
+   * @param params - Response end parameters (finishReason, usage)
+   */
+  endLLMResponse(
+    nodeId: NodeId,
+    params: { finishReason: string | null; usage?: import("./options.js").TokenUsage },
+  ): void {
+    const node = this.nodes.get(nodeId);
+    if (!node || node.type !== "llm_call") {
+      return; // Silently ignore if node not found (may be called during cleanup)
+    }
+
+    const llmNode = node as LLMCallNode;
+
+    this.emit({
+      type: "llm_response_end",
+      ...this.createBaseEventProps(node),
+      iteration: llmNode.iteration,
+      model: llmNode.model,
+      finishReason: params.finishReason,
+      usage: params.usage,
+    });
+  }
+
+  /**
+   * Complete an LLM call node (after all gadgets finish).
    */
   completeLLMCall(nodeId: NodeId, params: CompleteLLMCallParams): void {
     const node = this.nodes.get(nodeId);

@@ -97,6 +97,7 @@ export async function executeAgent(
       model: options.model,
       stdin: env.stdin as NodeJS.ReadStream,
       stdout: env.stdout as NodeJS.WriteStream,
+      showHints: options.showHints,
     });
 
     // Load available profiles for Ctrl+P cycling
@@ -687,6 +688,7 @@ export function registerAgentCommand(
         globalRetry,
         profileRateLimits: config?.["rate-limits"],
         profileRetry: config?.retry,
+        showHints: config?.["show-hints"],
       };
       return executeAgent(prompt, mergedOptions, env, "agent");
     }, env),

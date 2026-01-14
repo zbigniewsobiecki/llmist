@@ -76,7 +76,7 @@ export class KeyboardManager {
       onAction({ type: "ctrl_c" });
     });
 
-    // Ctrl+B to toggle focus mode
+    // Ctrl+B to toggle focus mode (browse ↔ input)
     screen.key(["C-b"], () => {
       onAction({ type: "toggle_focus_mode" });
     });

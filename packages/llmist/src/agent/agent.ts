@@ -720,6 +720,13 @@ export class Agent {
                 } else if (event.type === "gadget_result") {
                   gadgetCallCount++;
                   gadgetResults.push(event);
+                } else if (event.type === "llm_response_end") {
+                  // Signal that LLM finished generating (before gadgets complete)
+                  // This allows consumers to track "LLM thinking time" separately
+                  this.tree.endLLMResponse(currentLLMNodeId!, {
+                    finishReason: event.finishReason,
+                    usage: event.usage,
+                  });
                 }
 
                 // Yield event to consumer in real-time
