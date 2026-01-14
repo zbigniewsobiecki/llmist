@@ -1,3 +1,8 @@
+## 15.7.0 (2026-01-14)
+
+* Merge pull request #359 from zbigniewsobiecki/dev ([981d1f4](https://github.com/zbigniewsobiecki/llmist/commit/981d1f4)), closes [#359](https://github.com/zbigniewsobiecki/llmist/issues/359)
+* feat(tui): improve focused mode with line scrolling and Finish rendering (#358) ([65650b9](https://github.com/zbigniewsobiecki/llmist/commit/65650b9)), closes [#358](https://github.com/zbigniewsobiecki/llmist/issues/358)
+
 ## 15.6.0 (2026-01-14)
 
 * feat(tui,agent): add llm_response_end event and TUI improvements ([1147780](https://github.com/zbigniewsobiecki/llmist/commit/1147780))
