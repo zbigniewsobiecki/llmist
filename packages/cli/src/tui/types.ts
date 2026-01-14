@@ -12,6 +12,8 @@ import type { Box, Screen, ScrollableBox, Text, Textbox } from "@unblessed/node"
 export interface TUIOptions {
   /** Model name to display in status bar */
   model: string;
+  /** Show keyboard shortcuts hints bar (default: true) */
+  showHints?: boolean;
   /** Standard input stream (optional, defaults to process.stdin) */
   stdin?: NodeJS.ReadStream;
   /** Standard output stream (optional, defaults to process.stdout) */
@@ -45,8 +47,11 @@ export type ApprovalResponse = "yes" | "no" | "always" | "deny" | "cancel";
 
 /**
  * Focus mode for TUI interaction.
- * - "browse": Navigate blocks with arrow keys, input bar hidden
- * - "input": Type in input bar, navigation disabled
+ * Both modes show the input bar, but determine which element handles keypresses.
+ * - "browse": Body has focus - navigate blocks with j/k/arrows, Enter expands
+ * - "input": Input bar has focus - typing goes to textbox, Enter submits
+ *
+ * Tab switches between modes. Prompt shows ">" in browse, ">>>" in input.
  */
 export type FocusMode = "browse" | "input";
 
@@ -285,4 +290,6 @@ export interface TUIBlockLayout {
   inputBar: Textbox;
   /** Status bar */
   statusBar: Box;
+  /** Hints bar for keyboard shortcuts (null if disabled) */
+  hintsBar: Box | null;
 }

@@ -27,6 +27,7 @@
 import type { ExecutionTree, RateLimitStats, StreamEvent } from "llmist";
 import { BlockRenderer } from "./block-renderer.js";
 import { TUIController } from "./controller.js";
+import { HintsBar } from "./hints-bar.js";
 import { InputHandler } from "./input-handler.js";
 import { type KeyAction, KeyboardManager } from "./keymap.js";
 import { createBlockLayout } from "./layout.js";
@@ -92,8 +93,17 @@ export class TUIApp {
 
     const { screen } = screenCtx;
 
+    // Determine if hints bar should be shown (default: true)
+    const showHints = options.showHints ?? true;
+
     // Create block-based layout with ScrollableBox
-    const layout = createBlockLayout(screen);
+    const layout = createBlockLayout(screen, showHints);
+
+    // Create hints bar if enabled
+    let hintsBar: HintsBar | null = null;
+    if (layout.hintsBar) {
+      hintsBar = new HintsBar(layout.hintsBar, () => screenCtx.requestRender());
+    }
 
     // Create status bar with both debounced and immediate render callbacks
     const statusBar = new StatusBar(
@@ -111,6 +121,7 @@ export class TUIApp {
       screen,
       () => screenCtx.requestRender(),
       () => screenCtx.renderNow(),
+      showHints,
     );
 
     // Create block renderer with both debounced and immediate render callbacks
@@ -120,13 +131,22 @@ export class TUIApp {
       () => screenCtx.renderNow(),
     );
 
+    // Wire up content change notifications to hints bar
+    if (hintsBar) {
+      blockRenderer.onHasContentChange((hasContent) => {
+        hintsBar.setHasContent(hasContent);
+      });
+    }
+
     // Create controller with state change callbacks
     const controller = new TUIController({
       onFocusModeChange: (mode) => {
         applyFocusMode(mode, layout, statusBar, inputHandler, screenCtx);
+        hintsBar?.setFocusMode(mode);
       },
       onContentFilterModeChange: (mode) => {
         applyContentFilterMode(mode, blockRenderer, statusBar, screenCtx);
+        hintsBar?.setContentFilterMode(mode);
       },
     });
 
@@ -165,7 +185,7 @@ export class TUIApp {
     // Set up keyboard handlers
     keyboardManager.setup();
 
-    // Wire up Ctrl+C/B/K/I/J/P from input handler to keyboard manager
+    // Wire up Ctrl keys from input handler to keyboard manager
     inputHandler.onCtrlC(() => keyboardManager.handleForwardedKey("C-c"));
     inputHandler.onCtrlB(() => keyboardManager.handleForwardedKey("C-b"));
     inputHandler.onCtrlK(() => keyboardManager.handleForwardedKey("C-k"));
@@ -324,15 +344,11 @@ export class TUIApp {
 
   /**
    * Wait for user to enter a new prompt (REPL mode).
-   * Stays in current mode (browse) - user can Tab to input or Enter to start typing.
-   * After the prompt is submitted, focus mode switches to BROWSE.
+   * Stays in input mode after submission - user can watch output and type next message.
+   * User can Ctrl+B to browse if they want to navigate blocks.
    */
   async waitForPrompt(): Promise<string> {
-    // Don't force input mode - let user review output in browse mode first
-    const result = await this.inputHandler.waitForPrompt();
-    // Return to browse mode after prompt is entered
-    this.controller.setFocusMode("browse");
-    return result;
+    return this.inputHandler.waitForPrompt();
   }
 
   /**
@@ -607,6 +623,7 @@ export class TUIApp {
 
 /**
  * Apply focus mode changes to UI components.
+ * Input bar is always visible - only the prompt indicator and focus state change.
  */
 function applyFocusMode(
   mode: FocusMode,
@@ -618,22 +635,21 @@ function applyFocusMode(
   // Update status bar FIRST
   statusBar.setFocusMode(mode);
 
-  // Update layout
-  if (mode === "input") {
-    layout.body.height = "100%-2";
-  } else {
-    layout.body.height = "100%-1";
-  }
+  // Layout stays constant - body always leaves room for input bar
+  // (100%-2 is set in createBlockLayout)
 
-  // Render the layout changes
-  screenCtx.renderNow();
-
-  // Activate/deactivate input handler
+  // Activate/deactivate input handler (changes prompt and focus, not visibility)
   if (mode === "input") {
     inputHandler.activate();
   } else {
     inputHandler.deactivate();
+    // Explicitly focus the body to release textbox focus
+    // This is critical - blessed textbox keeps capturing keys until focus moves elsewhere
+    layout.body.focus();
   }
+
+  // Render the focus changes
+  screenCtx.renderNow();
 }
 
 /**

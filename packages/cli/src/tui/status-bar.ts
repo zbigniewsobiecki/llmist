@@ -36,8 +36,8 @@ export class StatusBar {
   /** Whether we're currently streaming */
   private isStreaming = false;
 
-  /** Active LLM calls: Map from label ("#1") to model name */
-  private activeLLMCalls = new Map<string, string>();
+  /** Active LLM calls: Map from label ("#1") to model name and start time */
+  private activeLLMCalls = new Map<string, { model: string; startTime: number }>();
 
   /** Active gadgets (by name) */
   private activeGadgets = new Set<string>();
@@ -169,7 +169,7 @@ export class StatusBar {
    * @param model - Full model name like "gemini:gemini-2.5-flash"
    */
   startLLMCall(label: string, model: string): void {
-    this.activeLLMCalls.set(label, model);
+    this.activeLLMCalls.set(label, { model, startTime: Date.now() });
     this.startSpinner();
     this.render();
   }
@@ -182,6 +182,21 @@ export class StatusBar {
     this.activeLLMCalls.delete(label);
     this.maybeStopSpinner();
     this.render();
+  }
+
+  /**
+   * Get the start time of the earliest running LLM call.
+   * Used to show elapsed time since the first call started (for concurrent subagents).
+   * @returns Start time in ms, or null if no LLM calls are active
+   */
+  private getEarliestLLMCallStartTime(): number | null {
+    if (this.activeLLMCalls.size === 0) return null;
+
+    let earliest = Infinity;
+    for (const { startTime } of this.activeLLMCalls.values()) {
+      if (startTime < earliest) earliest = startTime;
+    }
+    return earliest;
   }
 
   /**
@@ -334,6 +349,18 @@ export class StatusBar {
           event.depth === 0 ? `#${event.iteration + 1}` : `#${event.iteration + 1}.${event.depth}`;
         this.nodeIdToLabel.set(event.nodeId, label);
         this.startLLMCall(label, event.model);
+        break;
+      }
+
+      case "llm_response_end": {
+        // LLM finished generating tokens (before gadgets complete)
+        // Remove from active LLM calls to stop the timer
+        const label = this.nodeIdToLabel.get(event.nodeId);
+        if (label) {
+          this.activeLLMCalls.delete(label);
+          this.maybeStopSpinner();
+          this.render();
+        }
         break;
       }
 
@@ -507,8 +534,6 @@ export class StatusBar {
    * @param immediate - If true, render immediately without debouncing
    */
   private render(immediate = false): void {
-    const elapsed = this.getElapsedSeconds().toFixed(1);
-
     // ANSI color codes
     const YELLOW = "\x1b[33m";
     const GREEN = "\x1b[32m";
@@ -518,9 +543,7 @@ export class StatusBar {
     const GRAY = "\x1b[90m";
     const RESET = "\x1b[0m";
     const BG_BLUE = "\x1b[44m";
-    const BG_GREEN = "\x1b[42m";
     const WHITE = "\x1b[37m";
-    const BLACK = "\x1b[30m";
 
     // Calculate display values: accumulated + current streaming
     const displayInputTokens = this.metrics.inputTokens + this.streamingInputTokens;
@@ -530,14 +553,10 @@ export class StatusBar {
     // Order: mode indicator, stable metrics (tokens, time, cost), then dynamic activity (LLM calls, gadgets)
     const parts: string[] = [];
 
-    // Mode indicator at the start
-    // In focused mode, show FOCUSED (dark blue bg) instead of BROWSE/INPUT
-    if (this.contentFilterMode === "focused") {
-      parts.push(`${BG_BLUE}${WHITE} FOCUSED ${RESET}`);
-    } else if (this.focusMode === "browse") {
+    // Mode indicator - only show BROWSE badge (input mode is the default, no badge needed)
+    // Also skip in focused content mode - hints bar shows exit hint there
+    if (this.focusMode === "browse" && this.contentFilterMode !== "focused") {
       parts.push(`${BG_BLUE}${WHITE} BROWSE ${RESET}`);
-    } else {
-      parts.push(`${BG_GREEN}${BLACK} INPUT ${RESET}`);
     }
 
     // Profile indicator (if profiles are set)
@@ -547,24 +566,38 @@ export class StatusBar {
       parts.push(`${YELLOW}${display}${RESET}`);
     }
 
-    // Input tokens (yellow) - show ~ prefix during streaming to indicate estimate
-    const inputPrefix = this.isStreaming && this.streamingInputTokens > 0 ? "~" : "";
-    parts.push(`${YELLOW}↑ ${inputPrefix}${formatTokens(displayInputTokens)}${RESET}`);
+    // Input tokens (yellow) - only show if > 0
+    if (displayInputTokens > 0) {
+      const inputPrefix = this.isStreaming && this.streamingInputTokens > 0 ? "~" : "";
+      parts.push(`${YELLOW}↑${inputPrefix}${formatTokens(displayInputTokens)}${RESET}`);
+    }
 
     // Cached tokens (blue) - only show if present
     if (this.metrics.cachedTokens > 0) {
-      parts.push(`${BLUE}⤿ ${formatTokens(this.metrics.cachedTokens)}${RESET}`);
+      parts.push(`${BLUE}⤿${formatTokens(this.metrics.cachedTokens)}${RESET}`);
     }
 
-    // Output tokens (green) - show ~ prefix during streaming to indicate estimate
-    const outputPrefix = this.isStreaming ? "~" : "";
-    parts.push(`${GREEN}↓ ${outputPrefix}${formatTokens(displayOutputTokens)}${RESET}`);
+    // Output tokens (green) - only show if > 0
+    if (displayOutputTokens > 0) {
+      const outputPrefix = this.isStreaming ? "~" : "";
+      parts.push(`${GREEN}↓${outputPrefix}${formatTokens(displayOutputTokens)}${RESET}`);
+    }
 
-    // Elapsed time (gray)
-    parts.push(`${GRAY}${elapsed}s${RESET}`);
+    // Elapsed time (gray) - only show when LLM call is active
+    // Shows time since earliest running call (for concurrent subagents)
+    const earliestStart = this.getEarliestLLMCallStartTime();
+    if (earliestStart !== null) {
+      const elapsedSeconds = (Date.now() - earliestStart) / 1000;
+      // Show integer for whole seconds, one decimal otherwise
+      const timeStr =
+        elapsedSeconds % 1 === 0 ? `${elapsedSeconds}s` : `${elapsedSeconds.toFixed(1)}s`;
+      parts.push(`${GRAY}${timeStr}${RESET}`);
+    }
 
-    // Cost (cyan)
-    parts.push(`${CYAN}$${formatCost(this.metrics.cost)}${RESET}`);
+    // Cost (cyan) - only show if > 0
+    if (this.metrics.cost > 0) {
+      parts.push(`${CYAN}$${formatCost(this.metrics.cost)}${RESET}`);
+    }
 
     // Selection debug info (if callback is set)
     if (this.selectionDebugCallback) {
@@ -602,7 +635,7 @@ export class StatusBar {
       // Show active LLM calls with model names, grouped by model
       if (this.activeLLMCalls.size > 0) {
         const byModel = new Map<string, string[]>();
-        for (const [label, model] of this.activeLLMCalls) {
+        for (const [label, { model }] of this.activeLLMCalls) {
           const shortModel = this.shortenModelName(model);
           if (!byModel.has(shortModel)) byModel.set(shortModel, []);
           byModel.get(shortModel)?.push(label);
@@ -623,7 +656,7 @@ export class StatusBar {
       }
     }
 
-    this.statusBox.setContent(parts.join(` ${GRAY}|${RESET} `));
+    this.statusBox.setContent(parts.join(" "));
 
     // Use immediate render for streaming updates, debounced for others
     if (immediate) {

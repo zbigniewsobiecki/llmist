@@ -62,7 +62,27 @@ export interface LLMCallStreamEvent extends BaseExecutionEvent {
 }
 
 /**
- * Emitted when an LLM call completes successfully.
+ * Emitted when the LLM finishes generating tokens (before gadget execution completes).
+ *
+ * This event fires when the LLM stream ends, allowing consumers to track
+ * "LLM thinking time" separately from gadget execution time.
+ *
+ * Event order: llm_call_start → llm_response_end → llm_call_complete
+ */
+export interface LLMResponseEndEvent extends BaseExecutionEvent {
+  type: "llm_response_end";
+  /** Iteration number within agent loop */
+  iteration: number;
+  /** Model identifier */
+  model: string;
+  /** Finish reason from LLM */
+  finishReason: string | null;
+  /** Token usage (may be partial, final usage in llm_call_complete) */
+  usage?: TokenUsage;
+}
+
+/**
+ * Emitted when an LLM call completes successfully (after all gadgets finish).
  */
 export interface LLMCallCompleteEvent extends BaseExecutionEvent {
   type: "llm_call_complete";
@@ -238,6 +258,7 @@ export interface StreamCompleteEvent extends BaseExecutionEvent {
 export type LLMEvent =
   | LLMCallStartEvent
   | LLMCallStreamEvent
+  | LLMResponseEndEvent
   | LLMCallCompleteEvent
   | LLMCallErrorEvent;
 
@@ -257,6 +278,7 @@ export type GadgetEvent =
 export type ExecutionEvent =
   | LLMCallStartEvent
   | LLMCallStreamEvent
+  | LLMResponseEndEvent
   | LLMCallCompleteEvent
   | LLMCallErrorEvent
   | GadgetCallEvent
