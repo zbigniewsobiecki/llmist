@@ -5,14 +5,12 @@
  * The input field is always visible but only active during prompts.
  */
 
-import type { Box, Screen, Text, Textbox } from "@unblessed/node";
+import type { Box, KeyEvent, Screen, Text, Textbox } from "@unblessed/node";
+import { openEditorSync } from "./editor.js";
 import type { CtrlCCallback, PendingInput } from "./types.js";
 
-/** Prompt indicator shown when input is idle */
-const IDLE_PROMPT = "> ";
-
-/** Prompt indicator shown when waiting for input */
-const ACTIVE_PROMPT = ">>> ";
+/** Prompt indicator (2 chars) */
+const PROMPT = "> ";
 
 /**
  * Manages input field for AskUser responses.
@@ -30,6 +28,18 @@ export class InputHandler {
 
   /** Whether we're waiting for REPL prompt (vs AskUser which should auto-focus) */
   private isPendingREPLPrompt = false;
+
+  /** Whether input mode is currently active (focused, capturing keystrokes) */
+  private isActive = false;
+
+  /** Whether a bracketed paste is in progress */
+  private isPasting = false;
+
+  /** Buffer for accumulating bracketed paste content */
+  private pasteBuffer = "";
+
+  /** Flag to indicate content came from editor (skip paste detection on submit) */
+  private fromEditor = false;
 
   /** Callback when Ctrl+C is pressed */
   private ctrlCCallback: CtrlCCallback | null = null;
@@ -55,6 +65,11 @@ export class InputHandler {
   /** Callback to check current focus mode (to avoid conflicts with browse mode) */
   private getFocusModeCallback: (() => "input" | "browse") | null = null;
 
+  /** Body height when input bar is visible */
+  private bodyHeightWithInput: string;
+  /** Body height when input bar is hidden (browse mode) */
+  private bodyHeightWithoutInput: string;
+
   constructor(
     inputBar: Textbox,
     promptLabel: Text,
@@ -62,6 +77,7 @@ export class InputHandler {
     screen: Screen,
     renderCallback: () => void,
     renderNowCallback?: () => void,
+    hasHints = true,
   ) {
     this.inputBar = inputBar;
     this.promptLabel = promptLabel;
@@ -70,10 +86,26 @@ export class InputHandler {
     this.renderCallback = renderCallback;
     this.renderNowCallback = renderNowCallback ?? renderCallback;
 
-    // Set up input submission handler
+    // Calculate body heights based on layout configuration
+    // With hints: input=100%-3, browse=100%-2 (status + hints visible)
+    // Without hints: input=100%-2, browse=100%-1 (just status visible)
+    this.bodyHeightWithInput = hasHints ? "100%-3" : "100%-2";
+    this.bodyHeightWithoutInput = hasHints ? "100%-2" : "100%-1";
+
+    // Simple single-line input:
+    // - Enter submits (Textbox default behavior)
+    // - Ctrl+S opens $EDITOR for multiline editing
+    // - Paste with newlines opens $EDITOR (via bracketed paste mode)
+
+    // Handle submit (Enter key) - Textbox fires this on Enter
     this.inputBar.on("submit", (value: string) => {
       this.handleSubmit(value);
     });
+
+    // Bracketed paste detection - terminal sends escape sequences around pasted content
+    // Start: \x1b[200~  End: \x1b[201~
+    // This is enabled in screen.ts via \x1b[?2004h
+    this.setupBracketedPasteHandler();
 
     // Handle cancel (ESC while focused)
     this.inputBar.on("cancel", () => {
@@ -89,7 +121,7 @@ export class InputHandler {
     });
 
     // Handle Ctrl+B on the input bar - toggle focus mode
-    // This ensures Ctrl+B works to exit input mode back to browse mode
+    // This ensures Ctrl+B works to switch between input and browse modes
     this.inputBar.key(["C-b"], () => {
       if (this.ctrlBCallback) {
         this.ctrlBCallback();
@@ -126,6 +158,12 @@ export class InputHandler {
       if (this.ctrlPCallback) {
         this.ctrlPCallback();
       }
+    });
+
+    // Handle Ctrl+S on the input bar - open $EDITOR for multiline input
+    this.inputBar.key(["C-s"], () => {
+      const currentValue = this.inputBar.getValue();
+      this.openEditorForInput(currentValue);
     });
 
     // Screen-level Enter key to activate pending REPL prompt
@@ -295,42 +333,70 @@ export class InputHandler {
   // ─────────────────────────────────────────────────────────────────────────────
 
   /**
-   * Activate input mode - show input bar and capture keyboard.
+   * Activate input mode - focus input bar and capture keyboard.
    * Called by TUIApp when switching to input mode.
-   * Preserves current prompt indicator and input text.
+   * Shows input bar with active prompt (">>>") and starts capturing keystrokes.
    */
   activate(): void {
     this.isPendingREPLPrompt = false;
+    this.isActive = true;
+    // Show input bar and adjust body height
     this.promptLabel.show();
     this.inputBar.show();
-    // Render immediately to ensure input bar is visible before focus
+    this.body.height = this.bodyHeightWithInput;
+    this.setPrompt(PROMPT);
+    // Render immediately to ensure layout update is visible before focus
     this.renderNowCallback();
     // Only call readInput() - it handles focusing internally
     this.inputBar.readInput();
   }
 
+  /** Flag to prevent handleCancel from re-entering during deactivation */
+  private isDeactivating = false;
+
   /**
    * Deactivate input mode - hide input bar completely.
    * Called by TUIApp when switching to browse mode.
+   * Input bar is hidden to give more space to content.
    */
   deactivate(): void {
+    this.isPendingREPLPrompt = false;
+    this.isActive = false;
+
+    // Cancel any active input session to clean up blessed's internal state
+    // This prevents listener accumulation when switching modes
+    this.isDeactivating = true;
+    this.inputBar.cancel();
+    this.isDeactivating = false;
+
+    // Hide input bar and reclaim that row for content
     this.promptLabel.hide();
     this.inputBar.hide();
-    this.isPendingREPLPrompt = false;
+    this.body.height = this.bodyHeightWithoutInput;
     this.renderNowCallback();
   }
 
   /**
-   * Check if input mode is active (input bar visible and focused).
+   * Check if input mode is active (focused, capturing keystrokes).
    */
   isInputActive(): boolean {
-    return this.inputBar.visible !== false;
+    return this.isActive;
   }
 
   /**
    * Handle input submission.
    */
   private handleSubmit(rawValue: string): void {
+    // Skip if a bracketed paste is in progress (submit fired mid-paste)
+    if (this.isPasting) {
+      return;
+    }
+
+    // Clear editor flag
+    if (this.fromEditor) {
+      this.fromEditor = false;
+    }
+
     // Value no longer contains prompt - just trim whitespace
     const value = rawValue.trim();
 
@@ -364,6 +430,11 @@ export class InputHandler {
    * Handle input cancellation (ESC key).
    */
   private handleCancel(): void {
+    // Skip if we're in the process of deactivating (switching to browse mode)
+    if (this.isDeactivating) {
+      return;
+    }
+
     if (this.pendingInput) {
       // Don't actually cancel - just re-enter input mode
       // The pending input will continue to wait
@@ -374,14 +445,105 @@ export class InputHandler {
   }
 
   /**
+   * Set up bracketed paste mode detection.
+   *
+   * Terminal emulators that support bracketed paste send:
+   * - \x1b[200~ before pasted content
+   * - \x1b[201~ after pasted content
+   *
+   * This allows reliable detection of paste vs typed input.
+   */
+  private setupBracketedPasteHandler(): void {
+    const PASTE_START = "\x1b[200~";
+    const PASTE_END = "\x1b[201~";
+
+    // Listen to raw input data from the terminal
+    this.screen.program.input.on("data", (data: Buffer) => {
+      const str = data.toString();
+
+      // Check for paste start marker
+      if (str.includes(PASTE_START)) {
+        this.isPasting = true;
+        this.pasteBuffer = "";
+
+        // Extract content after the start marker
+        const startIdx = str.indexOf(PASTE_START) + PASTE_START.length;
+        const afterStart = str.slice(startIdx);
+
+        // Check if end marker is also in this chunk
+        if (afterStart.includes(PASTE_END)) {
+          const endIdx = afterStart.indexOf(PASTE_END);
+          this.pasteBuffer = afterStart.slice(0, endIdx);
+          this.isPasting = false;
+          this.handlePaste(this.pasteBuffer);
+          this.pasteBuffer = "";
+        } else {
+          this.pasteBuffer = afterStart;
+        }
+        return;
+      }
+
+      // Check for paste end marker (in subsequent chunk)
+      if (this.isPasting && str.includes(PASTE_END)) {
+        const endIdx = str.indexOf(PASTE_END);
+        this.pasteBuffer += str.slice(0, endIdx);
+        this.isPasting = false;
+        this.handlePaste(this.pasteBuffer);
+        this.pasteBuffer = "";
+        return;
+      }
+
+      // Accumulate content while pasting
+      if (this.isPasting) {
+        this.pasteBuffer += str;
+      }
+    });
+  }
+
+  /**
+   * Handle completed paste content.
+   *
+   * If content contains newlines, opens $EDITOR for multiline editing.
+   * Otherwise, inserts directly into the input bar.
+   */
+  private handlePaste(content: string): void {
+    if (!content) return;
+
+    // If content has newlines, open editor for multiline editing
+    if (content.includes("\n")) {
+      const currentValue = this.inputBar.getValue();
+      this.openEditorForInput(currentValue + content);
+    } else {
+      // Single-line paste - append to current input
+      const currentValue = this.inputBar.getValue();
+      this.inputBar.setValue(currentValue + content);
+      // Re-focus input to continue editing
+      this.inputBar.readInput();
+    }
+  }
+
+  /**
+   * Set prompt text and dynamically adjust layout.
+   * Idle prompt "> " uses 2 chars, active prompt ">>> " uses 4 chars.
+   */
+  private setPrompt(prompt: string): void {
+    const width = prompt.length;
+    this.promptLabel.width = width;
+    this.promptLabel.setContent(prompt);
+    this.inputBar.left = width;
+    this.inputBar.width = `100%-${width}`;
+  }
+
+  /**
    * Set input to idle state.
    */
   private setIdle(): void {
     this.isPendingREPLPrompt = false;
-    this.promptLabel.setContent(IDLE_PROMPT);
+    this.isActive = false;
+    this.setPrompt(PROMPT);
     this.inputBar.setValue("");
-    // Don't focus - let body handle scroll keys
     this.renderCallback();
+    // Don't focus - let body handle scroll keys
   }
 
   /**
@@ -399,11 +561,11 @@ export class InputHandler {
    */
   private setPendingPrompt(): void {
     this.isPendingREPLPrompt = true;
-    this.promptLabel.setContent(IDLE_PROMPT);
+    this.setPrompt(PROMPT);
     this.inputBar.setValue("");
+    this.renderCallback();
     // Don't focus - let navigation keys work
     // User presses Enter to activate and start typing
-    this.renderCallback();
   }
 
   /**
@@ -411,12 +573,62 @@ export class InputHandler {
    */
   private setActive(): void {
     this.isPendingREPLPrompt = false;
-    this.promptLabel.setContent(ACTIVE_PROMPT);
+    this.isActive = true;
+    // Ensure input bar is visible (may be hidden in browse mode)
+    this.promptLabel.show();
+    this.inputBar.show();
+    this.body.height = this.bodyHeightWithInput;
+    this.setPrompt(PROMPT);
     this.inputBar.setValue("");
     // Render immediately to ensure input bar is visible before focus
     this.renderNowCallback();
     // Only call readInput() - it handles focusing internally
     // Calling both focus() and readInput() can cause double character echo
     this.inputBar.readInput();
+  }
+
+  /**
+   * Open $EDITOR for multiline input.
+   * Called when user presses Ctrl+S or pastes multiline content.
+   */
+  private openEditorForInput(initialContent: string): void {
+    // Fully reset terminal before spawning editor
+    // This is critical - blessed must release all terminal control
+    this.screen.program.clear();
+    this.screen.program.disableMouse();
+    this.screen.program.showCursor();
+    this.screen.program.normalBuffer();
+
+    // Synchronously spawn editor - this blocks the event loop completely
+    // preventing blessed from interfering with terminal control
+    const result = openEditorSync(initialContent);
+
+    // Restore blessed terminal control
+    this.screen.program.alternateBuffer();
+    this.screen.program.hideCursor();
+    this.screen.program.enableMouse();
+
+    // Force full screen redraw
+    this.screen.alloc();
+    this.screen.render();
+
+    // Clear any paste state
+    this.isPasting = false;
+    this.pasteBuffer = "";
+
+    // Use setImmediate to let any stray terminal input drain
+    // before processing the editor result (prevents ghost keypresses)
+    setImmediate(() => {
+      if (result) {
+        // Mark that content came from editor to prevent paste detection loop
+        this.fromEditor = true;
+        // User saved content - submit it
+        this.handleSubmit(result);
+      } else {
+        // User cancelled - restore input and continue editing
+        this.inputBar.setValue(initialContent);
+        this.inputBar.readInput();
+      }
+    });
   }
 }

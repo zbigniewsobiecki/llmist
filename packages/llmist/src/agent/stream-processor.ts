@@ -375,6 +375,11 @@ export class StreamProcessor {
       }
     }
 
+    // Signal that LLM response is complete (tokens stopped flowing)
+    // This fires BEFORE gadget execution finishes, allowing consumers to track
+    // "LLM thinking time" separately from gadget execution time
+    yield { type: "llm_response_end", finishReason, usage } as StreamEvent;
+
     // Finalize parsing
     for (const event of this.parser.finalize()) {
       for await (const processedEvent of this.processEventGenerator(event)) {

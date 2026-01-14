@@ -97,6 +97,12 @@ export class BlockRenderer {
   /** Previous session ID (for deferred cleanup) */
   private previousSessionId: number | null = null;
 
+  /** Callback for content state changes (empty to non-empty or vice versa) */
+  private onHasContentChangeCallback: ((hasContent: boolean) => void) | null = null;
+
+  /** Last reported hasContent state (to avoid duplicate callbacks) */
+  private lastHasContentState = false;
+
   constructor(
     container: ScrollableBox,
     renderCallback: () => void,
@@ -476,6 +482,18 @@ export class BlockRenderer {
       child.detach();
     }
     this.renderCallback();
+    this.notifyHasContentChange();
+  }
+
+  /**
+   * Set callback for content state changes.
+   * Called when blocks transition from empty to non-empty or vice versa.
+   * Used by HintsBar to know when "^B browse" hint should be shown.
+   */
+  onHasContentChange(callback: (hasContent: boolean) => void): void {
+    this.onHasContentChangeCallback = callback;
+    // Notify immediately with current state
+    callback(this.blocks.size > 0);
   }
 
   /**
@@ -531,6 +549,7 @@ export class BlockRenderer {
     this.previousSessionId = null;
 
     this.renderCallback();
+    this.notifyHasContentChange();
   }
 
   /**
@@ -637,6 +656,18 @@ export class BlockRenderer {
   // Private - Node & Block Management
   // ───────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Notify callback if content state has changed.
+   * Only fires when transitioning from empty to non-empty or vice versa.
+   */
+  private notifyHasContentChange(): void {
+    const hasContent = this.blocks.size > 0;
+    if (hasContent !== this.lastHasContentState) {
+      this.lastHasContentState = hasContent;
+      this.onHasContentChangeCallback?.(hasContent);
+    }
+  }
+
   private generateId(prefix: string): string {
     return `${prefix}_${++this.nodeIdCounter}`;
   }
@@ -677,6 +708,7 @@ export class BlockRenderer {
     this.applyBottomAlignmentAndScroll();
 
     this.renderCallback();
+    this.notifyHasContentChange();
   }
 
   /**
@@ -1261,6 +1293,7 @@ export class BlockRenderer {
 
     // Render again with new content
     this.renderNowCallback();
+    this.notifyHasContentChange();
   }
 
   /**

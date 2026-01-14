@@ -47,6 +47,11 @@ export function createScreen(options?: {
     useBCE: true,
   });
 
+  // Enable bracketed paste mode - terminal wraps pasted content with escape sequences
+  // Start: \x1b[200~  End: \x1b[201~
+  // This allows reliable paste detection across all terminal emulators
+  screen.program.write("\x1b[?2004h");
+
   let isDestroyed = false;
   let renderPending = false;
   let renderTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -93,6 +98,9 @@ export function createScreen(options?: {
       clearTimeout(renderTimeout);
       renderTimeout = null;
     }
+
+    // Disable bracketed paste mode before restoring terminal
+    screen.program.write("\x1b[?2004l");
 
     // Destroy screen (restores terminal)
     screen.destroy();

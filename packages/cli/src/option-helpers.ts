@@ -88,6 +88,9 @@ export interface CLIAgentOptions {
   // Internal: Profile-specific configs from TOML (passed by registerAgentCommand)
   profileRateLimits?: import("./config.js").RateLimitsConfig;
   profileRetry?: import("./config.js").RetryConfigCLI;
+  // TUI options
+  /** Show keyboard shortcuts hints bar (default: true) */
+  showHints?: boolean;
 }
 
 /**
@@ -342,5 +345,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
     if (r["max-timeout"] !== undefined) result.retryMaxTimeout = r["max-timeout"];
     if (r.enabled === false) result.noRetry = true;
   }
+  // TUI config
+  if (config["show-hints"] !== undefined) result.showHints = config["show-hints"];
   return result;
 }

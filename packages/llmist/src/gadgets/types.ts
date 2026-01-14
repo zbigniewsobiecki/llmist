@@ -241,6 +241,7 @@ export type StreamEvent =
   | GadgetSkippedEvent
   | { type: "human_input_required"; question: string; gadgetName: string; invocationId: string }
   | { type: "compaction"; event: CompactionEvent }
+  | { type: "llm_response_end"; finishReason: string | null; usage?: TokenUsage }
   | StreamCompletionEvent;
 
 // Imports for text-only handlers

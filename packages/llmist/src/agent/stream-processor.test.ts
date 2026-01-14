@@ -161,7 +161,9 @@ describe("StreamProcessor", () => {
 
       const result = await consumeStream(processor, stream);
 
-      expect(result.outputs).toHaveLength(0);
+      // llm_response_end event is always emitted (even for empty streams)
+      expect(result.outputs).toHaveLength(1);
+      expect(result.outputs[0].type).toBe("llm_response_end");
       expect(result.didExecuteGadgets).toBe(false);
       expect(result.shouldBreakLoop).toBe(false);
       expect(result.finishReason).toBeNull();
@@ -265,7 +267,9 @@ describe("StreamProcessor", () => {
       const result = await consumeStream(processor, stream);
 
       expect(result.rawResponse).toBe("");
-      expect(result.outputs).toHaveLength(0);
+      // Only llm_response_end event is emitted (text was suppressed)
+      expect(result.outputs).toHaveLength(1);
+      expect(result.outputs[0].type).toBe("llm_response_end");
     });
 
     it("provides correct context", async () => {
