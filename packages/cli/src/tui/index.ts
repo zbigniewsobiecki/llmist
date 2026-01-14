@@ -194,9 +194,37 @@ export class TUIApp {
     inputHandler.onCtrlJ(() => keyboardManager.handleForwardedKey("C-j"));
     inputHandler.onCtrlP(() => keyboardManager.handleForwardedKey("C-p"));
 
+    // Wire up arrow keys from input handler for line scrolling in focused mode
+    inputHandler.onArrowUp(() => {
+      handleKeyAction(
+        { type: "scroll_line", direction: -1 },
+        controller,
+        blockRenderer,
+        statusBar,
+        screenCtx,
+        modalManager,
+        layout,
+      );
+    });
+    inputHandler.onArrowDown(() => {
+      handleKeyAction(
+        { type: "scroll_line", direction: 1 },
+        controller,
+        blockRenderer,
+        statusBar,
+        screenCtx,
+        modalManager,
+        layout,
+      );
+    });
+
     // Wire up focus mode callback to prevent Enter key conflict
     // (Enter activates REPL prompt in input mode, but toggles blocks in browse mode)
     inputHandler.setGetFocusMode(() => controller.getFocusMode());
+
+    // Wire up content filter mode callback for arrow key behavior
+    // (arrows scroll in focused mode, move cursor in full mode)
+    inputHandler.setGetContentFilterMode(() => controller.getContentFilterMode());
 
     // Wire scroll event to detect user scrolling (for smart follow mode)
     layout.body.on("scroll", () => {
