@@ -190,6 +190,9 @@ export class RateLimitTracker {
   /** Date string (YYYY-MM-DD UTC) for daily reset tracking */
   private dailyResetDate: string;
 
+  /** Count of pending reservations (for backward compatibility) */
+  private pendingReservations = 0;
+
   constructor(config?: RateLimitConfig) {
     this.config = resolveRateLimitConfig(config);
     this.dailyResetDate = this.getCurrentDateUTC();
@@ -198,6 +201,10 @@ export class RateLimitTracker {
   /**
    * Record a completed request with its token usage.
    *
+   * If reserveRequest() was called before the LLM call (recommended for concurrent
+   * scenarios), the request timestamp was already recorded. Otherwise, this method
+   * will add it for backward compatibility.
+   *
    * @param inputTokens - Number of input tokens used
    * @param outputTokens - Number of output tokens generated
    */
@@ -205,8 +212,14 @@ export class RateLimitTracker {
     const now = Date.now();
     const totalTokens = inputTokens + outputTokens;
 
-    // Record request timestamp
-    this.requestTimestamps.push(now);
+    // Check if this request was pre-reserved
+    if (this.pendingReservations > 0) {
+      // Request already counted by reserveRequest()
+      this.pendingReservations--;
+    } else {
+      // Legacy path: add request timestamp here (backward compatibility)
+      this.requestTimestamps.push(now);
+    }
 
     // Record token usage
     this.tokenUsage.push({ timestamp: now, tokens: totalTokens });
@@ -373,6 +386,7 @@ export class RateLimitTracker {
     this.tokenUsage = [];
     this.dailyTokens = 0;
     this.dailyResetDate = this.getCurrentDateUTC();
+    this.pendingReservations = 0;
   }
 
   /**
@@ -383,6 +397,38 @@ export class RateLimitTracker {
    */
   updateConfig(config: RateLimitConfig): void {
     this.config = resolveRateLimitConfig(config);
+  }
+
+  /**
+   * Reserve a request slot before making an LLM call.
+   *
+   * This is critical for concurrent subagents sharing a rate limiter.
+   * Without reservation, multiple subagents checking getRequiredDelayMs()
+   * simultaneously would all see zero usage and proceed, causing rate limit errors.
+   *
+   * Call this AFTER waiting for getRequiredDelayMs() but BEFORE making the LLM call.
+   * The reservation ensures subsequent concurrent checks see the pending request.
+   *
+   * @example
+   * ```typescript
+   * // Proactive rate limiting with reservation
+   * const delay = tracker.getRequiredDelayMs();
+   * if (delay > 0) await sleep(delay);
+   *
+   * tracker.reserveRequest(); // Claim slot BEFORE making call
+   * try {
+   *   const result = await llm.call();
+   *   tracker.recordUsage(result.inputTokens, result.outputTokens);
+   * } catch (error) {
+   *   // Request already reserved; recordUsage updates token count
+   *   throw error;
+   * }
+   * ```
+   */
+  reserveRequest(): void {
+    const now = Date.now();
+    this.requestTimestamps.push(now);
+    this.pendingReservations++;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
