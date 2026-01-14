@@ -258,6 +258,8 @@ import type { LLMMessage } from "../core/messages.js";
 import type { ModelRegistry } from "../core/model-registry.js";
 import type { LLMGenerationOptions, LLMStream, TokenUsage } from "../core/options.js";
 import type { TextGenerationOptions } from "../core/quick-methods.js";
+import type { RateLimitTracker } from "../core/rate-limit.js";
+import type { ResolvedRetryConfig } from "../core/retry.js";
 
 // Text-only response handler types
 export type TextOnlyHandler =
@@ -816,6 +818,56 @@ export interface ExecutionContext {
    * ```
    */
   parentObservers?: Observers;
+
+  // ==========================================================================
+  // Rate Limiting & Retry (shared across subagents)
+  // ==========================================================================
+
+  /**
+   * Shared rate limit tracker for coordinated throttling across subagents.
+   *
+   * When present, all agents in the tree share this tracker to respect
+   * aggregate RPM/TPM limits. This ensures that a parent configured with
+   * `requestsPerMinute: 10` actually limits the entire agent tree to 10 RPM,
+   * not 10 RPM per agent.
+   *
+   * The tracker is automatically inherited via `withParentContext(ctx)`.
+   * Standalone gadgets (testing, CLI `gadget run`) will have this undefined
+   * and create their own tracker if rate limits are configured.
+   *
+   * @example
+   * ```typescript
+   * // Subagents automatically share the parent's tracker:
+   * const agent = new AgentBuilder(client)
+   *   .withParentContext(ctx)  // Inherits ctx.rateLimitTracker
+   *   .ask("Do something");
+   *
+   * // All LLM calls from this subagent count toward the parent's limits
+   * ```
+   */
+  rateLimitTracker?: RateLimitTracker;
+
+  /**
+   * Shared retry configuration for consistent backoff behavior across subagents.
+   *
+   * When present, subagents inherit the parent's retry strategy including
+   * max retries, backoff timing, and callbacks. This ensures consistent
+   * error handling across the entire agent tree.
+   *
+   * The config is automatically inherited via `withParentContext(ctx)`.
+   * Standalone gadgets will have this undefined and use default retry config.
+   *
+   * @example
+   * ```typescript
+   * // Subagents automatically share the parent's retry config:
+   * const agent = new AgentBuilder(client)
+   *   .withParentContext(ctx)  // Inherits ctx.retryConfig
+   *   .ask("Do something");
+   *
+   * // Retry attempts use the same backoff strategy as the parent
+   * ```
+   */
+  retryConfig?: ResolvedRetryConfig;
 }
 
 /**

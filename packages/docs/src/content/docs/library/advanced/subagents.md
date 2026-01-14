@@ -286,11 +286,11 @@ if (ctx?.requestHumanInput) {
 
 ## Rate Limiting & Retry Inheritance
 
-Subagents track rate limits independently from their parent agent.
+Subagents **share** rate limits and retry configuration with their parent agent. This ensures that the entire agent tree respects provider quotas.
 
-### Independent Rate Limit Tracking
+### Shared Rate Limit Tracking
 
-Each subagent maintains its own rate limit counters:
+When you configure rate limits on the parent agent, all subagents share the same tracker:
 
 ```typescript
 // Parent agent: 50 RPM limit
@@ -299,15 +299,24 @@ const parent = LLMist.createAgent()
   .withRateLimits({ requestsPerMinute: 50 })
   .withGadgets(BrowseWeb);
 
-// BrowseWeb subagent has separate 50 RPM limit
-// Total system throughput can be up to 100 RPM (50 parent + 50 subagent)
+// BrowseWeb subagent shares the 50 RPM limit
+// Total system throughput is capped at 50 RPM (parent + all subagents combined)
 ```
 
-This prevents a subagent from consuming the parent's entire rate limit budget.
+This ensures that your configured limits actually protect against provider rate limits, since API quotas apply to your API key—not to individual agent instances.
+
+### How It Works
+
+When a subagent is created via `withParentContext(ctx)` or `createSubagent()`:
+
+1. The parent's `RateLimitTracker` instance is passed through `ExecutionContext`
+2. All LLM calls from the subagent record usage to the shared tracker
+3. Throttle delays are calculated based on combined parent + subagent activity
+4. Retry configuration is also inherited for consistent backoff behavior
 
 ### Rate Limit Observers
 
-When observing rate limit events, check `subagentContext`:
+When observing rate limit events, you can distinguish parent vs subagent throttling:
 
 ```typescript
 .withHooks({
@@ -324,17 +333,24 @@ When observing rate limit events, check `subagentContext`:
 })
 ```
 
-### Retry Configuration
+### Shared Retry Configuration
 
-Subagents inherit retry configuration from their parent unless overridden via CLI config:
+Subagents inherit the parent's retry configuration automatically:
 
-```toml
-[subagents.BrowseWeb]
-model = "inherit"
+```typescript
+// Parent configuration applies to all subagents
+const parent = LLMist.createAgent()
+  .withRetry({
+    retries: 5,
+    minTimeout: 2000,
+    onRetry: (error, attempt) => {
+      console.log(`Retry ${attempt}: ${error.message}`);
+    },
+  })
+  .withGadgets(BrowseWeb);
 
-[subagents.BrowseWeb.retry]
-retries = 5              # More retries for browser automation
-max-timeout = 120000     # Up to 2 minutes for slow page loads
+// BrowseWeb subagent uses the same retry settings
+// onRetry callbacks are called for both parent and subagent retries
 ```
 
 ## See Also
