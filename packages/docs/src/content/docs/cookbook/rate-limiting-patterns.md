@@ -149,10 +149,10 @@ const agent = LLMist.createAgent()
 
 ## Pattern 7: Subagent Rate Limiting
 
-When using subagents (like BrowseWeb), rate limits apply to each agent independently:
+When using subagents (like BrowseWeb), rate limits are **shared** across the entire agent tree:
 
 ```typescript
-// Parent agent: conservative limits
+// Parent agent: 20 RPM limit
 const parent = LLMist.createAgent()
   .withModel('sonnet')
   .withRateLimits({
@@ -161,13 +161,15 @@ const parent = LLMist.createAgent()
   })
   .withGadgets(BrowseWeb);  // BrowseWeb is a subagent gadget
 
-// BrowseWeb subagent inherits model but uses its own rate limit tracking
-// Configure subagent limits in cli.toml:
-// [subagents.BrowseWeb]
-// model = "inherit"
+// BrowseWeb subagent shares the 20 RPM limit with parent
+// Total system throughput: max 20 RPM (parent + subagent combined)
 ```
 
-Rate limit statistics in `onRateLimitThrottle` hooks are per-agent (parent and subagent tracked separately).
+This ensures your configured limits actually protect against provider quotas, since API limits apply to your API key—not individual agent instances. The `RateLimitTracker` is shared via `ExecutionContext` when subagents are created with `withParentContext(ctx)`.
+
+:::tip
+Retry configuration is also shared, so all agents in the tree use the same backoff strategy.
+:::
 
 ## Pattern 8: Understanding Which Limit Triggered
 
