@@ -188,6 +188,22 @@ export interface AgentOptions {
    * enabling the parent to observe subagent gadget activity.
    */
   parentObservers?: Observers;
+
+  /**
+   * Shared rate limit tracker from parent agent.
+   *
+   * When provided (via withParentContext), this agent uses the parent's tracker
+   * instead of creating its own. All LLM calls count toward the shared limits.
+   */
+  sharedRateLimitTracker?: RateLimitTracker;
+
+  /**
+   * Shared retry configuration from parent agent.
+   *
+   * When provided (via withParentContext), this agent uses the parent's retry
+   * settings instead of creating its own.
+   */
+  sharedRetryConfig?: ResolvedRetryConfig;
 }
 
 /**
@@ -362,13 +378,19 @@ export class Agent {
     // Store abort signal for cancellation
     this.signal = options.signal;
 
-    // Initialize retry configuration (enabled by default)
-    this.retryConfig = resolveRetryConfig(options.retryConfig);
+    // Initialize retry configuration
+    // Prefer shared config from parent (for coordinated retry across subagents)
+    this.retryConfig = options.sharedRetryConfig ?? resolveRetryConfig(options.retryConfig);
 
-    // Initialize rate limit tracker for proactive throttling (if configured)
-    const rateLimitConfig = resolveRateLimitConfig(options.rateLimitConfig);
-    if (rateLimitConfig.enabled) {
-      this.rateLimitTracker = new RateLimitTracker(options.rateLimitConfig);
+    // Initialize rate limit tracker for proactive throttling
+    // Prefer shared tracker from parent (for coordinated limits across subagents)
+    if (options.sharedRateLimitTracker) {
+      this.rateLimitTracker = options.sharedRateLimitTracker;
+    } else {
+      const rateLimitConfig = resolveRateLimitConfig(options.rateLimitConfig);
+      if (rateLimitConfig.enabled) {
+        this.rateLimitTracker = new RateLimitTracker(options.rateLimitConfig);
+      }
     }
 
     // Build agent context config for subagents to inherit
@@ -703,6 +725,9 @@ export class Agent {
                 priorFailedInvocations: this.failedInvocationIds,
                 // Parent observer hooks for subagent visibility
                 parentObservers: this.parentObservers,
+                // Shared rate limit tracker and retry config for subagents
+                rateLimitTracker: this.rateLimitTracker,
+                retryConfig: this.retryConfig,
               });
 
               // Consume the stream processor generator, yielding events in real-time

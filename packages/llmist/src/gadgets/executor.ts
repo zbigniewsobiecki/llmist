@@ -7,6 +7,8 @@ import type { Observers } from "../agent/hooks.js";
 import { LLMist } from "../core/client.js";
 import { GADGET_ARG_PREFIX } from "../core/constants.js";
 import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
+import type { RateLimitTracker } from "../core/rate-limit.js";
+import type { ResolvedRetryConfig } from "../core/retry.js";
 import { createLogger } from "../logging/logger.js";
 import { parseBlockParams } from "./block-params.js";
 import { CostReportingLLMistWrapper } from "./cost-reporting-client.js";
@@ -76,6 +78,10 @@ export class GadgetExecutor {
     // Current agent's observers - passed to ExecutionContext.parentObservers
     // so gadgets creating subagents can inherit them via withParentContext(ctx)
     private readonly currentObservers?: Observers,
+    // Shared rate limit tracker for coordinated throttling across subagents
+    private readonly rateLimitTracker?: RateLimitTracker,
+    // Shared retry config for consistent backoff behavior across subagents
+    private readonly retryConfig?: ResolvedRetryConfig,
   ) {
     this.logger = logger ?? createLogger({ name: "llmist:executor" });
     this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
@@ -302,6 +308,10 @@ export class GadgetExecutor {
         // and call them for gadget events in addition to its own hooks
         // Merge child and parent observers so both get called (child first, then parent)
         parentObservers: mergeObservers(this.currentObservers, this.parentObservers),
+        // Shared rate limit tracker for coordinated throttling across subagents
+        rateLimitTracker: this.rateLimitTracker,
+        // Shared retry config for consistent backoff behavior across subagents
+        retryConfig: this.retryConfig,
       };
 
       // Execute gadget (handle both sync and async)

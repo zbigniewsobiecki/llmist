@@ -25,8 +25,8 @@ import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
-import type { RateLimitConfig } from "../core/rate-limit.js";
-import type { RetryConfig } from "../core/retry.js";
+import type { RateLimitConfig, RateLimitTracker } from "../core/rate-limit.js";
+import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import type { ExecutionContext, SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
@@ -112,6 +112,13 @@ export class AgentBuilder {
   // When a gadget calls withParentContext(ctx), these observers are
   // also called for gadget events in the subagent
   private parentObservers?: Observers;
+  // Shared rate limit tracker from parent for coordinated throttling
+  // When a gadget calls withParentContext(ctx), this tracker is shared
+  // so all agents in the tree respect aggregate RPM/TPM limits
+  private sharedRateLimitTracker?: RateLimitTracker;
+  // Shared retry config from parent for consistent backoff behavior
+  // When a gadget calls withParentContext(ctx), this config is shared
+  private sharedRetryConfig?: ResolvedRetryConfig;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -810,6 +817,17 @@ export class AgentBuilder {
       this.parentObservers = ctx.parentObservers;
     }
 
+    // Share rate limit tracker for coordinated throttling across all subagents
+    // This ensures the entire agent tree respects aggregate RPM/TPM limits
+    if (ctx.rateLimitTracker && !this.sharedRateLimitTracker) {
+      this.sharedRateLimitTracker = ctx.rateLimitTracker;
+    }
+
+    // Share retry config for consistent backoff behavior across all subagents
+    if (ctx.retryConfig && !this.sharedRetryConfig) {
+      this.sharedRetryConfig = ctx.retryConfig;
+    }
+
     return this;
   }
 
@@ -1251,6 +1269,9 @@ export class AgentBuilder {
       baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
       // Parent observer hooks for subagent visibility
       parentObservers: this.parentObservers,
+      // Shared rate limit tracker and retry config (for coordinated limits across subagents)
+      sharedRateLimitTracker: this.sharedRateLimitTracker,
+      sharedRetryConfig: this.sharedRetryConfig,
     };
 
     return new Agent(AGENT_INTERNAL_KEY, options);

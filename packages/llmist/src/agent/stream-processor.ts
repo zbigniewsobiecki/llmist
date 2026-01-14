@@ -9,6 +9,8 @@ import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
 import type { LLMStreamChunk, TokenUsage } from "../core/options.js";
+import type { RateLimitTracker } from "../core/rate-limit.js";
+import type { ResolvedRetryConfig } from "../core/retry.js";
 import { GadgetExecutor } from "../gadgets/executor.js";
 import type { MediaStore } from "../gadgets/media-store.js";
 import { GadgetCallParser } from "../gadgets/parser.js";
@@ -134,6 +136,16 @@ export interface StreamProcessorOptions {
    * enabling the parent to observe subagent gadget activity.
    */
   parentObservers?: Observers;
+
+  // ==========================================================================
+  // Rate Limiting & Retry (shared across subagents)
+  // ==========================================================================
+
+  /** Shared rate limit tracker for coordinated throttling across subagents */
+  rateLimitTracker?: RateLimitTracker;
+
+  /** Shared retry config for consistent backoff behavior across subagents */
+  retryConfig?: ResolvedRetryConfig;
 }
 
 /**
@@ -274,6 +286,10 @@ export class StreamProcessor {
       options.parentObservers,
       // Current agent's observers for subagent inheritance
       options.hooks?.observers,
+      // Shared rate limit tracker for coordinated throttling across subagents
+      options.rateLimitTracker,
+      // Shared retry config for consistent backoff behavior across subagents
+      options.retryConfig,
     );
   }
 
