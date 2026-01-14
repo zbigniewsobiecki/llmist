@@ -12,7 +12,7 @@
  */
 
 import type { Screen } from "@unblessed/node";
-import type { FocusMode } from "./types.js";
+import type { ContentFilterMode, FocusMode } from "./types.js";
 
 export type NavigationAction =
   | "select_next"
@@ -29,12 +29,14 @@ export type KeyAction =
   | { type: "toggle_content_filter" }
   | { type: "cycle_profile" }
   | { type: "scroll_page"; direction: -1 | 1 }
+  | { type: "scroll_line"; direction: -1 | 1 }
   | { type: "navigation"; action: NavigationAction }
   | { type: "raw_viewer"; mode: "request" | "response" };
 
 export interface KeyboardManagerConfig {
   screen: Screen;
   getFocusMode: () => FocusMode;
+  getContentFilterMode: () => ContentFilterMode;
   isWaitingForREPLPrompt: () => boolean;
   hasPendingInput: () => boolean;
   isBlockExpanded: () => boolean;
@@ -102,13 +104,21 @@ export class KeyboardManager {
       onAction({ type: "scroll_page", direction: 1 });
     });
 
-    // Navigation keys (browse mode only)
+    // Navigation keys (browse mode only, or line scroll in focused content mode)
     screen.key(["up", "k"], () => {
+      if (this.config.getContentFilterMode() === "focused") {
+        onAction({ type: "scroll_line", direction: -1 });
+        return;
+      }
       if (this.config.getFocusMode() !== "browse") return;
       onAction({ type: "navigation", action: "select_previous" });
     });
 
     screen.key(["down", "j"], () => {
+      if (this.config.getContentFilterMode() === "focused") {
+        onAction({ type: "scroll_line", direction: 1 });
+        return;
+      }
       if (this.config.getFocusMode() !== "browse") return;
       onAction({ type: "navigation", action: "select_next" });
     });

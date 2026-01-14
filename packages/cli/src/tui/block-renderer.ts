@@ -762,18 +762,18 @@ export class BlockRenderer {
 
   /**
    * Check if a gadget should render as plain text in focused mode.
-   * TellUser and AskUser render as text for a chat-like experience.
+   * TellUser, AskUser, and Finish render as text for a chat-like experience.
    */
   private shouldRenderAsText(node: BlockNode): boolean {
     if (this.contentFilterMode !== "focused") return false;
     if (node.type !== "gadget") return false;
 
     const name = (node as GadgetNode).name;
-    return name === "TellUser" || name === "AskUser";
+    return name === "TellUser" || name === "AskUser" || name === "Finish";
   }
 
   /**
-   * Create a text-like block for TellUser/AskUser gadgets in focused mode.
+   * Create a text-like block for TellUser/AskUser/Finish gadgets in focused mode.
    * Renders just the content without the gadget header.
    */
   private createTextLikeBlock(node: GadgetNode, top: number): SelectableBlock {
@@ -790,6 +790,12 @@ export class BlockRenderer {
       if (typeof question === "string") {
         // Render question with a prompt indicator
         content = `\n? ${question}\n`;
+      }
+    } else if (node.name === "Finish") {
+      const message = node.parameters?.message;
+      if (typeof message === "string" && message.trim()) {
+        // Render finish message with a completion indicator
+        content = `\n\x1b[32m✓\x1b[0m ${renderMarkdown(message)}\n`;
       }
     }
 
@@ -1326,9 +1332,9 @@ export class BlockRenderer {
         // LLM calls are hidden in focused mode
         return false;
       case "gadget": {
-        // Keep user-facing gadgets visible (Finish hidden - status bar shows completion)
+        // Keep user-facing gadgets visible in focused mode
         const name = (node as GadgetNode).name;
-        return name === "TellUser" || name === "AskUser";
+        return name === "TellUser" || name === "AskUser" || name === "Finish";
       }
       default:
         return false;

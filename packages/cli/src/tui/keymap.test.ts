@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { type KeyAction, KeyboardManager } from "./keymap.js";
-import type { FocusMode } from "./types.js";
+import type { ContentFilterMode, FocusMode } from "./types.js";
 
 /**
  * Creates a minimal mock screen that captures key handlers.
@@ -23,6 +23,7 @@ function createMockScreen() {
 
 interface MockConfig {
   focusMode?: FocusMode;
+  contentFilterMode?: ContentFilterMode;
   isWaitingForREPLPrompt?: boolean;
   hasPendingInput?: boolean;
   isBlockExpanded?: boolean;
@@ -36,6 +37,7 @@ function createKeyboardManager(
   const manager = new KeyboardManager({
     screen: screen as any,
     getFocusMode: () => config.focusMode ?? "browse",
+    getContentFilterMode: () => config.contentFilterMode ?? "full",
     isWaitingForREPLPrompt: () => config.isWaitingForREPLPrompt ?? false,
     hasPendingInput: () => config.hasPendingInput ?? false,
     isBlockExpanded: () => config.isBlockExpanded ?? false,
@@ -156,6 +158,66 @@ describe("KeyboardManager", () => {
       onAction.mockClear();
       screen.simulateKey("C-j");
       expect(onAction).toHaveBeenCalledWith({ type: "scroll_page", direction: 1 });
+    });
+  });
+
+  describe("line scrolling in focused mode", () => {
+    test("up/k dispatches scroll_line with direction -1 in focused content mode", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      createKeyboardManager(screen, onAction, { contentFilterMode: "focused" });
+
+      screen.simulateKey("up");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "scroll_line", direction: -1 });
+    });
+
+    test("down/j dispatches scroll_line with direction 1 in focused content mode", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      createKeyboardManager(screen, onAction, { contentFilterMode: "focused" });
+
+      screen.simulateKey("down");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "scroll_line", direction: 1 });
+    });
+
+    test("k dispatches scroll_line in focused content mode", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      createKeyboardManager(screen, onAction, { contentFilterMode: "focused" });
+
+      screen.simulateKey("k");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "scroll_line", direction: -1 });
+    });
+
+    test("j dispatches scroll_line in focused content mode", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      createKeyboardManager(screen, onAction, { contentFilterMode: "focused" });
+
+      screen.simulateKey("j");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "scroll_line", direction: 1 });
+    });
+
+    test("line scrolling takes precedence over navigation in focused mode", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      // Even if focus mode is "browse", focused content mode triggers scroll_line
+      createKeyboardManager(screen, onAction, {
+        focusMode: "browse",
+        contentFilterMode: "focused",
+      });
+
+      screen.simulateKey("up");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "scroll_line", direction: -1 });
+      expect(onAction).not.toHaveBeenCalledWith({
+        type: "navigation",
+        action: "select_previous",
+      });
     });
   });
 
