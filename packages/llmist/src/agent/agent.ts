@@ -1033,6 +1033,10 @@ export class Agent {
 
         await this.sleep(throttleDelay);
       }
+
+      // Reserve a request slot BEFORE making the call
+      // This ensures concurrent subagents see this pending request
+      this.rateLimitTracker.reserveRequest();
     }
 
     return this.client.stream(llmOptions);
