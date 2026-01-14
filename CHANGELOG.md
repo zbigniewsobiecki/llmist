@@ -1,3 +1,12 @@
+## 15.6.0 (2026-01-14)
+
+* feat(tui,agent): add llm_response_end event and TUI improvements ([1147780](https://github.com/zbigniewsobiecki/llmist/commit/1147780))
+* Merge pull request #355 from zbigniewsobiecki/feat/tui-improvements-and-llm-response-end ([06b6323](https://github.com/zbigniewsobiecki/llmist/commit/06b6323)), closes [#355](https://github.com/zbigniewsobiecki/llmist/issues/355)
+* Merge pull request #357 from zbigniewsobiecki/dev ([8667427](https://github.com/zbigniewsobiecki/llmist/commit/8667427)), closes [#357](https://github.com/zbigniewsobiecki/llmist/issues/357)
+* fix(gadgets): use duck typing for TaskCompletionSignal detection (#356) ([d1bffbb](https://github.com/zbigniewsobiecki/llmist/commit/d1bffbb)), closes [#356](https://github.com/zbigniewsobiecki/llmist/issues/356)
+* chore: sync dev with main [skip ci] ([9c8bbbd](https://github.com/zbigniewsobiecki/llmist/commit/9c8bbbd))
+* feat(gadgets): add maxConcurrent property for sequential execution (#353) ([d7620e5](https://github.com/zbigniewsobiecki/llmist/commit/d7620e5)), closes [#353](https://github.com/zbigniewsobiecki/llmist/issues/353)
+
 ## 15.5.0 (2026-01-13)
 
 * feat(gadgets): add maxConcurrent property for sequential execution (#353) (#354) ([4b37924](https://github.com/zbigniewsobiecki/llmist/commit/4b37924)), closes [#353](https://github.com/zbigniewsobiecki/llmist/issues/353) [#354](https://github.com/zbigniewsobiecki/llmist/issues/354)
