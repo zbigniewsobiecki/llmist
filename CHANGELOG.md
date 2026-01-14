@@ -1,3 +1,8 @@
+## 15.8.0 (2026-01-14)
+
+* Merge pull request #363 from zbigniewsobiecki/dev ([c415b86](https://github.com/zbigniewsobiecki/llmist/commit/c415b86)), closes [#363](https://github.com/zbigniewsobiecki/llmist/issues/363)
+* feat(agent): share rate limits and retry config across subagents (#362) ([ca24248](https://github.com/zbigniewsobiecki/llmist/commit/ca24248)), closes [#362](https://github.com/zbigniewsobiecki/llmist/issues/362)
+
 ## <small>15.7.1 (2026-01-14)</small>
 
 * Merge pull request #361 from zbigniewsobiecki/dev ([982e33d](https://github.com/zbigniewsobiecki/llmist/commit/982e33d)), closes [#361](https://github.com/zbigniewsobiecki/llmist/issues/361)
