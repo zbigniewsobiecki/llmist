@@ -381,8 +381,11 @@ export class GadgetExecutor {
         storedMedia,
       };
     } catch (error) {
-      // Check if this is a TaskCompletionSignal
-      if (error instanceof TaskCompletionSignal) {
+      // Check if this is a TaskCompletionSignal using duck typing
+      // (handles module duplication issues when external gadgets throw signals)
+      const isTaskCompletionSignal =
+        error instanceof Error && error.name === "TaskCompletionSignal";
+      if (isTaskCompletionSignal) {
         this.logger.info("Gadget requested loop termination", {
           gadgetName: call.gadgetName,
           message: error.message,

@@ -537,6 +537,41 @@ describe("GadgetExecutor", () => {
       expect(result.error).toBeUndefined();
     });
 
+    it("handles TaskCompletionSignal from external packages (duck typing)", async () => {
+      // Simulate external package throwing a "foreign" TaskCompletionSignal
+      // that is NOT the same class instance as the host's (dual-package problem)
+      class ExternalPackageGadget extends Gadget({
+        name: "ExternalPackageGadget",
+        description: "Simulates external package behavior",
+        schema: z.object({ result: z.string() }),
+      }) {
+        execute(params: this["params"]): string {
+          // Create an Error that looks like TaskCompletionSignal but isn't
+          const signal = new Error(params.result);
+          signal.name = "TaskCompletionSignal";
+          throw signal;
+        }
+      }
+
+      registry.registerByClass(new ExternalPackageGadget());
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "ExternalPackageGadget",
+        invocationId: "external-1",
+        parametersRaw: '{"result": "Task done from external"}',
+        parameters: { result: "Task done from external" },
+      };
+
+      const result = await executor.execute(call);
+
+      expect(result).toMatchObject({
+        gadgetName: "ExternalPackageGadget",
+        result: "Task done from external",
+        breaksLoop: true,
+      });
+      expect(result.error).toBeUndefined();
+    });
+
     it("normal errors do not set breaksLoop flag", async () => {
       registry.registerByClass(new ErrorGadget());
 
