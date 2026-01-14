@@ -157,6 +157,7 @@ export class TUIApp {
     const keyboardManager = new KeyboardManager({
       screen,
       getFocusMode: () => controller.getFocusMode(),
+      getContentFilterMode: () => controller.getContentFilterMode(),
       isWaitingForREPLPrompt: () => inputHandler.isWaitingForREPLPrompt(),
       hasPendingInput: () => inputHandler.hasPendingInput(),
       isBlockExpanded: () => blockRenderer.getSelectedBlock()?.expanded ?? false,
@@ -718,6 +719,15 @@ function handleKeyAction(
       } else {
         body.scroll(scrollAmount);
       }
+      blockRenderer.handleUserScroll();
+      screenCtx.renderNow();
+      break;
+    }
+
+    case "scroll_line": {
+      const body = layout.body;
+      if (!body.scroll) return;
+      body.scroll(action.direction);
       blockRenderer.handleUserScroll();
       screenCtx.renderNow();
       break;
