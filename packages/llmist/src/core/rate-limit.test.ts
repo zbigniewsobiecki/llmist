@@ -267,6 +267,97 @@ describe("RateLimitTracker", () => {
     });
   });
 
+  describe("reserveRequest (concurrent subagent support)", () => {
+    it("should count request immediately when reserved", () => {
+      tracker = new RateLimitTracker({ requestsPerMinute: 10 });
+
+      // Before reservation: 0 requests
+      expect(tracker.getUsageStats().rpm).toBe(0);
+
+      // Reserve a request slot
+      tracker.reserveRequest();
+
+      // Should immediately see 1 request (before recordUsage is called)
+      expect(tracker.getUsageStats().rpm).toBe(1);
+    });
+
+    it("should not double-count when reserveRequest + recordUsage used", () => {
+      tracker = new RateLimitTracker({ requestsPerMinute: 10 });
+
+      // Simulate the new pattern: reserve -> call LLM -> record
+      tracker.reserveRequest();
+      tracker.recordUsage(100, 50);
+
+      // Should only count as 1 request, not 2
+      expect(tracker.getUsageStats().rpm).toBe(1);
+      expect(tracker.getUsageStats().tpm).toBe(150);
+    });
+
+    it("should maintain backward compatibility when only recordUsage used", () => {
+      tracker = new RateLimitTracker({ requestsPerMinute: 10 });
+
+      // Legacy pattern: just call recordUsage
+      tracker.recordUsage(100, 50);
+
+      // Should still count as 1 request
+      expect(tracker.getUsageStats().rpm).toBe(1);
+      expect(tracker.getUsageStats().tpm).toBe(150);
+    });
+
+    it("should throttle concurrent subagents correctly", () => {
+      tracker = new RateLimitTracker({
+        requestsPerMinute: 3,
+        safetyMargin: 1.0, // No margin for easier testing
+      });
+
+      // Simulate 3 concurrent subagents all reserving at once
+      tracker.reserveRequest();
+      tracker.reserveRequest();
+      tracker.reserveRequest();
+
+      // Should now be at limit
+      expect(tracker.getUsageStats().rpm).toBe(3);
+      expect(tracker.getRequiredDelayMs()).toBeGreaterThan(0);
+
+      // 4th subagent would need to wait
+      tracker.reserveRequest();
+      expect(tracker.getUsageStats().rpm).toBe(4);
+    });
+
+    it("should handle mixed reservation and legacy patterns", () => {
+      tracker = new RateLimitTracker({ requestsPerMinute: 10 });
+
+      // Some requests use new pattern
+      tracker.reserveRequest();
+      tracker.recordUsage(100, 50);
+
+      // Some requests use legacy pattern
+      tracker.recordUsage(200, 100);
+
+      // Should count as 2 total requests
+      expect(tracker.getUsageStats().rpm).toBe(2);
+      expect(tracker.getUsageStats().tpm).toBe(450);
+    });
+
+    it("should reset pending reservations on reset()", () => {
+      tracker = new RateLimitTracker({ requestsPerMinute: 10 });
+
+      tracker.reserveRequest();
+      tracker.reserveRequest();
+      // Don't call recordUsage - simulate abandoned reservations
+
+      tracker.reset();
+
+      // After reset, should be clean
+      expect(tracker.getUsageStats().rpm).toBe(0);
+
+      // New reservation should work normally
+      tracker.reserveRequest();
+      tracker.recordUsage(100, 50);
+      expect(tracker.getUsageStats().rpm).toBe(1);
+    });
+  });
+
   describe("triggeredBy", () => {
     it("should not set triggeredBy when under all limits", () => {
       tracker = new RateLimitTracker({
