@@ -51,6 +51,7 @@ describe("AgentBuilder", () => {
       expect(builder.withGadgetArgPrefix("<<<ARG>>>")).toBe(builder);
       expect(builder.withTextOnlyHandler("acknowledge")).toBe(builder);
       expect(builder.withDefaultGadgetTimeout(5000)).toBe(builder);
+      expect(builder.withGadgetExecutionMode("sequential")).toBe(builder);
       expect(builder.withRetry({ retries: 5 })).toBe(builder);
       expect(builder.withoutRetry()).toBe(builder);
     });
@@ -794,6 +795,33 @@ describe("AgentBuilder", () => {
     it("chains correctly", () => {
       const builder = new AgentBuilder();
       const result = builder.withModel("gpt4").withDefaultGadgetTimeout(10000);
+
+      expect(result).toBe(builder);
+    });
+  });
+
+  describe("withGadgetExecutionMode", () => {
+    it("sets execution mode to sequential", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withGadgetExecutionMode("sequential");
+
+      expect(result).toBe(builder);
+    });
+
+    it("sets execution mode to parallel", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withGadgetExecutionMode("parallel");
+
+      expect(result).toBe(builder);
+    });
+
+    it("chains correctly with other builder methods", () => {
+      const builder = new AgentBuilder();
+      const result = builder
+        .withModel("sonnet")
+        .withGadgets(Calculator)
+        .withGadgetExecutionMode("sequential")
+        .withMaxIterations(5);
 
       expect(result).toBe(builder);
     });

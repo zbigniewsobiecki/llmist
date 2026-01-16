@@ -17,6 +17,7 @@ import { GadgetCallParser } from "../gadgets/parser.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
   AgentContextConfig,
+  GadgetExecutionMode,
   GadgetExecutionResult,
   GadgetSkippedEvent,
   ParsedGadgetCall,
@@ -82,6 +83,9 @@ export interface StreamProcessorOptions {
 
   /** Default gadget timeout */
   defaultGadgetTimeoutMs?: number;
+
+  /** Gadget execution mode ('parallel' | 'sequential') */
+  gadgetExecutionMode?: GadgetExecutionMode;
 
   /** LLMist client for ExecutionContext.llmist */
   client?: LLMist;
@@ -209,6 +213,9 @@ export class StreamProcessor {
   private readonly parentNodeId: NodeId | null;
   private readonly baseDepth: number;
 
+  // Gadget execution mode
+  private readonly gadgetExecutionMode: GadgetExecutionMode;
+
   private responseText = "";
   private observerFailureCount = 0;
 
@@ -251,6 +258,9 @@ export class StreamProcessor {
     this.tree = options.tree;
     this.parentNodeId = options.parentNodeId ?? null;
     this.baseDepth = options.baseDepth ?? 0;
+
+    // Initialize gadget execution mode
+    this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
 
     // Initialize cross-iteration dependency tracking (use empty sets if not provided)
     this.priorCompletedInvocations = options.priorCompletedInvocations ?? new Set();
@@ -652,9 +662,16 @@ export class StreamProcessor {
       return; // Don't start yet, will be processed when a slot opens
     }
 
-    // Start execution with concurrency tracking
-    this.startGadgetWithConcurrencyTracking(call);
-    // DON'T await - continue processing stream immediately
+    // Execute based on execution mode
+    if (this.gadgetExecutionMode === "sequential") {
+      // Sequential: wait for completion before continuing
+      for await (const evt of this.executeGadgetGenerator(call)) {
+        yield evt;
+      }
+    } else {
+      // Parallel: fire-and-forget with concurrency tracking
+      this.startGadgetWithConcurrencyTracking(call);
+    }
   }
 
   /**
@@ -1235,33 +1252,47 @@ export class StreamProcessor {
         progress = true;
       }
 
-      // Execute ready gadgets in parallel
+      // Execute ready gadgets
       if (readyToExecute.length > 0) {
-        this.logger.debug("Executing ready gadgets in parallel", {
-          count: readyToExecute.length,
-          invocationIds: readyToExecute.map((c) => c.invocationId),
-        });
-
         // Remove from pending before executing
         for (const call of readyToExecute) {
           this.gadgetsAwaitingDependencies.delete(call.invocationId);
         }
 
-        // Execute all ready gadgets in parallel, collect events, then yield
-        const eventSets = await Promise.all(
-          readyToExecute.map(async (call) => {
-            const events: StreamEvent[] = [];
-            for await (const evt of this.executeGadgetGenerator(call)) {
-              events.push(evt);
-            }
-            return events;
-          }),
-        );
+        if (this.gadgetExecutionMode === "sequential") {
+          // Sequential: execute one at a time
+          this.logger.debug("Executing ready gadgets sequentially", {
+            count: readyToExecute.length,
+            invocationIds: readyToExecute.map((c) => c.invocationId),
+          });
 
-        // Yield all events from parallel execution
-        for (const events of eventSets) {
-          for (const evt of events) {
-            yield evt;
+          for (const call of readyToExecute) {
+            for await (const evt of this.executeGadgetGenerator(call)) {
+              yield evt;
+            }
+          }
+        } else {
+          // Parallel: execute all ready gadgets concurrently
+          this.logger.debug("Executing ready gadgets in parallel", {
+            count: readyToExecute.length,
+            invocationIds: readyToExecute.map((c) => c.invocationId),
+          });
+
+          const eventSets = await Promise.all(
+            readyToExecute.map(async (call) => {
+              const events: StreamEvent[] = [];
+              for await (const evt of this.executeGadgetGenerator(call)) {
+                events.push(evt);
+              }
+              return events;
+            }),
+          );
+
+          // Yield all events from parallel execution
+          for (const events of eventSets) {
+            for (const evt of events) {
+              yield evt;
+            }
           }
         }
 

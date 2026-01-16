@@ -949,3 +949,30 @@ export interface SubagentConfig {
  * Map of subagent names to their configurations.
  */
 export type SubagentConfigMap = Record<string, SubagentConfig>;
+
+/**
+ * Gadget execution mode controlling how multiple gadgets are executed.
+ *
+ * - `'parallel'` (default): Gadgets without dependencies execute concurrently (fire-and-forget).
+ *   This maximizes throughput but gadgets may complete in any order.
+ *
+ * - `'sequential'`: Gadgets execute one at a time, each awaiting completion before the next starts.
+ *   Useful for:
+ *   - Gadgets with implicit ordering dependencies (e.g., file operations)
+ *   - Debugging and tracing execution flow
+ *   - Resource-constrained environments
+ *   - Ensuring deterministic execution order
+ *
+ * Note: Explicit `dependsOn` relationships are always respected regardless of mode.
+ * Sequential mode effectively enforces a global `maxConcurrent: 1` for all gadgets.
+ *
+ * @example
+ * ```typescript
+ * const agent = LLMist.createAgent()
+ *   .withModel("sonnet")
+ *   .withGadgets(FileReader, FileWriter)
+ *   .withGadgetExecutionMode('sequential')  // Execute one at a time
+ *   .ask("Process files in order");
+ * ```
+ */
+export type GadgetExecutionMode = "parallel" | "sequential";
