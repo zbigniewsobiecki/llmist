@@ -290,6 +290,7 @@ export type {
   GadgetExecuteResult,
   GadgetExecuteResultWithMedia,
   GadgetExecuteReturn,
+  GadgetExecutionMode,
   GadgetExecutionResult,
   GadgetMediaOutput,
   GadgetSkippedEvent,
