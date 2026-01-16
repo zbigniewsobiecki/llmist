@@ -29,6 +29,7 @@ import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
   AgentContextConfig,
+  GadgetExecutionMode,
   StreamCompletionEvent,
   StreamEvent,
   SubagentConfigMap,
@@ -132,6 +133,9 @@ export interface AgentOptions {
 
   /** Default gadget timeout */
   defaultGadgetTimeoutMs?: number;
+
+  /** Gadget execution mode: 'parallel' (default) or 'sequential' */
+  gadgetExecutionMode?: GadgetExecutionMode;
 
   /** Custom prompt configuration for gadget system prompts */
   promptConfig?: PromptTemplateConfig;
@@ -241,6 +245,7 @@ export class Agent {
     resultMapping?: (text: string) => string;
   };
   private readonly defaultGadgetTimeoutMs?: number;
+  private readonly gadgetExecutionMode: GadgetExecutionMode;
   private readonly defaultMaxTokens?: number;
   private hasUserPrompt: boolean;
 
@@ -310,6 +315,7 @@ export class Agent {
     this.textOnlyHandler = options.textOnlyHandler ?? "terminate";
     this.textWithGadgetsHandler = options.textWithGadgetsHandler;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
+    this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
     // Initialize gadget output limiting
@@ -712,6 +718,7 @@ export class Agent {
                 logger: this.logger.getSubLogger({ name: "stream-processor" }),
                 requestHumanInput: this.requestHumanInput,
                 defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+                gadgetExecutionMode: this.gadgetExecutionMode,
                 client: this.client,
                 mediaStore: this.mediaStore,
                 agentConfig: this.agentContextConfig,

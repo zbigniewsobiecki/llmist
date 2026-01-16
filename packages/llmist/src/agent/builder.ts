@@ -29,7 +29,12 @@ import type { RateLimitConfig, RateLimitTracker } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
 import type { GadgetOrClass } from "../gadgets/registry.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
-import type { ExecutionContext, SubagentConfigMap, TextOnlyHandler } from "../gadgets/types.js";
+import type {
+  ExecutionContext,
+  GadgetExecutionMode,
+  SubagentConfigMap,
+  TextOnlyHandler,
+} from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
@@ -93,6 +98,7 @@ export class AgentBuilder {
     resultMapping?: (text: string) => string;
   };
   private defaultGadgetTimeoutMs?: number;
+  private gadgetExecutionMode?: GadgetExecutionMode;
   private gadgetOutputLimit?: boolean;
   private gadgetOutputLimitPercent?: number;
   private compactionConfig?: CompactionConfig;
@@ -498,6 +504,30 @@ export class AgentBuilder {
       throw new Error("Timeout must be a non-negative number");
     }
     this.defaultGadgetTimeoutMs = timeoutMs;
+    return this;
+  }
+
+  /**
+   * Set the gadget execution mode.
+   *
+   * Controls how multiple gadgets are executed when the LLM calls them:
+   * - `'parallel'` (default): Gadgets without dependencies execute concurrently
+   * - `'sequential'`: Gadgets execute one at a time, each awaiting completion
+   *
+   * @param mode - Execution mode ('parallel' or 'sequential')
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Sequential execution for ordered file operations
+   * .withGadgetExecutionMode('sequential')
+   *
+   * // Parallel execution (default) for independent operations
+   * .withGadgetExecutionMode('parallel')
+   * ```
+   */
+  withGadgetExecutionMode(mode: GadgetExecutionMode): this {
+    this.gadgetExecutionMode = mode;
     return this;
   }
 
@@ -1052,6 +1082,7 @@ export class AgentBuilder {
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+      gadgetExecutionMode: this.gadgetExecutionMode,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
@@ -1256,6 +1287,7 @@ export class AgentBuilder {
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+      gadgetExecutionMode: this.gadgetExecutionMode,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
