@@ -1,3 +1,9 @@
+## 15.9.0 (2026-01-16)
+
+* Merge pull request #366 from zbigniewsobiecki/feat/sequential-gadget-execution ([137157a](https://github.com/zbigniewsobiecki/llmist/commit/137157a)), closes [#366](https://github.com/zbigniewsobiecki/llmist/issues/366)
+* Merge pull request #367 from zbigniewsobiecki/dev ([207d822](https://github.com/zbigniewsobiecki/llmist/commit/207d822)), closes [#367](https://github.com/zbigniewsobiecki/llmist/issues/367)
+* feat(agent): add sequential gadget execution mode ([1995785](https://github.com/zbigniewsobiecki/llmist/commit/1995785))
+
 ## <small>15.8.1 (2026-01-14)</small>
 
 * Merge pull request #365 from zbigniewsobiecki/dev ([7b4f20d](https://github.com/zbigniewsobiecki/llmist/commit/7b4f20d)), closes [#365](https://github.com/zbigniewsobiecki/llmist/issues/365)
