@@ -1,3 +1,9 @@
+## 15.10.0 (2026-01-20)
+
+* Merge pull request #368 from zbigniewsobiecki/feat/openrouter-model-updates ([2959a68](https://github.com/zbigniewsobiecki/llmist/commit/2959a68)), closes [#368](https://github.com/zbigniewsobiecki/llmist/issues/368)
+* Merge pull request #369 from zbigniewsobiecki/dev ([6aeace9](https://github.com/zbigniewsobiecki/llmist/commit/6aeace9)), closes [#369](https://github.com/zbigniewsobiecki/llmist/issues/369)
+* feat(providers): add new OpenRouter models and update pricing ([a86f962](https://github.com/zbigniewsobiecki/llmist/commit/a86f962)), closes [Hi#speed](https://github.com/Hi/issues/speed)
+
 ## 15.9.0 (2026-01-16)
 
 * Merge pull request #366 from zbigniewsobiecki/feat/sequential-gadget-execution ([137157a](https://github.com/zbigniewsobiecki/llmist/commit/137157a)), closes [#366](https://github.com/zbigniewsobiecki/llmist/issues/366)
