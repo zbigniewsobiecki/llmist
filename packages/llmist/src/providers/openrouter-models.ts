@@ -160,22 +160,25 @@ export const OPENROUTER_MODELS: ModelSpec[] = [
     provider: "openrouter",
     modelId: "google/gemini-2.5-flash",
     displayName: "Gemini 2.5 Flash (OpenRouter)",
-    contextWindow: 1_000_000,
-    maxOutputTokens: 65_536,
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_535,
     pricing: {
-      input: 0.15,
-      output: 0.6,
+      input: 0.3,
+      output: 2.5,
     },
-    knowledgeCutoff: "2025-01",
+    knowledgeCutoff: "2025-06",
     features: {
       streaming: true,
       functionCalling: true,
       vision: true,
       reasoning: true,
+      structuredOutputs: true,
     },
     metadata: {
       family: "Gemini 2.5",
-      notes: "Google Gemini 2.5 Flash via OpenRouter. Fast and cost-effective.",
+      releaseDate: "2025-06-17",
+      notes:
+        "Google Gemini 2.5 Flash via OpenRouter. Workhorse model for reasoning, coding, and math.",
     },
   },
   {
@@ -198,6 +201,56 @@ export const OPENROUTER_MODELS: ModelSpec[] = [
     metadata: {
       family: "Gemini 2.5",
       notes: "Google Gemini 2.5 Pro via OpenRouter.",
+    },
+  },
+  {
+    provider: "openrouter",
+    modelId: "google/gemini-3-pro-preview",
+    displayName: "Gemini 3 Pro Preview (OpenRouter)",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    pricing: {
+      input: 2.0,
+      output: 12.0,
+    },
+    knowledgeCutoff: "2025-11",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "Gemini 3",
+      releaseDate: "2025-11-18",
+      notes:
+        "Gemini 3 Pro Preview via OpenRouter. Flagship frontier model for multimodal reasoning.",
+    },
+  },
+  {
+    provider: "openrouter",
+    modelId: "google/gemini-3-flash-preview",
+    displayName: "Gemini 3 Flash Preview (OpenRouter)",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_535,
+    pricing: {
+      input: 0.5,
+      output: 3.0,
+    },
+    knowledgeCutoff: "2025-12",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "Gemini 3",
+      releaseDate: "2025-12-17",
+      notes:
+        "Gemini 3 Flash Preview via OpenRouter. High-speed thinking model for agentic workflows.",
     },
   },
 
@@ -291,6 +344,30 @@ export const OPENROUTER_MODELS: ModelSpec[] = [
     metadata: {
       family: "DeepSeek V3",
       notes: "DeepSeek Chat via OpenRouter. Very cost-effective.",
+    },
+  },
+  {
+    provider: "openrouter",
+    modelId: "deepseek/deepseek-v3.2",
+    displayName: "DeepSeek V3.2 (OpenRouter)",
+    contextWindow: 163_840,
+    maxOutputTokens: 65_536,
+    pricing: {
+      input: 0.25,
+      output: 0.38,
+    },
+    knowledgeCutoff: "2025-12",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: false,
+      reasoning: true,
+    },
+    metadata: {
+      family: "DeepSeek V3.2",
+      releaseDate: "2025-12-01",
+      notes:
+        "DeepSeek V3.2 via OpenRouter. GPT-5 class performance with DeepSeek Sparse Attention.",
     },
   },
 
