@@ -155,6 +155,26 @@ export function resolveRetryConfig(config?: RetryConfig): ResolvedRetryConfig {
 }
 
 /**
+ * Extract numeric status code from error object.
+ * Handles common patterns: error.status, error.code, error.statusCode
+ */
+function getErrorStatusCode(error: Error): number | undefined {
+  const errAny = error as unknown as Record<string, unknown>;
+
+  // Check common status properties
+  if (typeof errAny.status === "number") return errAny.status;
+  if (typeof errAny.code === "number") return errAny.code;
+  if (typeof errAny.statusCode === "number") return errAny.statusCode;
+
+  // Some errors have string codes like "502"
+  if (typeof errAny.code === "string" && /^\d{3}$/.test(errAny.code)) {
+    return parseInt(errAny.code, 10);
+  }
+
+  return undefined;
+}
+
+/**
  * Determines if an error is retryable based on common LLM API error patterns.
  *
  * Retryable errors include:
@@ -175,6 +195,17 @@ export function resolveRetryConfig(config?: RetryConfig): ResolvedRetryConfig {
 export function isRetryableError(error: Error): boolean {
   const message = error.message.toLowerCase();
   const name = error.name;
+  const statusCode = getErrorStatusCode(error);
+
+  // Check numeric status code first (most reliable)
+  if (statusCode !== undefined) {
+    // Rate limit (429) - retry
+    if (statusCode === 429) return true;
+    // Server errors (5xx) - retry
+    if (statusCode >= 500 && statusCode < 600) return true;
+    // Client errors (4xx except 429) - don't retry
+    if (statusCode >= 400 && statusCode < 500) return false;
+  }
 
   // Rate limits (429) - always retry
   if (message.includes("429") || message.includes("rate limit") || message.includes("rate_limit")) {
