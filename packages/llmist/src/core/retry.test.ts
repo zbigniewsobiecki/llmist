@@ -207,6 +207,47 @@ describe("retry configuration", () => {
       expect(isRetryableError(new Error("Some random error"))).toBe(false);
       expect(isRetryableError(new Error("Unexpected issue"))).toBe(false);
     });
+
+    // Numeric status code errors
+    describe("numeric status codes", () => {
+      it("should retry errors with numeric status 429", () => {
+        const error = new Error("Rate limited") as Error & { status: number };
+        error.status = 429;
+        expect(isRetryableError(error)).toBe(true);
+      });
+
+      it("should retry errors with numeric status 502", () => {
+        const error = new Error("JSON error injected into SSE stream") as Error & {
+          status: number;
+        };
+        error.status = 502;
+        expect(isRetryableError(error)).toBe(true);
+      });
+
+      it("should retry errors with numeric code 503", () => {
+        const error = new Error("Upstream error") as Error & { code: number };
+        error.code = 503;
+        expect(isRetryableError(error)).toBe(true);
+      });
+
+      it("should NOT retry errors with numeric status 400", () => {
+        const error = new Error("Bad request") as Error & { status: number };
+        error.status = 400;
+        expect(isRetryableError(error)).toBe(false);
+      });
+
+      it("should NOT retry errors with numeric status 401", () => {
+        const error = new Error("Unauthorized") as Error & { status: number };
+        error.status = 401;
+        expect(isRetryableError(error)).toBe(false);
+      });
+
+      it("should handle string code that looks like status", () => {
+        const error = new Error("Server error") as Error & { code: string };
+        error.code = "502";
+        expect(isRetryableError(error)).toBe(true);
+      });
+    });
   });
 
   describe("formatLLMError", () => {
