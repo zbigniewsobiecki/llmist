@@ -1,3 +1,8 @@
+## 15.11.0 (2026-01-21)
+
+* Merge pull request #371 from zbigniewsobiecki/dev ([c1db3fe](https://github.com/zbigniewsobiecki/llmist/commit/c1db3fe)), closes [#371](https://github.com/zbigniewsobiecki/llmist/issues/371)
+* feat(retry): add numeric status code support to isRetryableError() (#370) ([02318a9](https://github.com/zbigniewsobiecki/llmist/commit/02318a9)), closes [#370](https://github.com/zbigniewsobiecki/llmist/issues/370)
+
 ## 15.10.0 (2026-01-20)
 
 * Merge pull request #368 from zbigniewsobiecki/feat/openrouter-model-updates ([2959a68](https://github.com/zbigniewsobiecki/llmist/commit/2959a68)), closes [#368](https://github.com/zbigniewsobiecki/llmist/issues/368)
