@@ -1,11 +1,17 @@
 import type { Command } from "commander";
 import type { ContentPart, TokenUsage } from "llmist";
-import { FALLBACK_CHARS_PER_TOKEN, LLMMessageBuilder, resolveModel, text } from "llmist";
+import {
+  FALLBACK_CHARS_PER_TOKEN,
+  formatLlmRequest,
+  LLMMessageBuilder,
+  resolveModel,
+  text,
+} from "llmist";
 import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile } from "./file-utils.js";
-import { formatLlmRequest, writeLogFile } from "./llm-logging.js";
+import { writeLogFile } from "./llm-logging.js";
 import { addCompleteOptions, type CLICompleteOptions } from "./option-helpers.js";
 import {
   executeAction,

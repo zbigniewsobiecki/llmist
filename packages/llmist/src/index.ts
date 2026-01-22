@@ -8,6 +8,9 @@ export type { HistoryMessage, TrailingMessage, TrailingMessageContext } from "./
 export { AgentBuilder } from "./agent/builder.js";
 export type { EventHandlers } from "./agent/event-handlers.js";
 export { collectEvents, collectText, runWithHandlers } from "./agent/event-handlers.js";
+// File-based logging for debugging and auditing
+export type { FileLoggingOptions, FileWrittenInfo } from "./agent/file-logging.js";
+export { formatCallNumber, formatLlmRequest } from "./agent/file-logging.js";
 // Syntactic sugar: Hook presets
 export type { LoggingOptions } from "./agent/hook-presets.js";
 export { HookPresets } from "./agent/hook-presets.js";
