@@ -1,3 +1,8 @@
+## 15.12.0 (2026-01-22)
+
+* Merge pull request #376 from zbigniewsobiecki/dev ([668b43d](https://github.com/zbigniewsobiecki/llmist/commit/668b43d)), closes [#376](https://github.com/zbigniewsobiecki/llmist/issues/376)
+* feat(agent): add HookPresets.fileLogging() for request/response logging (#375) ([f113e72](https://github.com/zbigniewsobiecki/llmist/commit/f113e72)), closes [#375](https://github.com/zbigniewsobiecki/llmist/issues/375)
+
 ## 15.11.0 (2026-01-21)
 
 * Merge pull request #371 from zbigniewsobiecki/dev ([c1db3fe](https://github.com/zbigniewsobiecki/llmist/commit/c1db3fe)), closes [#371](https://github.com/zbigniewsobiecki/llmist/issues/371)
