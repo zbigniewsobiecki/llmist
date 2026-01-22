@@ -53,6 +53,7 @@
  */
 
 import type { ModelRegistry } from "../core/model-registry.js";
+import { createFileLoggingHooks, type FileLoggingOptions } from "./file-logging.js";
 import type { AgentHooks } from "./hooks.js";
 
 /**
@@ -745,6 +746,77 @@ export class HookPresets {
         },
       },
     };
+  }
+
+  /**
+   * Logs LLM requests and responses to files for debugging and audit trails.
+   *
+   * Files are named `{counter}.request` and `{counter}.response` where counter
+   * is a zero-padded number that increments with each LLM call.
+   *
+   * **Output:**
+   * - Request files containing formatted LLM message history
+   * - Response files containing raw LLM output
+   *
+   * **Use cases:**
+   * - Debugging complex agent interactions
+   * - Creating audit trails for compliance
+   * - Analyzing LLM behavior patterns
+   * - Replaying conversations for testing
+   *
+   * **Performance:** Minimal overhead - only file I/O, no synchronous blocking.
+   *
+   * **Note:** Can also be enabled via `LLMIST_LOG_RAW_DIRECTORY` environment
+   * variable for zero-code activation.
+   *
+   * @param options - File logging options
+   * @param options.directory - Directory where log files will be written
+   * @param options.startingCounter - Starting counter (default: 1)
+   * @param options.counterPadding - Number of digits for padding (default: 4)
+   * @param options.skipSubagents - Skip subagent calls (default: true)
+   * @param options.formatRequest - Custom request formatter
+   * @param options.onFileWritten - Callback after each file is written
+   * @returns Hook configuration that can be passed to .withHooks()
+   *
+   * @example
+   * ```typescript
+   * // Basic file logging
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.fileLogging({
+   *     directory: './debug-logs'
+   *   }))
+   *   .ask("Hello");
+   * // Creates: ./debug-logs/0001.request
+   * //          ./debug-logs/0001.response
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // With callback for tracking
+   * await LLMist.createAgent()
+   *   .withHooks(HookPresets.fileLogging({
+   *     directory: './logs',
+   *     onFileWritten: (info) => {
+   *       console.log(`Wrote ${info.type}: ${info.filePath}`);
+   *     }
+   *   }))
+   *   .ask("Hello");
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Combined with other presets
+   * .withHooks(HookPresets.merge(
+   *   HookPresets.fileLogging({ directory: logDir }),
+   *   HookPresets.progressTracking({ onProgress: updateUI }),
+   *   HookPresets.errorLogging()
+   * ))
+   * ```
+   *
+   * @see {@link https://github.com/zbigniewsobiecki/llmist/blob/main/docs/HOOKS.md#hookpresetsfileloggingoptions | Full documentation}
+   */
+  static fileLogging(options: FileLoggingOptions): AgentHooks {
+    return createFileLoggingHooks(options);
   }
 
   /**
