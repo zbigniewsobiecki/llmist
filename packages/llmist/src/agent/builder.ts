@@ -39,6 +39,8 @@ import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type { CompactionConfig } from "./compaction/config.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
+import { getEnvFileLoggingHooks } from "./file-logging.js";
+import { HookPresets } from "./hook-presets.js";
 import type {
   AgentHooks,
   BeforeLLMCallAction,
@@ -947,9 +949,19 @@ export class AgentBuilder {
    * Note: Subagent event visibility is now handled entirely by the ExecutionTree.
    * When a subagent uses withParentContext(ctx), it shares the parent's tree,
    * and all events are automatically visible to tree subscribers (like the TUI).
+   *
+   * Environment-based file logging (via LLMIST_LOG_RAW_DIRECTORY) is automatically
+   * injected if the env var is set. User-provided hooks take precedence.
    */
   private composeHooks(): AgentHooks | undefined {
-    const hooks = this.hooks;
+    let hooks = this.hooks;
+
+    // Auto-inject environment-based file logging if LLMIST_LOG_RAW_DIRECTORY is set
+    const envFileLogging = getEnvFileLoggingHooks();
+    if (envFileLogging) {
+      // Merge env hooks with user hooks (user hooks take precedence)
+      hooks = hooks ? HookPresets.merge(envFileLogging, hooks) : envFileLogging;
+    }
 
     // Handle trailing message injection
     if (!this.trailingMessage) {
