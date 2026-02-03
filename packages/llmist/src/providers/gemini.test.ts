@@ -636,6 +636,9 @@ describe("GeminiGenerativeProvider", () => {
           }),
         }),
       );
+
+      const callArgs = generateContentStream.mock.calls[0][0];
+      expect(callArgs.config.toolConfig).toBeUndefined();
     });
 
     it("strips cached prefix from contents when cache is active", async () => {
@@ -707,6 +710,10 @@ describe("GeminiGenerativeProvider", () => {
       const callArgs = generateContentStream.mock.calls[0][0];
       // Should NOT have cachedContent
       expect(callArgs.config.cachedContent).toBeUndefined();
+      // toolConfig should be present when not using cached content
+      expect(callArgs.config.toolConfig).toEqual({
+        functionCallingConfig: { mode: "NONE" },
+      });
     });
 
     it("sends full contents when caching is explicitly disabled", async () => {
@@ -734,6 +741,10 @@ describe("GeminiGenerativeProvider", () => {
       const callArgs = generateContentStream.mock.calls[0][0];
       // Should NOT have cachedContent
       expect(callArgs.config.cachedContent).toBeUndefined();
+      // toolConfig should be present when not using cached content
+      expect(callArgs.config.toolConfig).toEqual({
+        functionCallingConfig: { mode: "NONE" },
+      });
       // caches.create should NOT have been called
       expect(client.caches.create).not.toHaveBeenCalled();
     });

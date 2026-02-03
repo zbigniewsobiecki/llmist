@@ -15,7 +15,7 @@
  */
 
 import { createHash } from "node:crypto";
-import type { GoogleGenAI } from "@google/genai";
+import { FunctionCallingConfigMode, type GoogleGenAI } from "@google/genai";
 import type { CachingConfig, CachingScope } from "../core/options.js";
 
 /**
@@ -106,6 +106,11 @@ export class GeminiCacheManager {
           contents: cacheableContents,
           ttl,
           displayName: `llmist-${scope}-${Date.now()}`,
+          toolConfig: {
+            functionCallingConfig: {
+              mode: FunctionCallingConfigMode.NONE,
+            },
+          },
         },
       });
 
