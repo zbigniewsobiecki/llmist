@@ -17,7 +17,12 @@ import type {
 import type { LLMMessage, MessageContent } from "../core/messages.js";
 import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
-import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
+import type {
+  LLMGenerationOptions,
+  LLMStream,
+  ModelDescriptor,
+  ReasoningEffort,
+} from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import {
   FALLBACK_CHARS_PER_TOKEN,
@@ -48,6 +53,15 @@ const ROLE_MAP: Record<LLMMessage["role"], "system" | "user" | "assistant"> = {
 
 // Note: Temperature support is now determined from the ModelSpec passed to stream()
 // instead of being hardcoded at module level
+
+/** Maps llmist reasoning effort levels to OpenAI's reasoning effort parameter */
+const OPENAI_EFFORT_MAP: Record<ReasoningEffort, string> = {
+  none: "none",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  maximum: "xhigh",
+};
 
 function sanitizeExtra(
   extra: Record<string, unknown> | undefined,
@@ -195,12 +209,22 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
     spec: ModelSpec | undefined,
     messages: LLMMessage[],
   ): Parameters<OpenAI["chat"]["completions"]["create"]>[0] {
-    const { maxTokens, temperature, topP, stopSequences, extra } = options;
+    const { maxTokens, temperature, topP, stopSequences, extra, reasoning } = options;
 
     // Use spec metadata to determine temperature support, defaulting to true if spec is unavailable
     const supportsTemperature = spec?.metadata?.supportsTemperature !== false;
     const shouldIncludeTemperature = typeof temperature === "number" && supportsTemperature;
     const sanitizedExtra = sanitizeExtra(extra, shouldIncludeTemperature);
+
+    // Build reasoning parameter for OpenAI reasoning models (o-series, etc.)
+    const reasoningParam =
+      reasoning?.enabled !== undefined
+        ? {
+            reasoning: {
+              effort: OPENAI_EFFORT_MAP[reasoning.effort ?? "medium"],
+            },
+          }
+        : {};
 
     return {
       model: descriptor.name,
@@ -212,6 +236,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
       stop: stopSequences,
       stream: true,
       stream_options: { include_usage: true },
+      ...reasoningParam,
       ...(sanitizedExtra ?? {}),
       ...(shouldIncludeTemperature ? { temperature } : {}),
     };
@@ -329,14 +354,19 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
 
       // Extract token usage if available (typically in the final chunk)
       // OpenAI returns cached token count in prompt_tokens_details.cached_tokens
+      // and reasoning tokens in completion_tokens_details.reasoning_tokens
+      type OpenAIUsageDetails = {
+        prompt_tokens_details?: { cached_tokens?: number };
+        completion_tokens_details?: { reasoning_tokens?: number };
+      };
+      const usageDetails = chunk.usage as (typeof chunk.usage & OpenAIUsageDetails) | undefined;
       const usage = chunk.usage
         ? {
             inputTokens: chunk.usage.prompt_tokens,
             outputTokens: chunk.usage.completion_tokens,
             totalTokens: chunk.usage.total_tokens,
-            cachedInputTokens:
-              (chunk.usage as { prompt_tokens_details?: { cached_tokens?: number } })
-                .prompt_tokens_details?.cached_tokens ?? 0,
+            cachedInputTokens: usageDetails?.prompt_tokens_details?.cached_tokens ?? 0,
+            reasoningTokens: usageDetails?.completion_tokens_details?.reasoning_tokens,
           }
         : undefined;
 

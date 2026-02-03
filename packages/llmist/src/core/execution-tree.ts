@@ -154,6 +154,8 @@ export interface CompleteLLMCallParams {
   finishReason?: string | null;
   /** Cost in USD */
   cost?: number;
+  /** Accumulated thinking/reasoning content from reasoning models */
+  thinkingContent?: string;
 }
 
 export interface CompleteGadgetParams {
@@ -446,6 +448,7 @@ export class ExecutionTree {
       usage: llmNode.usage,
       finishReason: llmNode.finishReason,
       cost: llmNode.cost,
+      thinkingContent: params.thinkingContent,
     });
   }
 

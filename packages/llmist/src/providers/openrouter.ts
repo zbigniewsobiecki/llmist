@@ -19,13 +19,24 @@
  */
 
 import OpenAI from "openai";
+import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
+import type { LLMGenerationOptions, ModelDescriptor, ReasoningEffort } from "../core/options.js";
 import {
   type OpenAICompatibleConfig,
   OpenAICompatibleProvider,
 } from "./openai-compatible-provider.js";
 import { OPENROUTER_MODELS } from "./openrouter-models.js";
 import { isNonEmpty, readEnvVar } from "./utils.js";
+
+/** Maps llmist reasoning effort levels to OpenRouter/OpenAI reasoning effort */
+const OPENROUTER_EFFORT_MAP: Record<ReasoningEffort, string> = {
+  none: "none",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  maximum: "xhigh",
+};
 
 /**
  * Configuration for OpenRouter provider.
@@ -94,6 +105,29 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
 
   getModelSpecs(): ModelSpec[] {
     return OPENROUTER_MODELS;
+  }
+
+  /**
+   * Override buildApiRequest to inject reasoning parameters.
+   * OpenRouter normalizes reasoning into the standard OpenAI format.
+   */
+  protected buildApiRequest(
+    options: LLMGenerationOptions,
+    descriptor: ModelDescriptor,
+    spec: ModelSpec | undefined,
+    messages: LLMMessage[],
+  ): Parameters<OpenAI["chat"]["completions"]["create"]>[0] {
+    const request = super.buildApiRequest(options, descriptor, spec, messages);
+
+    // Inject reasoning parameter when reasoning is enabled
+    if (options.reasoning?.enabled !== undefined) {
+      const requestObj = request as unknown as Record<string, unknown>;
+      requestObj.reasoning = {
+        effort: OPENROUTER_EFFORT_MAP[options.reasoning.effort ?? "medium"],
+      };
+    }
+
+    return request;
   }
 
   /**

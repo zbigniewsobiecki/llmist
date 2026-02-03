@@ -156,6 +156,7 @@ export class ModelRegistry {
    * @param outputTokens - Number of output tokens
    * @param cachedInputTokens - Number of cached input tokens (subset of inputTokens)
    * @param cacheCreationInputTokens - Number of cache creation tokens (subset of inputTokens, Anthropic only)
+   * @param reasoningTokens - Number of reasoning/thinking tokens (subset of outputTokens)
    * @returns CostEstimate if model found, undefined otherwise
    */
   estimateCost(
@@ -164,6 +165,7 @@ export class ModelRegistry {
     outputTokens: number,
     cachedInputTokens = 0,
     cacheCreationInputTokens = 0,
+    reasoningTokens = 0,
   ): CostEstimate | undefined {
     const spec = this.getModelSpec(modelId);
     if (!spec) return undefined;
@@ -179,7 +181,14 @@ export class ModelRegistry {
     const cachedInputCost = (cachedInputTokens / 1_000_000) * cachedRate;
     const cacheCreationCost = (cacheCreationInputTokens / 1_000_000) * cacheWriteRate;
     const inputCost = uncachedInputCost + cachedInputCost + cacheCreationCost;
-    const outputCost = (outputTokens / 1_000_000) * spec.pricing.output;
+
+    // Reasoning tokens use reasoningOutput pricing when available, otherwise output pricing
+    // They are a subset of outputTokens, so we split the output cost accordingly
+    const reasoningRate = spec.pricing.reasoningOutput ?? spec.pricing.output;
+    const nonReasoningOutputTokens = outputTokens - reasoningTokens;
+    const reasoningCost = (reasoningTokens / 1_000_000) * reasoningRate;
+    const nonReasoningOutputCost = (nonReasoningOutputTokens / 1_000_000) * spec.pricing.output;
+    const outputCost = nonReasoningOutputCost + reasoningCost;
     const totalCost = inputCost + outputCost;
 
     return {
@@ -187,6 +196,7 @@ export class ModelRegistry {
       cachedInputCost,
       cacheCreationCost,
       outputCost,
+      reasoningCost,
       totalCost,
       currency: "USD",
     };

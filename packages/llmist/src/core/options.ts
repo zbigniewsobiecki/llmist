@@ -1,5 +1,56 @@
 import type { LLMMessage } from "./messages.js";
 
+// =============================================================================
+// Reasoning / Thinking Types
+// =============================================================================
+
+/**
+ * Provider-agnostic reasoning effort level.
+ *
+ * Maps to provider-specific values:
+ * - **OpenAI**: "none"|"low"|"medium"|"high"|"xhigh"
+ * - **Anthropic**: budget_tokens (1024–32768)
+ * - **Gemini 3**: thinkingLevel "minimal"|"low"|"medium"|"high"
+ * - **Gemini 2.5**: thinkingBudget (0–24576)
+ * - **DeepSeek**: binary (enabled/disabled)
+ */
+export type ReasoningEffort = "none" | "low" | "medium" | "high" | "maximum";
+
+/**
+ * Configuration for reasoning/thinking mode on supported models.
+ *
+ * When `enabled` is true, the provider will be instructed to use
+ * extended reasoning before generating its response.
+ */
+export interface ReasoningConfig {
+  /** Whether reasoning is enabled */
+  enabled: boolean;
+  /** Reasoning effort level (default: "medium") */
+  effort?: ReasoningEffort;
+  /** Explicit token budget for thinking (Anthropic/Gemini 2.5, overrides effort) */
+  budgetTokens?: number;
+  /** Whether to surface thinking content in the stream (default: true) */
+  includeThinking?: boolean;
+  /** Enable interleaved thinking for multi-turn tool use (Anthropic only) */
+  interleaved?: boolean;
+}
+
+/**
+ * A chunk of thinking/reasoning content from a reasoning model.
+ *
+ * Emitted during streaming when a reasoning model produces thinking output.
+ * The `type` field distinguishes actual thinking from redacted content
+ * (e.g., Anthropic may redact thinking in certain scenarios).
+ */
+export interface ThinkingChunk {
+  /** The thinking text content */
+  content: string;
+  /** Whether this is actual thinking or redacted content */
+  type: "thinking" | "redacted";
+  /** Verification signature (Anthropic/Gemini) */
+  signature?: string;
+}
+
 export interface LLMGenerationOptions {
   model: string;
   messages: LLMMessage[];
@@ -45,6 +96,8 @@ export interface LLMGenerationOptions {
    * ```
    */
   signal?: AbortSignal;
+  /** Reasoning/thinking configuration for reasoning-capable models */
+  reasoning?: ReasoningConfig;
 }
 
 export interface TokenUsage {
@@ -55,6 +108,8 @@ export interface TokenUsage {
   cachedInputTokens?: number;
   /** Number of input tokens written to cache (subset of inputTokens, Anthropic only) */
   cacheCreationInputTokens?: number;
+  /** Number of reasoning/thinking tokens used (subset of outputTokens) */
+  reasoningTokens?: number;
 }
 
 export interface LLMStreamChunk {
@@ -71,6 +126,8 @@ export interface LLMStreamChunk {
    * Provider specific payload emitted at the same time as the text chunk. This is useful for debugging and tests.
    */
   rawEvent?: unknown;
+  /** Thinking/reasoning content from reasoning models */
+  thinking?: ThinkingChunk;
 }
 
 export interface LLMStream extends AsyncIterable<LLMStreamChunk> {}

@@ -231,11 +231,14 @@ export interface StreamCompletionEvent {
   didExecuteGadgets: boolean;
   /** Whether to break the agent loop (e.g., TaskComplete was called) */
   shouldBreakLoop: boolean;
+  /** Accumulated thinking/reasoning content from reasoning models */
+  thinkingContent?: string;
 }
 
 // Stream chunk with text or gadget metadata
 export type StreamEvent =
   | { type: "text"; content: string }
+  | { type: "thinking"; content: string; thinkingType: "thinking" | "redacted" }
   | { type: "gadget_call"; call: ParsedGadgetCall }
   | { type: "gadget_result"; result: GadgetExecutionResult }
   | GadgetSkippedEvent

@@ -114,8 +114,10 @@ export type {
   LLMCallStartEvent,
   LLMCallStreamEvent,
   LLMEvent,
+  LLMResponseEndEvent,
   StreamCompleteEvent,
   TextEvent,
+  ThinkingEvent,
 } from "./core/execution-events.js";
 export {
   filterByDepth,
@@ -206,6 +208,9 @@ export type {
   LLMStreamChunk,
   ModelDescriptor,
   ProviderIdentifier,
+  ReasoningConfig,
+  ReasoningEffort,
+  ThinkingChunk,
   TokenUsage,
 } from "./core/options.js";
 export { ModelIdentifierParser } from "./core/options.js";

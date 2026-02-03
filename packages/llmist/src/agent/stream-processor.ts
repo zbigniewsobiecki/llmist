@@ -318,12 +318,23 @@ export class StreamProcessor {
     let usage: TokenUsage | undefined;
     let didExecuteGadgets = false;
     let shouldBreakLoop = false;
+    let thinkingContent = "";
 
     // Process stream chunks
     for await (const chunk of stream) {
       // Capture metadata
       if (chunk.finishReason) finishReason = chunk.finishReason;
       if (chunk.usage) usage = chunk.usage;
+
+      // Emit thinking content as a thinking event
+      if (chunk.thinking?.content) {
+        thinkingContent += chunk.thinking.content;
+        yield {
+          type: "thinking",
+          content: chunk.thinking.content,
+          thinkingType: chunk.thinking.type,
+        };
+      }
 
       // Process text content if present
       let processedChunk = "";
@@ -479,6 +490,7 @@ export class StreamProcessor {
       usage,
       rawResponse: this.responseText,
       finalMessage,
+      thinkingContent: thinkingContent || undefined,
     };
     yield completionEvent;
   }
