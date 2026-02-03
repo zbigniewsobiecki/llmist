@@ -113,7 +113,14 @@ describe("CostReportingLLMistWrapper", () => {
       // "haiku" resolves to "anthropic:claude-haiku-4-5" (full model ID with provider prefix)
       // Model registry handles the prefix stripping internally
       const estimateCostMock = mockClient.modelRegistry.estimateCost as ReturnType<typeof mock>;
-      expect(estimateCostMock).toHaveBeenCalledWith("anthropic:claude-haiku-4-5", 100, 50, 30, 0);
+      expect(estimateCostMock).toHaveBeenCalledWith(
+        "anthropic:claude-haiku-4-5",
+        100,
+        50,
+        30,
+        0,
+        0,
+      );
     });
 
     it("handles cache creation input tokens", async () => {
@@ -135,7 +142,14 @@ describe("CostReportingLLMistWrapper", () => {
       await wrapper.complete("Test prompt");
 
       const estimateCostMock = mockClient.modelRegistry.estimateCost as ReturnType<typeof mock>;
-      expect(estimateCostMock).toHaveBeenCalledWith("anthropic:claude-haiku-4-5", 100, 50, 0, 20);
+      expect(estimateCostMock).toHaveBeenCalledWith(
+        "anthropic:claude-haiku-4-5",
+        100,
+        50,
+        0,
+        20,
+        0,
+      );
     });
 
     it("uses specified model from options", async () => {
@@ -149,7 +163,7 @@ describe("CostReportingLLMistWrapper", () => {
 
       // "sonnet" resolves to "anthropic:claude-sonnet-4-5" (full model ID with provider prefix)
       const estimateCostMock = mockClient.modelRegistry.estimateCost as ReturnType<typeof mock>;
-      expect(estimateCostMock).toHaveBeenCalledWith("anthropic:claude-sonnet-4-5", 10, 5, 0, 0);
+      expect(estimateCostMock).toHaveBeenCalledWith("anthropic:claude-sonnet-4-5", 10, 5, 0, 0, 0);
     });
 
     it("does not report cost when no tokens used", async () => {
@@ -269,7 +283,7 @@ describe("CostReportingLLMistWrapper", () => {
 
       const estimateCostMock = mockClient.modelRegistry.estimateCost as ReturnType<typeof mock>;
       // Full model ID with provider prefix is passed; registry handles stripping internally
-      expect(estimateCostMock).toHaveBeenCalledWith("openai:gpt-5", 10, 5, 0, 0);
+      expect(estimateCostMock).toHaveBeenCalledWith("openai:gpt-5", 10, 5, 0, 0, 0);
     });
   });
 
@@ -338,7 +352,7 @@ describe("CostReportingLLMistWrapper", () => {
 
       const estimateCostMock = mockClient.modelRegistry.estimateCost as ReturnType<typeof mock>;
       // Full model ID with provider prefix is passed; registry handles stripping internally
-      expect(estimateCostMock).toHaveBeenCalledWith("openai:gpt-5-nano", 10, 5, 0, 0);
+      expect(estimateCostMock).toHaveBeenCalledWith("openai:gpt-5-nano", 10, 5, 0, 0, 0);
     });
 
     it("tracks cumulative usage across multiple chunks", async () => {
@@ -357,7 +371,7 @@ describe("CostReportingLLMistWrapper", () => {
 
       const estimateCostMock = mockClient.modelRegistry.estimateCost as ReturnType<typeof mock>;
       // Should use the final usage values
-      expect(estimateCostMock).toHaveBeenCalledWith("haiku", 50, 50, 0, 0);
+      expect(estimateCostMock).toHaveBeenCalledWith("haiku", 50, 50, 0, 0, 0);
     });
 
     it("does not report cost if estimateCost returns zero", async () => {

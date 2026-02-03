@@ -57,9 +57,10 @@ const estimatedCost = registry.estimateCost('gpt-5', inputTokens, 1000);
 ```typescript
 const cost = registry.estimateCost('sonnet', 10_000, 2_000);
 
-console.log(cost.inputCost);   // Cost for input tokens
-console.log(cost.outputCost);  // Cost for output tokens
-console.log(cost.totalCost);   // Combined total
+console.log(cost.inputCost);      // Cost for input tokens
+console.log(cost.outputCost);     // Cost for output tokens
+console.log(cost.reasoningCost);  // Cost for reasoning tokens (part of output)
+console.log(cost.totalCost);      // Combined total
 ```
 
 ## Real-Time Tracking (ExecutionTree)
@@ -85,9 +86,10 @@ const result = await LLMist.createAgent()
 ```typescript
 const tokens = tree.getTotalTokens();
 
-console.log(tokens.input);   // Total input tokens
-console.log(tokens.output);  // Total output tokens
-console.log(tokens.cached);  // Cached tokens (if supported by provider)
+console.log(tokens.input);      // Total input tokens
+console.log(tokens.output);     // Total output tokens
+console.log(tokens.cached);     // Cached tokens (if supported by provider)
+console.log(tokens.reasoning);  // Reasoning/thinking tokens (subset of output)
 ```
 
 ## Subagent Costs
@@ -250,4 +252,5 @@ See [Retry Strategies](/library/advanced/retry-strategies/) for rate limiting co
 
 - [Execution Tree](/library/advanced/execution-tree/) - Tree structure and navigation
 - [Model Catalog](/library/advanced/model-catalog/) - Model specs and features
+- [Reasoning Models](/library/guides/reasoning-models/) - Reasoning token tracking
 - [Hooks Guide](/library/guides/hooks/) - Lifecycle monitoring

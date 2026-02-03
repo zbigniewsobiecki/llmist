@@ -40,10 +40,10 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
     contextWindow: 200_000,
     maxOutputTokens: 64_000,
     pricing: {
-      input: 0.8,
-      output: 4.0,
-      cachedInput: 0.08,
-      cacheWriteInput: 1.0,
+      input: 1.0,
+      output: 5.0,
+      cachedInput: 0.1,
+      cacheWriteInput: 1.25,
     },
     knowledgeCutoff: "2025-02",
     features: {
@@ -241,10 +241,10 @@ export const ANTHROPIC_MODELS: ModelSpec[] = [
     contextWindow: 200_000,
     maxOutputTokens: 64_000,
     pricing: {
-      input: 0.8,
-      output: 4.0,
-      cachedInput: 0.08,
-      cacheWriteInput: 1.0,
+      input: 1.0,
+      output: 5.0,
+      cachedInput: 0.1,
+      cacheWriteInput: 1.25,
     },
     knowledgeCutoff: "2025-02",
     features: {

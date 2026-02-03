@@ -11,7 +11,13 @@ import type {
 import type { LLMMessage, MessageContent } from "../core/messages.js";
 import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
-import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
+import type {
+  LLMGenerationOptions,
+  LLMStream,
+  ModelDescriptor,
+  ReasoningConfig,
+  ReasoningEffort,
+} from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
 import {
@@ -46,7 +52,7 @@ type GeminiChunk = {
   text?: () => string;
   candidates?: Array<{
     content?: {
-      parts?: Array<{ text?: string }>;
+      parts?: Array<{ text?: string; thought?: boolean; thoughtSignature?: string }>;
     };
     finishReason?: string;
   }>;
@@ -55,8 +61,54 @@ type GeminiChunk = {
     candidatesTokenCount?: number;
     totalTokenCount?: number;
     cachedContentTokenCount?: number;
+    thoughtsTokenCount?: number;
   };
 };
+
+/** Maps llmist reasoning effort to Gemini 3 thinkingLevel */
+const GEMINI3_THINKING_LEVEL: Record<ReasoningEffort, string> = {
+  none: "minimal",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  maximum: "high",
+};
+
+/** Maps llmist reasoning effort to Gemini 2.5 thinkingBudget */
+const GEMINI25_THINKING_BUDGET: Record<ReasoningEffort, number> = {
+  none: 0,
+  low: 2048,
+  medium: 8192,
+  high: 16384,
+  maximum: 24576,
+};
+
+/** Resolve Gemini thinking config from ReasoningConfig */
+function resolveGeminiThinkingConfig(
+  reasoning: ReasoningConfig | undefined,
+  modelName: string,
+): Record<string, unknown> | undefined {
+  if (!reasoning?.enabled) return undefined;
+
+  const isGemini3 = modelName.includes("gemini-3");
+
+  if (isGemini3) {
+    // Gemini 3 uses thinkingLevel
+    return {
+      thinkingConfig: {
+        thinkingLevel: GEMINI3_THINKING_LEVEL[reasoning.effort ?? "medium"],
+      },
+    };
+  }
+
+  // Gemini 2.5 uses thinkingBudget (numeric)
+  const budget = reasoning.budgetTokens ?? GEMINI25_THINKING_BUDGET[reasoning.effort ?? "medium"];
+  return {
+    thinkingConfig: {
+      thinkingBudget: budget,
+    },
+  };
+}
 
 const GEMINI_ROLE_MAP: Record<LLMMessage["role"], "user" | "model"> = {
   system: "user",
@@ -309,6 +361,9 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     const contents = this.convertMessagesToContents(messages);
     const generationConfig = this.buildGenerationConfig(options);
 
+    // Resolve thinking config for Gemini 2.5/3 reasoning models
+    const thinkingConfig = resolveGeminiThinkingConfig(options.reasoning, descriptor.name);
+
     // Build the config object for the new SDK
     const config: Record<string, unknown> = {
       // Note: systemInstruction removed - it doesn't work with countTokens()
@@ -320,6 +375,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
           mode: FunctionCallingConfigMode.NONE,
         },
       },
+      ...(thinkingConfig ?? {}),
       ...options.extra,
     };
 
@@ -495,7 +551,22 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
   protected async *normalizeProviderStream(iterable: AsyncIterable<unknown>): LLMStream {
     const stream = iterable as AsyncIterable<GeminiChunk>;
     for await (const chunk of stream) {
-      const text = this.extractMessageText(chunk);
+      // Extract thinking and regular text from parts
+      const { text, thinkingText, thinkingSignature } = this.extractTextAndThinking(chunk);
+
+      // Yield thinking content as ThinkingChunk
+      if (thinkingText) {
+        yield {
+          text: "",
+          thinking: {
+            content: thinkingText,
+            type: "thinking",
+            signature: thinkingSignature,
+          },
+          rawEvent: chunk,
+        };
+      }
+
       if (text) {
         yield { text, rawEvent: chunk };
       }
@@ -509,15 +580,37 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     }
   }
 
-  private extractMessageText(chunk: GeminiChunk): string {
+  /**
+   * Extract both regular text and thinking text from a chunk.
+   * Gemini marks thinking parts with `thought: true`.
+   */
+  private extractTextAndThinking(chunk: GeminiChunk): {
+    text: string;
+    thinkingText: string;
+    thinkingSignature?: string;
+  } {
     if (!chunk?.candidates) {
-      return "";
+      return { text: "", thinkingText: "" };
     }
 
-    return chunk.candidates
-      .flatMap((candidate) => candidate.content?.parts ?? [])
-      .map((part) => part.text ?? "")
-      .join("");
+    let text = "";
+    let thinkingText = "";
+    let thinkingSignature: string | undefined;
+
+    for (const candidate of chunk.candidates) {
+      for (const part of candidate.content?.parts ?? []) {
+        if (part.thought) {
+          thinkingText += part.text ?? "";
+          if (part.thoughtSignature) {
+            thinkingSignature = part.thoughtSignature;
+          }
+        } else {
+          text += part.text ?? "";
+        }
+      }
+    }
+
+    return { text, thinkingText, thinkingSignature };
   }
 
   private extractFinishReason(chunk: GeminiChunk): string | null {
@@ -525,11 +618,7 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
     return candidate?.finishReason ?? null;
   }
 
-  private extractUsage(
-    chunk: GeminiChunk,
-  ):
-    | { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens?: number }
-    | undefined {
+  private extractUsage(chunk: GeminiChunk) {
     const usageMetadata = chunk?.usageMetadata;
     if (!usageMetadata) {
       return undefined;
@@ -541,6 +630,8 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
       totalTokens: usageMetadata.totalTokenCount ?? 0,
       // Gemini returns cached token count in cachedContentTokenCount
       cachedInputTokens: usageMetadata.cachedContentTokenCount ?? 0,
+      // Gemini returns thinking tokens in thoughtsTokenCount
+      reasoningTokens: usageMetadata.thoughtsTokenCount,
     };
   }
 

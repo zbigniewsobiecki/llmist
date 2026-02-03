@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { ContentPart, TokenUsage } from "llmist";
+import type { ContentPart, ReasoningConfig, ReasoningEffort, TokenUsage } from "llmist";
 import {
   FALLBACK_CHARS_PER_TOKEN,
   formatLlmRequest,
@@ -72,11 +72,37 @@ export async function executeComplete(
     await writeLogFile(llmLogDir, filename, content);
   }
 
+  // Resolve reasoning configuration
+  // Precedence: --no-reasoning > --reasoning/--reasoning-budget > config > auto-detect
+  let reasoning: ReasoningConfig | undefined;
+  if (options.reasoning === false) {
+    reasoning = { enabled: false };
+  } else if (options.reasoning !== undefined || options.reasoningBudget !== undefined) {
+    const effort = typeof options.reasoning === "string" ? options.reasoning : undefined;
+    reasoning = {
+      enabled: true,
+      ...(effort && { effort: effort as ReasoningEffort }),
+      ...(options.reasoningBudget && { budgetTokens: options.reasoningBudget }),
+    };
+  } else if (options.profileReasoning) {
+    const cfg = options.profileReasoning;
+    if (cfg.enabled === false) {
+      reasoning = { enabled: false };
+    } else {
+      reasoning = {
+        enabled: true,
+        ...(cfg.effort && { effort: cfg.effort as ReasoningEffort }),
+        ...(cfg["budget-tokens"] && { budgetTokens: cfg["budget-tokens"] }),
+      };
+    }
+  }
+
   const stream = client.stream({
     model,
     messages,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
+    ...(reasoning && { reasoning }),
   });
 
   const printer = new StreamPrinter(env.stdout);
@@ -100,6 +126,13 @@ export async function executeComplete(
       }
       if (chunk.usage.outputTokens) {
         progress.setOutputTokens(chunk.usage.outputTokens, false);
+      }
+    }
+    if (chunk.thinking?.content) {
+      // Show thinking content on stderr in dim styling
+      if (stderrTTY && !options.quiet) {
+        progress.pause();
+        env.stderr.write(`\x1b[2m${chunk.thinking.content}\x1b[0m`);
       }
     }
     if (chunk.text) {
@@ -160,6 +193,7 @@ export function registerCompleteCommand(
         ...(options as CLICompleteOptions),
         globalRateLimits,
         globalRetry,
+        profileReasoning: config?.reasoning,
       };
       return executeComplete(prompt, mergedOptions, env);
     }, env),

@@ -59,7 +59,7 @@ for await (const event of agent.ask('Refactor the auth module').run()) {
 |----------|-------------------|-----|
 | Quick Q&A | `haiku` | Fast, cheap |
 | Code generation | `sonnet` | Good balance |
-| Complex reasoning | `opus` | Best quality |
+| Complex reasoning | `opus` or `o3` | Best quality, use `.withReasoning("high")` |
 | Bulk processing | `flash` | Cost-effective |
 | Simple extraction | `gpt-5-nano` | Affordable |
 
@@ -268,6 +268,21 @@ const codeAgent = LLMist.createAgent()
   .withTemperature(0.3);  // More deterministic
 ```
 
+### Reasoning Agent
+
+```typescript
+const reasoningAgent = LLMist.createAgent()
+  .withModel('o3')          // Or opus, pro — any reasoning-capable model
+  .withReasoning('high')    // "none" | "low" | "medium" | "high" | "maximum"
+  .withSystem(`You are an expert mathematician.
+    - Show your work step by step
+    - Verify your answers`)
+  .withGadgets(Calculator, Wolfram)
+  .withMaxIterations(10);
+```
+
+See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details on effort levels and provider mapping.
+
 ### Research Agent
 
 ```typescript
@@ -394,4 +409,5 @@ const agent = LLMist.createAgent()
 - [Hooks Guide](/library/guides/hooks/) - Lifecycle hooks
 - [Compaction](/library/advanced/compaction/) - Context management
 - [Cost Tracking](/library/guides/cost-tracking/) - Monitor costs
+- [Reasoning Models](/library/guides/reasoning-models/) - Thinking/reasoning support
 - [Streaming Guide](/library/guides/streaming/) - Event handling

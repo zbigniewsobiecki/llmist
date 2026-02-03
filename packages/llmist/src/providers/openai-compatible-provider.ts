@@ -327,12 +327,18 @@ export abstract class OpenAICompatibleProvider<
       const finishReason = chunk.choices.find((choice) => choice.finish_reason)?.finish_reason;
 
       // Extract token usage if available (typically in the final chunk)
+      // Also extract reasoning tokens from completion_tokens_details if present
+      type CompatUsageDetails = {
+        completion_tokens_details?: { reasoning_tokens?: number };
+      };
+      const usageDetails = chunk.usage as (typeof chunk.usage & CompatUsageDetails) | undefined;
       const usage = chunk.usage
         ? {
             inputTokens: chunk.usage.prompt_tokens,
             outputTokens: chunk.usage.completion_tokens,
             totalTokens: chunk.usage.total_tokens,
             cachedInputTokens: 0,
+            reasoningTokens: usageDetails?.completion_tokens_details?.reasoning_tokens,
           }
         : undefined;
 

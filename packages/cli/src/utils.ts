@@ -300,6 +300,8 @@ export class StreamProgress {
   // Cache token tracking for live cost estimation during streaming
   private callCachedInputTokens = 0;
   private callCacheCreationInputTokens = 0;
+  // Reasoning token tracking for live cost estimation during streaming
+  private callReasoningTokens = 0;
 
   // Cumulative stats (cumulative mode)
   private totalStartTime = Date.now();
@@ -338,6 +340,7 @@ export class StreamProgress {
       // First-class subagent metrics (cached tokens, cost, finish reason)
       cachedInputTokens?: number;
       cacheCreationInputTokens?: number;
+      reasoningTokens?: number;
       finishReason?: string;
       cost?: number;
       completed?: boolean;
@@ -492,6 +495,7 @@ export class StreamProgress {
       outputTokens?: number;
       cachedInputTokens?: number;
       cacheCreationInputTokens?: number;
+      reasoningTokens?: number;
       finishReason?: string;
       cost?: number;
     },
@@ -504,6 +508,7 @@ export class StreamProgress {
       if (info.cachedInputTokens !== undefined) agent.cachedInputTokens = info.cachedInputTokens;
       if (info.cacheCreationInputTokens !== undefined)
         agent.cacheCreationInputTokens = info.cacheCreationInputTokens;
+      if (info.reasoningTokens !== undefined) agent.reasoningTokens = info.reasoningTokens;
       if (info.finishReason !== undefined) agent.finishReason = info.finishReason;
 
       // Calculate cost if not provided and we have model registry
@@ -520,6 +525,7 @@ export class StreamProgress {
             agent.outputTokens,
             agent.cachedInputTokens,
             agent.cacheCreationInputTokens,
+            agent.reasoningTokens,
           );
           agent.cost = costResult?.totalCost;
         } catch {
@@ -655,9 +661,10 @@ export class StreamProgress {
     this.callOutputTokensEstimated = true;
     this.callOutputChars = 0;
     this.isStreaming = false;
-    // Reset cache tracking for new call
+    // Reset cache and reasoning tracking for new call
     this.callCachedInputTokens = 0;
     this.callCacheCreationInputTokens = 0;
+    this.callReasoningTokens = 0;
     this.start();
   }
 
@@ -682,6 +689,7 @@ export class StreamProgress {
             usage.outputTokens,
             usage.cachedInputTokens ?? 0,
             usage.cacheCreationInputTokens ?? 0,
+            usage.reasoningTokens ?? 0,
           );
           if (cost) {
             this.totalCost += cost.totalCost;
@@ -746,6 +754,15 @@ export class StreamProgress {
   setCachedTokens(cachedInputTokens: number, cacheCreationInputTokens: number): void {
     this.callCachedInputTokens = cachedInputTokens;
     this.callCacheCreationInputTokens = cacheCreationInputTokens;
+  }
+
+  /**
+   * Sets reasoning token count for the current call (from stream metadata).
+   * Used for live cost estimation during streaming.
+   * @param reasoningTokens - Number of reasoning/thinking tokens (subset of outputTokens)
+   */
+  setReasoningTokens(reasoningTokens: number): void {
+    this.callReasoningTokens = reasoningTokens;
   }
 
   /**
@@ -1108,6 +1125,7 @@ export class StreamProgress {
         outputTokens,
         this.callCachedInputTokens,
         this.callCacheCreationInputTokens,
+        this.callReasoningTokens,
       );
 
       return cost?.totalCost ?? 0;

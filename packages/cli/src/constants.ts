@@ -61,6 +61,10 @@ export const OPTION_FLAGS = {
   retryMinTimeout: "--retry-min-timeout <ms>",
   retryMaxTimeout: "--retry-max-timeout <ms>",
   noRetry: "--no-retry",
+  // Reasoning options
+  reasoning: "--reasoning [effort]",
+  noReasoning: "--no-reasoning",
+  reasoningBudget: "--reasoning-budget <tokens>",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -101,6 +105,12 @@ export const OPTION_DESCRIPTIONS = {
   retryMinTimeout: "Initial retry delay in milliseconds.",
   retryMaxTimeout: "Maximum retry delay in milliseconds.",
   noRetry: "Disable retry logic for API calls.",
+  // Reasoning descriptions
+  reasoning:
+    "Enable reasoning mode. Optional effort: none, low, medium, high, maximum (default: medium).",
+  noReasoning: "Disable auto-enabled reasoning for reasoning-capable models.",
+  reasoningBudget:
+    "Explicit reasoning token budget (Anthropic/Gemini 2.5). Overrides effort level.",
 } as const;
 
 /** Prefix for summary output written to stderr */

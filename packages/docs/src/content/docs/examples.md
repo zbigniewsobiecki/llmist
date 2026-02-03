@@ -54,6 +54,14 @@ npx tsx examples/01-basic-usage.ts
 | [20-external-gadgets.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/20-external-gadgets.ts) | External gadgets from npm packages and git URLs |
 | [21-browseweb-multi-call.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/21-browseweb-multi-call.ts) | Multi-step web browsing with external gadget |
 
+## Utilities & Features
+
+| Example | Description |
+|---------|-------------|
+| [22-format-timing.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/22-format-timing.ts) | Response formatting and timing utilities |
+| [23-session-manager.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/23-session-manager.ts) | Session management |
+| [25-reasoning-models.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/25-reasoning-models.ts) | Reasoning models with thinking/extended thinking |
+
 ## Configuration
 
 | File | Description |

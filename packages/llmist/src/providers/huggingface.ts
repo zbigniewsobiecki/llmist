@@ -16,7 +16,9 @@
  */
 
 import OpenAI from "openai";
+import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
+import type { LLMGenerationOptions, ModelDescriptor } from "../core/options.js";
 import { HUGGINGFACE_MODELS } from "./huggingface-models.js";
 import {
   type OpenAICompatibleConfig,
@@ -46,6 +48,30 @@ export class HuggingFaceProvider extends OpenAICompatibleProvider<HuggingFaceCon
 
   getModelSpecs(): ModelSpec[] {
     return HUGGINGFACE_MODELS;
+  }
+
+  /**
+   * Override buildApiRequest to inject DeepSeek-specific thinking parameters.
+   * DeepSeek models use `extra_body: { thinking: { type: "enabled" } }` for reasoning.
+   */
+  protected buildApiRequest(
+    options: LLMGenerationOptions,
+    descriptor: ModelDescriptor,
+    spec: ModelSpec | undefined,
+    messages: LLMMessage[],
+  ): Parameters<OpenAI["chat"]["completions"]["create"]>[0] {
+    const request = super.buildApiRequest(options, descriptor, spec, messages);
+
+    // Inject DeepSeek thinking mode when reasoning is enabled for DeepSeek models
+    if (options.reasoning?.enabled && descriptor.name.toLowerCase().includes("deepseek")) {
+      const requestObj = request as unknown as Record<string, unknown>;
+      requestObj.extra_body = {
+        ...(requestObj.extra_body as Record<string, unknown> | undefined),
+        thinking: { type: "enabled" },
+      };
+    }
+
+    return request;
   }
 
   /**

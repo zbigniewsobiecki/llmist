@@ -104,6 +104,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
     let outputTokens = 0;
     let cachedInputTokens = 0;
     let cacheCreationInputTokens = 0;
+    let reasoningTokens = 0;
 
     const messages = [
       ...(options?.systemPrompt
@@ -124,6 +125,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
         outputTokens = chunk.usage.outputTokens;
         cachedInputTokens = chunk.usage.cachedInputTokens ?? 0;
         cacheCreationInputTokens = chunk.usage.cacheCreationInputTokens ?? 0;
+        reasoningTokens = chunk.usage.reasoningTokens ?? 0;
       }
     }
 
@@ -133,6 +135,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
       outputTokens,
       cachedInputTokens,
       cacheCreationInputTokens,
+      reasoningTokens,
     );
     return result;
   }
@@ -152,6 +155,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
     let outputTokens = 0;
     let cachedInputTokens = 0;
     let cacheCreationInputTokens = 0;
+    let reasoningTokens = 0;
 
     const messages = [
       ...(options?.systemPrompt
@@ -175,6 +179,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
           outputTokens = chunk.usage.outputTokens;
           cachedInputTokens = chunk.usage.cachedInputTokens ?? 0;
           cacheCreationInputTokens = chunk.usage.cacheCreationInputTokens ?? 0;
+          reasoningTokens = chunk.usage.reasoningTokens ?? 0;
         }
       }
     } finally {
@@ -185,6 +190,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
         outputTokens,
         cachedInputTokens,
         cacheCreationInputTokens,
+        reasoningTokens,
       );
     }
   }
@@ -214,6 +220,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
       let outputTokens = 0;
       let cachedInputTokens = 0;
       let cacheCreationInputTokens = 0;
+      let reasoningTokens = 0;
 
       try {
         for await (const chunk of innerStream) {
@@ -222,6 +229,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
             outputTokens = chunk.usage.outputTokens;
             cachedInputTokens = chunk.usage.cachedInputTokens ?? 0;
             cacheCreationInputTokens = chunk.usage.cacheCreationInputTokens ?? 0;
+            reasoningTokens = chunk.usage.reasoningTokens ?? 0;
           }
           yield chunk;
         }
@@ -234,6 +242,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
             outputTokens,
             cachedInputTokens,
             cacheCreationInputTokens,
+            reasoningTokens,
           );
         }
       }
@@ -251,6 +260,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
     outputTokens: number,
     cachedInputTokens = 0,
     cacheCreationInputTokens = 0,
+    reasoningTokens = 0,
   ): void {
     if (inputTokens === 0 && outputTokens === 0) return;
 
@@ -261,6 +271,7 @@ export class CostReportingLLMistWrapper implements CostReportingLLMist {
       outputTokens,
       cachedInputTokens,
       cacheCreationInputTokens,
+      reasoningTokens,
     );
 
     if (estimate && estimate.totalCost > 0) {

@@ -287,6 +287,9 @@ export class TUIApp {
     if (event.type === "text") {
       // Text is append-only content not tracked by the tree
       this.blockRenderer.addText(event.content);
+    } else if (event.type === "thinking") {
+      // Thinking is append-only content from reasoning models
+      this.blockRenderer.addThinking(event.content, event.thinkingType);
     }
     // All other events (gadget_call, gadget_result, etc.)
     // are handled automatically by tree subscription in subscribeToTree()

@@ -94,6 +94,8 @@ export interface LLMCallCompleteEvent extends BaseExecutionEvent {
   finishReason?: string | null;
   /** Cost in USD */
   cost?: number;
+  /** Accumulated thinking/reasoning content from reasoning models */
+  thinkingContent?: string;
 }
 
 /**
@@ -204,6 +206,22 @@ export interface TextEvent extends BaseExecutionEvent {
 }
 
 // =============================================================================
+// Thinking / Reasoning Events
+// =============================================================================
+
+/**
+ * Emitted when a reasoning model produces thinking content during streaming.
+ * This gives consumers a dedicated event type to listen for reasoning output.
+ */
+export interface ThinkingEvent extends BaseExecutionEvent {
+  type: "thinking";
+  /** Thinking text content */
+  content: string;
+  /** Whether this is actual thinking or redacted content */
+  thinkingType: "thinking" | "redacted";
+}
+
+// =============================================================================
 // Other Events
 // =============================================================================
 
@@ -287,6 +305,7 @@ export type ExecutionEvent =
   | GadgetErrorEvent
   | GadgetSkippedEvent
   | TextEvent
+  | ThinkingEvent
   | CompactionEvent
   | HumanInputRequiredEvent
   | StreamCompleteEvent;

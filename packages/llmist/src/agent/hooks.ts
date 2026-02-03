@@ -206,6 +206,8 @@ export interface ObserveLLMCompleteContext {
   rawResponse: string;
   /** The final message that will be added to history (after interceptors) */
   finalMessage: string;
+  /** Accumulated thinking/reasoning content from reasoning models */
+  thinkingContent?: string;
   logger: Logger<ILogObj>;
   /** Present when event is from a subagent (undefined for top-level agent) */
   subagentContext?: SubagentContext;

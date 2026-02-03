@@ -17,8 +17,9 @@ import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
 import type { ContentPart } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
+import type { ModelSpec } from "../core/model-catalog.js";
 import { resolveModel } from "../core/model-shortcuts.js";
-import type { LLMGenerationOptions } from "../core/options.js";
+import type { LLMGenerationOptions, ReasoningConfig } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { RateLimitConfig } from "../core/rate-limit.js";
 import { RateLimitTracker, resolveRateLimitConfig } from "../core/rate-limit.js";
@@ -158,6 +159,9 @@ export interface AgentOptions {
   /** Optional abort signal for cancelling requests mid-flight */
   signal?: AbortSignal;
 
+  /** Reasoning/thinking configuration for reasoning-capable models */
+  reasoning?: ReasoningConfig;
+
   /** Subagent-specific configuration overrides (from CLI config) */
   subagentConfig?: SubagentConfigMap;
 
@@ -262,6 +266,7 @@ export class Agent {
 
   // Cancellation
   private readonly signal?: AbortSignal;
+  private readonly reasoning?: ReasoningConfig;
 
   // Retry configuration
   private readonly retryConfig: ResolvedRetryConfig;
@@ -383,6 +388,9 @@ export class Agent {
 
     // Store abort signal for cancellation
     this.signal = options.signal;
+
+    // Store reasoning configuration
+    this.reasoning = options.reasoning;
 
     // Initialize retry configuration
     // Prefer shared config from parent (for coordinated retry across subagents)
@@ -889,6 +897,7 @@ export class Agent {
                 usage: result.usage,
                 rawResponse: result.rawResponse,
                 finalMessage: result.finalMessage,
+                thinkingContent: result.thinkingContent,
                 logger: this.logger,
                 subagentContext,
               };
@@ -1273,18 +1282,40 @@ export class Agent {
   }
 
   /**
+   * Resolve reasoning configuration with auto-enable logic.
+   *
+   * Priority: explicit config > auto-enable for reasoning models > undefined
+   * When a model has `features.reasoning: true` and no explicit config is set,
+   * reasoning is automatically enabled at "medium" effort.
+   */
+  private resolveReasoningConfig(spec: ModelSpec | undefined): ReasoningConfig | undefined {
+    // Explicit config always wins
+    if (this.reasoning !== undefined) return this.reasoning;
+    // Auto-enable for reasoning-capable models
+    if (spec?.features?.reasoning) {
+      return { enabled: true, effort: "medium" };
+    }
+    return undefined;
+  }
+
+  /**
    * Prepare LLM call options, create tree node, and process beforeLLMCall controller.
    * @returns options, node ID, and optional skipWithSynthetic response if controller wants to skip
    */
   private async prepareLLMCall(
     iteration: number,
   ): Promise<{ options: LLMGenerationOptions; llmNodeId: string; skipWithSynthetic?: string }> {
+    // Resolve reasoning config: explicit config > auto-enable for reasoning models > none
+    const spec = this.client.modelRegistry?.getModelSpec?.(this.model);
+    const reasoning = this.resolveReasoningConfig(spec);
+
     let llmOptions: LLMGenerationOptions = {
       model: this.model,
       messages: this.conversation.getMessages(),
       temperature: this.temperature,
       maxTokens: this.defaultMaxTokens,
       signal: this.signal,
+      reasoning,
     };
 
     // Create LLM call node in execution tree BEFORE hooks
@@ -1373,6 +1404,7 @@ export class Agent {
       outputTokens,
       result.usage?.cachedInputTokens ?? 0,
       result.usage?.cacheCreationInputTokens ?? 0,
+      result.usage?.reasoningTokens ?? 0,
     )?.totalCost;
 
     // Complete LLM call in execution tree (including cost for automatic aggregation)
@@ -1381,6 +1413,7 @@ export class Agent {
       usage: result.usage,
       finishReason: result.finishReason,
       cost: llmCost,
+      thinkingContent: result.thinkingContent,
     });
   }
 

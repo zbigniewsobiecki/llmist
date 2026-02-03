@@ -97,6 +97,7 @@ export class StatusBar {
       inputTokens: 0,
       outputTokens: 0,
       cachedTokens: 0,
+      reasoningTokens: 0,
       cost: 0,
       startTime: Date.now(),
       iteration: 0,
@@ -136,11 +137,18 @@ export class StatusBar {
    * Called when an LLM call completes.
    * Replaces streaming estimates with actual values.
    */
-  endCall(inputTokens: number, outputTokens: number, cachedTokens: number, cost: number): void {
+  endCall(
+    inputTokens: number,
+    outputTokens: number,
+    cachedTokens: number,
+    cost: number,
+    reasoningTokens = 0,
+  ): void {
     // Add actual values to accumulated totals
     this.metrics.inputTokens += inputTokens;
     this.metrics.outputTokens += outputTokens;
     this.metrics.cachedTokens += cachedTokens;
+    this.metrics.reasoningTokens += reasoningTokens;
     this.metrics.cost += cost;
     // Clear streaming state
     this.streamingInputTokens = 0;
@@ -375,6 +383,7 @@ export class StatusBar {
               event.usage?.outputTokens ?? 0,
               event.usage?.cachedInputTokens ?? 0,
               event.cost ?? 0,
+              event.usage?.reasoningTokens ?? 0,
             );
           }
           this.nodeIdToLabel.delete(event.nodeId);
@@ -581,6 +590,11 @@ export class StatusBar {
     if (displayOutputTokens > 0) {
       const outputPrefix = this.isStreaming ? "~" : "";
       parts.push(`${GREEN}↓${outputPrefix}${formatTokens(displayOutputTokens)}${RESET}`);
+    }
+
+    // Reasoning tokens (magenta) - only show if > 0
+    if (this.metrics.reasoningTokens > 0) {
+      parts.push(`${MAGENTA}💭${formatTokens(this.metrics.reasoningTokens)}${RESET}`);
     }
 
     // Elapsed time (gray) - only show when LLM call is active
