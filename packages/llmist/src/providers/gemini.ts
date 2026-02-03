@@ -461,15 +461,18 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
       // Note: systemInstruction removed - it doesn't work with countTokens()
       // System messages are now included in contents as user+model exchanges
       ...(generationConfig ? { ...generationConfig } : {}),
-      // Explicitly disable function calling to prevent UNEXPECTED_TOOL_CALL errors
-      toolConfig: {
-        functionCallingConfig: {
-          mode: FunctionCallingConfigMode.NONE,
-        },
-      },
+      // When using cached content, toolConfig lives inside the cache resource.
+      // Gemini rejects requests that include both cachedContent and toolConfig.
+      ...(cacheName
+        ? { cachedContent: cacheName }
+        : {
+            toolConfig: {
+              functionCallingConfig: {
+                mode: FunctionCallingConfigMode.NONE,
+              },
+            },
+          }),
       ...(thinkingConfig ?? {}),
-      // Add cache reference if available
-      ...(cacheName ? { cachedContent: cacheName } : {}),
       ...options.extra,
     };
 
