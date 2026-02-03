@@ -90,6 +90,10 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     spec: ModelSpec | undefined,
     messages: LLMMessage[],
   ): MessageCreateParamsStreaming {
+    // Caching is enabled by default for Anthropic (preserves existing behavior).
+    // Only disabled when explicitly set to false via withoutCaching().
+    const cachingEnabled = options.caching?.enabled !== false;
+
     const systemMessages = messages.filter((message) => message.role === "system");
 
     // System message as array of text blocks with cache_control on last block
@@ -100,8 +104,8 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
         ? systemMessages.map((m, index) => ({
             type: "text" as const,
             text: extractMessageText(m.content),
-            // Add cache_control to the LAST system message block
-            ...(index === systemMessages.length - 1
+            // Add cache_control to the LAST system message block (only when caching is enabled)
+            ...(cachingEnabled && index === systemMessages.length - 1
               ? { cache_control: { type: "ephemeral" as const } }
               : {}),
           }))
@@ -119,12 +123,12 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     );
 
     // Build conversation with multimodal content support
-    // Cache_control is added to the last part of the last user message
+    // Cache_control is added to the last part of the last user message (only when caching is enabled)
     const conversation = nonSystemMessages.map((message, index) => ({
       role: message.role,
       content: this.convertToAnthropicContent(
         message.content,
-        message.role === "user" && index === lastUserIndex,
+        cachingEnabled && message.role === "user" && index === lastUserIndex,
       ),
     }));
 

@@ -51,6 +51,45 @@ export interface ThinkingChunk {
   signature?: string;
 }
 
+// =============================================================================
+// Context Caching Types
+// =============================================================================
+
+/**
+ * What content to include in the cache.
+ *
+ * - `"system"`: Cache only system prompt (lowest cost, highest reuse)
+ * - `"conversation"`: Cache system prompt + all conversation turns except the latest user message
+ */
+export type CachingScope = "system" | "conversation";
+
+/**
+ * Configuration for context caching across providers.
+ *
+ * Context caching allows reusing previously computed key-value pairs across
+ * requests, reducing latency and cost for repeated context.
+ *
+ * Provider behavior:
+ * - **Anthropic**: Automatic ephemeral caching via `cache_control` markers (always-on by default).
+ *   Use `enabled: false` to disable markers and opt out of caching.
+ * - **Gemini**: Explicit cache lifecycle via `caches.create()`. Requires `scope` and `ttl`.
+ * - **OpenAI**: Server-side automatic caching (no-op, but respects the unified API).
+ */
+export interface CachingConfig {
+  /** Whether context caching is enabled */
+  enabled: boolean;
+  /**
+   * What to cache (Gemini only, default: "conversation").
+   * - `"system"`: Cache only system-derived messages
+   * - `"conversation"`: Cache system + all turns except the latest user message
+   */
+  scope?: CachingScope;
+  /** TTL for cache entries (Gemini only, format: "3600s", default: "3600s", min: "300s") */
+  ttl?: string;
+  /** Minimum token count for content to be eligible for caching (Gemini default: 32768) */
+  minTokenThreshold?: number;
+}
+
 export interface LLMGenerationOptions {
   model: string;
   messages: LLMMessage[];
@@ -98,6 +137,8 @@ export interface LLMGenerationOptions {
   signal?: AbortSignal;
   /** Reasoning/thinking configuration for reasoning-capable models */
   reasoning?: ReasoningConfig;
+  /** Context caching configuration for supported providers */
+  caching?: CachingConfig;
 }
 
 export interface TokenUsage {

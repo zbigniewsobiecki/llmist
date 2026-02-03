@@ -395,6 +395,131 @@ describe("AnthropicMessagesProvider", () => {
     });
   });
 
+  describe("caching opt-out", () => {
+    it("omits cache_control from system messages when caching disabled", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const options = {
+        model: "claude-3",
+        messages: [
+          { role: "system" as const, content: "You are helpful" },
+          { role: "user" as const, content: "Hello" },
+        ],
+        caching: { enabled: false },
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      const payload = createSpy.mock.calls[0][0];
+      // System message should NOT have cache_control
+      expect(payload.system).toEqual([{ type: "text", text: "You are helpful" }]);
+    });
+
+    it("omits cache_control from user messages when caching disabled", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const options = {
+        model: "claude-3",
+        messages: [
+          { role: "system" as const, content: "System" },
+          { role: "user" as const, content: "User 1" },
+          { role: "assistant" as const, content: "Response" },
+          { role: "user" as const, content: "User 2" },
+        ],
+        caching: { enabled: false },
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      const payload = createSpy.mock.calls[0][0];
+      // Last user message should NOT have cache_control
+      const lastUserMsg = payload.messages[2];
+      expect(lastUserMsg.content).toEqual([{ type: "text", text: "User 2" }]);
+      // Verify no cache_control anywhere in messages
+      for (const msg of payload.messages) {
+        for (const block of msg.content) {
+          expect(block).not.toHaveProperty("cache_control");
+        }
+      }
+    });
+
+    it("preserves cache_control markers by default (no caching config)", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const options = {
+        model: "claude-3",
+        messages: [
+          { role: "system" as const, content: "You are helpful" },
+          { role: "user" as const, content: "Hello" },
+        ],
+        // No caching config — should default to enabled (existing behavior)
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      const payload = createSpy.mock.calls[0][0];
+      // System message SHOULD have cache_control
+      expect(payload.system).toEqual([
+        {
+          type: "text",
+          text: "You are helpful",
+          cache_control: { type: "ephemeral" },
+        },
+      ]);
+    });
+
+    it("preserves cache_control markers when caching explicitly enabled", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const options = {
+        model: "claude-3",
+        messages: [
+          { role: "system" as const, content: "You are helpful" },
+          { role: "user" as const, content: "Hello" },
+        ],
+        caching: { enabled: true },
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      const payload = createSpy.mock.calls[0][0];
+      // System message SHOULD have cache_control
+      expect(payload.system[0]).toHaveProperty("cache_control");
+    });
+  });
+
   describe("countTokens", () => {
     it("counts tokens for simple messages", async () => {
       const mockCountTokens = vi.fn().mockResolvedValue({

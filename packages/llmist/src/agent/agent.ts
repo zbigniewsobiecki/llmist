@@ -19,7 +19,7 @@ import type { MessageContent } from "../core/messages.js";
 import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import { resolveModel } from "../core/model-shortcuts.js";
-import type { LLMGenerationOptions, ReasoningConfig } from "../core/options.js";
+import type { CachingConfig, LLMGenerationOptions, ReasoningConfig } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { RateLimitConfig } from "../core/rate-limit.js";
 import { RateLimitTracker, resolveRateLimitConfig } from "../core/rate-limit.js";
@@ -162,6 +162,9 @@ export interface AgentOptions {
   /** Reasoning/thinking configuration for reasoning-capable models */
   reasoning?: ReasoningConfig;
 
+  /** Context caching configuration for supported providers */
+  caching?: CachingConfig;
+
   /** Subagent-specific configuration overrides (from CLI config) */
   subagentConfig?: SubagentConfigMap;
 
@@ -267,6 +270,7 @@ export class Agent {
   // Cancellation
   private readonly signal?: AbortSignal;
   private readonly reasoning?: ReasoningConfig;
+  private readonly caching?: CachingConfig;
 
   // Retry configuration
   private readonly retryConfig: ResolvedRetryConfig;
@@ -391,6 +395,9 @@ export class Agent {
 
     // Store reasoning configuration
     this.reasoning = options.reasoning;
+
+    // Store caching configuration
+    this.caching = options.caching;
 
     // Initialize retry configuration
     // Prefer shared config from parent (for coordinated retry across subagents)
@@ -1299,6 +1306,22 @@ export class Agent {
   }
 
   /**
+   * Resolve caching configuration.
+   *
+   * Priority: explicit config > default enabled (preserves Anthropic's existing behavior)
+   * Default is `{ enabled: true }` which means:
+   * - Anthropic: `cache_control` markers are added (existing behavior preserved)
+   * - Gemini: Cache manager is consulted but skips if no explicit config was set
+   * - OpenAI: No-op (server-side automatic)
+   */
+  private resolveCachingConfig(): CachingConfig | undefined {
+    // Explicit config always wins
+    if (this.caching !== undefined) return this.caching;
+    // Default: enabled (preserves Anthropic's existing always-on caching behavior)
+    return { enabled: true };
+  }
+
+  /**
    * Prepare LLM call options, create tree node, and process beforeLLMCall controller.
    * @returns options, node ID, and optional skipWithSynthetic response if controller wants to skip
    */
@@ -1309,6 +1332,9 @@ export class Agent {
     const spec = this.client.modelRegistry?.getModelSpec?.(this.model);
     const reasoning = this.resolveReasoningConfig(spec);
 
+    // Resolve caching config: explicit config > default enabled
+    const caching = this.resolveCachingConfig();
+
     let llmOptions: LLMGenerationOptions = {
       model: this.model,
       messages: this.conversation.getMessages(),
@@ -1316,6 +1342,7 @@ export class Agent {
       maxTokens: this.defaultMaxTokens,
       signal: this.signal,
       reasoning,
+      caching,
     };
 
     // Create LLM call node in execution tree BEFORE hooks
