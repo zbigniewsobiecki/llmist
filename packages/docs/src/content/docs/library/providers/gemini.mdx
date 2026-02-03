@@ -119,6 +119,45 @@ const answer = await LLMist.createAgent()
 
 See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details.
 
+## Context Caching
+
+Gemini supports explicit context caching via `caches.create()`, which pre-computes KV pairs for large content and stores them server-side with a configurable TTL. This significantly reduces latency and cost for repeated context.
+
+```typescript
+// Cache a large system prompt
+const agent = LLMist.createAgent()
+  .withModel('gemini:gemini-2.5-flash')
+  .withSystem(largeCodebaseContext)
+  .withCaching({ enabled: true, scope: 'system', ttl: '3600s' })
+  .ask('Analyze this codebase...');
+```
+
+### Caching Scopes
+
+| Scope | What's Cached | Best For |
+|-------|--------------|----------|
+| `"system"` | System prompt only | Stable system prompts across many queries |
+| `"conversation"` | System + all turns except latest user message | Multi-turn conversations with growing context |
+
+### Configuration
+
+```typescript
+.withCaching({
+  enabled: true,
+  scope: 'conversation',       // default
+  ttl: '3600s',                // Cache lifetime (default: 1 hour, min: 300s)
+  minTokenThreshold: 32768,    // Skip caching if below this (default: 32768)
+})
+```
+
+<Aside type="note">
+  Caching requires a minimum of ~32K tokens of content to be eligible. Below that threshold, llmist gracefully falls back to uncached requests.
+</Aside>
+
+<Aside type="tip">
+  llmist automatically detects content changes via hashing and creates a fresh cache when needed — you don't need to manage cache invalidation.
+</Aside>
+
 ## Vision (Image Input)
 
 Gemini models have excellent vision capabilities:

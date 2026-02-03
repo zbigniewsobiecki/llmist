@@ -103,6 +103,33 @@ For multi-turn tool use conversations, enable interleaved thinking so the model 
 
 See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details.
 
+## Prompt Caching
+
+Anthropic's prompt caching reduces cost and latency by reusing previously computed context across requests. llmist **enables caching automatically** by adding `cache_control` markers to system prompts and the last user message.
+
+No configuration needed — caching is on by default:
+
+```typescript
+// Caching is automatic — repeated context is served from cache
+const agent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withSystem(largeSystemPrompt)    // Cached automatically
+  .ask('Analyze this...');
+```
+
+To **disable** caching (removes all `cache_control` markers):
+
+```typescript
+const agent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withoutCaching()                 // No cache_control markers sent
+  .ask('Quick question');
+```
+
+<Aside type="tip">
+  Cached input tokens are ~90% cheaper than uncached tokens. For long system prompts or multi-turn conversations, this adds up fast.
+</Aside>
+
 ## Vision (Image Input)
 
 Claude models support image input:
