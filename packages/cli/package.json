@@ -1,6 +1,6 @@
 {
   "name": "@llmist/cli",
-  "version": "15.12.0",
+  "version": "15.13.0",
   "description": "CLI for llmist - run LLM agents from the command line",
   "type": "module",
   "main": "dist/cli.js",
@@ -56,7 +56,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "llmist": "^15.12.0",
+    "llmist": "^15.13.0",
     "@unblessed/node": "^1.0.0-alpha.23",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
@@ -70,7 +70,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@llmist/testing": "^15.12.0",
+    "@llmist/testing": "^15.13.0",
     "@types/diff": "^8.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/marked-terminal": "^6.1.1",

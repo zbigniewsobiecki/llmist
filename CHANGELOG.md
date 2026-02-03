@@ -1,3 +1,12 @@
+## 15.13.0 (2026-02-03)
+
+* Merge pull request #377 from zbigniewsobiecki/feat/reasoning-models ([9b22738](https://github.com/zbigniewsobiecki/llmist/commit/9b22738)), closes [#377](https://github.com/zbigniewsobiecki/llmist/issues/377)
+* Merge pull request #378 from zbigniewsobiecki/dev ([7fb77cf](https://github.com/zbigniewsobiecki/llmist/commit/7fb77cf)), closes [#378](https://github.com/zbigniewsobiecki/llmist/issues/378)
+* Merge remote-tracking branch 'origin/dev' into feat/reasoning-models ([2404f5a](https://github.com/zbigniewsobiecki/llmist/commit/2404f5a))
+* feat(cli): add reasoning model CLI support and fix cost calculations ([5bb7203](https://github.com/zbigniewsobiecki/llmist/commit/5bb7203))
+* feat(providers): add first-class reasoning model support across all providers ([17d5003](https://github.com/zbigniewsobiecki/llmist/commit/17d5003))
+* docs: add reasoning model documentation across all guides and provider pages ([d43540c](https://github.com/zbigniewsobiecki/llmist/commit/d43540c))
+
 ## 15.12.0 (2026-01-22)
 
 * Merge pull request #376 from zbigniewsobiecki/dev ([668b43d](https://github.com/zbigniewsobiecki/llmist/commit/668b43d)), closes [#376](https://github.com/zbigniewsobiecki/llmist/issues/376)
