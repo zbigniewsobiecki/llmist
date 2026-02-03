@@ -30,6 +30,8 @@ export interface TUIMetrics {
   outputTokens: number;
   /** Total cached input tokens */
   cachedTokens: number;
+  /** Total reasoning/thinking tokens across all LLM calls */
+  reasoningTokens: number;
   /** Total cost in USD */
   cost: number;
   /** Session start time (Date.now()) */
@@ -148,7 +150,7 @@ export type CtrlCCallback = () => void;
 /**
  * Node type discriminator.
  */
-export type BlockNodeType = "llm_call" | "gadget" | "text" | "system_message";
+export type BlockNodeType = "llm_call" | "gadget" | "text" | "thinking" | "system_message";
 
 /**
  * Base properties shared by all block nodes.
@@ -183,6 +185,7 @@ export interface LLMCallNode extends BaseBlockNode {
     inputTokens?: number;
     cachedInputTokens?: number;
     outputTokens?: number;
+    reasoningTokens?: number;
     elapsedSeconds?: number;
     cost?: number;
     finishReason?: string;
@@ -245,6 +248,22 @@ export interface TextNode extends BaseBlockNode {
 }
 
 /**
+ * Thinking content node - displays reasoning model thinking output.
+ * Collapsible/expandable. Hidden in focused mode.
+ */
+export interface ThinkingNode extends BaseBlockNode {
+  type: "thinking";
+  /** Accumulated thinking content (appended as chunks arrive) */
+  content: string;
+  /** Whether this is actual thinking or redacted content */
+  thinkingType: "thinking" | "redacted";
+  /** Whether the thinking block is complete (LLM call finished) */
+  isComplete: boolean;
+  /** Thinking has no children */
+  children: never[];
+}
+
+/**
  * System message node (not selectable).
  * Shows system-level notifications like rate limiting, retries, etc.
  */
@@ -261,7 +280,7 @@ export interface SystemMessageNode extends BaseBlockNode {
 /**
  * Union of all block node types.
  */
-export type BlockNode = LLMCallNode | GadgetNode | TextNode | SystemMessageNode;
+export type BlockNode = LLMCallNode | GadgetNode | TextNode | ThinkingNode | SystemMessageNode;
 
 /**
  * A rendered block with UI state.

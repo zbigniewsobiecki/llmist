@@ -29,6 +29,7 @@ import type {
   SelectableBlock,
   SystemMessageNode,
   TextNode,
+  ThinkingNode,
 } from "./types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,6 +70,9 @@ export class BlockRenderer {
 
   /** Current LLM call node (for adding gadget children) */
   private currentLLMCallId: string | null = null;
+
+  /** Current thinking block (accumulates chunks during streaming) */
+  private currentThinkingId: string | null = null;
 
   /** Persisted expanded states (survives rebuildBlocks) */
   private expandedStates = new Map<string, boolean>();
@@ -384,6 +388,79 @@ export class BlockRenderer {
   }
 
   /**
+   * Add thinking content from a reasoning model.
+   * Creates a new thinking block on first chunk, appends to existing on subsequent chunks.
+   * The block lives as a child of the current LLM call.
+   *
+   * @param content - Thinking text chunk
+   * @param thinkingType - Whether this is actual thinking or redacted content
+   */
+  addThinking(content: string, thinkingType: "thinking" | "redacted"): void {
+    if (this.currentThinkingId) {
+      // Append to existing thinking block
+      const node = this.getNode(this.currentThinkingId) as ThinkingNode | undefined;
+      if (node && node.type === "thinking") {
+        node.content += content;
+        this.updateBlock(this.currentThinkingId);
+        return;
+      }
+    }
+
+    // Create new thinking block as child of current LLM call
+    const id = this.generateId("thinking");
+    const parentLLMCallId = this.currentLLMCallId;
+
+    let depth = 0;
+    if (parentLLMCallId) {
+      const parent = this.getNode(parentLLMCallId);
+      if (parent) {
+        depth = parent.depth + 1;
+      }
+    }
+
+    const node: ThinkingNode = {
+      id,
+      type: "thinking",
+      depth,
+      parentId: parentLLMCallId,
+      sessionId: this.currentSessionId,
+      content,
+      thinkingType,
+      isComplete: false,
+      children: [] as never[],
+    };
+
+    this.nodes.set(id, node);
+
+    if (parentLLMCallId) {
+      // Nest under parent LLM call
+      const parent = this.getNode(parentLLMCallId) as LLMCallNode;
+      parent.children.push(id);
+    } else {
+      this.rootIds.push(id);
+    }
+
+    this.currentThinkingId = id;
+    this.rebuildBlocks();
+  }
+
+  /**
+   * Complete the current thinking block.
+   * Called when the LLM call finishes to mark thinking as complete.
+   */
+  completeThinking(): void {
+    if (!this.currentThinkingId) return;
+
+    const node = this.getNode(this.currentThinkingId) as ThinkingNode | undefined;
+    if (node && node.type === "thinking") {
+      node.isComplete = true;
+      this.updateBlock(this.currentThinkingId);
+    }
+
+    this.currentThinkingId = null;
+  }
+
+  /**
    * Add a user message block (for REPL mid-session input).
    *
    * Displays immediately with a distinct icon (👤) to differentiate
@@ -476,6 +553,7 @@ export class BlockRenderer {
     this.selectableIds = [];
     this.selectedIndex = -1;
     this.currentLLMCallId = null;
+    this.currentThinkingId = null;
 
     // Clear container children
     for (const child of [...this.container.children]) {
@@ -891,6 +969,36 @@ export class BlockRenderer {
           return `\n${fullContent}\n`;
         }
         return this.abbreviateToLines(fullContent, 2, selected);
+      }
+
+      case "thinking": {
+        const DIM = "\x1b[2m";
+        const RED_DIM = "\x1b[2;31m";
+        const RESET = "\x1b[0m";
+        const contIndent = getContinuationIndent(node.depth);
+
+        if (node.thinkingType === "redacted") {
+          // Redacted thinking - show locked indicator
+          const header = `${indent}${RED_DIM}🔒 [Redacted thinking block]${RESET}`;
+          return header;
+        }
+
+        if (!expanded) {
+          // Collapsed: show icon + abbreviated first line
+          const firstLine = node.content.split("\n")[0]?.slice(0, 60) ?? "";
+          const suffix = node.isComplete ? "" : "...";
+          return `${indent}${DIM}💭 Thinking${suffix} ${firstLine}${RESET}`;
+        }
+
+        // Expanded: show full thinking content in dim styling
+        const tokenInfo = node.isComplete
+          ? ` (${Math.ceil(node.content.length / 4)} tokens est.)`
+          : "";
+        const header = `${indent}${DIM}▼ 💭 Thinking${tokenInfo}${RESET}`;
+        const contentLines = node.content
+          .split("\n")
+          .map((line) => `${contIndent}${DIM}${line}${RESET}`);
+        return [header, ...contentLines].join("\n");
       }
 
       case "system_message": {
@@ -1331,6 +1439,9 @@ export class BlockRenderer {
       case "llm_call":
         // LLM calls are hidden in focused mode
         return false;
+      case "thinking":
+        // Thinking is hidden in focused mode
+        return false;
       case "gadget": {
         // Keep user-facing gadgets visible in focused mode
         const name = (node as GadgetNode).name;
@@ -1404,6 +1515,9 @@ export class BlockRenderer {
   private handleTreeEvent(event: ExecutionEvent, tree: ExecutionTree): void {
     switch (event.type) {
       case "llm_call_start": {
+        // Reset thinking tracker for new LLM call
+        this.currentThinkingId = null;
+
         // Find parent block ID if this is a nested LLM call
         let parentBlockId: string | undefined;
         if (event.parentId) {
@@ -1431,12 +1545,16 @@ export class BlockRenderer {
       }
 
       case "llm_call_complete": {
+        // Complete any active thinking block before completing the LLM call
+        this.completeThinking();
+
         const blockId = this.treeNodeToBlockId.get(event.nodeId);
         if (blockId) {
           this.completeLLMCall(blockId, {
             inputTokens: event.usage?.inputTokens,
             cachedInputTokens: event.usage?.cachedInputTokens,
             outputTokens: event.usage?.outputTokens,
+            reasoningTokens: event.usage?.reasoningTokens,
             cost: event.cost,
             finishReason: event.finishReason ?? undefined,
           });
@@ -1447,6 +1565,11 @@ export class BlockRenderer {
             this.setLLMCallResponse(blockId, completeNode.response);
           }
         }
+        break;
+      }
+
+      case "thinking": {
+        this.addThinking(event.content, event.thinkingType);
         break;
       }
 
