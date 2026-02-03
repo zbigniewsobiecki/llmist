@@ -1,3 +1,8 @@
+## <small>15.14.1 (2026-02-03)</small>
+
+* Merge pull request #382 from zbigniewsobiecki/dev ([fb7b6b4](https://github.com/zbigniewsobiecki/llmist/commit/fb7b6b4)), closes [#382](https://github.com/zbigniewsobiecki/llmist/issues/382)
+* fix(providers): make toolConfig and cachedContent mutually exclusive for Gemini (#381) ([997d6a3](https://github.com/zbigniewsobiecki/llmist/commit/997d6a3)), closes [#381](https://github.com/zbigniewsobiecki/llmist/issues/381)
+
 ## 15.14.0 (2026-02-03)
 
 * Merge pull request #379 from zbigniewsobiecki/feat/unified-context-caching ([60509b3](https://github.com/zbigniewsobiecki/llmist/commit/60509b3)), closes [#379](https://github.com/zbigniewsobiecki/llmist/issues/379)
