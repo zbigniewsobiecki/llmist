@@ -70,9 +70,15 @@ tree.on("gadget_complete", (event) => {
 
 // Or iterate with full subagent awareness
 for await (const event of tree.events()) {
+  if (event.type === 'thinking') {
+    process.stdout.write(`  💭 ${event.content}`);
+  }
   if (event.type === 'llm_call_complete') {
     const prefix = event.depth > 0 ? `  ↳ [depth ${event.depth}]` : '';
     console.log(`${prefix}LLM #${event.iteration}: ${event.usage?.totalTokens} tokens`);
+    if (event.thinkingContent) {
+      console.log(`  Thinking: ${event.thinkingContent.length} chars`);
+    }
   }
 }
 ```
@@ -88,6 +94,7 @@ for await (const event of tree.events()) {
 | `gadget_complete` | Gadget executed successfully |
 | `gadget_error` | Gadget failed with error |
 | `gadget_skipped` | Gadget skipped due to failed dependency |
+| `thinking` | Reasoning model thinking content |
 | `text` | Text output from LLM |
 | `compaction` | Context was compacted |
 

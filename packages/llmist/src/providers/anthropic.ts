@@ -10,11 +10,40 @@ import type { ContentPart, ImageContentPart, ImageMimeType } from "../core/input
 import type { LLMMessage, MessageContent } from "../core/messages.js";
 import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
-import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
+import type {
+  LLMGenerationOptions,
+  LLMStream,
+  ModelDescriptor,
+  ReasoningConfig,
+  ReasoningEffort,
+} from "../core/options.js";
 import { ANTHROPIC_MODELS } from "./anthropic-models.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import { ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS, FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
 import { createProviderFromEnv } from "./utils.js";
+
+/** Maps llmist reasoning effort levels to Anthropic thinking budget_tokens */
+const ANTHROPIC_EFFORT_BUDGET: Record<ReasoningEffort, number> = {
+  none: 1024, // Minimum allowed by Anthropic
+  low: 2048,
+  medium: 8192,
+  high: 16384,
+  maximum: 32768,
+};
+
+/** Resolve Anthropic thinking parameters from ReasoningConfig */
+function resolveAnthropicThinking(
+  reasoning: ReasoningConfig | undefined,
+): { type: "enabled"; budget_tokens: number } | undefined {
+  if (!reasoning?.enabled) return undefined;
+
+  // Explicit budget takes precedence (clamped to Anthropic's minimum of 1024)
+  const budget = reasoning.budgetTokens
+    ? Math.max(1024, reasoning.budgetTokens)
+    : ANTHROPIC_EFFORT_BUDGET[reasoning.effort ?? "medium"];
+
+  return { type: "enabled", budget_tokens: budget };
+}
 
 export class AnthropicMessagesProvider extends BaseProviderAdapter {
   readonly providerId = "anthropic" as const;
@@ -103,15 +132,22 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
     // Use model's max from the passed spec, or fall back to the default constant
     const defaultMaxTokens = spec?.maxOutputTokens ?? ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS;
 
+    // Resolve thinking configuration from reasoning config
+    const thinking = resolveAnthropicThinking(options.reasoning);
+
+    // Anthropic forbids temperature when thinking is enabled
+    const temperature = thinking ? undefined : options.temperature;
+
     const payload: MessageCreateParamsStreaming = {
       model: descriptor.name,
       system,
       messages: conversation,
       max_tokens: options.maxTokens ?? defaultMaxTokens,
-      temperature: options.temperature,
+      temperature,
       top_p: options.topP,
       stop_sequences: options.stopSequences,
       stream: true,
+      ...(thinking ? { thinking } : {}),
       ...options.extra,
     };
 
@@ -223,8 +259,41 @@ export class AnthropicMessagesProvider extends BaseProviderAdapter {
         continue;
       }
 
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        yield { text: event.delta.text ?? "", rawEvent: event };
+      // Handle thinking content blocks (from extended thinking / reasoning mode)
+      if (event.type === "content_block_start") {
+        const block = event.content_block as { type: string };
+        if (block.type === "thinking") {
+          yield { text: "", thinking: { content: "", type: "thinking" }, rawEvent: event };
+          continue;
+        }
+        if (block.type === "redacted_thinking") {
+          yield { text: "", thinking: { content: "", type: "redacted" }, rawEvent: event };
+          continue;
+        }
+      }
+
+      if (event.type === "content_block_delta") {
+        const delta = event.delta as { type: string; thinking?: string; signature?: string };
+        if (delta.type === "thinking_delta" && delta.thinking) {
+          yield {
+            text: "",
+            thinking: { content: delta.thinking, type: "thinking" },
+            rawEvent: event,
+          };
+          continue;
+        }
+        if (delta.type === "signature_delta" && delta.signature) {
+          yield {
+            text: "",
+            thinking: { content: "", type: "thinking", signature: delta.signature },
+            rawEvent: event,
+          };
+          continue;
+        }
+        if (delta.type === "text_delta") {
+          yield { text: (delta as { text?: string }).text ?? "", rawEvent: event };
+          continue;
+        }
         continue;
       }
 

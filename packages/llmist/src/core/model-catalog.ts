@@ -14,6 +14,8 @@ export interface ModelPricing {
   cachedInput?: number;
   /** Price per 1 million cache write tokens in USD (Anthropic: 1.25x input price) */
   cacheWriteInput?: number;
+  /** Price per 1 million reasoning/thinking output tokens in USD (defaults to output price if unset) */
+  reasoningOutput?: number;
 }
 
 export interface ModelFeatures {
@@ -75,6 +77,8 @@ export interface CostEstimate {
   /** Cost for cache creation tokens (already included in inputCost calculation, Anthropic only) */
   cacheCreationCost: number;
   outputCost: number;
+  /** Cost for reasoning/thinking tokens (subset of outputCost when reasoningOutput pricing is set) */
+  reasoningCost: number;
   totalCost: number;
   currency: "USD";
 }

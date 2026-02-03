@@ -569,6 +569,9 @@ export class HookPresets {
                   modelName,
                   ctx.usage.inputTokens,
                   ctx.usage.outputTokens,
+                  ctx.usage.cachedInputTokens ?? 0,
+                  ctx.usage.cacheCreationInputTokens ?? 0,
+                  ctx.usage.reasoningTokens ?? 0,
                 );
 
                 if (costEstimate) {

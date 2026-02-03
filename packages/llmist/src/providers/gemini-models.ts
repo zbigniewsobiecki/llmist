@@ -47,9 +47,9 @@ export const GEMINI_MODELS: ModelSpec[] = [
     contextWindow: 1_048_576,
     maxOutputTokens: 65_536,
     pricing: {
-      input: 0.4, // $0.40 for text/image/video
+      input: 0.5, // $0.50 for text/image/video
       output: 3.0,
-      cachedInput: 0.04,
+      cachedInput: 0.05,
     },
     knowledgeCutoff: "2025-01",
     features: {

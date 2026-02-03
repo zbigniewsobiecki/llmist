@@ -24,6 +24,7 @@ import type { ContentPart, ImageMimeType } from "../core/input-content.js";
 import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
+import type { ReasoningConfig, ReasoningEffort } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { RateLimitConfig, RateLimitTracker } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
@@ -127,6 +128,7 @@ export class AgentBuilder {
   // Shared retry config from parent for consistent backoff behavior
   // When a gadget calls withParentContext(ctx), this config is shared
   private sharedRetryConfig?: ResolvedRetryConfig;
+  private reasoningConfig?: ReasoningConfig;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -751,6 +753,62 @@ export class AgentBuilder {
   }
 
   /**
+   * Enable reasoning/thinking mode for reasoning-capable models.
+   *
+   * Can be called with:
+   * - No args: enables reasoning at "medium" effort
+   * - A string effort level: `withReasoning("high")`
+   * - A full config object: `withReasoning({ enabled: true, budgetTokens: 10000 })`
+   *
+   * @param config - Optional effort level or full reasoning config
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Simple — medium effort
+   * LLMist.createAgent()
+   *   .withModel("o3")
+   *   .withReasoning()
+   *   .ask("Solve this logic puzzle...");
+   *
+   * // Explicit effort level
+   * LLMist.createAgent()
+   *   .withModel("anthropic:claude-4-opus")
+   *   .withReasoning("high")
+   *   .ask("Analyze this complex problem");
+   *
+   * // Full config with explicit token budget
+   * LLMist.createAgent()
+   *   .withModel("anthropic:claude-4-opus")
+   *   .withReasoning({ enabled: true, budgetTokens: 16000 })
+   *   .ask("Step through this proof");
+   * ```
+   */
+  withReasoning(config?: ReasoningConfig | ReasoningEffort): this {
+    if (typeof config === "string") {
+      this.reasoningConfig = { enabled: true, effort: config };
+    } else if (config === undefined) {
+      this.reasoningConfig = { enabled: true, effort: "medium" };
+    } else {
+      this.reasoningConfig = config;
+    }
+    return this;
+  }
+
+  /**
+   * Explicitly disable reasoning for this agent, even if the model supports it.
+   *
+   * By default, reasoning is auto-enabled at "medium" effort for models with
+   * `features.reasoning: true`. Use this to opt out.
+   *
+   * @returns This builder for chaining
+   */
+  withoutReasoning(): this {
+    this.reasoningConfig = { enabled: false };
+    return this;
+  }
+
+  /**
    * Set subagent configuration overrides.
    *
    * Subagent gadgets (like BrowseWeb) can read these settings from ExecutionContext
@@ -1101,6 +1159,7 @@ export class AgentBuilder {
       retryConfig: this.retryConfig,
       rateLimitConfig: this.rateLimitConfig,
       signal: this.signal,
+      reasoning: this.reasoningConfig,
       subagentConfig: this.subagentConfig,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,
@@ -1306,6 +1365,7 @@ export class AgentBuilder {
       retryConfig: this.retryConfig,
       rateLimitConfig: this.rateLimitConfig,
       signal: this.signal,
+      reasoning: this.reasoningConfig,
       subagentConfig: this.subagentConfig,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,

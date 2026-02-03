@@ -7,12 +7,12 @@ llmist supports multiple LLM providers out of the box.
 
 ## Supported Providers
 
-| Provider | Env Variable | Prefix | Pricing |
-|----------|--------------|--------|---------|
-| OpenAI | `OPENAI_API_KEY` | `openai:` | Paid |
-| Anthropic | `ANTHROPIC_API_KEY` | `anthropic:` | Paid |
-| Google Gemini | `GEMINI_API_KEY` | `gemini:` | Paid |
-| HuggingFace | `HF_TOKEN` | `huggingface:` or `hf:` | **Free** |
+| Provider | Env Variable | Prefix | Reasoning | Pricing |
+|----------|--------------|--------|-----------|---------|
+| OpenAI | `OPENAI_API_KEY` | `openai:` | ✓ `reasoning.effort` | Paid |
+| Anthropic | `ANTHROPIC_API_KEY` | `anthropic:` | ✓ Extended thinking | Paid |
+| Google Gemini | `GEMINI_API_KEY` | `gemini:` | ✓ Thinking config | Paid |
+| HuggingFace | `HF_TOKEN` | `huggingface:` or `hf:` | — | **Free** |
 
 ## Auto-Discovery
 
@@ -79,3 +79,4 @@ interface ProviderAdapter {
 
 - [Model Catalog](/library/advanced/model-catalog/) - Query available models
 - [Custom Models](/library/advanced/custom-models/) - Register fine-tuned models
+- [Reasoning Models](/library/guides/reasoning-models/) - Provider-specific reasoning support

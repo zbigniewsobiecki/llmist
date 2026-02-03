@@ -310,6 +310,74 @@ describe("ModelRegistry", () => {
       expect(cost?.inputCost).toBeCloseTo(0.0225);
       expect(cost?.cacheCreationCost).toBeCloseTo(0.009);
     });
+
+    it("should calculate reasoning cost when reasoningTokens provided", () => {
+      // 1000 input, 500 output (200 of which are reasoning tokens)
+      const cost = registry.estimateCost("gpt-4", 1000, 500, 0, 0, 200);
+
+      expect(cost).toBeDefined();
+      // Without reasoningOutput pricing, reasoning tokens use regular output rate
+      // Non-reasoning output: (300 / 1M) * 60 = 0.018
+      // Reasoning: (200 / 1M) * 60 = 0.012
+      // Total output: 0.03 (same as without reasoning since rate is the same)
+      expect(cost?.outputCost).toBeCloseTo(0.03);
+      expect(cost?.reasoningCost).toBeCloseTo(0.012);
+      expect(cost?.inputCost).toBeCloseTo(0.03);
+      expect(cost?.totalCost).toBeCloseTo(0.06);
+    });
+
+    it("should use reasoningOutput pricing when available", () => {
+      // Register model with separate reasoning pricing
+      const spec: ModelSpec = {
+        modelId: "o3",
+        provider: "openai",
+        contextWindow: 200_000,
+        maxOutputTokens: 100_000,
+        pricing: {
+          input: 10.0,
+          output: 40.0,
+          reasoningOutput: 60.0, // Higher rate for reasoning tokens
+        },
+        features: {
+          streaming: true,
+          functionCalling: true,
+          vision: false,
+          json: true,
+          reasoning: true,
+        },
+      };
+      const provider = createMockProvider("openai", [spec]);
+      registry.registerProvider(provider);
+
+      // 100 input, 500 output (300 of which are reasoning)
+      const cost = registry.estimateCost("o3", 100, 500, 0, 0, 300);
+
+      expect(cost).toBeDefined();
+      // Non-reasoning output: (200 / 1M) * 40 = 0.008
+      // Reasoning: (300 / 1M) * 60 = 0.018
+      // Total output: 0.026
+      expect(cost?.reasoningCost).toBeCloseTo(0.018);
+      expect(cost?.outputCost).toBeCloseTo(0.026);
+      // Input: (100 / 1M) * 10 = 0.001
+      expect(cost?.inputCost).toBeCloseTo(0.001);
+      expect(cost?.totalCost).toBeCloseTo(0.027);
+    });
+
+    it("should handle zero reasoning tokens with reasoningCost of 0", () => {
+      const cost = registry.estimateCost("gpt-4", 1000, 500, 0, 0, 0);
+
+      expect(cost).toBeDefined();
+      expect(cost?.reasoningCost).toBe(0);
+      expect(cost?.outputCost).toBeCloseTo(0.03); // (500 / 1M) * 60
+    });
+
+    it("should default reasoning tokens to 0 when not provided", () => {
+      const costWithout = registry.estimateCost("gpt-4", 1000, 500);
+      const costWithZero = registry.estimateCost("gpt-4", 1000, 500, 0, 0, 0);
+
+      expect(costWithout?.reasoningCost).toBe(0);
+      expect(costWithout?.totalCost).toBe(costWithZero?.totalCost);
+    });
   });
 
   describe("validateModelConfig()", () => {

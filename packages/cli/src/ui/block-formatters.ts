@@ -79,6 +79,11 @@ export function formatLLMCallCollapsed(node: LLMCallNode, selected: boolean): st
       parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(d.outputTokens)}`));
     }
 
+    // 💭 reasoning tokens
+    if (d.reasoningTokens && d.reasoningTokens > 0) {
+      parts.push(chalk.dim("💭") + chalk.magenta(` ${formatTokens(d.reasoningTokens)}`));
+    }
+
     // Time
     if (d.elapsedSeconds !== undefined) {
       parts.push(chalk.dim(`${d.elapsedSeconds.toFixed(1)}s`));
@@ -149,6 +154,13 @@ export function formatLLMCallExpanded(node: LLMCallNode): string[] {
   if (d.outputTokens !== undefined) {
     lines.push(
       `${indent}${chalk.dim(BOX.vertical)} Output:  ${chalk.green(formatTokens(d.outputTokens))} tokens`,
+    );
+  }
+
+  // Reasoning tokens
+  if (d.reasoningTokens !== undefined && d.reasoningTokens > 0) {
+    lines.push(
+      `${indent}${chalk.dim(BOX.vertical)} Reason:  ${chalk.magenta(formatTokens(d.reasoningTokens))} tokens`,
     );
   }
 

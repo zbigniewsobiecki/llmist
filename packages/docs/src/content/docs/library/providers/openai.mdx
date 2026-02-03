@@ -27,7 +27,9 @@ llmist will automatically discover and use OpenAI.
 | `gpt-5-mini` | `gpt5-mini` | Fast, cost-effective tasks |
 | `gpt-4-turbo` | `gpt4-turbo` | Balanced performance |
 | `gpt-4o` | `gpt4o` | Multimodal tasks |
-| `o3-mini` | `o3-mini` | Reasoning tasks |
+| `o3` | `o3` | Advanced reasoning <Badge text="Reasoning" variant="note" /> |
+| `o4-mini` | `o4-mini` | Fast reasoning <Badge text="Reasoning" variant="note" /> |
+| `o3-mini` | `o3-mini` | Compact reasoning |
 
 ### Image Models
 
@@ -85,6 +87,31 @@ llmist will automatically discover and use OpenAI.
     ```
   </TabItem>
 </Tabs>
+
+## Reasoning Models
+
+OpenAI's o-series models (o3, o4-mini) and GPT-5 family support reasoning. llmist maps `ReasoningEffort` to OpenAI's native `reasoning.effort` parameter:
+
+| Effort | OpenAI Value |
+|--------|-------------|
+| `"none"` | `"none"` |
+| `"low"` | `"low"` |
+| `"medium"` | `"medium"` |
+| `"high"` | `"high"` |
+| `"maximum"` | `"xhigh"` |
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('o3')
+  .withReasoning('high')
+  .askAndCollect('Prove that √2 is irrational.');
+```
+
+<Aside type="tip">
+  Models with `features.reasoning: true` (like o3) auto-enable reasoning at `"medium"` effort. Use `.withoutReasoning()` to opt out.
+</Aside>
+
+See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details.
 
 ## Vision (Image Input)
 

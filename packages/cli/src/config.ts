@@ -81,6 +81,15 @@ export interface RetryConfigCLI {
 }
 
 /**
+ * Reasoning configuration from TOML config.
+ */
+export interface ReasoningConfigCLI {
+  enabled?: boolean;
+  effort?: string; // "none" | "low" | "medium" | "high" | "maximum"
+  "budget-tokens"?: number;
+}
+
+/**
  * Shared options used by both complete and agent command configurations.
  */
 export interface SharedCommandConfig {
@@ -92,6 +101,8 @@ export interface SharedCommandConfig {
   "rate-limits"?: RateLimitsConfig;
   /** Retry configuration */
   retry?: RetryConfigCLI;
+  /** Reasoning configuration */
+  reasoning?: ReasoningConfigCLI;
 }
 
 /**
@@ -229,6 +240,7 @@ const COMPLETE_CONFIG_KEYS = new Set([
   "log-llm-requests",
   "rate-limits",
   "retry",
+  "reasoning",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -256,6 +268,7 @@ const AGENT_CONFIG_KEYS = new Set([
   "log-llm-requests",
   "rate-limits",
   "retry",
+  "reasoning",
   "type", // Allowed for inheritance compatibility, ignored for built-in commands
 ]);
 
@@ -580,6 +593,53 @@ function validateRetryConfig(value: unknown, section: string): RetryConfigCLI {
 }
 
 /**
+ * Valid keys for reasoning configuration section.
+ */
+const REASONING_CONFIG_KEYS = new Set(["enabled", "effort", "budget-tokens"]);
+
+/** Valid effort levels for reasoning. */
+const VALID_REASONING_EFFORTS = new Set(["none", "low", "medium", "high", "maximum"]);
+
+/**
+ * Validates reasoning configuration.
+ */
+function validateReasoningConfig(value: unknown, section: string): ReasoningConfigCLI {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ConfigError(`[${section}] must be a table`);
+  }
+
+  const raw = value as Record<string, unknown>;
+  const result: ReasoningConfigCLI = {};
+
+  for (const [key, val] of Object.entries(raw)) {
+    if (!REASONING_CONFIG_KEYS.has(key)) {
+      throw new ConfigError(`[${section}] has unknown key: ${key}`);
+    }
+
+    switch (key) {
+      case "enabled":
+        result.enabled = validateBoolean(val, key, section);
+        break;
+      case "effort": {
+        const effort = validateString(val, key, section);
+        if (!VALID_REASONING_EFFORTS.has(effort)) {
+          throw new ConfigError(
+            `[${section}].effort must be one of: none, low, medium, high, maximum (got "${effort}")`,
+          );
+        }
+        result.effort = effort;
+        break;
+      }
+      case "budget-tokens":
+        result["budget-tokens"] = validateNumber(val, key, section, { integer: true, min: 1 });
+        break;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Validates the global [subagents] section.
  * Contains default-model and per-subagent configurations.
  */
@@ -808,6 +868,9 @@ function validateCompleteConfig(raw: unknown, section: string): CompleteConfig {
   if ("retry" in rawObj) {
     result.retry = validateRetryConfig(rawObj.retry, `${section}.retry`);
   }
+  if ("reasoning" in rawObj) {
+    result.reasoning = validateReasoningConfig(rawObj.reasoning, `${section}.reasoning`);
+  }
 
   return result;
 }
@@ -916,6 +979,9 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
   }
   if ("retry" in rawObj) {
     result.retry = validateRetryConfig(rawObj.retry, `${section}.retry`);
+  }
+  if ("reasoning" in rawObj) {
+    result.reasoning = validateReasoningConfig(rawObj.reasoning, `${section}.reasoning`);
   }
 
   return result;

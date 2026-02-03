@@ -66,6 +66,43 @@ llmist will automatically discover and use Anthropic.
   </TabItem>
 </Tabs>
 
+## Extended Thinking
+
+All Claude 4+ models support extended thinking (reasoning). llmist maps `ReasoningEffort` to Anthropic's `thinking.budget_tokens`:
+
+| Effort | Budget Tokens |
+|--------|--------------|
+| `"none"` | 1024 (minimum) |
+| `"low"` | 2048 |
+| `"medium"` | 8192 |
+| `"high"` | 16384 |
+| `"maximum"` | 32768 |
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('opus')
+  .withReasoning('high')
+  .askAndCollect('Explain the Riemann hypothesis.');
+```
+
+You can also specify an explicit token budget:
+
+```typescript
+.withReasoning({ enabled: true, budgetTokens: 10000 })
+```
+
+<Aside type="caution" title="Temperature">
+  Anthropic forbids `temperature` when thinking is enabled — llmist automatically strips it.
+</Aside>
+
+For multi-turn tool use conversations, enable interleaved thinking so the model can reason between tool calls:
+
+```typescript
+.withReasoning({ enabled: true, effort: 'high', interleaved: true })
+```
+
+See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details.
+
 ## Vision (Image Input)
 
 Claude models support image input:

@@ -36,12 +36,18 @@ export interface CLICompleteOptions {
   retryMinTimeout?: number;
   retryMaxTimeout?: number;
   noRetry?: boolean;
+  // Reasoning options
+  /** Reasoning effort (string) or enabled (true) or disabled (false from --no-reasoning) */
+  reasoning?: string | boolean;
+  /** Explicit reasoning token budget */
+  reasoningBudget?: number;
   // Internal: Global configs from TOML (passed by registerCompleteCommand)
   globalRateLimits?: import("./config.js").RateLimitsConfig;
   globalRetry?: import("./config.js").RetryConfigCLI;
   // Internal: Profile-specific configs from TOML (passed by registerCompleteCommand)
   profileRateLimits?: import("./config.js").RateLimitsConfig;
   profileRetry?: import("./config.js").RetryConfigCLI;
+  profileReasoning?: import("./config.js").ReasoningConfigCLI;
 }
 
 /**
@@ -82,12 +88,18 @@ export interface CLIAgentOptions {
   retryMinTimeout?: number;
   retryMaxTimeout?: number;
   noRetry?: boolean;
+  // Reasoning options
+  /** Reasoning effort (string) or enabled (true) or disabled (false from --no-reasoning) */
+  reasoning?: string | boolean;
+  /** Explicit reasoning token budget */
+  reasoningBudget?: number;
   // Internal: Global configs from TOML (passed by registerAgentCommand)
   globalRateLimits?: import("./config.js").RateLimitsConfig;
   globalRetry?: import("./config.js").RetryConfigCLI;
   // Internal: Profile-specific configs from TOML (passed by registerAgentCommand)
   profileRateLimits?: import("./config.js").RateLimitsConfig;
   profileRetry?: import("./config.js").RetryConfigCLI;
+  profileReasoning?: import("./config.js").ReasoningConfigCLI;
   // TUI options
   /** Show keyboard shortcuts hints bar (default: true) */
   showHints?: boolean;
@@ -171,6 +183,14 @@ export function addCompleteOptions(cmd: Command, defaults?: CompleteConfig): Com
         defaults?.retry?.["max-timeout"],
       )
       .option(OPTION_FLAGS.noRetry, OPTION_DESCRIPTIONS.noRetry)
+      // Reasoning options
+      .option(OPTION_FLAGS.reasoning, OPTION_DESCRIPTIONS.reasoning)
+      .option(OPTION_FLAGS.noReasoning, OPTION_DESCRIPTIONS.noReasoning)
+      .option(
+        OPTION_FLAGS.reasoningBudget,
+        OPTION_DESCRIPTIONS.reasoningBudget,
+        createNumericParser({ label: "Reasoning budget", integer: true, min: 1 }),
+      )
   );
 }
 
@@ -268,6 +288,14 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
         defaults?.retry?.["max-timeout"],
       )
       .option(OPTION_FLAGS.noRetry, OPTION_DESCRIPTIONS.noRetry)
+      // Reasoning options
+      .option(OPTION_FLAGS.reasoning, OPTION_DESCRIPTIONS.reasoning)
+      .option(OPTION_FLAGS.noReasoning, OPTION_DESCRIPTIONS.noReasoning)
+      .option(
+        OPTION_FLAGS.reasoningBudget,
+        OPTION_DESCRIPTIONS.reasoningBudget,
+        createNumericParser({ label: "Reasoning budget", integer: true, min: 1 }),
+      )
   );
 }
 
@@ -298,6 +326,10 @@ export function configToCompleteOptions(config: CustomCommandConfig): Partial<CL
     if (r["min-timeout"] !== undefined) result.retryMinTimeout = r["min-timeout"];
     if (r["max-timeout"] !== undefined) result.retryMaxTimeout = r["max-timeout"];
     if (r.enabled === false) result.noRetry = true;
+  }
+  // Reasoning config (passed through as-is for precedence resolution in command handler)
+  if (config.reasoning) {
+    result.profileReasoning = config.reasoning;
   }
   return result;
 }
@@ -344,6 +376,10 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
     if (r["min-timeout"] !== undefined) result.retryMinTimeout = r["min-timeout"];
     if (r["max-timeout"] !== undefined) result.retryMaxTimeout = r["max-timeout"];
     if (r.enabled === false) result.noRetry = true;
+  }
+  // Reasoning config (passed through as-is for precedence resolution in command handler)
+  if (config.reasoning) {
+    result.profileReasoning = config.reasoning;
   }
   // TUI config
   if (config["show-hints"] !== undefined) result.showHints = config["show-hints"];

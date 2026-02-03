@@ -57,6 +57,9 @@ for await (const event of agent.run()) {
     case 'gadget_result':
       console.log(`Result: ${event.result.result}`);
       break;
+    case 'thinking':
+      process.stdout.write(`💭 ${event.content}`);
+      break;
     case 'human_input_required':
       console.log(`Question: ${event.question}`);
       break;
@@ -71,6 +74,7 @@ for await (const event of agent.run()) {
 | `text` | `content: string` | Text chunk from LLM |
 | `gadget_call` | `call: { gadgetName, parameters }` | Gadget about to execute |
 | `gadget_result` | `result: { gadgetName, result?, error?, parameters }` | Gadget completed |
+| `thinking` | `content: string, thinkingType: "thinking" \| "redacted"` | Reasoning model thinking content |
 | `human_input_required` | `question, gadgetName, invocationId` | User input needed |
 
 ## Helper Functions
@@ -150,8 +154,13 @@ for await (const chunk of client.streamText('Tell me a story')) {
 }
 ```
 
+:::note[Reasoning Models]
+For models with reasoning/thinking enabled, the `run()` loop also emits `thinking` events with internal reasoning content. For full details, see the [Reasoning Models](/library/guides/reasoning-models/) guide.
+:::
+
 ## See Also
 
 - [Gadgets Guide](/library/guides/gadgets/) - Creating tools
 - [Hooks Guide](/library/guides/hooks/) - Monitoring streams
 - [Human-in-the-Loop](/library/guides/human-in-loop/) - Handling user input events
+- [Reasoning Models](/library/guides/reasoning-models/) - Thinking/reasoning model support

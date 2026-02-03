@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { Agent, AgentHooks, ContentPart, TokenUsage } from "llmist";
+import type { Agent, AgentHooks, ContentPart, ReasoningEffort, TokenUsage } from "llmist";
 import { AgentBuilder, GadgetRegistry, HookPresets, isAbortError, text } from "llmist";
 import type { ApprovalConfig } from "./approval/index.js";
 import { builtinGadgets } from "./builtin-gadgets.js";
@@ -411,6 +411,30 @@ export async function executeAgent(
     builder.withTemperature(options.temperature);
   }
 
+  // Reasoning configuration
+  // Precedence: --no-reasoning > --reasoning/--reasoning-budget > config > auto-detect
+  if (options.reasoning === false) {
+    builder.withoutReasoning();
+  } else if (options.reasoning !== undefined || options.reasoningBudget !== undefined) {
+    const effort = typeof options.reasoning === "string" ? options.reasoning : undefined;
+    builder.withReasoning({
+      enabled: true,
+      ...(effort && { effort: effort as ReasoningEffort }),
+      ...(options.reasoningBudget && { budgetTokens: options.reasoningBudget }),
+    });
+  } else if (options.profileReasoning) {
+    const cfg = options.profileReasoning;
+    if (cfg.enabled === false) {
+      builder.withoutReasoning();
+    } else {
+      builder.withReasoning({
+        enabled: true,
+        ...(cfg.effort && { effort: cfg.effort as ReasoningEffort }),
+        ...(cfg["budget-tokens"] && { budgetTokens: cfg["budget-tokens"] }),
+      });
+    }
+  }
+
   // Set up human input handler (TUI mode only)
   // In piped mode, AskUser gadget is excluded (see gadget registration above)
   if (tui) {
@@ -544,6 +568,12 @@ export async function executeAgent(
         // Piped mode: output text events and TellUser messages to stdout
         if (event.type === "text") {
           env.stdout.write(event.content);
+        } else if (event.type === "thinking") {
+          // Show thinking content on stderr in dim styling (piped mode only)
+          const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
+          if (stderrTTY && !options.quiet) {
+            env.stderr.write(`\x1b[2m${event.content}\x1b[0m`);
+          }
         } else if (
           event.type === "gadget_result" &&
           event.result.gadgetName === "TellUser" &&
@@ -658,6 +688,7 @@ export function registerAgentCommand(
         globalRetry,
         profileRateLimits: config?.["rate-limits"],
         profileRetry: config?.retry,
+        profileReasoning: config?.reasoning,
         showHints: config?.["show-hints"],
       };
       return executeAgent(prompt, mergedOptions, env, "agent");

@@ -39,6 +39,12 @@ model = "anthropic:claude-sonnet-4-5"   # Model identifier (provider:model or al
 # temperature = 0.7                      # Sampling temperature (0-2)
 # max-tokens = 4096                      # Maximum output tokens
 # quiet = false                          # Suppress all output except content
+#
+# Reasoning configuration (for models that support extended thinking)
+# [complete.reasoning]
+# enabled = true                         # Enable reasoning mode
+# effort = "medium"                      # none, low, medium, high, maximum
+# budget-tokens = 8192                   # Explicit token budget (Anthropic/Gemini 2.5)
 
 #──────────────────────────────────────────────────────────────────────────────
 # IMAGE COMMAND DEFAULTS
@@ -81,6 +87,12 @@ max-iterations = 15                      # Max agent loop iterations
 # builtin-interaction = true             # Enable AskUser (set false for non-interactive)
 # quiet = false                          # Suppress all output except content and TellUser
 # show-hints = true                      # Show keyboard shortcuts hints bar in TUI
+#
+# Reasoning configuration (for models that support extended thinking)
+# [agent.reasoning]
+# enabled = true                         # Enable reasoning mode
+# effort = "medium"                      # none, low, medium, high, maximum
+# budget-tokens = 8192                   # Explicit token budget (Anthropic/Gemini 2.5)
 #
 # Custom gadget markers (defaults shown):
 # gadget-start-prefix = "!!!GADGET_START:"

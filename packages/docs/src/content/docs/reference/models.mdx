@@ -43,28 +43,30 @@ For explicit provider selection, use the `provider:model` format:
 
 ## Model Capabilities
 
-| Model | Vision | Streaming | Tool Use | Context |
-|-------|--------|-----------|----------|---------|
-| GPT-5 | ✓ | ✓ | ✓ | 128K |
-| GPT-5 Mini | ✓ | ✓ | ✓ | 128K |
-| GPT-4o | ✓ | ✓ | ✓ | 128K |
-| Claude Opus 4.5 | ✓ | ✓ | ✓ | 200K |
-| Claude Sonnet 4.5 | ✓ | ✓ | ✓ | 200K |
-| Claude Haiku 4.5 | ✓ | ✓ | ✓ | 200K |
-| Gemini Flash | ✓ | ✓ | ✓ | 1M |
-| Gemini Pro | ✓ | ✓ | ✓ | 1M |
-| DeepSeek V3.2 | ✗ | ✓ | ✓ | 64K |
-| DeepSeek R1 | ✗ | ✓ | ✓ | 64K |
-| Llama 3.3 70B | ✗ | ✓ | ✗ | 128K |
-| Qwen 2.5 72B | ✗ | ✓ | ✗ | 128K |
-| Mixtral 8x7B | ✗ | ✓ | ✗ | 32K |
+| Model | Vision | Streaming | Tool Use | Reasoning | Context |
+|-------|--------|-----------|----------|-----------|---------|
+| GPT-5 | ✓ | ✓ | ✓ | ✓ | 128K |
+| GPT-5 Mini | ✓ | ✓ | ✓ | ✗ | 128K |
+| GPT-4o | ✓ | ✓ | ✓ | ✗ | 128K |
+| o3 | ✗ | ✓ | ✓ | ✓ | 200K |
+| o4-mini | ✗ | ✓ | ✓ | ✓ | 200K |
+| Claude Opus 4.5 | ✓ | ✓ | ✓ | ✓ | 200K |
+| Claude Sonnet 4.5 | ✓ | ✓ | ✓ | ✓ | 200K |
+| Claude Haiku 4.5 | ✓ | ✓ | ✓ | ✓ | 200K |
+| Gemini Flash | ✓ | ✓ | ✓ | ✓ | 1M |
+| Gemini Pro | ✓ | ✓ | ✓ | ✓ | 1M |
+| DeepSeek V3.2 | ✗ | ✓ | ✓ | ✗ | 64K |
+| DeepSeek R1 | ✗ | ✓ | ✓ | ✗ | 64K |
+| Llama 3.3 70B | ✗ | ✓ | ✗ | ✗ | 128K |
+| Qwen 2.5 72B | ✗ | ✓ | ✗ | ✗ | 128K |
+| Mixtral 8x7B | ✗ | ✓ | ✗ | ✗ | 32K |
 
 ## Recommended Models by Use Case
 
 | Use Case | Recommended | Why |
 |----------|-------------|-----|
 | **General tasks** | `sonnet` | Best balance of quality and speed |
-| **Complex reasoning** | `opus`, DeepSeek R1 | Highest capability, step-by-step reasoning |
+| **Complex reasoning** | `opus`, `o3`, DeepSeek R1 | Highest capability; use `.withReasoning("high")` for o3/Claude |
 | **High-volume tasks** | `haiku`, `flash` | Fast and cost-effective |
 | **Long documents** | `flash`, `pro` | 1M token context |
 | **Coding** | `sonnet`, `gpt5`, DeepSeek V3.2 | Strong code understanding |
