@@ -69,6 +69,11 @@ describe("GeminiCacheManager", () => {
       expect(result!.cacheName).toBe("cachedContents/abc123");
       expect(result!.cachedContentCount).toBe(2);
       expect(mockClient.createFn).toHaveBeenCalledOnce();
+
+      const createCall = mockClient.createFn.mock.calls[0][0];
+      expect(createCall.config.toolConfig).toEqual({
+        functionCallingConfig: { mode: "NONE" },
+      });
     });
 
     it("reuses cache when content hash matches", async () => {
