@@ -12,6 +12,7 @@ import type { LLMMessage, MessageContent } from "../core/messages.js";
 import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type {
+  CachingConfig,
   LLMGenerationOptions,
   LLMStream,
   ModelDescriptor,
@@ -20,6 +21,7 @@ import type {
 } from "../core/options.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
+import { GeminiCacheManager } from "./gemini-cache-manager.js";
 import {
   calculateGeminiImageCost,
   geminiImageModels,
@@ -173,6 +175,12 @@ function wrapPcmInWav(
 
 export class GeminiGenerativeProvider extends BaseProviderAdapter {
   readonly providerId = "gemini" as const;
+  private readonly cacheManager: GeminiCacheManager;
+
+  constructor(client: unknown) {
+    super(client);
+    this.cacheManager = new GeminiCacheManager(client as GoogleGenAI);
+  }
 
   supports(descriptor: ModelDescriptor): boolean {
     return descriptor.provider === this.providerId;
@@ -180,6 +188,65 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
 
   getModelSpecs() {
     return GEMINI_MODELS;
+  }
+
+  /**
+   * Override the base stream method to inject cache logic.
+   *
+   * When caching is enabled, we:
+   * 1. Prepare messages as usual
+   * 2. Attempt to get/create a cache for the cacheable prefix
+   * 3. If a cache is available, strip cached contents from the request and add cachedContent ref
+   * 4. Otherwise, proceed normally (graceful degradation)
+   */
+  async *stream(
+    options: LLMGenerationOptions,
+    descriptor: ModelDescriptor,
+    spec?: ModelSpec,
+  ): LLMStream {
+    const preparedMessages = this.prepareMessages(options.messages);
+    const contents = this.convertMessagesToContents(preparedMessages);
+
+    // Attempt caching if configured
+    const cachingConfig = options.caching;
+    let cacheName: string | null = null;
+    let cachedContentCount = 0;
+
+    if (cachingConfig?.enabled) {
+      // Find the index of the last user message in contents
+      let lastUserIndex = -1;
+      for (let i = contents.length - 1; i >= 0; i--) {
+        if (contents[i].role === "user") {
+          lastUserIndex = i;
+          break;
+        }
+      }
+
+      const cacheResult = await this.cacheManager.getOrCreateCache(
+        descriptor.name,
+        contents,
+        cachingConfig,
+        lastUserIndex,
+      );
+
+      if (cacheResult) {
+        cacheName = cacheResult.cacheName;
+        cachedContentCount = cacheResult.cachedContentCount;
+      }
+    }
+
+    // Build the API request, potentially with cache reference
+    const payload = this.buildApiRequestFromContents(
+      options,
+      descriptor,
+      spec,
+      contents,
+      cacheName,
+      cachedContentCount,
+    );
+
+    const rawStream = await this.executeStreamRequest(payload, options.signal);
+    yield* this.normalizeProviderStream(rawStream);
   }
 
   // =========================================================================
@@ -359,6 +426,31 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
   } {
     // Convert messages to Gemini format (system messages become user+model exchanges)
     const contents = this.convertMessagesToContents(messages);
+    return this.buildApiRequestFromContents(options, descriptor, _spec, contents, null, 0);
+  }
+
+  /**
+   * Build API request from pre-converted Gemini contents.
+   *
+   * When a cache name is provided, the cached prefix is stripped from contents
+   * and the cache reference is added to the config. This tells Gemini to use
+   * the pre-computed KV pairs instead of reprocessing the cached content.
+   */
+  private buildApiRequestFromContents(
+    options: LLMGenerationOptions,
+    descriptor: ModelDescriptor,
+    _spec: ModelSpec | undefined,
+    contents: GeminiContent[],
+    cacheName: string | null,
+    cachedContentCount: number,
+  ): {
+    model: string;
+    contents: GeminiContent[];
+    config: Record<string, unknown>;
+  } {
+    // If cache is active, strip the cached prefix from contents
+    const effectiveContents = cacheName ? contents.slice(cachedContentCount) : contents;
+
     const generationConfig = this.buildGenerationConfig(options);
 
     // Resolve thinking config for Gemini 2.5/3 reasoning models
@@ -376,12 +468,14 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
         },
       },
       ...(thinkingConfig ?? {}),
+      // Add cache reference if available
+      ...(cacheName ? { cachedContent: cacheName } : {}),
       ...options.extra,
     };
 
     return {
       model: descriptor.name,
-      contents,
+      contents: effectiveContents,
       config,
     };
   }

@@ -283,6 +283,27 @@ const reasoningAgent = LLMist.createAgent()
 
 See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details on effort levels and provider mapping.
 
+### Caching Agent
+
+Reduce latency and cost for conversations with large, repeated context:
+
+```typescript
+// Gemini: explicit caching for large system prompts
+const geminiAgent = LLMist.createAgent()
+  .withModel('gemini:gemini-2.5-flash')
+  .withSystem(longCodebaseContext)      // Large context benefits most
+  .withCaching({ enabled: true, scope: 'system', ttl: '3600s' })
+  .withMaxIterations(20);
+
+// Anthropic: caching is automatic, but can be disabled
+const anthropicAgent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withoutCaching()   // Opt out of prompt caching
+  .ask('Quick question');
+```
+
+See the provider pages for [Anthropic](/library/providers/anthropic/) and [Gemini](/library/providers/gemini/) caching details.
+
 ### Research Agent
 
 ```typescript

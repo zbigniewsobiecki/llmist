@@ -24,7 +24,7 @@ import type { ContentPart, ImageMimeType } from "../core/input-content.js";
 import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
-import type { ReasoningConfig, ReasoningEffort } from "../core/options.js";
+import type { CachingConfig, ReasoningConfig, ReasoningEffort } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { RateLimitConfig, RateLimitTracker } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
@@ -129,6 +129,7 @@ export class AgentBuilder {
   // When a gadget calls withParentContext(ctx), this config is shared
   private sharedRetryConfig?: ResolvedRetryConfig;
   private reasoningConfig?: ReasoningConfig;
+  private cachingConfig?: CachingConfig;
 
   constructor(client?: LLMist) {
     this.client = client;
@@ -809,6 +810,64 @@ export class AgentBuilder {
   }
 
   /**
+   * Enable context caching for supported providers.
+   *
+   * Can be called with:
+   * - No args: enables caching with defaults (`{ enabled: true }`)
+   * - A full config object: `withCaching({ enabled: true, scope: "system", ttl: "7200s" })`
+   *
+   * Provider behavior:
+   * - **Anthropic**: Caching is always-on by default via `cache_control` markers.
+   *   Calling `withCaching()` explicitly is a no-op (it's already enabled).
+   * - **Gemini**: Creates an explicit cache via `caches.create()` for the configured scope.
+   * - **OpenAI**: Server-side automatic caching (no-op).
+   *
+   * @param config - Optional caching configuration
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Simple — enable with defaults
+   * LLMist.createAgent()
+   *   .withModel("gemini:gemini-2.5-flash")
+   *   .withCaching()
+   *   .ask("Analyze this large codebase...");
+   *
+   * // Cache only system prompt with longer TTL
+   * LLMist.createAgent()
+   *   .withModel("gemini:gemini-2.5-pro")
+   *   .withCaching({ enabled: true, scope: "system", ttl: "7200s" })
+   *   .ask("...");
+   * ```
+   */
+  withCaching(config?: CachingConfig): this {
+    this.cachingConfig = config ?? { enabled: true };
+    return this;
+  }
+
+  /**
+   * Explicitly disable context caching.
+   *
+   * For Anthropic, this removes `cache_control` markers from requests,
+   * opting out of prompt caching entirely.
+   *
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Disable Anthropic's automatic caching
+   * LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withoutCaching()
+   *   .ask("...");
+   * ```
+   */
+  withoutCaching(): this {
+    this.cachingConfig = { enabled: false };
+    return this;
+  }
+
+  /**
    * Set subagent configuration overrides.
    *
    * Subagent gadgets (like BrowseWeb) can read these settings from ExecutionContext
@@ -1160,6 +1219,7 @@ export class AgentBuilder {
       rateLimitConfig: this.rateLimitConfig,
       signal: this.signal,
       reasoning: this.reasoningConfig,
+      caching: this.cachingConfig,
       subagentConfig: this.subagentConfig,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,
@@ -1366,6 +1426,7 @@ export class AgentBuilder {
       rateLimitConfig: this.rateLimitConfig,
       signal: this.signal,
       reasoning: this.reasoningConfig,
+      caching: this.cachingConfig,
       subagentConfig: this.subagentConfig,
       // Tree context for shared tree model (subagents share parent's tree)
       parentTree: this.parentContext?.tree,

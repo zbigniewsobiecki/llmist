@@ -595,6 +595,150 @@ describe("GeminiGenerativeProvider", () => {
     });
   });
 
+  describe("caching integration", () => {
+    it("includes cachedContent in config when cache manager returns a name", async () => {
+      const stream = (async function* () {})();
+      const generateContentStream = vi.fn().mockResolvedValue(stream);
+      const cacheCreate = vi.fn().mockResolvedValue({
+        name: "cachedContents/test-cache",
+        expireTime: new Date(Date.now() + 3600_000).toISOString(),
+      });
+      const cacheDelete = vi.fn().mockResolvedValue({});
+
+      const client = {
+        models: { generateContentStream },
+        caches: { create: cacheCreate, delete: cacheDelete },
+      } as unknown as GoogleGenAI;
+
+      const provider = new GeminiGenerativeProvider(client);
+
+      // Create content large enough to meet the 32768 token threshold
+      const longText = "x".repeat(200_000); // ~50k tokens
+      const options = {
+        model: "gemini-2.5-flash",
+        messages: [
+          { role: "system" as const, content: longText },
+          { role: "user" as const, content: "First question" },
+          { role: "assistant" as const, content: "First answer" },
+          { role: "user" as const, content: "Follow-up question" },
+        ],
+        caching: { enabled: true, scope: "conversation" as const },
+      };
+
+      const descriptor = { provider: "gemini", name: "gemini-2.5-flash" } as const;
+      const s = provider.stream(options, descriptor);
+      await s.next();
+
+      expect(generateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({
+            cachedContent: "cachedContents/test-cache",
+          }),
+        }),
+      );
+    });
+
+    it("strips cached prefix from contents when cache is active", async () => {
+      const stream = (async function* () {})();
+      const generateContentStream = vi.fn().mockResolvedValue(stream);
+      const cacheCreate = vi.fn().mockResolvedValue({
+        name: "cachedContents/strip-test",
+        expireTime: new Date(Date.now() + 3600_000).toISOString(),
+      });
+      const cacheDelete = vi.fn().mockResolvedValue({});
+
+      const client = {
+        models: { generateContentStream },
+        caches: { create: cacheCreate, delete: cacheDelete },
+      } as unknown as GoogleGenAI;
+
+      const provider = new GeminiGenerativeProvider(client);
+
+      const longText = "x".repeat(200_000);
+      const options = {
+        model: "gemini-2.5-flash",
+        messages: [
+          { role: "system" as const, content: longText },
+          { role: "user" as const, content: "First" },
+          { role: "assistant" as const, content: "Response" },
+          { role: "user" as const, content: "Latest" },
+        ],
+        caching: { enabled: true, scope: "conversation" as const },
+      };
+
+      const s = provider.stream(options, { provider: "gemini", name: "gemini-2.5-flash" });
+      await s.next();
+
+      // The contents sent to the API should NOT include the cached prefix
+      const callArgs = generateContentStream.mock.calls[0][0];
+      const contents = callArgs.contents;
+
+      // Only the uncached portion should remain
+      // The last user message ("Latest") should be in the contents
+      const allText = contents
+        .flatMap((c: { parts: Array<{ text?: string }> }) => c.parts)
+        .filter((p: { text?: string }) => "text" in p)
+        .map((p: { text: string }) => p.text);
+      expect(allText).toContain("Latest");
+    });
+
+    it("sends full contents when caching is not configured", async () => {
+      const stream = (async function* () {})();
+      const generateContentStream = vi.fn().mockResolvedValue(stream);
+      const client = {
+        models: { generateContentStream },
+        caches: { create: vi.fn(), delete: vi.fn() },
+      } as unknown as GoogleGenAI;
+
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-2.5-flash",
+        messages: [
+          { role: "system" as const, content: "System" },
+          { role: "user" as const, content: "Hello" },
+        ],
+        // No caching config
+      };
+
+      const s = provider.stream(options, { provider: "gemini", name: "gemini-2.5-flash" });
+      await s.next();
+
+      const callArgs = generateContentStream.mock.calls[0][0];
+      // Should NOT have cachedContent
+      expect(callArgs.config.cachedContent).toBeUndefined();
+    });
+
+    it("sends full contents when caching is explicitly disabled", async () => {
+      const stream = (async function* () {})();
+      const generateContentStream = vi.fn().mockResolvedValue(stream);
+      const client = {
+        models: { generateContentStream },
+        caches: { create: vi.fn(), delete: vi.fn() },
+      } as unknown as GoogleGenAI;
+
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-2.5-flash",
+        messages: [
+          { role: "system" as const, content: "System" },
+          { role: "user" as const, content: "Hello" },
+        ],
+        caching: { enabled: false },
+      };
+
+      const s = provider.stream(options, { provider: "gemini", name: "gemini-2.5-flash" });
+      await s.next();
+
+      const callArgs = generateContentStream.mock.calls[0][0];
+      // Should NOT have cachedContent
+      expect(callArgs.config.cachedContent).toBeUndefined();
+      // caches.create should NOT have been called
+      expect(client.caches.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe("normalizeProviderStream", () => {
     it("should extract text from Gemini chunks", async () => {
       const { client } = createClient();

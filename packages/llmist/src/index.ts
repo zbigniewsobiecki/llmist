@@ -203,6 +203,8 @@ export {
 // Vision namespace for one-shot image analysis
 export type { VisionAnalyzeOptions, VisionAnalyzeResult } from "./core/namespaces/vision.js";
 export type {
+  CachingConfig,
+  CachingScope,
   LLMGenerationOptions,
   LLMStream,
   LLMStreamChunk,
