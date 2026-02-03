@@ -246,6 +246,20 @@ The OpenRouter provider includes enhanced error messages:
 | 429 | Rate limit exceeded - reduce request frequency |
 | 503 | Model unavailable - try a different model or use fallbacks |
 
+## Reasoning Models via OpenRouter
+
+OpenRouter provides access to reasoning-capable models like DeepSeek R1, which excels at math, logic, and coding with chain-of-thought reasoning:
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('openrouter:deepseek/deepseek-r1')
+  .askAndCollect('Prove there are infinitely many primes.');
+```
+
+<Aside type="note">
+  Reasoning behavior for models accessed through OpenRouter depends on the upstream provider's support. For first-class reasoning support with `withReasoning()`, use direct provider connections (OpenAI, Anthropic, Gemini). See the [Reasoning Models](/library/guides/reasoning-models/) guide.
+</Aside>
+
 ## See Also
 
 - [OpenRouter Documentation](https://openrouter.ai/docs)

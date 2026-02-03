@@ -71,6 +71,23 @@ const visionModels = registry.getModelsByFeature('vision');
 
 **Available features:** `streaming`, `functionCalling`, `vision`, `reasoning`, `structuredOutputs`, `fineTuning`
 
+### Reasoning Feature
+
+Models with `reasoning: true` support thinking/extended thinking. When selected, llmist **auto-enables reasoning at `"medium"` effort** unless you explicitly call `.withReasoning()` or `.withoutReasoning()`.
+
+```typescript
+// Query reasoning-capable models
+const reasoningModels = registry.getModelsByFeature('reasoning');
+console.log(reasoningModels);
+// → ['openai:o3', 'openai:o4-mini', 'anthropic:claude-opus-4-5', 'gemini:gemini-3-pro-preview', ...]
+
+// Check if a specific model supports reasoning
+const hasReasoning = registry.supportsFeature('o3', 'reasoning');
+// → true
+```
+
+See [Reasoning Models](/library/guides/reasoning-models/) for how effort maps to each provider.
+
 ## Find Cheapest Model
 
 ```typescript

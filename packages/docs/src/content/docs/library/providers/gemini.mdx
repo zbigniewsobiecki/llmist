@@ -78,6 +78,47 @@ llmist will automatically discover and use Gemini.
   </TabItem>
 </Tabs>
 
+## Reasoning Support
+
+Gemini 2.5 and 3 models support thinking/reasoning with different native mechanisms:
+
+### Gemini 2.5 (Pro/Flash)
+
+Uses numeric `thinkingConfig.thinkingBudget`:
+
+| Effort | Thinking Budget |
+|--------|----------------|
+| `"none"` | 0 |
+| `"low"` | 2048 |
+| `"medium"` | 8192 |
+| `"high"` | 16384 |
+| `"maximum"` | 24576 |
+
+### Gemini 3 (Pro/Flash)
+
+Uses categorical `thinkingConfig.thinkingLevel`:
+
+| Effort | Thinking Level |
+|--------|---------------|
+| `"none"` | `"minimal"` |
+| `"low"` | `"low"` |
+| `"medium"` | `"medium"` |
+| `"high"` | `"high"` |
+| `"maximum"` | `"high"` |
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('pro')  // gemini-3-pro-preview
+  .withReasoning('high')
+  .askAndCollect('Solve step by step: ∫ sin(x)cos(x) dx');
+```
+
+<Aside type="tip">
+  llmist auto-detects whether the model is Gemini 2.5 or 3 and uses the correct native parameter.
+</Aside>
+
+See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details.
+
 ## Vision (Image Input)
 
 Gemini models have excellent vision capabilities:
