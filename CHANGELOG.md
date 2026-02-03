@@ -1,3 +1,9 @@
+## 15.14.0 (2026-02-03)
+
+* Merge pull request #379 from zbigniewsobiecki/feat/unified-context-caching ([60509b3](https://github.com/zbigniewsobiecki/llmist/commit/60509b3)), closes [#379](https://github.com/zbigniewsobiecki/llmist/issues/379)
+* Merge pull request #380 from zbigniewsobiecki/dev ([5510981](https://github.com/zbigniewsobiecki/llmist/commit/5510981)), closes [#380](https://github.com/zbigniewsobiecki/llmist/issues/380)
+* feat(providers): add unified context caching across all providers ([43ced67](https://github.com/zbigniewsobiecki/llmist/commit/43ced67))
+
 ## 15.13.0 (2026-02-03)
 
 * Merge pull request #377 from zbigniewsobiecki/feat/reasoning-models ([9b22738](https://github.com/zbigniewsobiecki/llmist/commit/9b22738)), closes [#377](https://github.com/zbigniewsobiecki/llmist/issues/377)
