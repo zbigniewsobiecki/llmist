@@ -14,17 +14,17 @@ describe("GeminiGenerativeProvider reasoning support", () => {
   };
 
   describe("buildApiRequest - thinkingConfig mapping", () => {
-    it("adds thinkingLevel for Gemini 3 models", async () => {
+    it("adds thinkingLevel for Gemini 3 Pro models", async () => {
       const { client, generateContentStream } = createClient();
       const provider = new GeminiGenerativeProvider(client);
 
       const options = {
-        model: "gemini-3-pro",
+        model: "gemini-3-pro-preview",
         messages: [{ role: "user" as const, content: "Test" }],
         reasoning: { enabled: true, effort: "high" as const },
       };
 
-      await provider.stream(options, { provider: "gemini", name: "gemini-3-pro" }).next();
+      await provider.stream(options, { provider: "gemini", name: "gemini-3-pro-preview" }).next();
 
       expect(generateContentStream).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -37,7 +37,38 @@ describe("GeminiGenerativeProvider reasoning support", () => {
       );
     });
 
-    it("maps Gemini 3 effort levels correctly", async () => {
+    it("maps Gemini 3 Pro effort levels correctly (no medium/minimal)", async () => {
+      const effortMappings: Array<{ effort: string; expected: string }> = [
+        { effort: "none", expected: "low" },
+        { effort: "low", expected: "low" },
+        { effort: "medium", expected: "high" },
+        { effort: "high", expected: "high" },
+        { effort: "maximum", expected: "high" },
+      ];
+
+      for (const { effort, expected } of effortMappings) {
+        const { client, generateContentStream } = createClient();
+        const provider = new GeminiGenerativeProvider(client);
+
+        const options = {
+          model: "gemini-3-pro-preview",
+          messages: [{ role: "user" as const, content: "Test" }],
+          reasoning: {
+            enabled: true,
+            effort: effort as "none" | "low" | "medium" | "high" | "maximum",
+          },
+        };
+
+        await provider.stream(options, { provider: "gemini", name: "gemini-3-pro-preview" }).next();
+
+        const callArgs = generateContentStream.mock.calls[0]?.[0] as {
+          config: { thinkingConfig: { thinkingLevel: string } };
+        };
+        expect(callArgs.config.thinkingConfig.thinkingLevel).toBe(expected);
+      }
+    });
+
+    it("maps Gemini 3 Flash effort levels correctly (full range)", async () => {
       const effortMappings: Array<{ effort: string; expected: string }> = [
         { effort: "none", expected: "minimal" },
         { effort: "low", expected: "low" },
@@ -51,7 +82,7 @@ describe("GeminiGenerativeProvider reasoning support", () => {
         const provider = new GeminiGenerativeProvider(client);
 
         const options = {
-          model: "gemini-3-pro",
+          model: "gemini-3-flash-preview",
           messages: [{ role: "user" as const, content: "Test" }],
           reasoning: {
             enabled: true,
@@ -59,13 +90,34 @@ describe("GeminiGenerativeProvider reasoning support", () => {
           },
         };
 
-        await provider.stream(options, { provider: "gemini", name: "gemini-3-pro" }).next();
+        await provider
+          .stream(options, { provider: "gemini", name: "gemini-3-flash-preview" })
+          .next();
 
         const callArgs = generateContentStream.mock.calls[0]?.[0] as {
           config: { thinkingConfig: { thinkingLevel: string } };
         };
         expect(callArgs.config.thinkingConfig.thinkingLevel).toBe(expected);
       }
+    });
+
+    it("uses Flash mapping for unknown Gemini 3 variants", async () => {
+      const { client, generateContentStream } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-3-nano-preview",
+        messages: [{ role: "user" as const, content: "Test" }],
+        reasoning: { enabled: true, effort: "medium" as const },
+      };
+
+      await provider.stream(options, { provider: "gemini", name: "gemini-3-nano-preview" }).next();
+
+      const callArgs = generateContentStream.mock.calls[0]?.[0] as {
+        config: { thinkingConfig: { thinkingLevel: string } };
+      };
+      // Flash mapping: medium → "medium" (not "high" like Pro would give)
+      expect(callArgs.config.thinkingConfig.thinkingLevel).toBe("medium");
     });
 
     it("adds thinkingBudget for Gemini 2.5 models", async () => {
