@@ -131,9 +131,21 @@ Maps to `thinkingConfig.thinkingBudget` (numeric token count):
 | `"high"` | 16384 |
 | `"maximum"` | 24576 |
 
-### Gemini 3 (Pro/Flash)
+### Gemini 3 Pro
 
-Maps to `thinkingConfig.thinkingLevel` (categorical):
+Maps to `thinkingConfig.thinkingLevel` — Pro only supports `"low"` and `"high"`:
+
+| Effort | Thinking Level |
+|--------|---------------|
+| `"none"` | `"low"` |
+| `"low"` | `"low"` |
+| `"medium"` | `"high"` |
+| `"high"` | `"high"` |
+| `"maximum"` | `"high"` |
+
+### Gemini 3 Flash
+
+Maps to `thinkingConfig.thinkingLevel` — Flash supports the full range:
 
 | Effort | Thinking Level |
 |--------|---------------|
