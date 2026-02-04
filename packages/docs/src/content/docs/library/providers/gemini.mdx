@@ -94,9 +94,25 @@ Uses numeric `thinkingConfig.thinkingBudget`:
 | `"high"` | 16384 |
 | `"maximum"` | 24576 |
 
-### Gemini 3 (Pro/Flash)
+### Gemini 3 Pro
 
-Uses categorical `thinkingConfig.thinkingLevel`:
+Uses categorical `thinkingConfig.thinkingLevel` — Pro only supports `"low"` and `"high"`:
+
+| Effort | Thinking Level |
+|--------|---------------|
+| `"none"` | `"low"` |
+| `"low"` | `"low"` |
+| `"medium"` | `"high"` |
+| `"high"` | `"high"` |
+| `"maximum"` | `"high"` |
+
+<Aside type="caution">
+  Gemini 3 Pro does **not** support `"medium"` or `"minimal"` thinking levels. llmist automatically maps unsupported levels to the nearest supported value.
+</Aside>
+
+### Gemini 3 Flash
+
+Uses categorical `thinkingConfig.thinkingLevel` — Flash supports the full range:
 
 | Effort | Thinking Level |
 |--------|---------------|
@@ -114,7 +130,7 @@ const answer = await LLMist.createAgent()
 ```
 
 <Aside type="tip">
-  llmist auto-detects whether the model is Gemini 2.5 or 3 and uses the correct native parameter.
+  llmist auto-detects the specific Gemini model variant (2.5 vs 3, Pro vs Flash) and uses the correct native parameter and level mapping.
 </Aside>
 
 See the [Reasoning Models](/library/guides/reasoning-models/) guide for full details.

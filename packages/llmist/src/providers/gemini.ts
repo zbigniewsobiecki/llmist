@@ -67,8 +67,17 @@ type GeminiChunk = {
   };
 };
 
-/** Maps llmist reasoning effort to Gemini 3 thinkingLevel */
-const GEMINI3_THINKING_LEVEL: Record<ReasoningEffort, string> = {
+/** Maps llmist reasoning effort to Gemini 3 Pro thinkingLevel (supports only "low" and "high") */
+const GEMINI3_PRO_THINKING_LEVEL: Record<ReasoningEffort, string> = {
+  none: "low",
+  low: "low",
+  medium: "high",
+  high: "high",
+  maximum: "high",
+};
+
+/** Maps llmist reasoning effort to Gemini 3 Flash thinkingLevel (supports full range) */
+const GEMINI3_FLASH_THINKING_LEVEL: Record<ReasoningEffort, string> = {
   none: "minimal",
   low: "low",
   medium: "medium",
@@ -95,10 +104,13 @@ function resolveGeminiThinkingConfig(
   const isGemini3 = modelName.includes("gemini-3");
 
   if (isGemini3) {
-    // Gemini 3 uses thinkingLevel
+    // Gemini 3 uses thinkingLevel — Pro only supports "low"/"high", Flash supports full range
+    const levelMap = modelName.includes("pro")
+      ? GEMINI3_PRO_THINKING_LEVEL
+      : GEMINI3_FLASH_THINKING_LEVEL;
     return {
       thinkingConfig: {
-        thinkingLevel: GEMINI3_THINKING_LEVEL[reasoning.effort ?? "medium"],
+        thinkingLevel: levelMap[reasoning.effort ?? "medium"],
       },
     };
   }
