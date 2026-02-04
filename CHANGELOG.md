@@ -1,3 +1,8 @@
+## <small>15.14.2 (2026-02-04)</small>
+
+* Merge pull request #384 from zbigniewsobiecki/dev ([869c5b1](https://github.com/zbigniewsobiecki/llmist/commit/869c5b1)), closes [#384](https://github.com/zbigniewsobiecki/llmist/issues/384)
+* fix(providers): split Gemini 3 thinking level maps for Pro vs Flash (#383) ([81f1e2b](https://github.com/zbigniewsobiecki/llmist/commit/81f1e2b)), closes [#383](https://github.com/zbigniewsobiecki/llmist/issues/383)
+
 ## <small>15.14.1 (2026-02-03)</small>
 
 * Merge pull request #382 from zbigniewsobiecki/dev ([fb7b6b4](https://github.com/zbigniewsobiecki/llmist/commit/fb7b6b4)), closes [#382](https://github.com/zbigniewsobiecki/llmist/issues/382)
