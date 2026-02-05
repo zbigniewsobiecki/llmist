@@ -610,7 +610,7 @@ export class ExecutionTree {
     nodeId: NodeId,
     failedDependency: string,
     failedDependencyError: string,
-    reason: "dependency_failed" | "controller_skip",
+    reason: "dependency_failed" | "controller_skip" | "limit_exceeded",
   ): void {
     const node = this.nodes.get(nodeId);
     if (!node || node.type !== "gadget") {

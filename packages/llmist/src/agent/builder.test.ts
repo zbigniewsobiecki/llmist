@@ -827,6 +827,67 @@ describe("AgentBuilder", () => {
     });
   });
 
+  describe("withMaxGadgetsPerResponse", () => {
+    it("returns this for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withMaxGadgetsPerResponse(5);
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts zero (unlimited)", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withMaxGadgetsPerResponse(0);
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts positive integers", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withMaxGadgetsPerResponse(25);
+
+      expect(result).toBe(builder);
+    });
+
+    it("stores the value correctly", () => {
+      const builder = new AgentBuilder();
+      builder.withMaxGadgetsPerResponse(10);
+
+      // Access private field via type assertion
+      const maxGadgets = (builder as unknown as { maxGadgetsPerResponse?: number })
+        .maxGadgetsPerResponse;
+
+      expect(maxGadgets).toBe(10);
+    });
+
+    it("throws error for negative values", () => {
+      const builder = new AgentBuilder();
+
+      expect(() => builder.withMaxGadgetsPerResponse(-1)).toThrow(
+        "maxGadgetsPerResponse must be a non-negative number",
+      );
+    });
+
+    it("throws error for non-integer values", () => {
+      const builder = new AgentBuilder();
+
+      expect(() => builder.withMaxGadgetsPerResponse(5.5)).toThrow(
+        "maxGadgetsPerResponse must be an integer",
+      );
+    });
+
+    it("chains correctly with other builder methods", () => {
+      const builder = new AgentBuilder();
+      const result = builder
+        .withModel("sonnet")
+        .withGadgets(Calculator)
+        .withMaxGadgetsPerResponse(10)
+        .withMaxIterations(5);
+
+      expect(result).toBe(builder);
+    });
+  });
+
   describe("full integration", () => {
     it("builds a complete configuration chain", () => {
       const builder = new AgentBuilder();
