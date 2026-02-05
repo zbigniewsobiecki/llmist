@@ -1,3 +1,8 @@
+## 15.15.0 (2026-02-05)
+
+* Merge pull request #386 from zbigniewsobiecki/dev ([2ab73e5](https://github.com/zbigniewsobiecki/llmist/commit/2ab73e5)), closes [#386](https://github.com/zbigniewsobiecki/llmist/issues/386)
+* feat(agent): add maxGadgetsPerResponse to gracefully limit gadget execution (#385) ([541b043](https://github.com/zbigniewsobiecki/llmist/commit/541b043)), closes [#385](https://github.com/zbigniewsobiecki/llmist/issues/385)
+
 ## <small>15.14.2 (2026-02-04)</small>
 
 * Merge pull request #384 from zbigniewsobiecki/dev ([869c5b1](https://github.com/zbigniewsobiecki/llmist/commit/869c5b1)), closes [#384](https://github.com/zbigniewsobiecki/llmist/issues/384)
