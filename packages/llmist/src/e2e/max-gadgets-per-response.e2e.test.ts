@@ -12,9 +12,9 @@ import { collectAllEvents, filterEventsByType } from "./setup.js";
  *
  * These tests verify that:
  * 1. Gadget limit is enforced correctly
- * 2. Excess gadgets are skipped with informative messages
- * 3. Agent loop continues to next iteration after hitting limit
- * 4. Skip events have correct format and reason
+ * 2. The gadget that exceeds the limit emits a skip event
+ * 3. Stream loop breaks immediately (no further gadgets parsed)
+ * 4. Agent loop continues to next iteration after hitting limit
  */
 describe("E2E: maxGadgetsPerResponse", () => {
   beforeEach(() => {
@@ -134,15 +134,14 @@ five
         const gadgetResults = filterEventsByType(events, "gadget_result");
         const skippedEvents = filterEventsByType(events, "gadget_skipped");
 
-        // First 3 execute, last 2 are skipped
+        // First 3 execute, 4th triggers skip and breaks loop (5th never parsed)
         expect(gadgetResults).toHaveLength(3);
-        expect(skippedEvents).toHaveLength(2);
+        expect(skippedEvents).toHaveLength(1);
 
         // Verify skip reason
-        for (const skipEvent of skippedEvents) {
-          expect(skipEvent.failedDependency).toBe("maxGadgetsPerResponse");
-          expect(skipEvent.failedDependencyError).toContain("Gadget limit (3) exceeded");
-        }
+        const skipEvent = skippedEvents[0];
+        expect(skipEvent.failedDependency).toBe("maxGadgetsPerResponse");
+        expect(skipEvent.failedDependencyError).toContain("Gadget limit (3) exceeded");
       },
       TEST_TIMEOUTS.QUICK,
     );
@@ -303,7 +302,7 @@ three
     );
 
     it(
-      "emits gadget_call events for all gadgets (including skipped ones)",
+      "emits gadget_call event for the skipped gadget (before breaking loop)",
       async () => {
         mockLLM()
           .forModel("gpt-5-nano")
@@ -337,11 +336,11 @@ three
 
         const events = await collectAllEvents(agent.run());
 
-        // gadget_call events should be emitted for ALL gadgets
+        // gadget_call events emitted for parsed gadgets (includes the one that triggered limit)
         const gadgetCalls = filterEventsByType(events, "gadget_call");
-        expect(gadgetCalls).toHaveLength(3); // All 3 gadgets called
+        expect(gadgetCalls).toHaveLength(3); // gc_1, gc_2, gc_3 all parsed
 
-        // But only 2 have results, 1 is skipped
+        // 2 have results, 1 is skipped (which triggers loop break)
         const gadgetResults = filterEventsByType(events, "gadget_result");
         const skippedEvents = filterEventsByType(events, "gadget_skipped");
         expect(gadgetResults).toHaveLength(2);
