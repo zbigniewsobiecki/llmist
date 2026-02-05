@@ -10,7 +10,7 @@ import {
 import type { CompleteConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
-import { readAudioFile, readImageFile } from "./file-utils.js";
+import { readAudioFile, readImageFile, readSystemPromptFile } from "./file-utils.js";
 import { writeLogFile } from "./llm-logging.js";
 import { addCompleteOptions, type CLICompleteOptions } from "./option-helpers.js";
 import {
@@ -39,8 +39,18 @@ export async function executeComplete(
   const model = resolveModel(options.model);
 
   const builder = new LLMMessageBuilder();
-  if (options.system) {
-    builder.addSystem(options.system);
+
+  // Resolve system prompt (inline or from file)
+  let systemPrompt = options.system;
+  if (options.systemFile) {
+    if (options.system) {
+      throw new Error("Cannot use both --system and --system-file options");
+    }
+    systemPrompt = await readSystemPromptFile(options.systemFile);
+  }
+
+  if (systemPrompt) {
+    builder.addSystem(systemPrompt);
   }
 
   // Build multimodal message if --image or --audio flags are present
@@ -109,45 +119,60 @@ export async function executeComplete(
   const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
   const progress = new StreamProgress(env.stderr, stderrTTY, client.modelRegistry);
 
-  // Start call with model and estimate based on prompt length
-  const estimatedInputTokens = Math.round(prompt.length / FALLBACK_CHARS_PER_TOKEN);
+  // Calculate estimated tokens from all message content (system + user)
+  let estimatedInputTokens = 0;
+  for (const msg of messages) {
+    if (typeof msg.content === "string") {
+      estimatedInputTokens += msg.content.length;
+    } else if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === "text") {
+          estimatedInputTokens += part.text.length;
+        }
+        // Note: image/audio parts aren't easily estimable, skip for now
+      }
+    }
+  }
+  estimatedInputTokens = Math.round(estimatedInputTokens / FALLBACK_CHARS_PER_TOKEN);
   progress.startCall(model, estimatedInputTokens);
 
   let finishReason: string | null | undefined;
   let usage: TokenUsage | undefined;
   let accumulatedResponse = "";
 
-  for await (const chunk of stream) {
-    // Capture actual usage from stream
-    if (chunk.usage) {
-      usage = chunk.usage;
-      if (chunk.usage.inputTokens) {
-        progress.setInputTokens(chunk.usage.inputTokens, false);
+  try {
+    for await (const chunk of stream) {
+      // Capture actual usage from stream
+      if (chunk.usage) {
+        usage = chunk.usage;
+        if (chunk.usage.inputTokens) {
+          progress.setInputTokens(chunk.usage.inputTokens, false);
+        }
+        if (chunk.usage.outputTokens) {
+          progress.setOutputTokens(chunk.usage.outputTokens, false);
+        }
       }
-      if (chunk.usage.outputTokens) {
-        progress.setOutputTokens(chunk.usage.outputTokens, false);
+      if (chunk.thinking?.content) {
+        // Show thinking content on stderr in dim styling
+        if (stderrTTY && !options.quiet) {
+          progress.pause();
+          env.stderr.write(`\x1b[2m${chunk.thinking.content}\x1b[0m`);
+        }
+      }
+      if (chunk.text) {
+        progress.pause(); // Must pause to avoid stderr/stdout interleaving
+        accumulatedResponse += chunk.text;
+        progress.update(accumulatedResponse.length); // Update token estimate from chars
+        printer.write(chunk.text);
+      }
+      if (chunk.finishReason !== undefined) {
+        finishReason = chunk.finishReason;
       }
     }
-    if (chunk.thinking?.content) {
-      // Show thinking content on stderr in dim styling
-      if (stderrTTY && !options.quiet) {
-        progress.pause();
-        env.stderr.write(`\x1b[2m${chunk.thinking.content}\x1b[0m`);
-      }
-    }
-    if (chunk.text) {
-      progress.pause(); // Must pause to avoid stderr/stdout interleaving
-      accumulatedResponse += chunk.text;
-      progress.update(accumulatedResponse.length); // Update token estimate from chars
-      printer.write(chunk.text);
-    }
-    if (chunk.finishReason !== undefined) {
-      finishReason = chunk.finishReason;
-    }
+    progress.endCall(usage); // Calculate cost before completing
+  } finally {
+    progress.complete(); // Always stop spinner, even on error
   }
-
-  progress.endCall(usage); // Calculate cost before completing
-  progress.complete();
   printer.ensureNewline();
 
   // Log response after streaming

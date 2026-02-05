@@ -17,6 +17,8 @@ import { createNumericParser } from "./utils.js";
 export interface CLICompleteOptions {
   model: string;
   system?: string;
+  /** Path to file containing system prompt (alternative to --system) */
+  systemFile?: string;
   temperature?: number;
   maxTokens?: number;
   quiet?: boolean;
@@ -56,6 +58,8 @@ export interface CLICompleteOptions {
 export interface CLIAgentOptions {
   model: string;
   system?: string;
+  /** Path to file containing system prompt (alternative to --system) */
+  systemFile?: string;
   temperature?: number;
   maxIterations?: number;
   gadget?: string[];
@@ -117,6 +121,7 @@ export function addCompleteOptions(cmd: Command, defaults?: CompleteConfig): Com
     cmd
       .option(OPTION_FLAGS.model, OPTION_DESCRIPTIONS.model, defaults?.model ?? DEFAULT_MODEL)
       .option(OPTION_FLAGS.systemPrompt, OPTION_DESCRIPTIONS.systemPrompt, defaults?.system)
+      .option(OPTION_FLAGS.systemPromptFile, OPTION_DESCRIPTIONS.systemPromptFile)
       .option(
         OPTION_FLAGS.temperature,
         OPTION_DESCRIPTIONS.temperature,
@@ -213,6 +218,7 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
     cmd
       .option(OPTION_FLAGS.model, OPTION_DESCRIPTIONS.model, defaults?.model ?? DEFAULT_MODEL)
       .option(OPTION_FLAGS.systemPrompt, OPTION_DESCRIPTIONS.systemPrompt, defaults?.system)
+      .option(OPTION_FLAGS.systemPromptFile, OPTION_DESCRIPTIONS.systemPromptFile)
       .option(
         OPTION_FLAGS.temperature,
         OPTION_DESCRIPTIONS.temperature,
