@@ -1,3 +1,9 @@
+## 15.16.0 (2026-02-05)
+
+* Merge pull request #389 from zbigniewsobiecki/feat/system-file-option ([735bdb7](https://github.com/zbigniewsobiecki/llmist/commit/735bdb7)), closes [#389](https://github.com/zbigniewsobiecki/llmist/issues/389)
+* Merge pull request #390 from zbigniewsobiecki/dev ([4c43da2](https://github.com/zbigniewsobiecki/llmist/commit/4c43da2)), closes [#390](https://github.com/zbigniewsobiecki/llmist/issues/390)
+* feat(cli): add --system-file option for loading system prompts from files ([d662c11](https://github.com/zbigniewsobiecki/llmist/commit/d662c11))
+
 ## <small>15.15.1 (2026-02-05)</small>
 
 * Merge pull request #387 from zbigniewsobiecki/fix/max-gadgets-break-loop ([5c56c11](https://github.com/zbigniewsobiecki/llmist/commit/5c56c11)), closes [#387](https://github.com/zbigniewsobiecki/llmist/issues/387)
