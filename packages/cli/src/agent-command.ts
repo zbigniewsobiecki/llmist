@@ -7,7 +7,7 @@ import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
 import { getCustomCommandNames, loadConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
-import { readAudioFile, readImageFile } from "./file-utils.js";
+import { readAudioFile, readImageFile, readSystemPromptFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
 import { addAgentOptions, type CLIAgentOptions } from "./option-helpers.js";
 import { resolveRateLimitConfig, resolveRetryConfig } from "./rate-limit-resolver.js";
@@ -400,9 +400,18 @@ export async function executeAgent(
     builder.withRetry(retryConfig);
   }
 
+  // Resolve system prompt (inline or from file)
+  let systemPrompt = options.system;
+  if (options.systemFile) {
+    if (options.system) {
+      throw new Error("Cannot use both --system and --system-file options");
+    }
+    systemPrompt = await readSystemPromptFile(options.systemFile);
+  }
+
   // Add optional configurations
-  if (options.system) {
-    builder.withSystem(options.system);
+  if (systemPrompt) {
+    builder.withSystem(systemPrompt);
   }
   if (options.maxIterations !== undefined) {
     builder.withMaxIterations(options.maxIterations);
