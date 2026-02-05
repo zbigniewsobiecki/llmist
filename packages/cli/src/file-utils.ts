@@ -66,6 +66,36 @@ async function checkFileSize(
 }
 
 /**
+ * Read a system prompt from a file.
+ *
+ * @param filePath - Path to system prompt file (absolute or relative to cwd)
+ * @param options - Optional configuration for file reading
+ * @returns System prompt content as string
+ * @throws Error if file doesn't exist, is too large, or can't be read
+ *
+ * @example
+ * ```typescript
+ * const systemPrompt = await readSystemPromptFile("./system.txt");
+ * builder.addSystem(systemPrompt);
+ * ```
+ */
+export async function readSystemPromptFile(
+  filePath: string,
+  options: FileReadOptions = {},
+): Promise<string> {
+  const absolutePath = resolve(filePath);
+  const maxFileSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
+
+  try {
+    await checkFileSize(absolutePath, filePath, maxFileSize);
+    return await readFile(absolutePath, "utf-8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to read system prompt file "${filePath}": ${message}`);
+  }
+}
+
+/**
  * Read and validate an image file.
  *
  * @param filePath - Path to image file (absolute or relative to cwd)

@@ -28,6 +28,7 @@ export const DEFAULT_MODEL = "openai:gpt-5-nano";
 export const OPTION_FLAGS = {
   model: "-m, --model <identifier>",
   systemPrompt: "-s, --system <prompt>",
+  systemPromptFile: "--system-file <path>",
   temperature: "-t, --temperature <value>",
   maxTokens: "--max-tokens <count>",
   maxIterations: "-i, --max-iterations <count>",
@@ -71,6 +72,7 @@ export const OPTION_FLAGS = {
 export const OPTION_DESCRIPTIONS = {
   model: "Model identifier, e.g. openai:gpt-5-nano or anthropic:claude-sonnet-4-5.",
   systemPrompt: "Optional system prompt prepended to the conversation.",
+  systemPromptFile: "Path to file containing system prompt (alternative to --system).",
   temperature: "Sampling temperature between 0 and 2.",
   maxTokens: "Maximum number of output tokens requested from the model.",
   maxIterations: "Maximum number of agent loop iterations before exiting.",
