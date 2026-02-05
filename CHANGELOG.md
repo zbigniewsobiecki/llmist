@@ -1,3 +1,9 @@
+## <small>15.15.1 (2026-02-05)</small>
+
+* Merge pull request #387 from zbigniewsobiecki/fix/max-gadgets-break-loop ([5c56c11](https://github.com/zbigniewsobiecki/llmist/commit/5c56c11)), closes [#387](https://github.com/zbigniewsobiecki/llmist/issues/387)
+* Merge pull request #388 from zbigniewsobiecki/dev ([a43c6bf](https://github.com/zbigniewsobiecki/llmist/commit/a43c6bf)), closes [#388](https://github.com/zbigniewsobiecki/llmist/issues/388)
+* fix(agent): break stream loop when gadget limit exceeded ([891c7e4](https://github.com/zbigniewsobiecki/llmist/commit/891c7e4))
+
 ## 15.15.0 (2026-02-05)
 
 * Merge pull request #386 from zbigniewsobiecki/dev ([2ab73e5](https://github.com/zbigniewsobiecki/llmist/commit/2ab73e5)), closes [#386](https://github.com/zbigniewsobiecki/llmist/issues/386)
