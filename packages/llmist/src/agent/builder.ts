@@ -102,6 +102,7 @@ export class AgentBuilder {
   };
   private defaultGadgetTimeoutMs?: number;
   private gadgetExecutionMode?: GadgetExecutionMode;
+  private maxGadgetsPerResponse?: number;
   private gadgetOutputLimit?: boolean;
   private gadgetOutputLimitPercent?: number;
   private compactionConfig?: CompactionConfig;
@@ -533,6 +534,38 @@ export class AgentBuilder {
    */
   withGadgetExecutionMode(mode: GadgetExecutionMode): this {
     this.gadgetExecutionMode = mode;
+    return this;
+  }
+
+  /**
+   * Set the maximum number of gadgets to execute per LLM response.
+   *
+   * When the limit is reached, remaining gadgets are skipped with an informative
+   * message visible to the LLM, allowing it to adjust on the next iteration.
+   * Gadgets already in-flight (executing in parallel) are allowed to complete.
+   *
+   * @param max - Maximum gadgets per response (0 = unlimited, default)
+   * @returns This builder for chaining
+   * @throws {Error} If max is negative or non-integer
+   *
+   * @example
+   * ```typescript
+   * // Limit to 5 gadgets per response
+   * LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withGadgets(ReadFile, WriteFile, Search)
+   *   .withMaxGadgetsPerResponse(5)
+   *   .ask("Process these files...");
+   * ```
+   */
+  withMaxGadgetsPerResponse(max: number): this {
+    if (max < 0) {
+      throw new Error("maxGadgetsPerResponse must be a non-negative number");
+    }
+    if (!Number.isInteger(max)) {
+      throw new Error("maxGadgetsPerResponse must be an integer");
+    }
+    this.maxGadgetsPerResponse = max;
     return this;
   }
 
@@ -1212,6 +1245,7 @@ export class AgentBuilder {
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetExecutionMode: this.gadgetExecutionMode,
+      maxGadgetsPerResponse: this.maxGadgetsPerResponse,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,
@@ -1419,6 +1453,7 @@ export class AgentBuilder {
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetExecutionMode: this.gadgetExecutionMode,
+      maxGadgetsPerResponse: this.maxGadgetsPerResponse,
       gadgetOutputLimit: this.gadgetOutputLimit,
       gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
       compactionConfig: this.compactionConfig,

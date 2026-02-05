@@ -150,6 +150,9 @@ export interface StreamProcessorOptions {
 
   /** Shared retry config for consistent backoff behavior across subagents */
   retryConfig?: ResolvedRetryConfig;
+
+  /** Maximum gadgets to execute per response (0 = unlimited) */
+  maxGadgetsPerResponse?: number;
 }
 
 /**
@@ -248,6 +251,10 @@ export class StreamProcessor {
   // Parent observer hooks for subagent visibility
   private readonly parentObservers?: Observers;
 
+  // Gadget limiting per response
+  private readonly maxGadgetsPerResponse: number;
+  private gadgetStartedCount: number = 0;
+
   constructor(options: StreamProcessorOptions) {
     this.iteration = options.iteration;
     this.registry = options.registry;
@@ -271,6 +278,9 @@ export class StreamProcessor {
 
     // Store parent observers for subagent visibility
     this.parentObservers = options.parentObservers;
+
+    // Initialize gadget limiting (0 = unlimited)
+    this.maxGadgetsPerResponse = options.maxGadgetsPerResponse ?? 0;
 
     this.parser = new GadgetCallParser({
       startPrefix: options.gadgetStartPrefix,
@@ -644,7 +654,17 @@ export class StreamProcessor {
         return; // Execution deferred, gadget_call already yielded
       }
 
-      // All dependencies satisfied - execute synchronously (dependency already complete)
+      // All dependencies satisfied - check limit then execute
+      const limitCheckGen = this.checkGadgetLimitExceeded(call);
+      let limitResult = await limitCheckGen.next();
+      while (!limitResult.done) {
+        yield limitResult.value;
+        limitResult = await limitCheckGen.next();
+      }
+      if (limitResult.value === true) {
+        return; // Limit exceeded, gadget was skipped
+      }
+
       for await (const evt of this.executeGadgetGenerator(call)) {
         yield evt;
       }
@@ -656,12 +676,25 @@ export class StreamProcessor {
       return;
     }
 
-    // NO dependencies - check concurrency limit before starting
+    // NO dependencies - check gadget limit FIRST, then concurrency
+    // Check maxGadgetsPerResponse limit before any execution path
+    const limitCheckGen = this.checkGadgetLimitExceeded(call);
+    let limitResult = await limitCheckGen.next();
+    while (!limitResult.done) {
+      yield limitResult.value;
+      limitResult = await limitCheckGen.next();
+    }
+    if (limitResult.value === true) {
+      return; // Limit exceeded, gadget was skipped
+    }
+
+    // Check concurrency limit
     const limit = this.getConcurrencyLimit(call.gadgetName);
     const activeCount = this.activeCountByGadget.get(call.gadgetName) ?? 0;
 
     if (limit > 0 && activeCount >= limit) {
       // Queue for later execution when a slot becomes available
+      // Note: gadget already passed maxGadgetsPerResponse check and was counted
       this.logger.debug("Gadget queued due to concurrency limit", {
         gadgetName: call.gadgetName,
         invocationId: call.invocationId,
@@ -1219,6 +1252,102 @@ export class StreamProcessor {
   }
 
   /**
+   * Check if gadget execution should be skipped due to maxGadgetsPerResponse limit.
+   * If limit is exceeded, yields skip events and returns true.
+   * If execution can proceed, increments counter and returns false.
+   *
+   * @returns true if gadget should be skipped, false if execution can proceed
+   */
+  private async *checkGadgetLimitExceeded(
+    call: ParsedGadgetCall,
+  ): AsyncGenerator<StreamEvent, boolean> {
+    // Skip check if no limit set (0 = unlimited)
+    if (this.maxGadgetsPerResponse <= 0) {
+      this.gadgetStartedCount++;
+      return false;
+    }
+
+    // Check if limit exceeded
+    if (this.gadgetStartedCount >= this.maxGadgetsPerResponse) {
+      const errorMessage = `Gadget limit (${this.maxGadgetsPerResponse}) exceeded. Consider calling fewer gadgets per response.`;
+
+      this.logger.info("Gadget skipped due to maxGadgetsPerResponse limit", {
+        gadgetName: call.gadgetName,
+        invocationId: call.invocationId,
+        limit: this.maxGadgetsPerResponse,
+        currentCount: this.gadgetStartedCount,
+      });
+
+      this.failedInvocations.add(call.invocationId);
+
+      // Mark skipped in execution tree
+      if (this.tree) {
+        const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
+        if (gadgetNode) {
+          this.tree.skipGadget(
+            gadgetNode.id,
+            "maxGadgetsPerResponse",
+            errorMessage,
+            "limit_exceeded",
+          );
+        }
+      }
+
+      const skipEvent: GadgetSkippedEvent = {
+        type: "gadget_skipped",
+        gadgetName: call.gadgetName,
+        invocationId: call.invocationId,
+        parameters: call.parameters ?? {},
+        failedDependency: "maxGadgetsPerResponse",
+        failedDependencyError: errorMessage,
+      };
+      yield skipEvent;
+
+      // Call onGadgetSkipped observer
+      const limitSkipNode = this.tree?.getNodeByInvocationId(call.invocationId);
+      const limitSkipSubagentContext =
+        this.tree && limitSkipNode
+          ? getSubagentContextForNode(this.tree, limitSkipNode.id)
+          : undefined;
+
+      if (this.hooks.observers?.onGadgetSkipped) {
+        const context: ObserveGadgetSkippedContext = {
+          iteration: this.iteration,
+          gadgetName: call.gadgetName,
+          invocationId: call.invocationId,
+          parameters: call.parameters ?? {},
+          failedDependency: "maxGadgetsPerResponse",
+          failedDependencyError: errorMessage,
+          logger: this.logger,
+          subagentContext: limitSkipSubagentContext,
+        };
+        await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+      }
+
+      // Call parent observers for subagent visibility
+      if (this.parentObservers?.onGadgetSkipped) {
+        const context: ObserveGadgetSkippedContext = {
+          iteration: this.iteration,
+          gadgetName: call.gadgetName,
+          invocationId: call.invocationId,
+          parameters: call.parameters ?? {},
+          failedDependency: "maxGadgetsPerResponse",
+          failedDependencyError: errorMessage,
+          logger: this.logger,
+          subagentContext: limitSkipSubagentContext,
+        };
+        await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
+      }
+
+      return true; // Limit exceeded, skip this gadget
+    }
+
+    // Limit not exceeded, increment counter and allow execution
+    this.gadgetStartedCount++;
+    return false;
+  }
+
+  /**
    * Process pending gadgets whose dependencies are now satisfied.
    * Yields events in real-time as gadgets complete.
    *
@@ -1272,19 +1401,30 @@ export class StreamProcessor {
         }
 
         if (this.gadgetExecutionMode === "sequential") {
-          // Sequential: execute one at a time
+          // Sequential: execute one at a time, checking limit for each
           this.logger.debug("Executing ready gadgets sequentially", {
             count: readyToExecute.length,
             invocationIds: readyToExecute.map((c) => c.invocationId),
           });
 
           for (const call of readyToExecute) {
+            // Check limit before execution
+            const limitCheckGen = this.checkGadgetLimitExceeded(call);
+            let limitResult = await limitCheckGen.next();
+            while (!limitResult.done) {
+              yield limitResult.value;
+              limitResult = await limitCheckGen.next();
+            }
+            if (limitResult.value === true) {
+              continue; // Limit exceeded, skip this gadget but continue with others
+            }
+
             for await (const evt of this.executeGadgetGenerator(call)) {
               yield evt;
             }
           }
         } else {
-          // Parallel: execute all ready gadgets concurrently
+          // Parallel: check limit for each and execute allowed gadgets concurrently
           this.logger.debug("Executing ready gadgets in parallel", {
             count: readyToExecute.length,
             invocationIds: readyToExecute.map((c) => c.invocationId),
@@ -1293,6 +1433,18 @@ export class StreamProcessor {
           const eventSets = await Promise.all(
             readyToExecute.map(async (call) => {
               const events: StreamEvent[] = [];
+
+              // Check limit before execution
+              const limitCheckGen = this.checkGadgetLimitExceeded(call);
+              let limitResult = await limitCheckGen.next();
+              while (!limitResult.done) {
+                events.push(limitResult.value);
+                limitResult = await limitCheckGen.next();
+              }
+              if (limitResult.value === true) {
+                return events; // Return skip events only
+              }
+
               for await (const evt of this.executeGadgetGenerator(call)) {
                 events.push(evt);
               }

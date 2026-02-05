@@ -1781,4 +1781,232 @@ test value
   // NOTE: Subagent event streaming tests removed - onSubagentEvent callback was replaced
   // by ExecutionTree event propagation via tree-hook-bridge. See tree-sharing.test.ts for
   // subagent event integration tests.
+
+  describe("maxGadgetsPerResponse", () => {
+    it("executes all gadgets when limit is 0 (unlimited)", async () => {
+      const gadget1 = createMockGadget({ name: "Gadget1", result: "result1" });
+      const gadget2 = createMockGadget({ name: "Gadget2", result: "result2" });
+      const gadget3 = createMockGadget({ name: "Gadget3", result: "result3" });
+      registry.registerByClass(gadget1);
+      registry.registerByClass(gadget2);
+      registry.registerByClass(gadget3);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        maxGadgetsPerResponse: 0, // Unlimited
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("Gadget1", {}, { invocationId: "g1" }),
+        createGadgetCallString("Gadget2", {}, { invocationId: "g2" }),
+        createGadgetCallString("Gadget3", {}, { invocationId: "g3" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+
+      expect(gadgetResults).toHaveLength(3);
+      expect(skippedEvents).toHaveLength(0);
+    });
+
+    it("skips excess gadgets when limit is reached", async () => {
+      const gadget1 = createMockGadget({ name: "Gadget1", result: "result1" });
+      const gadget2 = createMockGadget({ name: "Gadget2", result: "result2" });
+      const gadget3 = createMockGadget({ name: "Gadget3", result: "result3" });
+      registry.registerByClass(gadget1);
+      registry.registerByClass(gadget2);
+      registry.registerByClass(gadget3);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        maxGadgetsPerResponse: 2, // Limit to 2
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("Gadget1", {}, { invocationId: "g1" }),
+        createGadgetCallString("Gadget2", {}, { invocationId: "g2" }),
+        createGadgetCallString("Gadget3", {}, { invocationId: "g3" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+
+      // First 2 execute, third is skipped
+      expect(gadgetResults).toHaveLength(2);
+      expect(skippedEvents).toHaveLength(1);
+
+      // Verify which gadgets executed
+      expect(gadget1.getCallCount()).toBe(1);
+      expect(gadget2.getCallCount()).toBe(1);
+      expect(gadget3.getCallCount()).toBe(0);
+    });
+
+    it("uses correct skip reason in gadget_skipped event", async () => {
+      const gadget1 = createMockGadget({ name: "Gadget1", result: "result1" });
+      const gadget2 = createMockGadget({ name: "Gadget2", result: "result2" });
+      registry.registerByClass(gadget1);
+      registry.registerByClass(gadget2);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        maxGadgetsPerResponse: 1,
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("Gadget1", {}, { invocationId: "g1" }),
+        createGadgetCallString("Gadget2", {}, { invocationId: "g2" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+      expect(skippedEvents).toHaveLength(1);
+
+      if (skippedEvents[0].type === "gadget_skipped") {
+        expect(skippedEvents[0].gadgetName).toBe("Gadget2");
+        expect(skippedEvents[0].invocationId).toBe("g2");
+        expect(skippedEvents[0].failedDependency).toBe("maxGadgetsPerResponse");
+        expect(skippedEvents[0].failedDependencyError).toContain("Gadget limit (1) exceeded");
+      }
+    });
+
+    it("calls onGadgetSkipped observer for limit-exceeded gadgets", async () => {
+      const gadget1 = createMockGadget({ name: "Gadget1", result: "result1" });
+      const gadget2 = createMockGadget({ name: "Gadget2", result: "result2" });
+      registry.registerByClass(gadget1);
+      registry.registerByClass(gadget2);
+
+      const onGadgetSkipped = vi.fn(async () => {});
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        maxGadgetsPerResponse: 1,
+        hooks: {
+          observers: { onGadgetSkipped },
+        },
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("Gadget1", {}, { invocationId: "g1" }),
+        createGadgetCallString("Gadget2", {}, { invocationId: "g2" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      await consumeStream(processor, stream);
+
+      expect(onGadgetSkipped).toHaveBeenCalledTimes(1);
+      expect(onGadgetSkipped.mock.calls[0][0]).toMatchObject({
+        gadgetName: "Gadget2",
+        invocationId: "g2",
+        failedDependency: "maxGadgetsPerResponse",
+      });
+    });
+
+    it("applies limit to all gadgets regardless of type", async () => {
+      const gadget1 = createMockGadget({ name: "TypeA", result: "a1" });
+      const gadget2 = createMockGadget({ name: "TypeB", result: "b1" });
+      registry.registerByClass(gadget1);
+      registry.registerByClass(gadget2);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        maxGadgetsPerResponse: 2,
+      });
+
+      // Call TypeA twice and TypeB once - third call should be skipped
+      const gadgetCalls = [
+        createGadgetCallString("TypeA", {}, { invocationId: "a1" }),
+        createGadgetCallString("TypeB", {}, { invocationId: "b1" }),
+        createGadgetCallString("TypeA", {}, { invocationId: "a2" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+
+      expect(gadgetResults).toHaveLength(2);
+      expect(skippedEvents).toHaveLength(1);
+
+      // Third gadget call (second TypeA) should be skipped
+      if (skippedEvents[0].type === "gadget_skipped") {
+        expect(skippedEvents[0].invocationId).toBe("a2");
+      }
+    });
+
+    it("limit is separate from concurrency limits", async () => {
+      const DELAY_MS = 30;
+
+      // Same gadget type with concurrency limit and maxGadgetsPerResponse
+      const slowGadget = createMockGadget({
+        name: "SlowGadget",
+        result: "done",
+        delayMs: DELAY_MS,
+      });
+      registry.registerByClass(slowGadget);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        maxGadgetsPerResponse: 3, // Allow 3 gadgets per response
+        subagentConfig: {
+          SlowGadget: { maxConcurrent: 1 }, // But only 1 concurrent
+        },
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s1" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s2" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s3" }),
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s4" }), // Should be skipped
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      const skippedEvents = result.outputs.filter((e) => e.type === "gadget_skipped");
+
+      // 3 execute (maxGadgetsPerResponse), 1 skipped
+      expect(gadgetResults).toHaveLength(3);
+      expect(skippedEvents).toHaveLength(1);
+    });
+
+    it("marks skipped gadget as failed in failedInvocations set", async () => {
+      const gadget1 = createMockGadget({ name: "Gadget1", result: "result1" });
+      const gadget2 = createMockGadget({ name: "Gadget2", result: "result2" });
+      registry.registerByClass(gadget1);
+      registry.registerByClass(gadget2);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        maxGadgetsPerResponse: 1,
+      });
+
+      const gadgetCalls = [
+        createGadgetCallString("Gadget1", {}, { invocationId: "g1" }),
+        createGadgetCallString("Gadget2", {}, { invocationId: "g2" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      await consumeStream(processor, stream);
+
+      const failedIds = processor.getFailedInvocationIds();
+      expect(failedIds.has("g2")).toBe(true);
+    });
+  });
 });

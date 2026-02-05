@@ -183,7 +183,7 @@ export interface GadgetSkippedEvent extends BaseExecutionEvent {
   /** Gadget name */
   name: string;
   /** Reason for skipping */
-  reason: "dependency_failed" | "controller_skip";
+  reason: "dependency_failed" | "controller_skip" | "limit_exceeded";
   /** Error message (combines reason and failedDependencyError for consistency with GadgetErrorEvent) */
   error: string;
   /** Failed dependency invocation ID (if dependency_failed) */

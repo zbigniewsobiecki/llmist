@@ -168,6 +168,9 @@ export interface AgentOptions {
   /** Subagent-specific configuration overrides (from CLI config) */
   subagentConfig?: SubagentConfigMap;
 
+  /** Maximum gadgets to execute per LLM response (0 = unlimited) */
+  maxGadgetsPerResponse?: number;
+
   // ==========================================================================
   // Execution Tree Context (for shared tree model with subagents)
   // ==========================================================================
@@ -281,6 +284,9 @@ export class Agent {
   // Subagent configuration
   private readonly agentContextConfig: AgentContextConfig;
   private readonly subagentConfig?: SubagentConfigMap;
+
+  // Gadget limiting
+  private readonly maxGadgetsPerResponse: number;
 
   // Counter for generating synthetic invocation IDs for wrapped text content
   private syntheticInvocationCounter = 0;
@@ -420,6 +426,9 @@ export class Agent {
       temperature: this.temperature,
     };
     this.subagentConfig = options.subagentConfig;
+
+    // Initialize gadget limiting (0 = unlimited)
+    this.maxGadgetsPerResponse = options.maxGadgetsPerResponse ?? 0;
 
     // Initialize Execution Tree
     // If a parent tree is provided (subagent case), share it; otherwise create a new tree
@@ -750,6 +759,8 @@ export class Agent {
                 // Shared rate limit tracker and retry config for subagents
                 rateLimitTracker: this.rateLimitTracker,
                 retryConfig: this.retryConfig,
+                // Gadget limiting
+                maxGadgetsPerResponse: this.maxGadgetsPerResponse,
               });
 
               // Consume the stream processor generator, yielding events in real-time
