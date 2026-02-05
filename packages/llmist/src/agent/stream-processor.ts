@@ -254,6 +254,7 @@ export class StreamProcessor {
   // Gadget limiting per response
   private readonly maxGadgetsPerResponse: number;
   private gadgetStartedCount: number = 0;
+  private limitExceeded: boolean = false;
 
   constructor(options: StreamProcessorOptions) {
     this.iteration = options.iteration;
@@ -420,6 +421,14 @@ export class StreamProcessor {
           }
         }
       }
+
+      // Step 5: Break stream loop if gadget limit exceeded
+      // This stops reading further chunks, letting in-flight gadgets complete
+      // and allowing the agent to continue to the next iteration
+      if (this.limitExceeded) {
+        this.logger.info("Breaking stream loop due to gadget limit");
+        break;
+      }
     }
 
     // Signal that LLM response is complete (tokens stopped flowing)
@@ -554,6 +563,11 @@ export class StreamProcessor {
    * enabling real-time UI feedback.
    */
   private async *processGadgetCallGenerator(call: ParsedGadgetCall): AsyncGenerator<StreamEvent> {
+    // Early exit if limit already exceeded - don't emit events for buffered gadgets
+    if (this.limitExceeded) {
+      return;
+    }
+
     // Yield gadget_call IMMEDIATELY (real-time feedback before execution)
     yield { type: "gadget_call", call };
 
@@ -1271,7 +1285,10 @@ export class StreamProcessor {
     if (this.gadgetStartedCount >= this.maxGadgetsPerResponse) {
       const errorMessage = `Gadget limit (${this.maxGadgetsPerResponse}) exceeded. Consider calling fewer gadgets per response.`;
 
-      this.logger.info("Gadget skipped due to maxGadgetsPerResponse limit", {
+      // Set flag to break stream loop - stops reading further chunks
+      this.limitExceeded = true;
+
+      this.logger.info("Gadget limit exceeded, stopping stream processing", {
         gadgetName: call.gadgetName,
         invocationId: call.invocationId,
         limit: this.maxGadgetsPerResponse,
@@ -1355,6 +1372,11 @@ export class StreamProcessor {
    * but results are yielded as they become available.
    */
   private async *processPendingGadgetsGenerator(): AsyncGenerator<StreamEvent> {
+    // Skip processing pending gadgets if limit already exceeded
+    if (this.limitExceeded) {
+      return;
+    }
+
     let progress = true;
 
     while (progress && this.gadgetsAwaitingDependencies.size > 0) {
