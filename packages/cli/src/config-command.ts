@@ -105,6 +105,9 @@ function showProfile(name: string, config: CLIConfig, env: CLIEnvironment): void
   env.stdout.write(`  Model:           ${section.model ?? "(default)"}\n`);
   env.stdout.write(`  Max Iterations:  ${section["max-iterations"] ?? "(default)"}\n`);
   env.stdout.write(
+    `  Budget:          ${section.budget !== undefined ? `$${section.budget}` : "(none)"}\n`,
+  );
+  env.stdout.write(
     `  Temperature:     ${section.temperature !== undefined ? section.temperature : "(default)"}\n`,
   );
 
@@ -134,6 +137,7 @@ function showProfile(name: string, config: CLIConfig, env: CLIEnvironment): void
       if (subConfig.model) env.stdout.write(`    model: ${subConfig.model}\n`);
       if (subConfig.maxIterations)
         env.stdout.write(`    maxIterations: ${subConfig.maxIterations}\n`);
+      if (subConfig.budget) env.stdout.write(`    budget: $${subConfig.budget}\n`);
       if (subConfig.timeoutMs) env.stdout.write(`    timeoutMs: ${subConfig.timeoutMs}\n`);
     }
   }

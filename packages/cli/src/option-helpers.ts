@@ -62,6 +62,7 @@ export interface CLIAgentOptions {
   systemFile?: string;
   temperature?: number;
   maxIterations?: number;
+  budget?: number;
   gadget?: string[];
   builtins: boolean;
   builtinInteraction: boolean;
@@ -231,6 +232,12 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
         createNumericParser({ label: "Max iterations", integer: true, min: 1 }),
         defaults?.["max-iterations"],
       )
+      .option(
+        OPTION_FLAGS.budget,
+        OPTION_DESCRIPTIONS.budget,
+        createNumericParser({ label: "Budget", min: 0 }),
+        defaults?.budget,
+      )
       .option(OPTION_FLAGS.gadgetModule, OPTION_DESCRIPTIONS.gadgetModule, gadgetAccumulator, [
         ...defaultGadgets,
       ])
@@ -349,6 +356,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
   if (config.system !== undefined) result.system = config.system;
   if (config.temperature !== undefined) result.temperature = config.temperature;
   if (config["max-iterations"] !== undefined) result.maxIterations = config["max-iterations"];
+  if (config.budget !== undefined) result.budget = config.budget;
   // Prefer gadgets (plural) from resolved config, fall back to legacy gadget (singular)
   const gadgets = config.gadgets ?? config.gadget;
   if (gadgets !== undefined) result.gadget = gadgets;

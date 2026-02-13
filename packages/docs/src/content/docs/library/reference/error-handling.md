@@ -69,6 +69,36 @@ LLMist includes automatic retry for transient failures:
 })
 ```
 
+## BudgetPricingUnavailableError
+
+Thrown at agent construction when `.withBudget()` is set but the model has no valid pricing information in the model registry.
+
+**When it occurs:**
+- The model is not registered in the model registry
+- The model's pricing has both `input` and `output` set to `0`
+
+**Fix:**
+
+```typescript
+// Option 1: Register pricing for the model
+client.modelRegistry.registerModel({
+  provider: 'custom',
+  modelId: 'my-custom-model',
+  displayName: 'My Custom Model',
+  contextWindow: 128000,
+  maxOutputTokens: 4096,
+  pricing: { input: 5.0, output: 15.0 }, // per 1M tokens
+  knowledgeCutoff: '2025-01',
+  features: { streaming: true, functionCalling: true, vision: false },
+});
+
+// Option 2: Remove the budget constraint
+const agent = LLMist.createAgent()
+  .withModel('my-custom-model')
+  // .withBudget(0.50)  // Remove if model lacks pricing
+  .ask('Hello');
+```
+
 ## Special Exceptions
 
 | Exception | Purpose |

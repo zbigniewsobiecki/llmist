@@ -185,6 +185,10 @@ export interface ObserveLLMCallContext {
 export interface ObserveLLMCallReadyContext {
   iteration: number;
   maxIterations: number;
+  /** Budget limit in USD, if configured */
+  budget?: number;
+  /** Cumulative cost so far (from execution tree) */
+  totalCost: number;
   /** Final options after any controller modifications (e.g., trailing messages) */
   options: Readonly<LLMGenerationOptions>;
   logger: Logger<ILogObj>;
@@ -548,6 +552,10 @@ export interface LLMCallControllerContext {
   iteration: number;
   /** Maximum iterations configured for the agent */
   maxIterations: number;
+  /** Budget limit in USD, if configured */
+  budget?: number;
+  /** Cumulative cost so far (from execution tree) */
+  totalCost: number;
   options: LLMGenerationOptions;
   logger: Logger<ILogObj>;
 }
@@ -566,6 +574,10 @@ export interface AfterLLMCallControllerContext {
   iteration: number;
   /** Maximum iterations configured for the agent */
   maxIterations: number;
+  /** Budget limit in USD, if configured */
+  budget?: number;
+  /** Cumulative cost so far (from execution tree) */
+  totalCost: number;
   options: Readonly<LLMGenerationOptions>;
   finishReason: string | null;
   /** Token usage including cached token counts when available */

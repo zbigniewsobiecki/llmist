@@ -263,6 +263,7 @@ export { createGadget } from "./gadgets/create-gadget.js";
 // Gadget infrastructure
 export {
   AbortException,
+  BudgetPricingUnavailableError,
   HumanInputRequiredException,
   TaskCompletionSignal,
   TimeoutException,

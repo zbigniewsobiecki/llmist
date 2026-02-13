@@ -267,6 +267,39 @@ describe("config", () => {
         expect(() => validateConfig(raw)).toThrow("[agent].max-iterations must be an integer");
       });
 
+      it("should parse budget correctly from config", () => {
+        const raw = {
+          agent: {
+            budget: 0.5,
+          },
+        };
+
+        const result = validateConfig(raw);
+        expect(result.agent?.budget).toBe(0.5);
+      });
+
+      it("should reject non-numeric budget", () => {
+        const raw = {
+          agent: {
+            budget: "fifty-cents",
+          },
+        };
+
+        expect(() => validateConfig(raw)).toThrow(ConfigError);
+        expect(() => validateConfig(raw)).toThrow("[agent].budget must be a number");
+      });
+
+      it("should reject negative budget", () => {
+        const raw = {
+          agent: {
+            budget: -1,
+          },
+        };
+
+        expect(() => validateConfig(raw)).toThrow(ConfigError);
+        expect(() => validateConfig(raw)).toThrow("[agent].budget must be >= 0");
+      });
+
       it("should reject invalid gadget array", () => {
         const raw = {
           agent: {

@@ -232,6 +232,24 @@ const cheapAgent = LLMist.createAgent()
   .withHooks(HookPresets.tokenTracking());  // Monitor costs
 ```
 
+### Cost-Limited Agent
+
+Set a hard budget limit in USD. The agent loop automatically stops when cumulative cost reaches the specified amount:
+
+```typescript
+const budgetAgent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withMaxIterations(50)  // High iteration cap
+  .withBudget(0.50)       // But hard-stop at $0.50
+  .withGadgets(MyGadgets);
+```
+
+When both `maxIterations` and `budget` are set, whichever limit is hit first stops the loop. The call that causes cost to exceed the budget completes normally — the loop exits afterward without throwing.
+
+:::note
+Budget requires model pricing in the registry. Setting a budget on a model without pricing throws `BudgetPricingUnavailableError` at construction time.
+:::
+
 ### High-Reliability Mode
 
 Maximum reliability for critical tasks:
