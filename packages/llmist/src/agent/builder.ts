@@ -62,7 +62,10 @@ export type HistoryMessage =
  * Context available to trailing message functions.
  * Provides iteration information for dynamic message generation.
  */
-export type TrailingMessageContext = Pick<LLMCallControllerContext, "iteration" | "maxIterations">;
+export type TrailingMessageContext = Pick<
+  LLMCallControllerContext,
+  "iteration" | "maxIterations" | "budget" | "totalCost"
+>;
 
 /**
  * Trailing message can be a static string or a function that generates the message.
@@ -82,6 +85,7 @@ export class AgentBuilder {
   private systemPrompt?: string;
   private temperature?: number;
   private maxIterations?: number;
+  private budget?: number;
   private logger?: Logger<ILogObj>;
   private hooks?: AgentHooks;
   private promptConfig?: PromptTemplateConfig;
@@ -185,6 +189,23 @@ export class AgentBuilder {
    */
   withMaxIterations(max: number): this {
     this.maxIterations = max;
+    return this;
+  }
+
+  /**
+   * Set the budget limit in USD.
+   * The agent loop stops when cumulative cost reaches this limit.
+   *
+   * @param amountUSD - Maximum spend in USD
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * .withBudget(0.50)  // Stop after $0.50 spent
+   * ```
+   */
+  withBudget(amountUSD: number): this {
+    this.budget = amountUSD;
     return this;
   }
 
@@ -1140,7 +1161,12 @@ export class AgentBuilder {
       // Generate trailing message content
       const content =
         typeof trailingMsg === "function"
-          ? trailingMsg({ iteration: ctx.iteration, maxIterations: ctx.maxIterations })
+          ? trailingMsg({
+              iteration: ctx.iteration,
+              maxIterations: ctx.maxIterations,
+              budget: ctx.budget,
+              totalCost: ctx.totalCost,
+            })
           : trailingMsg;
 
       // Append as ephemeral user message
@@ -1232,6 +1258,7 @@ export class AgentBuilder {
       userPrompt,
       registry,
       maxIterations: this.maxIterations,
+      budget: this.budget,
       temperature: this.temperature,
       logger: this.logger,
       hooks: this.composeHooks(),
@@ -1440,6 +1467,7 @@ export class AgentBuilder {
       // No userPrompt - agent.run() will throw if called directly
       registry,
       maxIterations: this.maxIterations,
+      budget: this.budget,
       temperature: this.temperature,
       logger: this.logger,
       hooks: this.composeHooks(),

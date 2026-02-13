@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { LLMist } from "../core/client.js";
+import { BudgetPricingUnavailableError } from "../gadgets/exceptions.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import { AgentBuilder } from "./builder.js";
@@ -90,6 +91,39 @@ describe("Agent Architecture", () => {
 
       // Should stop after max iterations
       expect(iterationCount).toBeGreaterThan(0);
+    });
+
+    it("should throw BudgetPricingUnavailableError when budget set with unknown model", () => {
+      expect(() => {
+        new AgentBuilder(mockClient)
+          .withModel("unknown-model-xyz")
+          .withGadgets(...registry.getAll())
+          .withBudget(1.0)
+          .ask("Test prompt");
+      }).toThrow(BudgetPricingUnavailableError);
+    });
+
+    it("should allow budget when model has valid pricing", () => {
+      const clientWithPricing = {
+        stream: vi.fn().mockImplementation(async function* () {
+          yield { text: "Test response" };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+          getModelSpec: vi.fn().mockReturnValue({
+            modelId: "test:model",
+            pricing: { input: 3.0, output: 15.0 },
+          }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(clientWithPricing)
+        .withModel("test:model")
+        .withGadgets(...registry.getAll())
+        .withBudget(0.5)
+        .ask("Test prompt");
+
+      expect(agent).toBeDefined();
     });
   });
 

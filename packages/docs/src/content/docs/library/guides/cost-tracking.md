@@ -160,6 +160,45 @@ const agent = LLMist.createAgent()
   });
 ```
 
+### Budget Limits
+
+Set a hard budget cap with `.withBudget()` — the agent loop automatically stops when cumulative cost reaches the specified amount:
+
+```typescript
+const agent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withBudget(0.50)         // Stop after $0.50 spent
+  .withMaxIterations(100);  // High cap as safety net
+```
+
+**What counts toward the budget:**
+- LLM call costs (input + output tokens)
+- Paid gadget costs (reported via `ctx.reportCost()`)
+- Gadgets that make their own LLM calls (via `CostReportingLLMistWrapper`)
+- Subagent costs (automatically aggregated via the execution tree)
+
+**Combining with hooks for warnings:**
+
+```typescript
+const agent = LLMist.createAgent()
+  .withModel('sonnet')
+  .withBudget(1.00)
+  .withHooks({
+    controllers: {
+      beforeLLMCall: async (ctx) => {
+        if (ctx.budget && ctx.totalCost >= ctx.budget * 0.8) {
+          ctx.logger.warn(`80% of budget used: $${ctx.totalCost.toFixed(4)}/$${ctx.budget}`);
+        }
+        return { action: 'proceed' };
+      },
+    },
+  });
+```
+
+:::note
+Setting a budget on a model without pricing in the registry throws `BudgetPricingUnavailableError` at construction time. Register pricing via `client.modelRegistry.registerModel()` if using custom models.
+:::
+
 ### Token Tracking Preset
 
 ```typescript
