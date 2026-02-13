@@ -31,6 +31,9 @@ export LLMIST_LOG_LEVEL="debug"
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LLMIST_LOG_LEVEL` | Minimum log level | `warn` |
+| `LLMIST_LOG_FILE` | Write logs to a file instead of console | none |
+| `LLMIST_LOG_RESET` | Truncate log file on startup (`true`/`false`) | `false` |
+| `LLMIST_LOG_TEE` | Also write to stdout when file logging is active (`true`/`false`) | `false` |
 
 :::note[Session-Based Logging]
 Each CLI session automatically creates its own log directory at `~/.llmist/logs/<session-name>/` with a memorable name like `sunny-falcon`. Numbers are only appended when there's a name collision (e.g., `sunny-falcon-2`). Session logs are stored in `session.log.jsonl` within that directory.
@@ -137,6 +140,33 @@ Trace output shows:
 - Gadget parameters received
 - Execution timing
 - Return values
+
+### File Logging with Console Tee
+
+When running in containers (Docker, Kubernetes), you often need logs in both a file (for upload/archival) and stdout (for `docker logs` / log aggregation). Use `teeToConsole` to write to both:
+
+```typescript
+import { createLogger } from 'llmist';
+
+// Programmatic option
+const logger = createLogger({
+  minLevel: 'debug',
+  teeToConsole: true,
+});
+```
+
+Or via environment variables:
+
+```bash
+export LLMIST_LOG_FILE="/tmp/session.log"
+export LLMIST_LOG_TEE="true"
+```
+
+File output is stripped of ANSI colors for clean plaintext; console output preserves colors.
+
+:::note
+The `teeToConsole` option has no effect when file logging is not active. The programmatic option takes precedence over the `LLMIST_LOG_TEE` environment variable.
+:::
 
 ### Production Logging
 

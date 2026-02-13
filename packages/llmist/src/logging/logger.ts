@@ -58,6 +58,16 @@ export interface LoggerOptions {
    * @default false
    */
   logReset?: boolean;
+
+  /**
+   * When true AND file logging is active (LLMIST_LOG_FILE),
+   * also write formatted log lines to stdout (console).
+   * Useful for Docker/container environments where you need both
+   * file logs for upload and stdout for container log aggregation.
+   * No effect when file logging is not active.
+   * @default false
+   */
+  teeToConsole?: boolean;
 }
 
 /**
@@ -135,6 +145,9 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
   // Priority: options > env var > default (false = append)
   const logReset = options.logReset ?? envLogReset ?? false;
 
+  const envLogTee = parseEnvBoolean(process.env.LLMIST_LOG_TEE);
+  const teeToConsole = options.teeToConsole ?? envLogTee ?? false;
+
   // Initialize log file and WriteStream (only once per path)
   if (envLogFile && (!logFileInitialized || sharedLogFilePath !== envLogFile)) {
     try {
@@ -189,19 +202,21 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
     overwrite: useFileLogging
       ? {
           transportFormatted: (logMetaMarkup: string, logArgs: unknown[], _logErrors: string[]) => {
-            // Skip if stream was disabled due to errors
-            if (!sharedLogFileStream) return;
-
-            // tslog provides formatted meta (timestamp, level, name) and args separately
-            // Strip ANSI colors for clean file output
-            const meta = stripAnsi(logMetaMarkup);
             const args = logArgs.map((arg) =>
-              typeof arg === "string" ? stripAnsi(arg) : JSON.stringify(arg),
+              typeof arg === "string" ? arg : JSON.stringify(arg),
             );
-            const line = `${meta}${args.join(" ")}\n`;
 
-            // Use async stream.write() - non-blocking and buffered
-            sharedLogFileStream.write(line);
+            // File: strip ANSI for clean plaintext
+            if (sharedLogFileStream) {
+              const meta = stripAnsi(logMetaMarkup);
+              const fileArgs = args.map((a) => stripAnsi(a));
+              sharedLogFileStream.write(`${meta}${fileArgs.join(" ")}\n`);
+            }
+
+            // Console: preserve ANSI colors
+            if (teeToConsole) {
+              process.stdout.write(`${logMetaMarkup}${args.join(" ")}\n`);
+            }
           },
         }
       : undefined,
