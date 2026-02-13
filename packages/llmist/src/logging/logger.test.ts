@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { _resetFileLoggingState, createLogger, stripAnsi } from "./logger.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,6 +14,7 @@ describe("createLogger", () => {
     delete process.env.LLMIST_LOG_LEVEL;
     delete process.env.LLMIST_LOG_FILE;
     delete process.env.LLMIST_LOG_RESET;
+    delete process.env.LLMIST_LOG_TEE;
   });
 
   afterEach(() => {
@@ -268,6 +269,7 @@ describe("file logging", () => {
     delete process.env.LLMIST_LOG_LEVEL;
     delete process.env.LLMIST_LOG_FILE;
     delete process.env.LLMIST_LOG_RESET;
+    delete process.env.LLMIST_LOG_TEE;
   });
 
   afterEach(async () => {
@@ -500,6 +502,107 @@ describe("file logging", () => {
 
       // Should not throw - will create directory
       expect(() => createLogger({ name: "test" })).not.toThrow();
+    });
+  });
+
+  describe("teeToConsole", () => {
+    it("should write to both file and stdout when teeToConsole is true", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+      const logger = createLogger({ name: "tee-test", teeToConsole: true });
+      logger.info("tee message");
+      await sleep(50);
+
+      // File should have the message
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("tee message");
+
+      // Stdout should also have the message
+      const stdoutCalls = stdoutSpy.mock.calls.map((c) => String(c[0]));
+      expect(stdoutCalls.some((c) => c.includes("tee message"))).toBe(true);
+
+      stdoutSpy.mockRestore();
+    });
+
+    it("should respect LLMIST_LOG_TEE env var", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      process.env.LLMIST_LOG_TEE = "true";
+      const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+      const logger = createLogger({ name: "tee-env" });
+      logger.info("env tee message");
+      await sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("env tee message");
+
+      const stdoutCalls = stdoutSpy.mock.calls.map((c) => String(c[0]));
+      expect(stdoutCalls.some((c) => c.includes("env tee message"))).toBe(true);
+
+      stdoutSpy.mockRestore();
+    });
+
+    it("should default to no console tee (backward compat)", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+      const logger = createLogger({ name: "no-tee" });
+      logger.info("file only message");
+      await sleep(50);
+
+      // File should have the message
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("file only message");
+
+      // Stdout should NOT have the message
+      const stdoutCalls = stdoutSpy.mock.calls.map((c) => String(c[0]));
+      expect(stdoutCalls.some((c) => c.includes("file only message"))).toBe(false);
+
+      stdoutSpy.mockRestore();
+    });
+
+    it("should preserve ANSI colors in console output and strip from file", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+      const logger = createLogger({ name: "ansi-tee", teeToConsole: true });
+      logger.info("color test");
+      await sleep(50);
+
+      // File should have NO ANSI codes
+      const content = readFileSync(testLogFile, "utf-8");
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Testing for ANSI codes requires matching escape sequences
+      expect(content).not.toMatch(/\x1b\[/);
+      expect(content).toContain("color test");
+
+      // Console output should still have ANSI formatting from tslog's meta markup
+      const stdoutCalls = stdoutSpy.mock.calls.map((c) => String(c[0]));
+      const teeOutput = stdoutCalls.find((c) => c.includes("color test"));
+      expect(teeOutput).toBeDefined();
+
+      stdoutSpy.mockRestore();
+    });
+
+    it("should give option precedence over env var", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      process.env.LLMIST_LOG_TEE = "true";
+      const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+      // Option explicitly disables tee even though env says true
+      const logger = createLogger({ name: "precedence", teeToConsole: false });
+      logger.info("no tee despite env");
+      await sleep(50);
+
+      const stdoutCalls = stdoutSpy.mock.calls.map((c) => String(c[0]));
+      expect(stdoutCalls.some((c) => c.includes("no tee despite env"))).toBe(false);
+
+      stdoutSpy.mockRestore();
     });
   });
 });

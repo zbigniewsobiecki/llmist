@@ -192,6 +192,34 @@ Note: ctx.logger is especially useful for:
 - Structured logging with JSON-compatible metadata
 `);
 
+  // ==========================================================================
+  // 8. File logging with console tee (Docker/container pattern)
+  // ==========================================================================
+  console.log("8. File + console tee (for Docker/containers):\n");
+  console.log("   Set LLMIST_LOG_FILE and teeToConsole to write to both file AND stdout.");
+  console.log("   File output is stripped of ANSI colors; console preserves them.\n");
+
+  // Programmatic usage:
+  const teeLogger = createLogger({
+    minLevel: "debug",
+    teeToConsole: true, // Also write to stdout when LLMIST_LOG_FILE is set
+  });
+
+  // Or via environment variables:
+  // export LLMIST_LOG_FILE="/tmp/session.log"
+  // export LLMIST_LOG_TEE="true"
+
+  console.log("   Created logger with teeToConsole: true");
+  console.log("   (Activate by also setting LLMIST_LOG_FILE to a path)\n");
+
+  // Use it like any other logger
+  await LLMist.createAgent()
+    .withModel("haiku")
+    .withGadgets(Calculator)
+    .withLogger(teeLogger)
+    .withHooks(HookPresets.logging())
+    .askAndCollect("What is 10 + 20?");
+
   console.log("\n=== Done ===");
 }
 
