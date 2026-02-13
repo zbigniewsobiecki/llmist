@@ -1,3 +1,9 @@
+## 15.18.0 (2026-02-13)
+
+* Merge pull request #393 from zbigniewsobiecki/feat/budget-limit ([d792290](https://github.com/zbigniewsobiecki/llmist/commit/d792290)), closes [#393](https://github.com/zbigniewsobiecki/llmist/issues/393)
+* Merge pull request #394 from zbigniewsobiecki/dev ([d56ce5f](https://github.com/zbigniewsobiecki/llmist/commit/d56ce5f)), closes [#394](https://github.com/zbigniewsobiecki/llmist/issues/394)
+* feat(agent): add budget limit for agent loop ([2a07e77](https://github.com/zbigniewsobiecki/llmist/commit/2a07e77))
+
 ## 15.17.0 (2026-02-13)
 
 * Merge pull request #391 from zbigniewsobiecki/feat/tee-to-console ([e0c501a](https://github.com/zbigniewsobiecki/llmist/commit/e0c501a)), closes [#391](https://github.com/zbigniewsobiecki/llmist/issues/391)
