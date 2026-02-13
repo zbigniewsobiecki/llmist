@@ -1,3 +1,9 @@
+## 15.17.0 (2026-02-13)
+
+* Merge pull request #391 from zbigniewsobiecki/feat/tee-to-console ([e0c501a](https://github.com/zbigniewsobiecki/llmist/commit/e0c501a)), closes [#391](https://github.com/zbigniewsobiecki/llmist/issues/391)
+* Merge pull request #392 from zbigniewsobiecki/dev ([82b7731](https://github.com/zbigniewsobiecki/llmist/commit/82b7731)), closes [#392](https://github.com/zbigniewsobiecki/llmist/issues/392)
+* feat(logging): add teeToConsole option for dual file+stdout output ([f63a253](https://github.com/zbigniewsobiecki/llmist/commit/f63a253))
+
 ## 15.16.0 (2026-02-05)
 
 * Merge pull request #389 from zbigniewsobiecki/feat/system-file-option ([735bdb7](https://github.com/zbigniewsobiecki/llmist/commit/735bdb7)), closes [#389](https://github.com/zbigniewsobiecki/llmist/issues/389)
