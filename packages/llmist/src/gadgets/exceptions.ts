@@ -146,3 +146,39 @@ export class AbortException extends Error {
     this.name = "AbortException";
   }
 }
+
+/**
+ * Exception thrown when a budget limit is set but the model has no valid pricing information.
+ *
+ * This is thrown during agent construction when:
+ * - `budget` is set in agent options
+ * - The model is not found in the model registry, or has zero pricing (input === 0 && output === 0)
+ *
+ * To fix: either register pricing for the model via `client.modelRegistry.registerModel()`,
+ * or remove the budget constraint.
+ *
+ * @example
+ * ```typescript
+ * // This will throw BudgetPricingUnavailableError because "my-custom-model"
+ * // has no pricing in the registry:
+ * const agent = LLMist.createAgent()
+ *   .withModel("my-custom-model")
+ *   .withBudget(1.00)
+ *   .ask("Hello");
+ * ```
+ */
+export class BudgetPricingUnavailableError extends Error {
+  public readonly model: string;
+  public readonly budget: number;
+
+  constructor(model: string, budget: number) {
+    super(
+      `Budget of $${budget.toFixed(2)} was set but model "${model}" has no valid pricing ` +
+        `information in the model registry. Either register pricing for this model via ` +
+        `client.modelRegistry.registerModel() or remove the budget constraint.`,
+    );
+    this.name = "BudgetPricingUnavailableError";
+    this.model = model;
+    this.budget = budget;
+  }
+}

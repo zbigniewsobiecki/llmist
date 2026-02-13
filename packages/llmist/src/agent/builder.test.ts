@@ -555,6 +555,22 @@ describe("AgentBuilder", () => {
     });
   });
 
+  describe("withBudget", () => {
+    it("sets budget and returns builder for chaining", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withBudget(0.5);
+
+      expect(result).toBe(builder);
+    });
+
+    it("accepts zero budget", () => {
+      const builder = new AgentBuilder();
+      const result = builder.withBudget(0);
+
+      expect(result).toBe(builder);
+    });
+  });
+
   describe("ask", () => {
     it("has ask method defined", () => {
       const builder = new AgentBuilder();

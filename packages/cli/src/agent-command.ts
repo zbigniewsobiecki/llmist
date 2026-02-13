@@ -416,6 +416,9 @@ export async function executeAgent(
   if (options.maxIterations !== undefined) {
     builder.withMaxIterations(options.maxIterations);
   }
+  if (options.budget !== undefined) {
+    builder.withBudget(options.budget);
+  }
   if (options.temperature !== undefined) {
     builder.withTemperature(options.temperature);
   }
@@ -516,7 +519,7 @@ export async function executeAgent(
   // This message is appended to each LLM request but NOT persisted in history
   builder.withTrailingMessage((ctx) =>
     [
-      `[Iteration ${ctx.iteration + 1}/${ctx.maxIterations}]`,
+      `[Iteration ${ctx.iteration + 1}/${ctx.maxIterations}${ctx.budget ? ` | Budget: $${ctx.totalCost.toFixed(4)}/$${ctx.budget}` : ""}]`,
       "Think carefully in two steps: 1. what gadget invocations we should be making next? 2. how do they depend on one another so we can run all of them in the right order? Then respond with all the gadget invocations you are able to do now.",
     ].join(" "),
   );

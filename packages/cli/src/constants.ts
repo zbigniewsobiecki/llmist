@@ -32,6 +32,7 @@ export const OPTION_FLAGS = {
   temperature: "-t, --temperature <value>",
   maxTokens: "--max-tokens <count>",
   maxIterations: "-i, --max-iterations <count>",
+  budget: "-b, --budget <amount>",
   gadgetModule: "-g, --gadget <module>",
   logLevel: "--log-level <level>",
   logLlmRequests: "--log-llm-requests",
@@ -76,6 +77,7 @@ export const OPTION_DESCRIPTIONS = {
   temperature: "Sampling temperature between 0 and 2.",
   maxTokens: "Maximum number of output tokens requested from the model.",
   maxIterations: "Maximum number of agent loop iterations before exiting.",
+  budget: "Maximum spend in USD before the agent loop exits.",
   gadgetModule:
     "Path or module specifier for a gadget export. Repeat to register multiple gadgets.",
   logLevel: "Log level: silly, trace, debug, info, warn, error, fatal.",

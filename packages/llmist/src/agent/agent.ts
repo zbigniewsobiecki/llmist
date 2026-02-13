@@ -25,6 +25,7 @@ import type { RateLimitConfig } from "../core/rate-limit.js";
 import { RateLimitTracker, resolveRateLimitConfig } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
 import { extractRetryAfterMs, isRetryableError, resolveRetryConfig } from "../core/retry.js";
+import { BudgetPricingUnavailableError } from "../gadgets/exceptions.js";
 import { MediaStore } from "../gadgets/media-store.js";
 import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
@@ -88,6 +89,9 @@ export interface AgentOptions {
 
   /** Maximum iterations */
   maxIterations?: number;
+
+  /** Budget limit in USD. Agent loop stops when cumulative cost reaches this limit. */
+  budget?: number;
 
   /** Temperature */
   temperature?: number;
@@ -239,6 +243,7 @@ export class Agent {
   private readonly client: LLMist;
   private readonly model: string;
   private readonly maxIterations: number;
+  private readonly budget?: number;
   private readonly temperature?: number;
   private readonly logger: Logger<ILogObj>;
   private readonly hooks: AgentHooks;
@@ -320,6 +325,7 @@ export class Agent {
     this.client = options.client;
     this.model = resolveModel(options.model);
     this.maxIterations = options.maxIterations ?? 10;
+    this.budget = options.budget;
     this.temperature = options.temperature;
     this.logger = options.logger ?? createLogger({ name: "llmist:agent" });
     this.registry = options.registry;
@@ -436,6 +442,14 @@ export class Agent {
     this.parentNodeId = options.parentNodeId ?? null;
     this.baseDepth = options.baseDepth ?? 0;
     this.parentObservers = options.parentObservers;
+
+    // Validate budget against model pricing
+    if (this.budget !== undefined) {
+      const spec = this.client.modelRegistry?.getModelSpec?.(this.model);
+      if (!spec || (spec.pricing.input === 0 && spec.pricing.output === 0)) {
+        throw new BudgetPricingUnavailableError(this.model, this.budget);
+      }
+    }
   }
 
   /**
@@ -654,6 +668,7 @@ export class Agent {
     this.logger.info("Starting agent loop", {
       model: this.model,
       maxIterations: this.maxIterations,
+      ...(this.budget !== undefined && { budget: this.budget }),
     });
 
     // Declare outside while loop so they're accessible in the finally block
@@ -950,6 +965,19 @@ export class Agent {
             this.logger.info("Loop terminated by gadget or processor");
             break;
           }
+
+          // Check if budget limit has been reached
+          if (this.budget !== undefined) {
+            const totalCost = this.tree.getTotalCost();
+            if (totalCost >= this.budget) {
+              this.logger.info("Budget limit reached", {
+                totalCost,
+                budget: this.budget,
+                iteration: currentIteration,
+              });
+              break;
+            }
+          }
         } catch (error) {
           // Handle LLM error
           const errorHandled = await this.handleLLMError(error as Error, currentIteration);
@@ -988,9 +1016,22 @@ export class Agent {
         currentIteration++;
       }
 
+      let reason: string;
+      if (this.budget !== undefined && this.tree.getTotalCost() >= this.budget) {
+        reason = "budget_exceeded";
+      } else if (currentIteration >= this.maxIterations) {
+        reason = "max_iterations";
+      } else {
+        reason = "natural_completion";
+      }
+
       this.logger.info("Agent loop completed", {
         totalIterations: currentIteration,
-        reason: currentIteration >= this.maxIterations ? "max_iterations" : "natural_completion",
+        reason,
+        ...(this.budget !== undefined && {
+          totalCost: this.tree.getTotalCost(),
+          budget: this.budget,
+        }),
       });
     } finally {
       // Safety net: Complete any in-flight LLM call if generator terminated early
@@ -1384,6 +1425,8 @@ export class Agent {
       const context: LLMCallControllerContext = {
         iteration,
         maxIterations: this.maxIterations,
+        budget: this.budget,
+        totalCost: this.tree.getTotalCost(),
         options: llmOptions,
         logger: this.logger,
       };
@@ -1411,6 +1454,8 @@ export class Agent {
         const context: ObserveLLMCallReadyContext = {
           iteration,
           maxIterations: this.maxIterations,
+          budget: this.budget,
+          totalCost: this.tree.getTotalCost(),
           options: llmOptions,
           logger: this.logger,
           subagentContext,
@@ -1473,6 +1518,8 @@ export class Agent {
     const context: AfterLLMCallControllerContext = {
       iteration,
       maxIterations: this.maxIterations,
+      budget: this.budget,
+      totalCost: this.tree.getTotalCost(),
       options: llmOptions,
       finishReason: result.finishReason,
       usage: result.usage,

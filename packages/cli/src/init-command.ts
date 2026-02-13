@@ -53,6 +53,7 @@ const STARTER_CONFIG = `# ~/.llmist/cli.toml
 [agent]
 # model = "anthropic:claude-sonnet-4-5"
 # max-iterations = 15             # Max tool-use loops before stopping
+# budget = 0.50                  # Max USD spend per agent run
 # gadgets = [                     # Tools the agent can use
 #   "ListDirectory",
 #   "ReadFile",

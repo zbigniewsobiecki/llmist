@@ -157,6 +157,7 @@ export interface InitialGadget {
  */
 export interface AgentConfig extends SharedCommandConfig {
   "max-iterations"?: number;
+  budget?: number;
   gadgets?: string[]; // Full replacement (preferred)
   "gadget-add"?: string[]; // Add to inherited gadgets
   "gadget-remove"?: string[]; // Remove from inherited gadgets
@@ -250,6 +251,7 @@ const AGENT_CONFIG_KEYS = new Set([
   "system",
   "temperature",
   "max-iterations",
+  "budget",
   "gadgets", // Full replacement (preferred)
   "gadget-add", // Add to inherited gadgets
   "gadget-remove", // Remove from inherited gadgets
@@ -422,6 +424,11 @@ function validateSingleSubagentConfig(
         );
       }
       result.maxIterations = val;
+    } else if (key === "budget") {
+      if (typeof val !== "number" || val < 0) {
+        throw new ConfigError(`[${section}].${subagentName}.budget must be a non-negative number`);
+      }
+      result.budget = val;
     } else if (key === "timeoutMs") {
       if (typeof val !== "number" || !Number.isInteger(val) || val < 0) {
         throw new ConfigError(
@@ -903,6 +910,9 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
       min: 1,
     });
   }
+  if ("budget" in rawObj) {
+    result.budget = validateNumber(rawObj.budget, "budget", section, { min: 0 });
+  }
   // Gadget configuration (new plural form preferred)
   if ("gadgets" in rawObj) {
     result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
@@ -1119,6 +1129,9 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
       integer: true,
       min: 1,
     });
+  }
+  if ("budget" in rawObj) {
+    result.budget = validateNumber(rawObj.budget, "budget", section, { min: 0 });
   }
   // Gadget configuration (new plural form preferred)
   if ("gadgets" in rawObj) {
