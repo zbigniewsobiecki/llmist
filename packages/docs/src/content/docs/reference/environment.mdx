@@ -50,12 +50,19 @@ const agent = LLMist.createAgent()
 | Variable | Description | Values |
 |----------|-------------|--------|
 | `LLMIST_LOG_LEVEL` | Logging verbosity | `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
+| `LLMIST_LOG_FILE` | Write logs to a file instead of console | File path |
+| `LLMIST_LOG_RESET` | Truncate log file on startup | `true`, `false` |
+| `LLMIST_LOG_TEE` | Also write to stdout when file logging is active | `true`, `false` |
 
 ### Example Logging Setup
 
 ```bash
 # Enable debug logging
 export LLMIST_LOG_LEVEL="debug"
+
+# Log to file AND stdout (useful for Docker/containers)
+export LLMIST_LOG_FILE="/tmp/agent.log"
+export LLMIST_LOG_TEE="true"
 ```
 
 <Aside type="note">
