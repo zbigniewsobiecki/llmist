@@ -283,6 +283,20 @@ export function isRetryableError(error: Error): boolean {
     return true;
   }
 
+  // SSE stream parsing errors (Gemini SDK and proxy layers)
+  // These occur when the API injects errors into the SSE stream mid-response,
+  // the stream ends with truncated data, or chunks fail to parse.
+  if (
+    message.includes("incomplete json segment") ||
+    message.includes("exception parsing stream chunk") ||
+    message.includes("json error injected into sse stream") ||
+    (message.includes("sending request") && message.includes("exception")) ||
+    (message.includes("invalid chunk") && message.includes("finish reason")) ||
+    message.includes("unexpected line format")
+  ) {
+    return true;
+  }
+
   // Don't retry authentication, bad requests, or content policy errors
   if (
     message.includes("401") ||
@@ -476,6 +490,20 @@ export function formatLLMError(error: Error, context?: FormatLLMErrorContext): s
     message.toLowerCase().includes("safety")
   ) {
     return "Content policy violation - the request was blocked";
+  }
+
+  // SSE stream parsing errors
+  if (
+    message.toLowerCase().includes("incomplete json segment") ||
+    message.toLowerCase().includes("exception parsing stream chunk") ||
+    message.toLowerCase().includes("json error injected into sse stream") ||
+    (message.toLowerCase().includes("sending request") &&
+      message.toLowerCase().includes("exception")) ||
+    (message.toLowerCase().includes("invalid chunk") &&
+      message.toLowerCase().includes("finish reason")) ||
+    message.toLowerCase().includes("unexpected line format")
+  ) {
+    return "Stream interrupted - the API returned corrupted or incomplete data";
   }
 
   // Try to extract a clean message from JSON errors

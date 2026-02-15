@@ -410,7 +410,7 @@ describe("retry configuration", () => {
         const error = new Error("429 Too Many Requests");
         const result = formatLLMError(error, {
           retriesExhausted: true,
-          provider: "unknown-provider" as any,
+          provider: "unknown-provider",
         });
 
         expect(result).toContain("All retry attempts exhausted");
@@ -576,6 +576,61 @@ describe("retry configuration", () => {
 
     it("should NOT retry generic 400 errors (non-HF)", () => {
       expect(isRetryableError(new Error("400 Bad Request"))).toBe(false);
+    });
+  });
+
+  describe("isRetryableError - SSE stream parsing errors", () => {
+    it("should retry 'Incomplete JSON segment' errors (Gemini SDK)", () => {
+      expect(isRetryableError(new Error("Incomplete JSON segment at the end"))).toBe(true);
+    });
+
+    it("should retry 'exception parsing stream chunk' errors (Gemini SDK)", () => {
+      expect(
+        isRetryableError(new Error('exception parsing stream chunk: {"error": "internal"}')),
+      ).toBe(true);
+    });
+
+    it("should retry 'JSON error injected into SSE stream' errors (proxy layers)", () => {
+      expect(isRetryableError(new Error("JSON error injected into SSE stream"))).toBe(true);
+    });
+
+    it("should retry 'exception sending request' errors (Gemini SDK)", () => {
+      expect(
+        isRetryableError(new Error("exception encountered while sending request: fetch failed")),
+      ).toBe(true);
+    });
+
+    it("should retry 'invalid chunk with finish reason' errors", () => {
+      expect(isRetryableError(new Error("invalid chunk: missing finish reason in stream"))).toBe(
+        true,
+      );
+    });
+
+    it("should retry 'unexpected line format' errors", () => {
+      expect(isRetryableError(new Error("unexpected line format in SSE response"))).toBe(true);
+    });
+
+    it("should NOT retry unrelated errors containing 'invalid'", () => {
+      expect(isRetryableError(new Error("Invalid API key provided"))).toBe(false);
+      expect(isRetryableError(new Error("Invalid request format"))).toBe(false);
+    });
+
+    it("should NOT retry unrelated errors containing 'exception'", () => {
+      expect(isRetryableError(new Error("An exception occurred in user code"))).toBe(false);
+    });
+  });
+
+  describe("formatLLMError - SSE stream parsing errors", () => {
+    it("should format SSE stream errors with a clean message", () => {
+      expect(formatLLMError(new Error("Incomplete JSON segment at the end"))).toBe(
+        "Stream interrupted - the API returned corrupted or incomplete data",
+      );
+      expect(
+        formatLLMError(new Error('exception parsing stream chunk: {"error": "internal"}')),
+      ).toBe("Stream interrupted - the API returned corrupted or incomplete data");
+      expect(formatLLMError(new Error("JSON error injected into SSE stream"))).toBe(
+        "Stream interrupted - the API returned corrupted or incomplete data",
+      );
     });
   });
 });
