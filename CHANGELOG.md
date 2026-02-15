@@ -1,3 +1,9 @@
+## <small>15.18.1 (2026-02-15)</small>
+
+* Merge pull request #395 from zbigniewsobiecki/fix/gemini-sse-stream-retry ([bc4d3c4](https://github.com/zbigniewsobiecki/llmist/commit/bc4d3c4)), closes [#395](https://github.com/zbigniewsobiecki/llmist/issues/395)
+* Merge pull request #396 from zbigniewsobiecki/dev ([a8e70a3](https://github.com/zbigniewsobiecki/llmist/commit/a8e70a3)), closes [#396](https://github.com/zbigniewsobiecki/llmist/issues/396)
+* fix(core): make Gemini SSE stream errors retryable ([b8f57f7](https://github.com/zbigniewsobiecki/llmist/commit/b8f57f7))
+
 ## 15.18.0 (2026-02-13)
 
 * Merge pull request #393 from zbigniewsobiecki/feat/budget-limit ([d792290](https://github.com/zbigniewsobiecki/llmist/commit/d792290)), closes [#393](https://github.com/zbigniewsobiecki/llmist/issues/393)
