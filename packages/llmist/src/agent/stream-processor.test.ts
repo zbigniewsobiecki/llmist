@@ -1985,6 +1985,76 @@ test value
       expect(skippedEvents).toHaveLength(1);
     });
 
+    it("does not skip exclusive gadgets when no other gadgets are in flight", async () => {
+      const gadget1 = createMockGadget({ name: "Gadget1", result: "result1" });
+      const exclusiveGadget = createMockGadget({
+        name: "ExclusiveGadget",
+        result: "exclusive result",
+      });
+      exclusiveGadget.exclusive = true;
+      registry.registerByClass(gadget1);
+      registry.registerByClass(exclusiveGadget);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+      });
+
+      // Only the exclusive gadget in the stream - no in-flight siblings
+      const gadgetCalls = createGadgetCallString("ExclusiveGadget", {}, { invocationId: "e1" });
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(1);
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.result).toBe(
+        "exclusive result",
+      );
+    });
+
+    it("defers exclusive gadget until in-flight gadgets complete", async () => {
+      const executionOrder: string[] = [];
+      const slowGadget = createMockGadget({
+        name: "SlowGadget",
+        delayMs: 50,
+        resultFn: () => {
+          executionOrder.push("slow");
+          return "slow result";
+        },
+      });
+      const exclusiveGadget = createMockGadget({
+        name: "ExclusiveGadget",
+        resultFn: () => {
+          executionOrder.push("exclusive");
+          return "exclusive result";
+        },
+      });
+      exclusiveGadget.exclusive = true;
+      registry.registerByClass(slowGadget);
+      registry.registerByClass(exclusiveGadget);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        gadgetExecutionMode: "parallel",
+      });
+
+      // SlowGadget dispatched first (in-flight), then ExclusiveGadget should be deferred
+      const gadgetCalls = [
+        createGadgetCallString("SlowGadget", {}, { invocationId: "s1" }),
+        createGadgetCallString("ExclusiveGadget", {}, { invocationId: "e1" }),
+      ].join("\n");
+
+      const stream = createTextStream(gadgetCalls);
+      const result = await consumeStream(processor, stream);
+
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults).toHaveLength(2);
+
+      // Exclusive gadget should have executed after the slow gadget
+      expect(executionOrder).toEqual(["slow", "exclusive"]);
+    });
+
     it("marks skipped gadget as failed in failedInvocations set", async () => {
       const gadget1 = createMockGadget({ name: "Gadget1", result: "result1" });
       const gadget2 = createMockGadget({ name: "Gadget2", result: "result2" });

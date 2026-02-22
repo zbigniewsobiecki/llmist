@@ -242,6 +242,10 @@ export class StreamProcessor {
   /** Queue of gadgets waiting for a concurrency slot (per gadget name) */
   private concurrencyQueue: Map<string, ParsedGadgetCall[]> = new Map();
 
+  // Exclusive gadget support
+  /** Queue of exclusive gadgets deferred until in-flight gadgets complete */
+  private exclusiveQueue: ParsedGadgetCall[] = [];
+
   // Cross-iteration dependency tracking
   /** Invocation IDs completed in previous iterations (read-only reference from Agent) */
   private readonly priorCompletedInvocations: Set<string>;
@@ -702,6 +706,18 @@ export class StreamProcessor {
       return; // Limit exceeded, gadget was skipped
     }
 
+    // Check exclusive constraint: exclusive gadgets must run alone
+    const gadget = this.registry.get(call.gadgetName);
+    if (gadget?.exclusive && this.inFlightExecutions.size > 0) {
+      this.logger.debug("Deferring exclusive gadget until in-flight gadgets complete", {
+        gadgetName: call.gadgetName,
+        invocationId: call.invocationId,
+        inFlightCount: this.inFlightExecutions.size,
+      });
+      this.exclusiveQueue.push(call);
+      return;
+    }
+
     // Check concurrency limit
     const limit = this.getConcurrencyLimit(call.gadgetName);
     const activeCount = this.activeCountByGadget.get(call.gadgetName) ?? 0;
@@ -1066,7 +1082,11 @@ export class StreamProcessor {
    * Clears the inFlightExecutions map after all gadgets complete.
    */
   private async *waitForInFlightExecutions(): AsyncGenerator<StreamEvent> {
-    if (this.inFlightExecutions.size === 0 && !this.hasQueuedGadgets()) {
+    if (
+      this.inFlightExecutions.size === 0 &&
+      !this.hasQueuedGadgets() &&
+      this.exclusiveQueue.length === 0
+    ) {
       return;
     }
 
@@ -1107,6 +1127,20 @@ export class StreamProcessor {
 
     // Clear the map after all promises have completed
     this.inFlightExecutions.clear();
+
+    // Process exclusive gadgets now that all in-flight gadgets have completed
+    if (this.exclusiveQueue.length > 0) {
+      this.logger.debug("Processing deferred exclusive gadgets", {
+        count: this.exclusiveQueue.length,
+      });
+      const queue = this.exclusiveQueue;
+      this.exclusiveQueue = [];
+      for (const call of queue) {
+        for await (const evt of this.executeGadgetGenerator(call)) {
+          yield evt;
+        }
+      }
+    }
   }
 
   /**
