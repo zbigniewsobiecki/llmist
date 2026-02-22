@@ -252,6 +252,18 @@ export abstract class AbstractGadget {
   maxConcurrent?: number;
 
   /**
+   * If true, this gadget must execute alone — no other gadgets in the same
+   * LLM response can run in parallel. When an exclusive gadget arrives and
+   * other gadgets are already in-flight, it is deferred until they complete.
+   *
+   * Use for gadgets that terminate the agent loop (e.g., Finish), where
+   * sibling tool results must be visible to the LLM before the loop ends.
+   *
+   * This is a safety floor: external config cannot weaken it.
+   */
+  exclusive?: boolean;
+
+  /**
    * Execute the gadget with the given parameters.
    * Can be synchronous or asynchronous.
    *

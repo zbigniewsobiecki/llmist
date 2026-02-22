@@ -186,6 +186,7 @@ class DataProcessor extends Gadget({
 
 class TaskComplete extends Gadget({
   description: "Call this when all tasks are complete",
+  exclusive: true, // Must run alone — defers until sibling gadgets complete
   schema: z.object({
     summary: z.string().describe("Summary of what was accomplished"),
   }),

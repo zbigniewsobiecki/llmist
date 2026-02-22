@@ -58,6 +58,13 @@ export interface GadgetConfig<TSchema extends ZodType> {
    * - `N > 1` = At most N concurrent
    */
   maxConcurrent?: number;
+
+  /**
+   * If true, this gadget must execute alone — no other gadgets in the same
+   * LLM response can run in parallel. Deferred until in-flight gadgets complete.
+   * Use for gadgets that terminate the agent loop (e.g., Finish).
+   */
+  exclusive?: boolean;
 }
 
 /**
@@ -123,6 +130,7 @@ export function Gadget<TSchema extends ZodType>(config: GadgetConfig<TSchema>) {
     timeoutMs = config.timeoutMs;
     examples = config.examples;
     maxConcurrent = config.maxConcurrent;
+    exclusive = config.exclusive;
 
     /**
      * Type helper property for accessing inferred parameter type.
