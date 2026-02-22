@@ -280,6 +280,7 @@ import { Gadget, TaskCompletionSignal, z } from 'llmist';
 
 class FinishTask extends Gadget({
   description: 'Call when the task is complete',
+  exclusive: true,  // Must run alone — defers until sibling gadgets complete
   schema: z.object({
     summary: z.string().describe('Summary of what was accomplished'),
     success: z.boolean().default(true),
@@ -303,6 +304,7 @@ class FinishTask extends Gadget({
 // Example: A subagent reporting its final result
 class ReportResult extends Gadget({
   description: 'Report the final result to the caller',
+  exclusive: true,
   schema: z.object({
     result: z.string().describe('Your findings to return'),
   }),
@@ -324,6 +326,33 @@ for await (const event of agent.run()) {
   }
 }
 ```
+
+### Exclusive Gadgets
+
+When an LLM returns multiple gadget calls in a single response, they execute in parallel by default. For gadgets that terminate the agent loop (like `FinishTask` above), this creates a race condition: if the LLM sends `FinishTask` alongside other gadgets, the loop terminates before the sibling gadgets' results are visible.
+
+Mark a gadget as `exclusive` to ensure it runs alone:
+
+```typescript
+class FinishTask extends Gadget({
+  description: 'Call when the task is complete',
+  exclusive: true,  // Defers until all sibling gadgets in the same response complete
+  schema: z.object({
+    summary: z.string().describe('Summary of what was accomplished'),
+  }),
+}) {
+  execute(params: this['params']): never {
+    throw new TaskCompletionSignal(params.summary);
+  }
+}
+```
+
+**How it works:**
+- When an exclusive gadget arrives and other gadgets are already in-flight, it is queued
+- Once all in-flight gadgets complete and their results are emitted, the exclusive gadget executes
+- This guarantees the LLM sees sibling gadget results before the loop ends
+
+**Important:** `exclusive` is a safety floor — external configuration cannot weaken it. Use it for any gadget whose execution should never overlap with siblings (loop terminators, final result reporters, etc.).
 
 ### HumanInputRequiredException
 
