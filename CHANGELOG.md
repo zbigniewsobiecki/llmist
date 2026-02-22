@@ -1,3 +1,9 @@
+## 15.19.0 (2026-02-22)
+
+* Merge pull request #397 from zbigniewsobiecki/feat/exclusive-gadgets ([d8bc979](https://github.com/zbigniewsobiecki/llmist/commit/d8bc979)), closes [#397](https://github.com/zbigniewsobiecki/llmist/issues/397)
+* docs: document exclusive gadget property in guide and examples ([a239e70](https://github.com/zbigniewsobiecki/llmist/commit/a239e70))
+* feat(gadgets): add exclusive property to defer gadgets until siblings complete ([b8d7907](https://github.com/zbigniewsobiecki/llmist/commit/b8d7907))
+
 ## <small>15.18.1 (2026-02-15)</small>
 
 * Merge pull request #395 from zbigniewsobiecki/fix/gemini-sse-stream-retry ([bc4d3c4](https://github.com/zbigniewsobiecki/llmist/commit/bc4d3c4)), closes [#395](https://github.com/zbigniewsobiecki/llmist/issues/395)
