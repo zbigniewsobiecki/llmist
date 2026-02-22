@@ -55,7 +55,7 @@
   "devDependencies": {
     "@types/node": "^20.12.7",
     "llmist": "^15.19.0",
-    "rimraf": "^5.0.5",
+    "rimraf": "^6.1.3",
     "tslog": "^4.10.2",
     "tsup": "^8.3.5",
     "typescript": "^5.4.5",
