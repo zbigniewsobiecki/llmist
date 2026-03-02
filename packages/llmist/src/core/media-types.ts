@@ -98,7 +98,7 @@ export interface ImageGenerationResult {
 /**
  * Available audio formats for speech generation.
  */
-export type AudioFormat = "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm";
+export type AudioFormat = "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm" | "pcm16";
 
 /**
  * Options for speech (TTS) generation requests.

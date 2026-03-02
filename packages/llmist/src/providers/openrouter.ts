@@ -19,14 +19,28 @@
  */
 
 import OpenAI from "openai";
+import type { ChatCompletionChunk } from "openai/resources/chat/completions";
+import type { Stream } from "openai/streaming";
+import type {
+  SpeechGenerationOptions,
+  SpeechGenerationResult,
+  SpeechModelSpec,
+} from "../core/media-types.js";
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
+import { getModelId } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions, ModelDescriptor, ReasoningEffort } from "../core/options.js";
 import {
   type OpenAICompatibleConfig,
   OpenAICompatibleProvider,
 } from "./openai-compatible-provider.js";
 import { OPENROUTER_MODELS } from "./openrouter-models.js";
+import {
+  calculateOpenRouterSpeechCost,
+  getOpenRouterSpeechModelSpec,
+  isOpenRouterSpeechModel,
+  openrouterSpeechModels,
+} from "./openrouter-speech-models.js";
 import { isNonEmpty, readEnvVar } from "./utils.js";
 
 /** Maps llmist reasoning effort levels to OpenRouter/OpenAI reasoning effort */
@@ -234,6 +248,144 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
     }
 
     return error;
+  }
+
+  // =========================================================================
+  // Speech Generation (TTS via Chat Completions with Audio Modality)
+  // =========================================================================
+
+  /**
+   * Get speech model specifications for OpenRouter.
+   */
+  getSpeechModelSpecs(): SpeechModelSpec[] {
+    return openrouterSpeechModels;
+  }
+
+  /**
+   * Check if this provider supports speech generation for a given model.
+   * Handles both prefixed (openrouter:openai/gpt-audio-mini) and unprefixed model IDs.
+   */
+  supportsSpeechGeneration(modelId: string): boolean {
+    // Strip provider prefix if present (e.g., "openrouter:openai/gpt-audio-mini" → "openai/gpt-audio-mini")
+    const bareModelId = getModelId(modelId);
+    return isOpenRouterSpeechModel(bareModelId);
+  }
+
+  /**
+   * Generate speech audio from text using OpenRouter's audio-capable models.
+   *
+   * OpenRouter TTS works via chat completions with audio modality, not a
+   * dedicated TTS endpoint. The model receives a prompt asking it to say
+   * the text, and returns audio data via streaming.
+   *
+   * @param options - Speech generation options
+   * @returns Promise resolving to the generation result with audio and cost
+   * @throws Error if model is unknown, voice/format are invalid, or no audio is returned
+   */
+  async generateSpeech(options: SpeechGenerationOptions): Promise<SpeechGenerationResult> {
+    const client = this.client as OpenAI;
+    // Strip provider prefix if present (e.g., "openrouter:openai/gpt-audio-mini" → "openai/gpt-audio-mini")
+    const bareModelId = getModelId(options.model);
+    const spec = getOpenRouterSpeechModelSpec(bareModelId);
+
+    if (!spec) {
+      throw new Error(`Unknown OpenRouter TTS model: ${options.model}`);
+    }
+
+    const voice = options.voice ?? spec.defaultVoice ?? "alloy";
+    if (!spec.voices.includes(voice)) {
+      throw new Error(
+        `Invalid voice "${voice}" for ${options.model}. Valid voices: ${spec.voices.join(", ")}`,
+      );
+    }
+
+    const format = options.responseFormat ?? spec.defaultFormat ?? "mp3";
+    if (!spec.formats.includes(format)) {
+      throw new Error(
+        `Invalid format "${format}" for ${options.model}. Valid formats: ${spec.formats.join(", ")}`,
+      );
+    }
+
+    // OpenRouter TTS uses chat completions with audio modality
+    // The response comes as streaming chunks with base64-encoded audio
+    try {
+      const response = (await client.chat.completions.create({
+        model: bareModelId,
+        messages: [
+          {
+            role: "user",
+            content: `Please say the following text exactly: "${options.input}"`,
+          },
+        ],
+        // OpenRouter-specific parameters for audio output
+        modalities: ["text", "audio"],
+        audio: {
+          voice,
+          format,
+          ...(options.speed !== undefined ? { speed: options.speed } : {}),
+        },
+        stream: true,
+      } as Parameters<typeof client.chat.completions.create>[0])) as Stream<ChatCompletionChunk>;
+
+      // Collect audio chunks from streaming response with runtime type validation
+      const audioChunks: Buffer[] = [];
+
+      for await (const chunk of response) {
+        // Runtime type narrowing for streaming audio data
+        const delta = chunk.choices[0]?.delta;
+        if (!delta || typeof delta !== "object") continue;
+
+        const audioObj = (delta as Record<string, unknown>).audio;
+        if (!audioObj || typeof audioObj !== "object") continue;
+
+        const audioData = (audioObj as Record<string, unknown>).data;
+        if (typeof audioData !== "string" || audioData.length === 0) continue;
+
+        // Validate and decode base64 audio data
+        const decoded = Buffer.from(audioData, "base64");
+        if (decoded.length === 0) {
+          throw new Error("Invalid base64 audio data received from OpenRouter");
+        }
+        audioChunks.push(decoded);
+      }
+
+      // Concatenate all audio chunks and extract ArrayBuffer safely
+      const audioBuffer = Buffer.concat(audioChunks);
+
+      // Validate that we received audio data
+      if (audioBuffer.length === 0) {
+        throw new Error(
+          "OpenRouter TTS returned no audio data. The model may have failed to generate audio or the stream was interrupted.",
+        );
+      }
+      const cost = calculateOpenRouterSpeechCost(bareModelId, options.input.length);
+
+      return {
+        // Use Uint8Array for clean ArrayBuffer extraction (safer than buffer.slice for Node.js Buffer)
+        audio: new Uint8Array(audioBuffer).buffer,
+        model: options.model,
+        usage: {
+          characterCount: options.input.length,
+        },
+        cost,
+        format,
+      };
+    } catch (error: unknown) {
+      // Enhance error message with more context for debugging
+      const err = error as Error & {
+        status?: number;
+        error?: { message?: string; code?: string; type?: string };
+        response?: { data?: unknown };
+        body?: unknown;
+      };
+      const apiError = err.error?.message || err.error?.code || "";
+      const bodyInfo = err.body ? JSON.stringify(err.body) : "";
+      const details = apiError || bodyInfo || err.message || "Unknown error";
+      throw new Error(
+        `OpenRouter TTS failed for model ${bareModelId}: ${details}` +
+          (err.status ? ` (HTTP ${err.status})` : ""),
+      );
+    }
   }
 }
 
