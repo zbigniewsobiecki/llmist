@@ -185,7 +185,7 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
       model: options.model,
       input: options.input,
       voice: voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer",
-      response_format: format,
+      response_format: format as "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm",
       speed: options.speed ?? 1.0,
     });
 

@@ -5,6 +5,7 @@
 
 import { createGadget, HumanInputRequiredException, TaskCompletionSignal } from "llmist";
 import { z } from "zod";
+import { createTextToSpeech, type TextToSpeechConfig } from "./builtins/text-to-speech.js";
 
 /**
  * AskUser gadget - Asks the user a question and waits for their response.
@@ -110,5 +111,30 @@ export const finish = createGadget({
 
 /**
  * All built-in gadgets as an array for easy registration.
+ * @deprecated Use getBuiltinGadgets() for config-driven gadgets.
+ * This export exists for backward compatibility with code that doesn't need speech config.
  */
-export const builtinGadgets = [askUser, tellUser, finish];
+export const builtinGadgets = [askUser, tellUser, finish, createTextToSpeech()];
+
+/**
+ * Factory function to create built-in gadgets with config-driven defaults.
+ *
+ * This allows gadgets like TextToSpeech to inherit settings from ~/.llmist/cli.toml.
+ *
+ * @param speechConfig - Optional speech configuration for TextToSpeech gadget
+ * @returns Array of built-in gadgets configured with the provided defaults
+ *
+ * @example
+ * ```typescript
+ * const fullConfig = loadConfig();
+ * const builtins = getBuiltinGadgets(fullConfig.speech);
+ * for (const gadget of builtins) {
+ *   registry.registerByClass(gadget);
+ * }
+ * ```
+ */
+export function getBuiltinGadgets(speechConfig?: TextToSpeechConfig) {
+  return [askUser, tellUser, finish, createTextToSpeech(speechConfig)];
+}
+
+export type { TextToSpeechConfig };

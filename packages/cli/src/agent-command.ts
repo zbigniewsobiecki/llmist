@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import type { Agent, AgentHooks, ContentPart, ReasoningEffort, TokenUsage } from "llmist";
 import { AgentBuilder, GadgetRegistry, HookPresets, isAbortError, text } from "llmist";
 import type { ApprovalConfig } from "./approval/index.js";
-import { builtinGadgets } from "./builtin-gadgets.js";
+import { getBuiltinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
 import { getCustomCommandNames, loadConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
@@ -62,10 +62,21 @@ export async function executeAgent(
   // SHOWCASE: llmist's GadgetRegistry for dynamic tool loading
   const registry = new GadgetRegistry();
 
+  // Load config for speech settings (used by TextToSpeech gadget)
+  // Note: loadConfig() is safe to call multiple times and caches the result
+  let speechConfig: import("./config.js").SpeechConfig | undefined;
+  try {
+    const fullConfig = loadConfig();
+    speechConfig = fullConfig.speech;
+  } catch {
+    // Config loading may fail (e.g., no config file) - use defaults
+  }
+
   // Register built-in gadgets for basic agent interaction
   // AskUser is auto-excluded when stdin/stdout is not interactive (piped input/output)
   if (options.builtins !== false) {
-    for (const gadget of builtinGadgets) {
+    const builtins = getBuiltinGadgets(speechConfig);
+    for (const gadget of builtins) {
       // Skip AskUser if:
       // 1. --no-builtin-interaction is set, OR
       // 2. stdin is not interactive (piped input), OR
@@ -533,6 +544,7 @@ export async function executeAgent(
     if (tui) {
       tui.resetAbort();
       tui.startNewSession(); // Increment session counter for new blocks
+      tui.showUserMessage(userPrompt); // Echo user message with correct sessionId
       builder.withSignal(tui.getAbortSignal());
     }
 
@@ -634,7 +646,6 @@ export async function executeAgent(
     if (!currentPrompt) {
       tui.setFocusMode("input"); // Start in input mode for fresh sessions
       currentPrompt = await tui.waitForPrompt();
-      tui.showUserMessage(currentPrompt); // Echo the user's message
     }
 
     // REPL loop
@@ -650,7 +661,6 @@ export async function executeAgent(
 
       // Wait for next prompt
       currentPrompt = await tui.waitForPrompt();
-      tui.showUserMessage(currentPrompt); // Echo the user's message
     }
   } else {
     // Piped mode: run once and exit
