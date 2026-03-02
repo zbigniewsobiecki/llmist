@@ -10,6 +10,9 @@ import { listDirectory } from "./filesystem/list-directory.js";
 import { readFile } from "./filesystem/read-file.js";
 import { writeFile } from "./filesystem/write-file.js";
 import { runCommand } from "./run-command.js";
+// Note: textToSpeech is a default instance with no config.
+// Use createTextToSpeech(config) for custom configuration from cli.toml.
+import { createTextToSpeech, textToSpeech } from "./text-to-speech.js";
 
 /**
  * Registry mapping gadget names to their instances.
@@ -21,6 +24,7 @@ export const builtinGadgetRegistry: Record<string, AbstractGadget> = {
   WriteFile: writeFile,
   EditFile: editFile,
   RunCommand: runCommand,
+  TextToSpeech: textToSpeech,
 };
 
 /**
@@ -53,4 +57,12 @@ export function getBuiltinGadgetNames(): string[] {
 }
 
 // Re-export individual gadgets for direct imports
-export { listDirectory, readFile, writeFile, editFile, runCommand };
+export {
+  listDirectory,
+  readFile,
+  writeFile,
+  editFile,
+  runCommand,
+  textToSpeech,
+  createTextToSpeech,
+};

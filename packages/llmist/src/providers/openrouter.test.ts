@@ -8,6 +8,12 @@ import {
   OpenRouterProvider,
   type OpenRouterRouting,
 } from "./openrouter.js";
+import {
+  calculateOpenRouterSpeechCost,
+  getOpenRouterSpeechModelSpec,
+  isOpenRouterSpeechModel,
+  openrouterSpeechModels,
+} from "./openrouter-speech-models.js";
 
 describe("OpenRouterProvider", () => {
   describe("supports", () => {
@@ -406,6 +412,333 @@ describe("OpenRouterProvider", () => {
       expect(count).toBe(4);
     });
   });
+
+  describe("speech generation", () => {
+    it("should return speech model specs", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const specs = provider.getSpeechModelSpecs();
+      expect(specs).toBeDefined();
+      expect(Array.isArray(specs)).toBe(true);
+      expect(specs.length).toBeGreaterThan(0);
+    });
+
+    it("should include gpt-audio models", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const specs = provider.getSpeechModelSpecs();
+      const modelIds = specs.map((s) => s.modelId);
+
+      expect(modelIds).toContain("openai/gpt-audio");
+      expect(modelIds).toContain("openai/gpt-audio-mini");
+    });
+
+    it("should support speech generation for gpt-audio models", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      expect(provider.supportsSpeechGeneration("openai/gpt-audio")).toBe(true);
+      expect(provider.supportsSpeechGeneration("openai/gpt-audio-mini")).toBe(true);
+    });
+
+    it("should not support speech generation for non-audio models", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      expect(provider.supportsSpeechGeneration("anthropic/claude-sonnet-4-5")).toBe(false);
+      expect(provider.supportsSpeechGeneration("openai/gpt-4o")).toBe(false);
+    });
+
+    it("should support speech generation with provider-prefixed model IDs", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      // These are the formats used in CLI config files
+      expect(provider.supportsSpeechGeneration("openrouter:openai/gpt-audio")).toBe(true);
+      expect(provider.supportsSpeechGeneration("openrouter:openai/gpt-audio-mini")).toBe(true);
+    });
+
+    it("should generate speech by streaming audio chunks", async () => {
+      // Mock streaming response with audio chunks
+      const mockAudioChunk1 = Buffer.from("audio-chunk-1").toString("base64");
+      const mockAudioChunk2 = Buffer.from("audio-chunk-2").toString("base64");
+
+      const mockStream = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            choices: [
+              {
+                delta: {
+                  audio: { data: mockAudioChunk1, transcript: "Hello" },
+                },
+              },
+            ],
+          };
+          yield {
+            choices: [
+              {
+                delta: {
+                  audio: { data: mockAudioChunk2, transcript: " world" },
+                },
+              },
+            ],
+          };
+          yield {
+            choices: [
+              {
+                delta: {},
+                finish_reason: "stop",
+              },
+            ],
+          };
+        },
+      };
+
+      const mockCreate = vi.fn().mockResolvedValue(mockStream);
+      const mockClient = {
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const result = await provider.generateSpeech({
+        model: "openai/gpt-audio-mini",
+        input: "Hello world",
+        voice: "nova",
+        responseFormat: "pcm16",
+      });
+
+      // Verify API was called with correct parameters
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: "openai/gpt-audio-mini",
+          modalities: ["text", "audio"],
+          audio: { voice: "nova", format: "pcm16" },
+          stream: true,
+        }),
+      );
+
+      // Verify result
+      expect(result.model).toBe("openai/gpt-audio-mini");
+      expect(result.format).toBe("pcm16");
+      expect(result.usage.characterCount).toBe(11); // "Hello world"
+
+      // Verify audio was assembled from chunks
+      const audioBuffer = Buffer.from(result.audio);
+      const expectedAudio = Buffer.concat([
+        Buffer.from("audio-chunk-1"),
+        Buffer.from("audio-chunk-2"),
+      ]);
+      expect(audioBuffer).toEqual(expectedAudio);
+    });
+
+    it("should use default voice and format when not specified", async () => {
+      const mockAudioChunk = Buffer.from("audio-data").toString("base64");
+      const mockStream = {
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [{ delta: { audio: { data: mockAudioChunk } } }] };
+        },
+      };
+
+      const mockCreate = vi.fn().mockResolvedValue(mockStream);
+      const mockClient = {
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      await provider.generateSpeech({
+        model: "openai/gpt-audio-mini",
+        input: "Test",
+        voice: "alloy", // Required parameter
+      });
+
+      // Should use defaults from spec
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audio: { voice: "alloy", format: "pcm16" }, // mp3 is default
+        }),
+      );
+    });
+
+    it("should throw error for unknown model", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      await expect(
+        provider.generateSpeech({
+          model: "unknown/model",
+          input: "Test",
+          voice: "alloy",
+        }),
+      ).rejects.toThrow("Unknown OpenRouter TTS model: unknown/model");
+    });
+
+    it("should throw error for invalid voice", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      await expect(
+        provider.generateSpeech({
+          model: "openai/gpt-audio-mini",
+          input: "Test",
+          voice: "invalid-voice",
+        }),
+      ).rejects.toThrow('Invalid voice "invalid-voice" for openai/gpt-audio-mini');
+    });
+
+    it("should throw error for invalid format", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      await expect(
+        provider.generateSpeech({
+          model: "openai/gpt-audio-mini",
+          input: "Test",
+          voice: "alloy",
+          responseFormat: "ogg" as any,
+        }),
+      ).rejects.toThrow('Invalid format "ogg" for openai/gpt-audio-mini');
+    });
+
+    it("should throw error when no audio chunks are returned", async () => {
+      const mockStream = {
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [{ delta: {} }] };
+          yield { choices: [{ delta: { content: "text only" } }] };
+        },
+      };
+
+      const mockCreate = vi.fn().mockResolvedValue(mockStream);
+      const mockClient = {
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      await expect(
+        provider.generateSpeech({
+          model: "openai/gpt-audio-mini",
+          input: "Test",
+          voice: "alloy",
+        }),
+      ).rejects.toThrow("OpenRouter TTS returned no audio data");
+    });
+
+    it("should handle empty base64 string gracefully", async () => {
+      // Empty base64 string produces empty buffer - this chunk should be skipped
+      // but since it's the only chunk, it should throw "no audio data"
+      const mockStream = {
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [{ delta: { audio: { data: "" } } }] };
+        },
+      };
+
+      const mockCreate = vi.fn().mockResolvedValue(mockStream);
+      const mockClient = {
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      // Empty string produces empty buffer which is valid but zero-length
+      // Our validation should catch this as no audio data
+      await expect(
+        provider.generateSpeech({
+          model: "openai/gpt-audio-mini",
+          input: "Test",
+          voice: "alloy",
+        }),
+      ).rejects.toThrow("OpenRouter TTS returned no audio data");
+    });
+
+    it("should pass speed parameter to API", async () => {
+      const mockAudioChunk = Buffer.from("audio-data").toString("base64");
+      const mockStream = {
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [{ delta: { audio: { data: mockAudioChunk } } }] };
+        },
+      };
+
+      const mockCreate = vi.fn().mockResolvedValue(mockStream);
+      const mockClient = {
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      await provider.generateSpeech({
+        model: "openai/gpt-audio-mini",
+        input: "Test",
+        voice: "alloy",
+        speed: 1.5,
+      });
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audio: expect.objectContaining({ speed: 1.5 }),
+        }),
+      );
+    });
+
+    it("should skip malformed delta objects gracefully", async () => {
+      const mockAudioChunk = Buffer.from("valid-audio").toString("base64");
+      const mockStream = {
+        async *[Symbol.asyncIterator]() {
+          // Various malformed chunks that should be skipped
+          yield { choices: [{ delta: null }] };
+          yield { choices: [{ delta: "not an object" }] };
+          yield { choices: [{ delta: { audio: null } }] };
+          yield { choices: [{ delta: { audio: "not an object" } }] };
+          yield { choices: [{ delta: { audio: { data: 123 } } }] }; // data not string
+          // Valid chunk
+          yield { choices: [{ delta: { audio: { data: mockAudioChunk } } }] };
+        },
+      };
+
+      const mockCreate = vi.fn().mockResolvedValue(mockStream);
+      const mockClient = {
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const result = await provider.generateSpeech({
+        model: "openai/gpt-audio-mini",
+        input: "Test",
+        voice: "alloy",
+      });
+
+      // Should still succeed with the valid chunk
+      expect(Buffer.from(result.audio).toString()).toBe("valid-audio");
+    });
+  });
 });
 
 describe("createOpenRouterProviderFromEnv", () => {
@@ -488,5 +821,86 @@ describe("createOpenRouterProviderFromEnv", () => {
     const provider = createOpenRouterProviderFromEnv();
 
     expect(provider).toBeInstanceOf(OpenRouterProvider);
+  });
+});
+
+describe("openrouter-speech-models", () => {
+  describe("openrouterSpeechModels", () => {
+    it("should have provider set to 'openrouter' for all models", () => {
+      for (const model of openrouterSpeechModels) {
+        expect(model.provider).toBe("openrouter");
+      }
+    });
+
+    it("should have required fields for all models", () => {
+      for (const model of openrouterSpeechModels) {
+        expect(model.modelId).toBeDefined();
+        expect(model.displayName).toBeDefined();
+        expect(model.pricing).toBeDefined();
+        expect(model.voices).toBeDefined();
+        expect(model.voices.length).toBeGreaterThan(0);
+        expect(model.formats).toBeDefined();
+        expect(model.formats.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should include standard OpenAI TTS voices", () => {
+      const firstModel = openrouterSpeechModels[0];
+      expect(firstModel.voices).toContain("alloy");
+      expect(firstModel.voices).toContain("nova");
+      expect(firstModel.voices).toContain("shimmer");
+    });
+  });
+
+  describe("getOpenRouterSpeechModelSpec", () => {
+    it("should return spec for valid model", () => {
+      const spec = getOpenRouterSpeechModelSpec("openai/gpt-audio-mini");
+      expect(spec).toBeDefined();
+      expect(spec?.modelId).toBe("openai/gpt-audio-mini");
+    });
+
+    it("should return undefined for invalid model", () => {
+      const spec = getOpenRouterSpeechModelSpec("invalid-model");
+      expect(spec).toBeUndefined();
+    });
+  });
+
+  describe("isOpenRouterSpeechModel", () => {
+    it("should return true for valid speech models", () => {
+      expect(isOpenRouterSpeechModel("openai/gpt-audio")).toBe(true);
+      expect(isOpenRouterSpeechModel("openai/gpt-audio-mini")).toBe(true);
+    });
+
+    it("should return false for non-speech models", () => {
+      expect(isOpenRouterSpeechModel("openai/gpt-4o")).toBe(false);
+      expect(isOpenRouterSpeechModel("anthropic/claude-sonnet-4-5")).toBe(false);
+    });
+  });
+
+  describe("calculateOpenRouterSpeechCost", () => {
+    it("should calculate cost based on per-minute rate", () => {
+      // gpt-audio-mini has perMinute: 0.015
+      // 750 chars ≈ 1 minute
+      const cost = calculateOpenRouterSpeechCost("openai/gpt-audio-mini", 750);
+      expect(cost).toBeCloseTo(0.015, 3);
+    });
+
+    it("should return undefined for unknown model", () => {
+      const cost = calculateOpenRouterSpeechCost("unknown-model", 1000);
+      expect(cost).toBeUndefined();
+    });
+
+    it("should use estimated minutes if provided", () => {
+      // gpt-audio has perMinute: 0.08
+      const cost = calculateOpenRouterSpeechCost("openai/gpt-audio", 100, 2);
+      expect(cost).toBeCloseTo(0.16, 3); // 2 minutes * $0.08/min
+    });
+
+    it("should scale cost with character count", () => {
+      // 1500 chars ≈ 2 minutes
+      const cost1500 = calculateOpenRouterSpeechCost("openai/gpt-audio-mini", 1500);
+      const cost750 = calculateOpenRouterSpeechCost("openai/gpt-audio-mini", 750);
+      expect(cost1500).toBeCloseTo(cost750! * 2, 5);
+    });
   });
 });
