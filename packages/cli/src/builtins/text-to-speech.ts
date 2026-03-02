@@ -18,8 +18,8 @@ import { z } from "zod";
 const TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
 export type TTSVoice = (typeof TTS_VOICES)[number];
 
-/** Available audio output formats */
-const TTS_FORMATS = ["mp3", "opus", "aac", "flac", "wav"] as const;
+/** Available audio output formats (pcm16 required for OpenRouter TTS) */
+const TTS_FORMATS = ["mp3", "opus", "aac", "flac", "wav", "pcm16"] as const;
 export type TTSFormat = (typeof TTS_FORMATS)[number];
 
 /**
@@ -38,7 +38,7 @@ export interface TextToSpeechConfig {
   model?: string;
   /** Default voice (alloy, echo, fable, onyx, nova, shimmer) */
   voice?: string;
-  /** Default audio format (mp3, opus, aac, flac, wav) */
+  /** Default audio format (mp3, opus, aac, flac, wav, pcm16). Use pcm16 for OpenRouter. */
   format?: string;
   /** Default speed (0.25 - 4.0) */
   speed?: number;
