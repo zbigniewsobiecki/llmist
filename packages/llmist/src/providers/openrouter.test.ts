@@ -670,7 +670,7 @@ describe("OpenRouterProvider", () => {
       ).rejects.toThrow("OpenRouter TTS returned no audio data");
     });
 
-    it("should pass speed parameter to API", async () => {
+    it("should NOT include speed parameter (OpenRouter chat completions TTS doesn't support it)", async () => {
       const mockAudioChunk = Buffer.from("audio-data").toString("base64");
       const mockStream = {
         async *[Symbol.asyncIterator]() {
@@ -689,18 +689,17 @@ describe("OpenRouterProvider", () => {
 
       const provider = new OpenRouterProvider(mockClient, {});
 
+      // Speed is provided but should be ignored by OpenRouter provider
       await provider.generateSpeech({
         model: "openai/gpt-audio-mini",
         input: "Test",
         voice: "alloy",
-        speed: 1.5,
+        speed: 1.5, // Provided but ignored
       });
 
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          audio: expect.objectContaining({ speed: 1.5 }),
-        }),
-      );
+      // Verify speed is NOT in the audio parameters
+      const callArgs = mockCreate.mock.calls[0][0];
+      expect(callArgs.audio).not.toHaveProperty("speed");
     });
 
     it("should skip malformed delta objects gracefully", async () => {
