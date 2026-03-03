@@ -1,5 +1,5 @@
 import type { AbstractGadget } from "../gadgets/gadget.js";
-import type { GadgetMediaOutput } from "../gadgets/types.js";
+import type { GadgetMediaOutput, StoredMedia } from "../gadgets/types.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
 import type {
   AudioMimeType,
@@ -500,6 +500,7 @@ Produces: { "items": ["first", "second"] }`);
    * @param invocationId - Invocation ID (shown to LLM so it can reference for dependencies)
    * @param media - Optional media outputs from the gadget
    * @param mediaIds - Optional IDs for the media outputs
+   * @param storedMedia - Optional stored media info including file paths
    */
   addGadgetCallResult(
     gadget: string,
@@ -508,6 +509,7 @@ Produces: { "items": ["first", "second"] }`);
     invocationId: string,
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
+    storedMedia?: StoredMedia[],
   ) {
     const paramStr = this.formatBlockParameters(parameters, "");
 
@@ -519,8 +521,14 @@ Produces: { "items": ["first", "second"] }`);
 
     // User message with result, including invocation ID so LLM can reference it
     if (media && media.length > 0 && mediaIds && mediaIds.length > 0) {
-      // Build text with ID references (include kind for clarity)
-      const idRefs = media.map((m, i) => `[Media: ${mediaIds[i]} (${m.kind})]`).join("\n");
+      // Build text with ID references, including file paths if available
+      const idRefs = media
+        .map((m, i) => {
+          const path = storedMedia?.[i]?.path;
+          const pathInfo = path ? ` → saved to: ${path}` : "";
+          return `[Media: ${mediaIds[i]} (${m.kind})${pathInfo}]`;
+        })
+        .join("\n");
       const textWithIds = `Result (${invocationId}): ${result}\n${idRefs}`;
 
       // Build multimodal content: text + media content parts
