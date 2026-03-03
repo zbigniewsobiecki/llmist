@@ -1,3 +1,45 @@
+## [16.0.0](https://github.com/zbigniewsobiecki/llmist/compare/v15.19.0...v16.0.0) (2026-03-03)
+
+### ⚠ BREAKING CHANGES
+
+* model parameter removed from TextToSpeech schema
+
+The `model` parameter has been removed from the TextToSpeech gadget's
+schema because model selection is an infrastructure concern, not a
+content choice the LLM should make.
+
+**Problem:**
+User configures `model = "openrouter:openai/gpt-audio-mini"` in their
+config, but the schema description said "Options: tts-1, tts-1-hd".
+The LLM saw this, passed `model: tts-1-hd`, and the user got:
+"No provider supports speech generation for model 'tts-1-hd'"
+
+**Solution:**
+- Remove `model` from the gadget schema entirely
+- Model is now always taken from config (defaultModel)
+- LLM can still control: voice, format, speed (content decisions)
+- LLM cannot control: model (infrastructure decision)
+
+**Rationale:**
+The LLM cannot know:
+- Which TTS providers are configured
+- What API keys are available
+- User's cost/quality preferences
+
+Tests updated to verify model is config-only and cannot be overridden.
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+### Features
+
+* **providers:** add OpenRouter TTS support via audio-enabled chat completions ([#402](https://github.com/zbigniewsobiecki/llmist/issues/402)) ([ff7319a](https://github.com/zbigniewsobiecki/llmist/commit/ff7319a3bb95ced09bac40499cf54af69b03853f))
+* TUI media path display + fix TTS model override bug ([#407](https://github.com/zbigniewsobiecki/llmist/issues/407)) ([1bd9ea2](https://github.com/zbigniewsobiecki/llmist/commit/1bd9ea2701318f1076e71b880e9ed264d3cc9eae))
+
+### Bug Fixes
+
+* **cli:** add pcm16 format support for OpenRouter TTS ([#404](https://github.com/zbigniewsobiecki/llmist/issues/404)) ([ccfec64](https://github.com/zbigniewsobiecki/llmist/commit/ccfec642826498566a31778ebc9ac03ef2dec34f))
+* **cli:** improve FFmpeg conversion robustness and TUI paste handling ([#409](https://github.com/zbigniewsobiecki/llmist/issues/409)) ([a1bf392](https://github.com/zbigniewsobiecki/llmist/commit/a1bf3927072988d2d6299e10460a959c927372b2))
+
 ## 15.19.0 (2026-02-22)
 
 * Merge pull request #397 from zbigniewsobiecki/feat/exclusive-gadgets ([d8bc979](https://github.com/zbigniewsobiecki/llmist/commit/d8bc979)), closes [#397](https://github.com/zbigniewsobiecki/llmist/issues/397)
