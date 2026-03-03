@@ -30,6 +30,7 @@ import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import { getModelId } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions, ModelDescriptor, ReasoningEffort } from "../core/options.js";
+import { createLogger } from "../logging/logger.js";
 import {
   type OpenAICompatibleConfig,
   OpenAICompatibleProvider,
@@ -42,6 +43,9 @@ import {
   openrouterSpeechModels,
 } from "./openrouter-speech-models.js";
 import { isNonEmpty, readEnvVar } from "./utils.js";
+
+/** Logger for OpenRouter provider debugging */
+const logger = createLogger({ name: "openrouter" });
 
 /** Maps llmist reasoning effort levels to OpenRouter/OpenAI reasoning effort */
 const OPENROUTER_EFFORT_MAP: Record<ReasoningEffort, string> = {
@@ -308,6 +312,13 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
 
     // OpenRouter TTS uses chat completions with audio modality
     // The response comes as streaming chunks with base64-encoded audio
+    logger.debug("TTS request", {
+      model: bareModelId,
+      voice,
+      format,
+      inputLength: options.input.length,
+    });
+
     try {
       const response = (await client.chat.completions.create({
         model: bareModelId,
@@ -318,11 +329,12 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
           },
         ],
         // OpenRouter-specific parameters for audio output
+        // Note: OpenRouter TTS via chat completions does NOT support the speed parameter
+        // (unlike OpenAI's dedicated /audio/speech endpoint which does)
         modalities: ["text", "audio"],
         audio: {
           voice,
           format,
-          ...(options.speed !== undefined ? { speed: options.speed } : {}),
         },
         stream: true,
       } as Parameters<typeof client.chat.completions.create>[0])) as Stream<ChatCompletionChunk>;
@@ -381,6 +393,18 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
       const apiError = err.error?.message || err.error?.code || "";
       const bodyInfo = err.body ? JSON.stringify(err.body) : "";
       const details = apiError || bodyInfo || err.message || "Unknown error";
+
+      // Log detailed error for debugging (visible with LLMIST_LOG_LEVEL=debug)
+      logger.debug("TTS error", {
+        model: bareModelId,
+        voice,
+        format,
+        status: err.status,
+        error: err.error,
+        body: err.body,
+        message: err.message,
+      });
+
       throw new Error(
         `OpenRouter TTS failed for model ${bareModelId}: ${details}` +
           (err.status ? ` (HTTP ${err.status})` : ""),

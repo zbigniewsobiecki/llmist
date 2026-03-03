@@ -8,7 +8,7 @@
  * @module core/execution-tree
  */
 
-import type { GadgetMediaOutput } from "../gadgets/types.js";
+import type { GadgetMediaOutput, StoredMedia } from "../gadgets/types.js";
 import type { LLMMessage } from "./messages.js";
 import type { TokenUsage } from "./options.js";
 
@@ -171,6 +171,8 @@ export interface CompleteGadgetParams {
   cost?: number;
   /** Media outputs */
   media?: GadgetMediaOutput[];
+  /** Stored media with file paths */
+  storedMedia?: StoredMedia[];
 }
 
 // =============================================================================
@@ -599,6 +601,7 @@ export class ExecutionTree {
         executionTimeMs: params.executionTimeMs ?? 0,
         cost: params.cost,
         media: params.media,
+        storedMedia: params.storedMedia,
       });
     }
   }

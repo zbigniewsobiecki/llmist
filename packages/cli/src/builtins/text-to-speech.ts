@@ -81,14 +81,10 @@ export function createTextToSpeech(config?: TextToSpeechConfig) {
 
   return createGadget({
     name: "TextToSpeech",
-    description: `Convert text to speech audio. Defaults: ${defaultModel} model, ${defaultVoice} voice, ${defaultFormat} format.`,
+    description: `Convert text to speech audio. Uses configured TTS model. Defaults: ${defaultVoice} voice, ${defaultFormat} format.`,
     schema: z.object({
       text: z.string().min(1).describe("Text to convert to speech"),
       voice: z.enum(TTS_VOICES).optional().describe(`Voice to use (default: ${defaultVoice})`),
-      model: z
-        .string()
-        .optional()
-        .describe(`TTS model (default: ${defaultModel}). Options: tts-1, tts-1-hd`),
       format: z.enum(TTS_FORMATS).optional().describe(`Output format (default: ${defaultFormat})`),
       speed: z
         .number()
@@ -104,11 +100,10 @@ export function createTextToSpeech(config?: TextToSpeechConfig) {
         output: "Generated audio (mp3, 35 chars, $0.000525)",
       },
       {
-        comment: "Use a specific voice and high-quality model",
+        comment: "Use a specific voice",
         params: {
           text: "This is an important announcement.",
           voice: "onyx",
-          model: "tts-1-hd",
         },
         output: "Generated audio (mp3, 35 chars, $0.001050)",
       },
@@ -127,40 +122,58 @@ export function createTextToSpeech(config?: TextToSpeechConfig) {
         output: "Generated audio (mp3, 12 chars, $N/A)",
       },
     ],
-    execute: async ({ text, voice, model, format, speed }, ctx) => {
+    execute: async ({ text, voice, format, speed }, ctx) => {
       // Require LLMist client context with speech capability
       if (!ctx?.llmist?.speech?.generate) {
         return "status=1\n\nerror: Speech generation requires LLMist client with speech capability.";
       }
 
-      const selectedModel = model ?? defaultModel;
+      // Always use config model - LLM shouldn't choose TTS provider
+      const selectedModel = defaultModel;
       const selectedVoice = voice ?? defaultVoice;
       const selectedFormat = format ?? defaultFormat;
-      const selectedSpeed = speed ?? defaultSpeed;
+      // Only include speed if explicitly set (not using default) - some providers don't support it
+      const selectedSpeed = speed ?? (defaultSpeed !== 1.0 ? defaultSpeed : undefined);
 
-      try {
-        const result = await ctx.llmist.speech.generate({
-          model: selectedModel,
-          input: text,
-          voice: selectedVoice,
-          // Cast is safe: Zod validates LLM input, config values validated at factory time
-          responseFormat: selectedFormat as TTSFormat,
-          speed: selectedSpeed,
-        });
+      // Retry logic for transient API errors (e.g., HTTP 400/500 from OpenRouter)
+      const maxRetries = 2;
+      let lastError: unknown;
 
-        // Return as media result with audio data
-        return resultWithAudio(
-          `Generated audio (${result.format}, ${result.usage.characterCount} chars, $${result.cost?.toFixed(6) ?? "N/A"})`,
-          Buffer.from(result.audio),
-          {
-            mimeType: `audio/${result.format}`,
-            cost: result.cost,
-            description: `TTS: "${text.slice(0, 50)}${text.length > 50 ? "..." : ""}"`,
-          },
-        );
-      } catch (error) {
-        return `status=1\n\nerror: ${getErrorMessage(error)}`;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const result = await ctx.llmist.speech.generate({
+            model: selectedModel,
+            input: text,
+            voice: selectedVoice,
+            // Cast is safe: Zod validates LLM input, config values validated at factory time
+            responseFormat: selectedFormat as TTSFormat,
+            ...(selectedSpeed !== undefined ? { speed: selectedSpeed } : {}),
+          });
+
+          // Return as media result with audio data
+          return resultWithAudio(
+            `Generated audio (${result.format}, ${result.usage.characterCount} chars, $${result.cost?.toFixed(6) ?? "N/A"})`,
+            Buffer.from(result.audio),
+            {
+              mimeType: `audio/${result.format}`,
+              cost: result.cost,
+              description: `TTS: "${text.slice(0, 50)}${text.length > 50 ? "..." : ""}"`,
+            },
+          );
+        } catch (error) {
+          lastError = error;
+          // Only retry on potentially transient errors (HTTP 4xx/5xx)
+          const errorMsg = getErrorMessage(error);
+          const isRetryable = errorMsg.includes("HTTP 4") || errorMsg.includes("HTTP 5");
+          if (!isRetryable || attempt === maxRetries) {
+            break;
+          }
+          // Exponential backoff: 500ms, 1000ms
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        }
       }
+
+      return `status=1\n\nerror: ${getErrorMessage(lastError)}`;
     },
   });
 }

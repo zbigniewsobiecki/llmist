@@ -4,7 +4,7 @@
  */
 
 import type { LLMMessage, MessageContent } from "../core/messages.js";
-import type { GadgetMediaOutput } from "../gadgets/types.js";
+import type { GadgetMediaOutput, StoredMedia } from "../gadgets/types.js";
 
 /**
  * Manages the conversation history and message building.
@@ -26,6 +26,7 @@ export interface IConversationManager {
    * Adds a gadget call and its result to the conversation.
    * The invocationId is shown to the LLM so it can reference previous calls when building dependencies.
    * Optionally includes media outputs (images, audio, etc.) for multimodal results.
+   * If storedMedia is provided, file paths will be included in the result message.
    */
   addGadgetCallResult(
     gadgetName: string,
@@ -34,6 +35,7 @@ export interface IConversationManager {
     invocationId: string,
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
+    storedMedia?: StoredMedia[],
   ): void;
 
   /**

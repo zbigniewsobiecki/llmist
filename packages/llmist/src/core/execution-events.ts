@@ -8,7 +8,7 @@
  * @module core/execution-events
  */
 
-import type { GadgetMediaOutput } from "../gadgets/types.js";
+import type { GadgetMediaOutput, StoredMedia } from "../gadgets/types.js";
 import type { LLMMessage } from "./messages.js";
 import type { TokenUsage } from "./options.js";
 
@@ -156,6 +156,8 @@ export interface GadgetCompleteEvent extends BaseExecutionEvent {
   cost?: number;
   /** Media outputs */
   media?: GadgetMediaOutput[];
+  /** Stored media with file paths */
+  storedMedia?: StoredMedia[];
 }
 
 /**

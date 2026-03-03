@@ -589,6 +589,50 @@ describe("ExecutionTree", () => {
       expect(gadgetCallEvent?.path).toEqual([llmNode.id, gadgetNode.id]);
     });
 
+    test("gadget_complete event includes storedMedia", () => {
+      const events: ExecutionEvent[] = [];
+      tree.onAll((e) => events.push(e));
+
+      const gadgetNode = tree.addGadget({
+        invocationId: "gc_tts",
+        name: "TextToSpeech",
+        parameters: { text: "Hello" },
+        dependencies: [],
+      });
+
+      const storedMedia = [
+        {
+          id: "media_123",
+          kind: "audio" as const,
+          path: "/tmp/media-abc123/audio.pcm16",
+          mimeType: "audio/pcm",
+          sizeBytes: 1024,
+          gadgetName: "TextToSpeech",
+          createdAt: new Date(),
+        },
+      ];
+
+      tree.startGadget(gadgetNode.id);
+      tree.completeGadget(gadgetNode.id, {
+        result: "Audio generated",
+        executionTimeMs: 500,
+        storedMedia,
+      });
+
+      // Find the gadget_complete event
+      const completeEvent = events.find((e) => e.type === "gadget_complete");
+      expect(completeEvent).toBeDefined();
+      expect(completeEvent?.type === "gadget_complete" && completeEvent.storedMedia).toHaveLength(
+        1,
+      );
+      expect(completeEvent?.type === "gadget_complete" && completeEvent.storedMedia?.[0].path).toBe(
+        "/tmp/media-abc123/audio.pcm16",
+      );
+      expect(completeEvent?.type === "gadget_complete" && completeEvent.storedMedia?.[0].kind).toBe(
+        "audio",
+      );
+    });
+
     test("on() returns unsubscribe function", () => {
       const events: ExecutionEvent[] = [];
       const unsubscribe = tree.on("llm_call_start", (e) => events.push(e));
