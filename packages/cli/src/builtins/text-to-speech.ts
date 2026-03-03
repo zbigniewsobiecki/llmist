@@ -13,6 +13,7 @@
 
 import { createGadget, getErrorMessage, resultWithAudio } from "llmist";
 import { z } from "zod";
+import { convertToMp3, isFFmpegAvailable } from "../ffmpeg.js";
 
 /** Available TTS voices */
 const TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
@@ -121,6 +122,11 @@ export function createTextToSpeech(config?: TextToSpeechConfig) {
         params: { text: "Hello there!" },
         output: "Generated audio (mp3, 12 chars, $N/A)",
       },
+      {
+        comment: "Auto-converted to MP3 (when ffmpeg is available and format isn't MP3)",
+        params: { text: "Converted audio.", format: "pcm16" },
+        output: "Generated audio (mp3, 16 chars, $0.000240) [converted from pcm16]",
+      },
     ],
     execute: async ({ text, voice, format, speed }, ctx) => {
       // Require LLMist client context with speech capability
@@ -150,12 +156,28 @@ export function createTextToSpeech(config?: TextToSpeechConfig) {
             ...(selectedSpeed !== undefined ? { speed: selectedSpeed } : {}),
           });
 
+          let audioBuffer: Buffer = Buffer.from(result.audio);
+          let finalFormat = result.format;
+
+          // Convert to mp3 if we didn't get mp3 and ffmpeg is available
+          if (finalFormat !== "mp3" && (await isFFmpegAvailable())) {
+            const mp3Buffer = await convertToMp3(audioBuffer, finalFormat);
+            if (mp3Buffer) {
+              audioBuffer = mp3Buffer;
+              finalFormat = "mp3";
+            }
+          }
+
+          // Indicate if conversion happened
+          const conversionNote =
+            finalFormat !== result.format ? ` [converted from ${result.format}]` : "";
+
           // Return as media result with audio data
           return resultWithAudio(
-            `Generated audio (${result.format}, ${result.usage.characterCount} chars, $${result.cost?.toFixed(6) ?? "N/A"})`,
-            Buffer.from(result.audio),
+            `Generated audio (${finalFormat}, ${result.usage.characterCount} chars, $${result.cost?.toFixed(6) ?? "N/A"})${conversionNote}`,
+            audioBuffer,
             {
-              mimeType: `audio/${result.format}`,
+              mimeType: `audio/${finalFormat}`,
               cost: result.cost,
               description: `TTS: "${text.slice(0, 50)}${text.length > 50 ? "..." : ""}"`,
             },

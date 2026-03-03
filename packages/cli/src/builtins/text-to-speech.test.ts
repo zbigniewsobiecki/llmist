@@ -1,5 +1,12 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import * as ffmpegModule from "../ffmpeg.js";
 import { createTextToSpeech, textToSpeech } from "./text-to-speech.js";
+
+// Mock the ffmpeg module
+vi.mock("../ffmpeg.js", () => ({
+  isFFmpegAvailable: vi.fn().mockResolvedValue(false),
+  convertToMp3: vi.fn().mockResolvedValue(null),
+}));
 
 describe("TextToSpeech gadget", () => {
   describe("factory function", () => {
@@ -41,7 +48,7 @@ describe("TextToSpeech gadget", () => {
     test("throws error for invalid format in config", () => {
       expect(() => createTextToSpeech({ format: "ogg" })).toThrow('Invalid TTS format "ogg"');
       expect(() => createTextToSpeech({ format: "ogg" })).toThrow(
-        "Valid formats: mp3, opus, aac, flac, wav",
+        "Valid formats: mp3, opus, aac, flac, wav, pcm16",
       );
     });
 
@@ -289,6 +296,174 @@ describe("TextToSpeech gadget", () => {
       // Description should be truncated with ellipsis
       expect((result as any).media[0].description).toContain("...");
       expect((result as any).media[0].description.length).toBeLessThan(100);
+    });
+  });
+
+  describe("FFmpeg conversion", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      // Default: ffmpeg not available
+      vi.mocked(ffmpegModule.isFFmpegAvailable).mockResolvedValue(false);
+      vi.mocked(ffmpegModule.convertToMp3).mockResolvedValue(null);
+    });
+
+    afterEach(() => {
+      vi.clearAllMocks();
+    });
+
+    test("converts to mp3 using ffmpeg when available and output is not mp3", async () => {
+      vi.mocked(ffmpegModule.isFFmpegAvailable).mockResolvedValue(true);
+      vi.mocked(ffmpegModule.convertToMp3).mockResolvedValue(Buffer.from("mp3 data"));
+
+      const mockGenerate = vi.fn().mockResolvedValue({
+        audio: new ArrayBuffer(100),
+        model: "openai/gpt-4o-audio-preview",
+        usage: { characterCount: 5 },
+        cost: 0.000075,
+        format: "pcm16",
+      });
+
+      const mockCtx = {
+        llmist: {
+          speech: {
+            generate: mockGenerate,
+          },
+        },
+      };
+
+      const gadget = createTextToSpeech({ model: "openai/gpt-4o-audio-preview", format: "pcm16" });
+      const result = await gadget.execute({ text: "Hello" }, mockCtx as any);
+
+      // Should have called convertToMp3
+      expect(ffmpegModule.convertToMp3).toHaveBeenCalledWith(expect.any(Buffer), "pcm16");
+
+      // Result should show mp3 format with conversion note
+      expect((result as any).result).toContain("mp3");
+      expect((result as any).result).toContain("[converted from pcm16]");
+      expect((result as any).media[0].mimeType).toBe("audio/mp3");
+    });
+
+    test("keeps original format when ffmpeg is not available", async () => {
+      vi.mocked(ffmpegModule.isFFmpegAvailable).mockResolvedValue(false);
+
+      const mockGenerate = vi.fn().mockResolvedValue({
+        audio: new ArrayBuffer(100),
+        model: "openai/gpt-4o-audio-preview",
+        usage: { characterCount: 5 },
+        cost: 0.000075,
+        format: "pcm16",
+      });
+
+      const mockCtx = {
+        llmist: {
+          speech: {
+            generate: mockGenerate,
+          },
+        },
+      };
+
+      const gadget = createTextToSpeech({ model: "openai/gpt-4o-audio-preview", format: "pcm16" });
+      const result = await gadget.execute({ text: "Hello" }, mockCtx as any);
+
+      // Should NOT have called convertToMp3
+      expect(ffmpegModule.convertToMp3).not.toHaveBeenCalled();
+
+      // Result should show original format without conversion note
+      expect((result as any).result).toContain("pcm16");
+      expect((result as any).result).not.toContain("[converted from");
+      expect((result as any).media[0].mimeType).toBe("audio/pcm16");
+    });
+
+    test("keeps original format when ffmpeg conversion fails", async () => {
+      vi.mocked(ffmpegModule.isFFmpegAvailable).mockResolvedValue(true);
+      vi.mocked(ffmpegModule.convertToMp3).mockResolvedValue(null); // Conversion fails
+
+      const mockGenerate = vi.fn().mockResolvedValue({
+        audio: new ArrayBuffer(100),
+        model: "openai/gpt-4o-audio-preview",
+        usage: { characterCount: 5 },
+        cost: 0.000075,
+        format: "pcm16",
+      });
+
+      const mockCtx = {
+        llmist: {
+          speech: {
+            generate: mockGenerate,
+          },
+        },
+      };
+
+      const gadget = createTextToSpeech({ model: "openai/gpt-4o-audio-preview", format: "pcm16" });
+      const result = await gadget.execute({ text: "Hello" }, mockCtx as any);
+
+      // Should have tried to convert
+      expect(ffmpegModule.convertToMp3).toHaveBeenCalled();
+
+      // Result should show original format (conversion failed)
+      expect((result as any).result).toContain("pcm16");
+      expect((result as any).result).not.toContain("[converted from");
+    });
+
+    test("does not attempt conversion when output is already mp3", async () => {
+      vi.mocked(ffmpegModule.isFFmpegAvailable).mockResolvedValue(true);
+
+      const mockGenerate = vi.fn().mockResolvedValue({
+        audio: new ArrayBuffer(100),
+        model: "tts-1",
+        usage: { characterCount: 5 },
+        cost: 0.000075,
+        format: "mp3",
+      });
+
+      const mockCtx = {
+        llmist: {
+          speech: {
+            generate: mockGenerate,
+          },
+        },
+      };
+
+      const gadget = createTextToSpeech();
+      const result = await gadget.execute({ text: "Hello" }, mockCtx as any);
+
+      // Should NOT have called convertToMp3 since output is already mp3
+      expect(ffmpegModule.convertToMp3).not.toHaveBeenCalled();
+
+      // Result should show mp3 without conversion note
+      expect((result as any).result).toContain("mp3");
+      expect((result as any).result).not.toContain("[converted from");
+    });
+
+    test("converts wav to mp3 using ffmpeg", async () => {
+      vi.mocked(ffmpegModule.isFFmpegAvailable).mockResolvedValue(true);
+      vi.mocked(ffmpegModule.convertToMp3).mockResolvedValue(Buffer.from("mp3 data"));
+
+      const mockGenerate = vi.fn().mockResolvedValue({
+        audio: new ArrayBuffer(100),
+        model: "tts-1",
+        usage: { characterCount: 5 },
+        cost: 0.000075,
+        format: "wav",
+      });
+
+      const mockCtx = {
+        llmist: {
+          speech: {
+            generate: mockGenerate,
+          },
+        },
+      };
+
+      const gadget = createTextToSpeech({ format: "wav" });
+      const result = await gadget.execute({ text: "Hello" }, mockCtx as any);
+
+      // Should have called convertToMp3 with wav format
+      expect(ffmpegModule.convertToMp3).toHaveBeenCalledWith(expect.any(Buffer), "wav");
+
+      // Result should show mp3 format with conversion note
+      expect((result as any).result).toContain("mp3");
+      expect((result as any).result).toContain("[converted from wav]");
     });
   });
 
