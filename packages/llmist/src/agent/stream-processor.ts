@@ -992,6 +992,7 @@ export class StreamProcessor {
             executionTimeMs: result.executionTimeMs,
             cost: result.cost,
             media: result.media,
+            storedMedia: result.storedMedia,
           });
         }
       }

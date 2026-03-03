@@ -1589,6 +1589,7 @@ export class Agent {
             gadgetResult.invocationId,
             gadgetResult.media,
             gadgetResult.mediaIds,
+            gadgetResult.storedMedia,
           );
         }
       }
