@@ -560,13 +560,10 @@ export class InputHandler {
 
     // If content has newlines, open editor for multiline editing
     if (content.includes("\n")) {
-      const currentValue = this.inputBar.getValue();
-      this.openEditorForInput(currentValue + content);
+      // Use current value - blessed already added the content
+      this.openEditorForInput(this.inputBar.getValue());
     } else {
-      // Single-line paste - append to current input
-      const currentValue = this.inputBar.getValue();
-      this.inputBar.setValue(currentValue + content);
-      // Re-focus input to continue editing
+      // Single-line paste - blessed already added the content, just re-focus
       this.inputBar.readInput();
     }
   }
