@@ -6,7 +6,7 @@ describe("TextToSpeech gadget", () => {
     test("creates gadget with default configuration", () => {
       const gadget = createTextToSpeech();
       expect(gadget.name).toBe("TextToSpeech");
-      expect(gadget.description).toContain("tts-1");
+      expect(gadget.description).toContain("configured TTS model");
       expect(gadget.description).toContain("nova");
       expect(gadget.description).toContain("mp3");
     });
@@ -18,14 +18,15 @@ describe("TextToSpeech gadget", () => {
         format: "wav",
         speed: 0.8,
       });
-      expect(gadget.description).toContain("tts-1-hd");
+      // Model is config-only, not exposed in description to LLM
+      expect(gadget.description).toContain("configured TTS model");
       expect(gadget.description).toContain("alloy");
       expect(gadget.description).toContain("wav");
     });
 
     test("partial config uses defaults for missing values", () => {
       const gadget = createTextToSpeech({ voice: "onyx" });
-      expect(gadget.description).toContain("tts-1"); // default model
+      expect(gadget.description).toContain("configured TTS model"); // model is config-only
       expect(gadget.description).toContain("onyx"); // custom voice
       expect(gadget.description).toContain("mp3"); // default format
     });
@@ -109,12 +110,12 @@ describe("TextToSpeech gadget", () => {
       const gadget = createTextToSpeech();
       await gadget.execute({ text: "Hello" }, mockCtx as any);
 
+      // Note: speed is NOT included when using default (1.0) since some providers don't support it
       expect(mockGenerate).toHaveBeenCalledWith({
         model: "tts-1",
         input: "Hello",
         voice: "nova",
         responseFormat: "mp3",
-        speed: 1.0,
       });
     });
 
@@ -152,10 +153,10 @@ describe("TextToSpeech gadget", () => {
       });
     });
 
-    test("overrides config defaults with explicit parameters", async () => {
+    test("overrides config defaults with explicit parameters (except model)", async () => {
       const mockGenerate = vi.fn().mockResolvedValue({
         audio: new ArrayBuffer(100),
-        model: "tts-1",
+        model: "tts-1-hd", // config model is used
         usage: { characterCount: 5 },
         cost: 0.000075,
         format: "opus",
@@ -169,6 +170,7 @@ describe("TextToSpeech gadget", () => {
         },
       };
 
+      // Model is set via config, not schema - LLM can't override it
       const gadget = createTextToSpeech({
         model: "tts-1-hd",
         voice: "nova",
@@ -178,7 +180,7 @@ describe("TextToSpeech gadget", () => {
       await gadget.execute(
         {
           text: "Override test",
-          model: "tts-1",
+          // model is NOT in schema - always uses config model
           voice: "echo",
           format: "opus",
           speed: 1.5,
@@ -186,8 +188,9 @@ describe("TextToSpeech gadget", () => {
         mockCtx as any,
       );
 
+      // Model should be from config (tts-1-hd), not overridden by LLM
       expect(mockGenerate).toHaveBeenCalledWith({
-        model: "tts-1",
+        model: "tts-1-hd",
         input: "Override test",
         voice: "echo",
         responseFormat: "opus",
@@ -327,6 +330,18 @@ describe("TextToSpeech gadget", () => {
       expect(validSlow.success).toBe(true);
       const validFast = schema!.safeParse({ text: "test", speed: 4.0 });
       expect(validFast.success).toBe(true);
+    });
+
+    test("model is NOT exposed in schema (config-only)", () => {
+      const schema = textToSpeech.parameterSchema;
+      expect(schema).toBeDefined();
+      // Model passed in params should be stripped/ignored (not validated)
+      // The schema should parse successfully even with unknown keys stripped
+      const result = schema!.safeParse({ text: "test", model: "tts-1-hd" });
+      // When strict mode is on, this would fail. With default passthrough, it just ignores.
+      // Either way, the key point is model should NOT be in the schema shape
+      const shape = (schema as any)?.shape ?? (schema as any)?._def?.schema?.shape;
+      expect(shape?.model).toBeUndefined();
     });
   });
 
