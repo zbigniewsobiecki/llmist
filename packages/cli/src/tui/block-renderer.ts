@@ -33,6 +33,21 @@ import type {
 } from "./types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BlockRenderer Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Options for completing a gadget execution.
+ */
+export interface CompleteGadgetOptions {
+  result?: string;
+  error?: string;
+  executionTimeMs?: number;
+  cost?: number;
+  mediaOutputs?: GadgetNode["mediaOutputs"];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BlockRenderer Class
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -278,22 +293,19 @@ export class BlockRenderer {
   /**
    * Complete a gadget with result.
    */
-  completeGadget(
-    invocationId: string,
-    result?: string,
-    error?: string,
-    executionTimeMs?: number,
-    cost?: number,
-  ): void {
+  completeGadget(invocationId: string, options: CompleteGadgetOptions = {}): void {
     // Find gadget by invocationId
     const node = this.findGadgetByInvocationId(invocationId);
     if (!node) return;
+
+    const { result, error, executionTimeMs, cost, mediaOutputs } = options;
 
     node.isComplete = true;
     node.result = result;
     node.error = error;
     node.executionTimeMs = executionTimeMs;
     node.cost = cost;
+    node.mediaOutputs = mediaOutputs;
 
     // Estimate result tokens (rough: ~4 chars per token)
     if (result) {
@@ -1595,18 +1607,27 @@ export class BlockRenderer {
       }
 
       case "gadget_complete": {
-        this.completeGadget(
-          event.invocationId,
-          event.result,
-          undefined,
-          event.executionTimeMs,
-          event.cost,
-        );
+        // Convert storedMedia to mediaOutputs format for the TUI
+        const mediaOutputs = event.storedMedia?.map((m) => ({
+          kind: m.kind,
+          path: m.path,
+          mimeType: m.mimeType,
+          description: m.description,
+        }));
+        this.completeGadget(event.invocationId, {
+          result: event.result,
+          executionTimeMs: event.executionTimeMs,
+          cost: event.cost,
+          mediaOutputs,
+        });
         break;
       }
 
       case "gadget_error": {
-        this.completeGadget(event.invocationId, undefined, event.error, event.executionTimeMs);
+        this.completeGadget(event.invocationId, {
+          error: event.error,
+          executionTimeMs: event.executionTimeMs,
+        });
         break;
       }
 

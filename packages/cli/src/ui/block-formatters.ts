@@ -436,6 +436,30 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
     lines.push(`${indent}${chalk.dim(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
   }
 
+  // Media outputs section (audio, images, etc.)
+  if (node.mediaOutputs && node.mediaOutputs.length > 0) {
+    const headerLine = `${BOX.topLeft}${BOX.horizontal} Media ${BOX.horizontal.repeat(width - 9)}`;
+    lines.push(`${indent}${chalk.dim(headerLine)}`);
+
+    for (const media of node.mediaOutputs) {
+      const kindEmoji =
+        media.kind === "audio"
+          ? "🔊"
+          : media.kind === "image"
+            ? "🖼️"
+            : media.kind === "video"
+              ? "🎬"
+              : "📄";
+      // Truncate long paths from the start (keep the end which is more useful)
+      const maxPathLen = width - 8; // Account for indent, border, emoji, and spacing
+      const displayPath =
+        media.path.length > maxPathLen ? "..." + media.path.slice(-(maxPathLen - 3)) : media.path;
+      lines.push(`${indent}${chalk.dim(BOX.vertical)} ${kindEmoji} ${chalk.cyan(displayPath)}`);
+    }
+
+    lines.push(`${indent}${chalk.dim(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
+  }
+
   // Subagent activity section
   if (node.children.length > 0) {
     const headerLine = `${BOX.topLeft}${BOX.horizontal} Subagent Activity ${BOX.horizontal.repeat(width - 21)}`;

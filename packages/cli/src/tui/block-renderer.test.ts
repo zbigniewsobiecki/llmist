@@ -305,6 +305,56 @@ describe("BlockRenderer", () => {
       unsubscribe();
     });
 
+    test("subscribeToTree passes through storedMedia as mediaOutputs", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+      const tree = new ExecutionTree();
+
+      const unsubscribe = renderer.subscribeToTree(tree);
+
+      // Add LLM call and TTS gadget
+      const llmNode = tree.addLLMCall({ iteration: 1, model: "sonnet" });
+      const gadgetNode = tree.addGadget({
+        invocationId: "gc_tts",
+        name: "TextToSpeech",
+        parameters: { text: "Hello world" },
+        parentId: llmNode.id,
+      });
+
+      // Complete with storedMedia (as would be emitted by MediaStore)
+      tree.startGadget(gadgetNode.id);
+      tree.completeGadget(gadgetNode.id, {
+        result: "Generated audio (pcm16, 11 chars, $0.000165)",
+        executionTimeMs: 500,
+        cost: 0.000165,
+        storedMedia: [
+          {
+            id: "media_abc123",
+            kind: "audio",
+            path: "/Users/test/.llmist/tmp/media-session1/audio-xyz.pcm16",
+            mimeType: "audio/pcm",
+            sizeBytes: 1024,
+            gadgetName: "TextToSpeech",
+            createdAt: new Date(),
+            description: 'TTS: "Hello world"',
+          },
+        ],
+      });
+
+      // Verify mediaOutputs are available on the gadget node
+      const foundGadget = renderer.findGadgetByInvocationId("gc_tts");
+      expect(foundGadget?.isComplete).toBe(true);
+      expect(foundGadget?.mediaOutputs).toHaveLength(1);
+      expect(foundGadget?.mediaOutputs?.[0].kind).toBe("audio");
+      expect(foundGadget?.mediaOutputs?.[0].path).toBe(
+        "/Users/test/.llmist/tmp/media-session1/audio-xyz.pcm16",
+      );
+      expect(foundGadget?.mediaOutputs?.[0].mimeType).toBe("audio/pcm");
+      expect(foundGadget?.mediaOutputs?.[0].description).toBe('TTS: "Hello world"');
+
+      unsubscribe();
+    });
+
     test("subscribeToTree handles gadget errors", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});

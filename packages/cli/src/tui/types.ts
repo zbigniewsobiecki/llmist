@@ -3,6 +3,7 @@
  */
 
 import type { Box, Screen, ScrollableBox, Text, Textbox } from "@unblessed/node";
+import type { MediaKind } from "llmist";
 
 // Note: Box is imported for SelectableBlock.box type
 
@@ -223,6 +224,13 @@ export interface GadgetNode extends BaseBlockNode {
   cost?: number;
   /** Estimated tokens in result (for context budget awareness) */
   resultTokens?: number;
+  /** Media outputs with file paths (for audio, images, etc.) */
+  mediaOutputs?: Array<{
+    kind: MediaKind;
+    path: string;
+    mimeType: string;
+    description?: string;
+  }>;
   /** Aggregated stats from subagent LLM calls (computed when gadget completes) */
   subagentStats?: {
     inputTokens: number;
