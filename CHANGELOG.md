@@ -1,3 +1,9 @@
+## [16.0.1](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.0...v16.0.1) (2026-03-04)
+
+### Bug Fixes
+
+* **cli:** add silent dev scripts for clean stdout piping ([#411](https://github.com/zbigniewsobiecki/llmist/issues/411)) ([347c684](https://github.com/zbigniewsobiecki/llmist/commit/347c6843a4d65269b386233e98af181571dbc57e))
+
 ## [16.0.0](https://github.com/zbigniewsobiecki/llmist/compare/v15.19.0...v16.0.0) (2026-03-03)
 
 ### ⚠ BREAKING CHANGES
