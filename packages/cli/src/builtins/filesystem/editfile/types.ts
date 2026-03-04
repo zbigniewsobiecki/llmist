@@ -4,8 +4,13 @@
 
 /**
  * Strategy used to find a match.
+ * - exact: Byte-for-byte comparison
+ * - whitespace: Ignores differences in spaces/tabs
+ * - indentation: Matches structure ignoring leading whitespace
+ * - fuzzy: Similarity-based matching using Levenshtein distance
+ * - dmp: diff-match-patch algorithm for heavily refactored code
  */
-export type MatchStrategy = "exact" | "whitespace" | "indentation" | "fuzzy";
+export type MatchStrategy = "exact" | "whitespace" | "indentation" | "fuzzy" | "dmp";
 
 /**
  * Result of attempting to find a match.
@@ -27,6 +32,12 @@ export interface MatchResult {
   startLine: number;
   /** 1-based end line number for display */
   endLine: number;
+  /**
+   * Indentation delta when using indentation strategy.
+   * Contains the whitespace prefix that should be applied to replacement lines.
+   * Only present when strategy is 'indentation'.
+   */
+  indentationDelta?: string;
 }
 
 /**
