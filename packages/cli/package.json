@@ -26,7 +26,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist",
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "node scripts/postinstall.js",
+    "dev": "npx --silent tsx src/cli.ts"
   },
   "homepage": "https://llmist.dev",
   "repository": {
