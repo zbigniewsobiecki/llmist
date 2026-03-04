@@ -1,10 +1,11 @@
 /**
  * Layered matching algorithm for EditFile gadget.
  *
- * Tries strategies in order: exact -> whitespace -> indentation -> fuzzy
+ * Tries strategies in order: exact -> whitespace -> indentation -> fuzzy -> dmp
  * This approach reduces edit errors by ~9x (per Aider benchmarks).
  */
 
+import DiffMatchPatch from "diff-match-patch";
 import type {
   MatchFailure,
   MatchOptions,
@@ -12,6 +13,9 @@ import type {
   MatchStrategy,
   SuggestionMatch,
 } from "./types.js";
+
+// Singleton DMP instance
+const dmp = new DiffMatchPatch();
 
 const DEFAULT_OPTIONS: Required<MatchOptions> = {
   fuzzyThreshold: 0.8,
@@ -32,6 +36,9 @@ export function findMatch(
   search: string,
   options: MatchOptions = {},
 ): MatchResult | null {
+  // Early return for empty search - prevents matching at every position
+  if (!search) return null;
+
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   // Try each strategy in order
@@ -43,6 +50,7 @@ export function findMatch(
     { name: "whitespace", fn: whitespaceMatch },
     { name: "indentation", fn: indentationMatch },
     { name: "fuzzy", fn: (c, s) => fuzzyMatch(c, s, opts.fuzzyThreshold) },
+    { name: "dmp", fn: (c, s) => dmpMatch(c, s, opts.fuzzyThreshold) },
   ];
 
   for (const { name, fn } of strategies) {
@@ -154,9 +162,10 @@ function indentationMatch(content: string, search: string): MatchResult | null {
 
   const strippedSearch = stripIndent(search);
   const contentLines = content.split("\n");
+  const searchLines = search.split("\n");
 
   // Sliding window search
-  const searchLineCount = search.split("\n").length;
+  const searchLineCount = searchLines.length;
 
   for (let i = 0; i <= contentLines.length - searchLineCount; i++) {
     const windowLines = contentLines.slice(i, i + searchLineCount);
@@ -169,6 +178,9 @@ function indentationMatch(content: string, search: string): MatchResult | null {
       const endIndex = startIndex + matchedContent.length;
       const { startLine, endLine } = getLineNumbers(content, startIndex, endIndex);
 
+      // Compute indentation delta (difference between file's indent and search's indent)
+      const indentationDelta = computeIndentationDelta(searchLines, windowLines);
+
       return {
         found: true,
         strategy: "indentation",
@@ -178,6 +190,7 @@ function indentationMatch(content: string, search: string): MatchResult | null {
         endIndex,
         startLine,
         endLine,
+        indentationDelta,
       };
     }
   }
@@ -237,6 +250,190 @@ function fuzzyMatch(content: string, search: string, threshold: number): MatchRe
     startLine,
     endLine,
   };
+}
+
+// ============================================================================
+// Strategy 5: DMP (diff-match-patch) Match
+// ============================================================================
+
+/**
+ * DMP matching strategy using Google's diff-match-patch algorithm.
+ * Handles heavily refactored code where other strategies fail.
+ *
+ * - Short patterns (≤32 chars): Uses native bitap algorithm
+ * - Long patterns (>32 chars): Uses 32-char prefix for region finding + Levenshtein
+ * - Skips patterns >1000 chars (too slow)
+ */
+function dmpMatch(content: string, search: string, threshold: number): MatchResult | null {
+  // Skip empty strings - prevent DMP from failing silently
+  if (!search || !content) return null;
+
+  // Skip very long patterns (too slow and unlikely to match)
+  if (search.length > 1000) return null;
+
+  // DMP works better with single-line or short patterns
+  // For long multiline searches, fuzzy is usually better
+  if (search.split("\n").length > 20) return null;
+
+  const matchIndex =
+    search.length <= 32
+      ? dmpMatchShortPattern(content, search, threshold)
+      : dmpMatchLongPattern(content, search, threshold);
+
+  if (matchIndex === -1) return null;
+
+  // Determine the actual matched content length
+  // For DMP, we find the region and then find the best ending point
+  const matchedContent = findBestMatchExtent(content, matchIndex, search, threshold);
+  if (!matchedContent) return null;
+
+  const startIndex = matchIndex;
+  const endIndex = matchIndex + matchedContent.length;
+  const { startLine, endLine } = getLineNumbers(content, startIndex, endIndex);
+
+  // Calculate confidence based on similarity
+  const similarity = stringSimilarity(search, matchedContent);
+
+  return {
+    found: true,
+    strategy: "dmp",
+    confidence: similarity,
+    matchedContent,
+    startIndex,
+    endIndex,
+    startLine,
+    endLine,
+  };
+}
+
+/**
+ * DMP matching for short patterns (≤32 chars) using native bitap.
+ */
+function dmpMatchShortPattern(content: string, search: string, threshold: number): number {
+  // DMP's match_main uses bitap for patterns ≤32 chars
+  // Threshold is inverted: DMP uses 0.0 = perfect, we use 1.0 = perfect
+  dmp.Match_Threshold = 1 - threshold;
+  dmp.Match_Distance = 1000; // Allow matches within reasonable distance
+
+  const index = dmp.match_main(content, search, 0);
+  return index;
+}
+
+/**
+ * DMP matching for long patterns (>32 chars).
+ * Uses a 32-char prefix to find candidate regions, then verifies with Levenshtein.
+ */
+function dmpMatchLongPattern(content: string, search: string, threshold: number): number {
+  // Extract 32-char prefix for region finding
+  const prefix = search.slice(0, 32);
+  // Use same threshold as short patterns - DMP uses inverted threshold (0 = perfect)
+  dmp.Match_Threshold = 1 - threshold;
+  dmp.Match_Distance = 1000;
+
+  const prefixIndex = dmp.match_main(content, prefix, 0);
+  if (prefixIndex === -1) return -1;
+
+  // Now verify the full pattern matches starting from this region
+  // Look in a window around the prefix match - scale padding with pattern length
+  const windowPadding = Math.max(50, Math.floor(search.length / 2));
+  const windowStart = Math.max(0, prefixIndex - windowPadding);
+  const windowEnd = Math.min(content.length, prefixIndex + search.length + windowPadding);
+  const window = content.slice(windowStart, windowEnd);
+
+  // Find best match within window using sliding approach
+  let bestIndex = -1;
+  let bestSimilarity = 0;
+
+  for (let i = 0; i <= window.length - search.length; i++) {
+    const candidate = window.slice(i, i + search.length);
+    const similarity = stringSimilarity(search, candidate);
+
+    if (similarity >= threshold && similarity > bestSimilarity) {
+      bestSimilarity = similarity;
+      bestIndex = windowStart + i;
+    }
+  }
+
+  return bestIndex;
+}
+
+/**
+ * Find the best extent of a match starting at matchIndex.
+ * Handles cases where the matched content length differs from search length.
+ */
+function findBestMatchExtent(
+  content: string,
+  matchIndex: number,
+  search: string,
+  threshold: number,
+): string | null {
+  // Try exact length first
+  const exactLength = content.slice(matchIndex, matchIndex + search.length);
+  if (stringSimilarity(search, exactLength) >= threshold) {
+    return exactLength;
+  }
+
+  // Try line-based matching (match same number of lines)
+  const searchLines = search.split("\n").length;
+  const contentFromMatch = content.slice(matchIndex);
+  const contentLines = contentFromMatch.split("\n");
+
+  if (contentLines.length >= searchLines) {
+    const lineBasedMatch = contentLines.slice(0, searchLines).join("\n");
+    if (stringSimilarity(search, lineBasedMatch) >= threshold) {
+      return lineBasedMatch;
+    }
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Multi-Match Support
+// ============================================================================
+
+/**
+ * Find all matches for the search string in content.
+ * Returns matches in order of appearance (not by confidence).
+ *
+ * @param content The file content to search in
+ * @param search The string to search for
+ * @param options Matching options
+ * @returns Array of MatchResult for all matches found
+ */
+export function findAllMatches(
+  content: string,
+  search: string,
+  options: MatchOptions = {},
+): MatchResult[] {
+  const results: MatchResult[] = [];
+  let searchStart = 0;
+
+  while (searchStart < content.length) {
+    // Try to find a match starting from current position
+    const remainingContent = content.slice(searchStart);
+    const match = findMatch(remainingContent, search, options);
+
+    if (!match) break;
+
+    // Adjust indices to be relative to original content
+    results.push({
+      ...match,
+      startIndex: searchStart + match.startIndex,
+      endIndex: searchStart + match.endIndex,
+      // Recalculate line numbers for original content
+      ...getLineNumbers(content, searchStart + match.startIndex, searchStart + match.endIndex),
+    });
+
+    // Move search start past this match to find next
+    searchStart = searchStart + match.endIndex;
+    // Safety: advance at least one character to prevent infinite loop on zero-width matches
+    if (match.endIndex === 0) {
+      searchStart++;
+    }
+  }
+
+  return results;
 }
 
 // ============================================================================
@@ -427,4 +624,169 @@ function getContext(content: string, lineNumber: number, contextLines: number): 
   });
 
   return contextWithNumbers.join("\n");
+}
+
+// ============================================================================
+// Indentation Delta Functions
+// ============================================================================
+
+/**
+ * Extract leading whitespace from a line.
+ */
+function getLeadingWhitespace(line: string): string {
+  const match = line.match(/^[ \t]*/);
+  return match ? match[0] : "";
+}
+
+/**
+ * Compute the indentation delta between search and matched content.
+ * Returns the whitespace prefix that should be added to each line.
+ *
+ * @param searchLines Lines from the search pattern
+ * @param matchedLines Lines from the matched content in the file
+ * @returns The indentation delta string (e.g., "    " for 4-space indent)
+ */
+function computeIndentationDelta(searchLines: string[], matchedLines: string[]): string {
+  // Find the first non-empty line in both to compare indentation
+  for (let i = 0; i < Math.min(searchLines.length, matchedLines.length); i++) {
+    const searchLine = searchLines[i];
+    const matchedLine = matchedLines[i];
+
+    // Skip empty lines
+    if (searchLine.trim() === "" && matchedLine.trim() === "") continue;
+
+    const searchIndent = getLeadingWhitespace(searchLine);
+    const matchedIndent = getLeadingWhitespace(matchedLine);
+
+    // Return the difference in indentation
+    if (matchedIndent.length > searchIndent.length) {
+      return matchedIndent.slice(searchIndent.length);
+    }
+    // If matched has less indent, return empty (can't have negative delta)
+    return "";
+  }
+
+  return "";
+}
+
+/**
+ * Adjust indentation of replacement text based on the indentation delta.
+ * Adds the delta to each line of the replacement.
+ *
+ * @param replacement The replacement text
+ * @param delta The indentation delta to apply
+ * @returns The replacement with adjusted indentation
+ */
+export function adjustIndentation(replacement: string, delta: string): string {
+  if (!delta) return replacement;
+
+  return replacement
+    .split("\n")
+    .map((line, index) => {
+      // Don't add indent to empty lines or the first line if it's aligned with search
+      if (line.trim() === "") return line;
+      return delta + line;
+    })
+    .join("\n");
+}
+
+// ============================================================================
+// Before/After Context Formatting
+// ============================================================================
+
+/**
+ * Format context showing before and after state of an edit.
+ * Shows 5 lines of context around the edit with diff-style markers.
+ *
+ * @param originalContent The original file content
+ * @param match The match result
+ * @param replacement The replacement text
+ * @param contextLines Number of context lines to show (default: 5)
+ * @returns Formatted string showing the edit context
+ */
+export function formatEditContext(
+  originalContent: string,
+  match: MatchResult,
+  replacement: string,
+  contextLines = 5,
+): string {
+  const lines = originalContent.split("\n");
+  const startLine = match.startLine - 1; // Convert to 0-based
+  const endLine = match.endLine; // Already exclusive for slicing
+
+  const contextStart = Math.max(0, startLine - contextLines);
+  const contextEnd = Math.min(lines.length, endLine + contextLines);
+
+  const output: string[] = [];
+  output.push(`=== Edit (lines ${match.startLine}-${match.endLine}) ===`);
+  output.push("");
+
+  // Show before section
+  // Context lines before the change
+  for (let i = contextStart; i < startLine; i++) {
+    output.push(`  ${String(i + 1).padStart(4)} | ${lines[i]}`);
+  }
+
+  // Lines being removed (marked with <)
+  for (let i = startLine; i < endLine; i++) {
+    output.push(`< ${String(i + 1).padStart(4)} | ${lines[i]}`);
+  }
+
+  // Lines being added (marked with >)
+  const replacementLines = replacement.split("\n");
+  for (let i = 0; i < replacementLines.length; i++) {
+    const lineNum = startLine + i + 1;
+    output.push(`> ${String(lineNum).padStart(4)} | ${replacementLines[i]}`);
+  }
+
+  // Context lines after the change
+  for (let i = endLine; i < contextEnd; i++) {
+    output.push(`  ${String(i + 1).padStart(4)} | ${lines[i]}`);
+  }
+
+  return output.join("\n");
+}
+
+/**
+ * Format a summary of multiple matches for disambiguation.
+ *
+ * @param content The file content
+ * @param matches Array of matches found
+ * @param maxMatches Maximum matches to show (default: 5)
+ * @returns Formatted string showing match locations
+ */
+export function formatMultipleMatches(
+  content: string,
+  matches: MatchResult[],
+  maxMatches = 5,
+): string {
+  const lines = content.split("\n");
+  const output: string[] = [];
+
+  output.push(`Found ${matches.length} matches:`);
+  output.push("");
+
+  const displayMatches = matches.slice(0, maxMatches);
+
+  for (let i = 0; i < displayMatches.length; i++) {
+    const match = displayMatches[i];
+    output.push(`Match ${i + 1} (lines ${match.startLine}-${match.endLine}):`);
+
+    // Show a few lines of context
+    const contextStart = Math.max(0, match.startLine - 2);
+    const contextEnd = Math.min(lines.length, match.endLine + 1);
+
+    for (let j = contextStart; j < contextEnd; j++) {
+      const marker = j >= match.startLine - 1 && j < match.endLine ? ">" : " ";
+      output.push(`${marker}${String(j + 1).padStart(4)} | ${lines[j]}`);
+    }
+
+    output.push("");
+  }
+
+  if (matches.length > maxMatches) {
+    output.push(`... and ${matches.length - maxMatches} more matches`);
+  }
+
+  return output.join("\n");
 }
