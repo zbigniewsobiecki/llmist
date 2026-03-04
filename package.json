@@ -25,7 +25,8 @@
     "release:dry": "npx semantic-release --dry-run",
     "docs:dev": "turbo run dev --filter=@llmist/docs",
     "docs:build": "turbo run build --filter=@llmist/docs",
-    "docs:preview": "turbo run preview --filter=@llmist/docs"
+    "docs:preview": "turbo run preview --filter=@llmist/docs",
+    "cli:dev": "npx --silent tsx packages/cli/src/cli.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.2",
