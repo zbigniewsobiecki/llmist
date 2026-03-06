@@ -38,6 +38,7 @@ import type {
   ObserveLLMErrorContext,
   SubagentContext,
 } from "./hooks.js";
+import { safeObserve } from "./safe-observe.js";
 
 /**
  * Find the parent gadget's invocation ID by walking up the tree.
@@ -146,22 +147,6 @@ export function getSubagentContextForNode(
     parentGadgetInvocationId,
     depth: node.depth,
   };
-}
-
-/**
- * Safely call an async observer function.
- * Errors are logged but don't crash the system.
- */
-async function safeObserve(
-  fn: () => void | Promise<void>,
-  logger: Logger<ILogObj>,
-  eventType: string,
-): Promise<void> {
-  try {
-    await fn();
-  } catch (error) {
-    logger.warn(`Observer error in ${eventType}:`, error);
-  }
 }
 
 /**

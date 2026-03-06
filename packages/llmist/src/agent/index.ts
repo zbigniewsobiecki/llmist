@@ -75,6 +75,8 @@ export type {
   SubagentContext,
 } from "./hooks.js";
 export type { IConversationManager } from "./interfaces.js";
+// Shared observer error-handling utility
+export { safeObserve } from "./safe-observe.js";
 // StreamProcessor for advanced use cases
 export {
   type StreamProcessingResult,

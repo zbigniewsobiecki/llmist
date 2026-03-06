@@ -68,6 +68,7 @@ import type {
   Observers,
 } from "./hooks.js";
 import type { IConversationManager } from "./interfaces.js";
+import { safeObserve } from "./safe-observe.js";
 import { StreamProcessor } from "./stream-processor.js";
 import { bridgeTreeToHooks, getSubagentContextForNode } from "./tree-hook-bridge.js";
 
@@ -859,7 +860,7 @@ export class Agent {
                 this.retryConfig.onRetry?.(error, streamAttempt);
 
                 // Emit observer hook for retry attempt
-                await this.safeObserve(async () => {
+                await safeObserve(async () => {
                   if (this.hooks.observers?.onRetryAttempt) {
                     // currentLLMNodeId is guaranteed to be defined at this point (set in prepareLLMCall)
                     const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
@@ -874,7 +875,7 @@ export class Agent {
                     };
                     await this.hooks.observers.onRetryAttempt(hookContext);
                   }
-                });
+                }, this.logger);
 
                 // Wait before retrying
                 await this.sleep(finalDelay);
@@ -919,7 +920,7 @@ export class Agent {
           });
 
           // Observer: LLM call complete
-          await this.safeObserve(async () => {
+          await safeObserve(async () => {
             if (this.hooks.observers?.onLLMCallComplete) {
               // At this point, currentLLMNodeId and llmOptions are guaranteed to be defined
               const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
@@ -936,7 +937,7 @@ export class Agent {
               };
               await this.hooks.observers.onLLMCallComplete(context);
             }
-          });
+          }, this.logger);
 
           // Complete LLM call in execution tree (with cost calculation)
           this.completeLLMCallInTree(currentLLMNodeId!, result);
@@ -983,7 +984,7 @@ export class Agent {
           const errorHandled = await this.handleLLMError(error as Error, currentIteration);
 
           // Observer: LLM error
-          await this.safeObserve(async () => {
+          await safeObserve(async () => {
             if (this.hooks.observers?.onLLMCallError) {
               // Use llmOptions if available, fallback to constructing options
               const options = llmOptions ?? {
@@ -1006,7 +1007,7 @@ export class Agent {
               };
               await this.hooks.observers.onLLMCallError(context);
             }
-          });
+          }, this.logger);
 
           if (!errorHandled) {
             throw error;
@@ -1040,7 +1041,7 @@ export class Agent {
         const node = this.tree.getNode(currentLLMNodeId);
         if (node && node.type === "llm_call" && !node.completedAt) {
           // Call observer hook for the interrupted request
-          await this.safeObserve(async () => {
+          await safeObserve(async () => {
             if (this.hooks.observers?.onLLMCallComplete) {
               const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
               const context: ObserveLLMCompleteContext = {
@@ -1060,7 +1061,7 @@ export class Agent {
               };
               await this.hooks.observers.onLLMCallComplete(context);
             }
-          });
+          }, this.logger);
 
           // Complete the LLM call in the execution tree
           this.tree.completeLLMCall(currentLLMNodeId, {
@@ -1092,7 +1093,7 @@ export class Agent {
         this.logger.debug("Rate limit throttling", { delayMs: throttleDelay });
 
         // Emit observer hook for rate limit throttling
-        await this.safeObserve(async () => {
+        await safeObserve(async () => {
           if (this.hooks.observers?.onRateLimitThrottle) {
             const subagentContext = getSubagentContextForNode(this.tree, llmNodeId);
             const context: ObserveRateLimitThrottleContext = {
@@ -1104,7 +1105,7 @@ export class Agent {
             };
             await this.hooks.observers.onRateLimitThrottle(context);
           }
-        });
+        }, this.logger);
 
         await this.sleep(throttleDelay);
       }
@@ -1183,19 +1184,6 @@ export class Agent {
     // For gadget and custom handlers, they would need to be implemented
     // This is simplified for now
     return true;
-  }
-
-  /**
-   * Safely execute an observer, catching and logging any errors.
-   */
-  private async safeObserve(fn: () => void | Promise<void>): Promise<void> {
-    try {
-      await fn();
-    } catch (error) {
-      this.logger.error("Observer threw error (ignoring)", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
   }
 
   /**
@@ -1290,7 +1278,7 @@ export class Agent {
       reason: this.signal.reason,
     });
 
-    await this.safeObserve(async () => {
+    await safeObserve(async () => {
       if (this.hooks.observers?.onAbort) {
         const context: ObserveAbortContext = {
           iteration,
@@ -1299,7 +1287,7 @@ export class Agent {
         };
         await this.hooks.observers.onAbort(context);
       }
-    });
+    }, this.logger);
 
     return true;
   }
@@ -1325,7 +1313,7 @@ export class Agent {
     });
 
     // Observer: Compaction occurred
-    await this.safeObserve(async () => {
+    await safeObserve(async () => {
       if (this.hooks.observers?.onCompaction) {
         await this.hooks.observers.onCompaction({
           iteration,
@@ -1335,7 +1323,7 @@ export class Agent {
           logger: this.logger,
         });
       }
-    });
+    }, this.logger);
 
     return { type: "compaction", event: compactionEvent } as StreamEvent;
   }
@@ -1407,7 +1395,7 @@ export class Agent {
     });
 
     // Observer: LLM call start
-    await this.safeObserve(async () => {
+    await safeObserve(async () => {
       if (this.hooks.observers?.onLLMCallStart) {
         const subagentContext = getSubagentContextForNode(this.tree, llmNode.id);
         const context: ObserveLLMCallContext = {
@@ -1418,7 +1406,7 @@ export class Agent {
         };
         await this.hooks.observers.onLLMCallStart(context);
       }
-    });
+    }, this.logger);
 
     // Controller: Before LLM call
     if (this.hooks.controllers?.beforeLLMCall) {
@@ -1448,7 +1436,7 @@ export class Agent {
     }
 
     // Observer: LLM call ready (after controller modifications)
-    await this.safeObserve(async () => {
+    await safeObserve(async () => {
       if (this.hooks.observers?.onLLMCallReady) {
         const subagentContext = getSubagentContextForNode(this.tree, llmNode.id);
         const context: ObserveLLMCallReadyContext = {
@@ -1462,7 +1450,7 @@ export class Agent {
         };
         await this.hooks.observers.onLLMCallReady(context);
       }
-    });
+    }, this.logger);
 
     return { options: llmOptions, llmNodeId: llmNode.id };
   }
