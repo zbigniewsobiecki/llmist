@@ -1,3 +1,5 @@
+## [16.0.3](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.2...v16.0.3) (2026-03-06)
+
 ## [16.0.2](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.1...v16.0.2) (2026-03-04)
 
 ### Bug Fixes
