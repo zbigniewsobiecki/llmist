@@ -48,6 +48,7 @@ import type {
   ObserveGadgetStartContext,
   Observers,
 } from "./hooks.js";
+import { safeObserve } from "./safe-observe.js";
 import { getSubagentContextForNode } from "./tree-hook-bridge.js";
 // NOTE: Gadget observer hooks (onGadgetExecutionStart, onGadgetExecutionComplete,
 // onGadgetSkipped) are called DIRECTLY here (awaited) to ensure proper ordering.
@@ -220,7 +221,6 @@ export class StreamProcessor {
   private readonly gadgetExecutionMode: GadgetExecutionMode;
 
   private responseText = "";
-  private observerFailureCount = 0;
 
   // Dependency tracking for gadget execution DAG
   /** Gadgets waiting for their dependencies to complete */
@@ -624,7 +624,7 @@ export class StreamProcessor {
             logger: this.logger,
             subagentContext: skippedSubagentContext,
           };
-          await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+          await safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context), this.logger);
         }
 
         // Call parent observers for subagent visibility (AWAITED)
@@ -639,7 +639,7 @@ export class StreamProcessor {
             logger: this.logger,
             subagentContext: skippedSubagentContext,
           };
-          await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
+          await safeObserve(() => this.parentObservers!.onGadgetSkipped!(context), this.logger);
         }
         return;
       }
@@ -902,7 +902,7 @@ export class StreamProcessor {
         logger: this.logger,
         subagentContext: gadgetStartSubagentContext,
       };
-      await this.safeObserve(() => this.hooks.observers!.onGadgetExecutionStart!(context));
+      await safeObserve(() => this.hooks.observers!.onGadgetExecutionStart!(context), this.logger);
     }
 
     // Step 3c: Call parent observers for subagent visibility (AWAITED)
@@ -915,7 +915,7 @@ export class StreamProcessor {
         logger: this.logger,
         subagentContext: gadgetStartSubagentContext,
       };
-      await this.safeObserve(() => this.parentObservers!.onGadgetExecutionStart!(context));
+      await safeObserve(() => this.parentObservers!.onGadgetExecutionStart!(context), this.logger);
     }
 
     // Step 4: Execute or use synthetic result
@@ -1018,7 +1018,10 @@ export class StreamProcessor {
         logger: this.logger,
         subagentContext: gadgetCompleteSubagentContext,
       };
-      await this.safeObserve(() => this.hooks.observers!.onGadgetExecutionComplete!(context));
+      await safeObserve(
+        () => this.hooks.observers!.onGadgetExecutionComplete!(context),
+        this.logger,
+      );
     }
 
     // Step 7c: Call parent observers for subagent visibility (AWAITED)
@@ -1035,7 +1038,10 @@ export class StreamProcessor {
         logger: this.logger,
         subagentContext: gadgetCompleteSubagentContext,
       };
-      await this.safeObserve(() => this.parentObservers!.onGadgetExecutionComplete!(context));
+      await safeObserve(
+        () => this.parentObservers!.onGadgetExecutionComplete!(context),
+        this.logger,
+      );
     }
 
     // Track completion for dependency resolution
@@ -1245,7 +1251,7 @@ export class StreamProcessor {
           logger: this.logger,
           subagentContext: skipSubagentContext,
         };
-        await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+        await safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context), this.logger);
       }
 
       // Call parent observers for subagent visibility (AWAITED)
@@ -1260,7 +1266,7 @@ export class StreamProcessor {
           logger: this.logger,
           subagentContext: skipSubagentContext,
         };
-        await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
+        await safeObserve(() => this.parentObservers!.onGadgetSkipped!(context), this.logger);
       }
 
       this.logger.info("Gadget skipped due to failed dependency", {
@@ -1373,7 +1379,7 @@ export class StreamProcessor {
           logger: this.logger,
           subagentContext: limitSkipSubagentContext,
         };
-        await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+        await safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context), this.logger);
       }
 
       // Call parent observers for subagent visibility
@@ -1388,7 +1394,7 @@ export class StreamProcessor {
           logger: this.logger,
           subagentContext: limitSkipSubagentContext,
         };
-        await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
+        await safeObserve(() => this.parentObservers!.onGadgetSkipped!(context), this.logger);
       }
 
       return true; // Limit exceeded, skip this gadget
@@ -1585,7 +1591,7 @@ export class StreamProcessor {
             logger: this.logger,
             subagentContext: timeoutSubagentContext,
           };
-          await this.safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context));
+          await safeObserve(() => this.hooks.observers!.onGadgetSkipped!(context), this.logger);
         }
 
         // Call parent observers for subagent visibility (AWAITED)
@@ -1600,26 +1606,10 @@ export class StreamProcessor {
             logger: this.logger,
             subagentContext: timeoutSubagentContext,
           };
-          await this.safeObserve(() => this.parentObservers!.onGadgetSkipped!(context));
+          await safeObserve(() => this.parentObservers!.onGadgetSkipped!(context), this.logger);
         }
       }
       this.gadgetsAwaitingDependencies.clear();
-    }
-  }
-
-  /**
-   * Safely execute an observer, catching and logging any errors.
-   * Observers are non-critical, so errors are logged but don't crash the system.
-   */
-  private async safeObserve(fn: () => void | Promise<void>): Promise<void> {
-    try {
-      await fn();
-    } catch (error) {
-      this.observerFailureCount++;
-      this.logger.error("Observer threw error (ignoring)", {
-        error: error instanceof Error ? error.message : String(error),
-        failureCount: this.observerFailureCount,
-      });
     }
   }
 
@@ -1634,7 +1624,7 @@ export class StreamProcessor {
 
     // Run all observers in parallel, waiting for completion
     // Errors are logged in safeObserve, no need to handle rejected promises
-    await Promise.allSettled(observers.map((observer) => this.safeObserve(observer)));
+    await Promise.allSettled(observers.map((observer) => safeObserve(observer, this.logger)));
   }
 
   // ==========================================================================
