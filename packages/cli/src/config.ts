@@ -809,6 +809,94 @@ function validateBaseConfig(
 }
 
 /**
+ * Validates and assigns agent-specific fields shared between validateAgentConfig and
+ * validateCustomConfig. Mutates result in-place and returns it for convenience.
+ */
+function validateAgentFields(
+  rawObj: Record<string, unknown>,
+  section: string,
+  result: AgentConfig | CustomCommandConfig,
+): void {
+  if ("max-iterations" in rawObj) {
+    result["max-iterations"] = validateNumber(rawObj["max-iterations"], "max-iterations", section, {
+      integer: true,
+      min: 1,
+    });
+  }
+  if ("budget" in rawObj) {
+    result.budget = validateNumber(rawObj.budget, "budget", section, { min: 0 });
+  }
+  // Gadget configuration (new plural form preferred)
+  if ("gadgets" in rawObj) {
+    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
+  }
+  if ("gadget-add" in rawObj) {
+    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
+  }
+  if ("gadget-remove" in rawObj) {
+    result["gadget-remove"] = validateStringArray(
+      rawObj["gadget-remove"],
+      "gadget-remove",
+      section,
+    );
+  }
+  // Legacy singular form (deprecated)
+  if ("gadget" in rawObj) {
+    result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
+  }
+  if ("builtins" in rawObj) {
+    result.builtins = validateBoolean(rawObj.builtins, "builtins", section);
+  }
+  if ("builtin-interaction" in rawObj) {
+    result["builtin-interaction"] = validateBoolean(
+      rawObj["builtin-interaction"],
+      "builtin-interaction",
+      section,
+    );
+  }
+  if ("gadget-start-prefix" in rawObj) {
+    result["gadget-start-prefix"] = validateString(
+      rawObj["gadget-start-prefix"],
+      "gadget-start-prefix",
+      section,
+    );
+  }
+  if ("gadget-end-prefix" in rawObj) {
+    result["gadget-end-prefix"] = validateString(
+      rawObj["gadget-end-prefix"],
+      "gadget-end-prefix",
+      section,
+    );
+  }
+  if ("gadget-arg-prefix" in rawObj) {
+    result["gadget-arg-prefix"] = validateString(
+      rawObj["gadget-arg-prefix"],
+      "gadget-arg-prefix",
+      section,
+    );
+  }
+  if ("gadget-approval" in rawObj) {
+    result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
+  }
+  if ("subagents" in rawObj) {
+    result.subagents = validateSubagentConfigMap(rawObj.subagents, section);
+  }
+  if ("initial-gadgets" in rawObj) {
+    result["initial-gadgets"] = validateInitialGadgets(rawObj["initial-gadgets"], section);
+  }
+  if ("quiet" in rawObj) {
+    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
+  }
+  if ("log-llm-requests" in rawObj) {
+    result["log-llm-requests"] = validateBoolean(
+      rawObj["log-llm-requests"],
+      "log-llm-requests",
+      section,
+    );
+  }
+}
+
+/**
  * Validates the global config section.
  */
 function validateGlobalConfig(raw: unknown, section: string): GlobalConfig {
@@ -904,83 +992,8 @@ function validateAgentConfig(raw: unknown, section: string): AgentConfig {
     ...validateLoggingConfig(rawObj, section),
   };
 
-  if ("max-iterations" in rawObj) {
-    result["max-iterations"] = validateNumber(rawObj["max-iterations"], "max-iterations", section, {
-      integer: true,
-      min: 1,
-    });
-  }
-  if ("budget" in rawObj) {
-    result.budget = validateNumber(rawObj.budget, "budget", section, { min: 0 });
-  }
-  // Gadget configuration (new plural form preferred)
-  if ("gadgets" in rawObj) {
-    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
-  }
-  if ("gadget-add" in rawObj) {
-    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
-  }
-  if ("gadget-remove" in rawObj) {
-    result["gadget-remove"] = validateStringArray(
-      rawObj["gadget-remove"],
-      "gadget-remove",
-      section,
-    );
-  }
-  // Legacy singular form (deprecated)
-  if ("gadget" in rawObj) {
-    result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
-  }
-  if ("builtins" in rawObj) {
-    result.builtins = validateBoolean(rawObj.builtins, "builtins", section);
-  }
-  if ("builtin-interaction" in rawObj) {
-    result["builtin-interaction"] = validateBoolean(
-      rawObj["builtin-interaction"],
-      "builtin-interaction",
-      section,
-    );
-  }
-  if ("gadget-start-prefix" in rawObj) {
-    result["gadget-start-prefix"] = validateString(
-      rawObj["gadget-start-prefix"],
-      "gadget-start-prefix",
-      section,
-    );
-  }
-  if ("gadget-end-prefix" in rawObj) {
-    result["gadget-end-prefix"] = validateString(
-      rawObj["gadget-end-prefix"],
-      "gadget-end-prefix",
-      section,
-    );
-  }
-  if ("gadget-arg-prefix" in rawObj) {
-    result["gadget-arg-prefix"] = validateString(
-      rawObj["gadget-arg-prefix"],
-      "gadget-arg-prefix",
-      section,
-    );
-  }
-  if ("gadget-approval" in rawObj) {
-    result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
-  }
-  if ("subagents" in rawObj) {
-    result.subagents = validateSubagentConfigMap(rawObj.subagents, section);
-  }
-  if ("initial-gadgets" in rawObj) {
-    result["initial-gadgets"] = validateInitialGadgets(rawObj["initial-gadgets"], section);
-  }
-  if ("quiet" in rawObj) {
-    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
-  }
-  if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateBoolean(
-      rawObj["log-llm-requests"],
-      "log-llm-requests",
-      section,
-    );
-  }
+  validateAgentFields(rawObj, section, result);
+
   if ("rate-limits" in rawObj) {
     result["rate-limits"] = validateRateLimitsConfig(
       rawObj["rate-limits"],
@@ -1124,73 +1137,7 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
   }
 
   // Always allow agent-specific fields (they'll be ignored for complete type)
-  if ("max-iterations" in rawObj) {
-    result["max-iterations"] = validateNumber(rawObj["max-iterations"], "max-iterations", section, {
-      integer: true,
-      min: 1,
-    });
-  }
-  if ("budget" in rawObj) {
-    result.budget = validateNumber(rawObj.budget, "budget", section, { min: 0 });
-  }
-  // Gadget configuration (new plural form preferred)
-  if ("gadgets" in rawObj) {
-    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
-  }
-  if ("gadget-add" in rawObj) {
-    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
-  }
-  if ("gadget-remove" in rawObj) {
-    result["gadget-remove"] = validateStringArray(
-      rawObj["gadget-remove"],
-      "gadget-remove",
-      section,
-    );
-  }
-  // Legacy singular form (deprecated)
-  if ("gadget" in rawObj) {
-    result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
-  }
-  if ("builtins" in rawObj) {
-    result.builtins = validateBoolean(rawObj.builtins, "builtins", section);
-  }
-  if ("builtin-interaction" in rawObj) {
-    result["builtin-interaction"] = validateBoolean(
-      rawObj["builtin-interaction"],
-      "builtin-interaction",
-      section,
-    );
-  }
-  if ("gadget-start-prefix" in rawObj) {
-    result["gadget-start-prefix"] = validateString(
-      rawObj["gadget-start-prefix"],
-      "gadget-start-prefix",
-      section,
-    );
-  }
-  if ("gadget-end-prefix" in rawObj) {
-    result["gadget-end-prefix"] = validateString(
-      rawObj["gadget-end-prefix"],
-      "gadget-end-prefix",
-      section,
-    );
-  }
-  if ("gadget-arg-prefix" in rawObj) {
-    result["gadget-arg-prefix"] = validateString(
-      rawObj["gadget-arg-prefix"],
-      "gadget-arg-prefix",
-      section,
-    );
-  }
-  if ("gadget-approval" in rawObj) {
-    result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
-  }
-  if ("subagents" in rawObj) {
-    result.subagents = validateSubagentConfigMap(rawObj.subagents, section);
-  }
-  if ("initial-gadgets" in rawObj) {
-    result["initial-gadgets"] = validateInitialGadgets(rawObj["initial-gadgets"], section);
-  }
+  validateAgentFields(rawObj, section, result);
 
   // Complete-specific fields
   if ("max-tokens" in rawObj) {
@@ -1198,18 +1145,6 @@ function validateCustomConfig(raw: unknown, section: string): CustomCommandConfi
       integer: true,
       min: 1,
     });
-  }
-
-  // Shared fields
-  if ("quiet" in rawObj) {
-    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
-  }
-  if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateBoolean(
-      rawObj["log-llm-requests"],
-      "log-llm-requests",
-      section,
-    );
   }
 
   // Logging options
