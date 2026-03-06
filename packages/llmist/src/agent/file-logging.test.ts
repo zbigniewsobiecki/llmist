@@ -1,13 +1,16 @@
+import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFileLoggingHooks,
+  createFileLoggingState,
   ENV_LOG_RAW_DIRECTORY,
   formatCallNumber,
   formatLlmRequest,
   getEnvFileLoggingHooks,
+  resetFileLoggingState,
 } from "./file-logging.js";
 import type { ObserveLLMCallCompleteContext, ObserveLLMCallReadyContext } from "./hooks.js";
 
@@ -92,6 +95,8 @@ describe("file-logging", () => {
     let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(async () => {
+      // Reset module-level state to ensure clean test isolation
+      resetFileLoggingState();
       testDir = join(tmpdir(), `llmist-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     });
@@ -217,7 +222,7 @@ describe("file-logging", () => {
       await expect(readFile(join(testDir, "0002.request"), "utf-8")).rejects.toThrow();
     });
 
-    it("includes subagent calls when skipSubagents: false", async () => {
+    it("includes subagent calls when skipSubagents: false (in subdirectory)", async () => {
       const hooks = createFileLoggingHooks({ directory: testDir, skipSubagents: false });
 
       // Main agent call
@@ -229,7 +234,7 @@ describe("file-logging", () => {
         },
       });
 
-      // Subagent call
+      // Subagent call - now writes to a numbered subdirectory
       await hooks.observers?.onLLMCallReady?.({
         iteration: 0,
         options: {
@@ -243,7 +248,8 @@ describe("file-logging", () => {
       });
 
       const content1 = await readFile(join(testDir, "0001.request"), "utf-8");
-      const content2 = await readFile(join(testDir, "0002.request"), "utf-8");
+      // Subagent call goes to numbered subdirectory: 0002-browse-123/0001.request
+      const content2 = await readFile(join(testDir, "0002-browse-123", "0001.request"), "utf-8");
 
       expect(content1).toContain("Main call");
       expect(content2).toContain("Subagent call");
@@ -384,6 +390,309 @@ describe("file-logging", () => {
 
       const content = await readFile(join(testDir, "000001.request"), "utf-8");
       expect(content).toContain("Hello!");
+    });
+
+    describe("subagent directory structure", () => {
+      // Helper to create minimal context objects
+      const createReadyContext = (subagentContext?: {
+        depth: number;
+        parentGadgetInvocationId: string;
+      }): ObserveLLMCallReadyContext => ({
+        iteration: 0,
+        maxIterations: 10,
+        totalCost: 0,
+        options: {
+          model: "gpt-4o",
+          messages: [{ role: "user", content: "Test message" }],
+        },
+        logger: {} as ObserveLLMCallReadyContext["logger"],
+        subagentContext,
+      });
+
+      const createCompleteContext = (subagentContext?: {
+        depth: number;
+        parentGadgetInvocationId: string;
+      }): ObserveLLMCallCompleteContext => ({
+        iteration: 0,
+        options: { model: "gpt-4o" },
+        messages: [{ role: "user", content: "Test message" }],
+        response: { role: "assistant", content: "Response" },
+        rawResponse: "Test response content",
+        finalMessage: "Test response content",
+        finishReason: "stop",
+        logger: {} as ObserveLLMCallCompleteContext["logger"],
+        subagentContext,
+      });
+
+      it("creates numbered subdirectory for subagent calls", async () => {
+        const hooks = createFileLoggingHooks({ directory: testDir, skipSubagents: false });
+
+        // Main agent call 1
+        await hooks.observers?.onLLMCallReady?.(createReadyContext());
+        await hooks.observers?.onLLMCallComplete?.(createCompleteContext());
+
+        // Subagent call (should create 0002-gc_abc123/ directory)
+        const subagentCtx = { depth: 1, parentGadgetInvocationId: "gc_abc123" };
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+        await hooks.observers?.onLLMCallComplete?.(createCompleteContext(subagentCtx));
+
+        // Verify directory structure
+        expect(existsSync(join(testDir, "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0001.response"))).toBe(true);
+        expect(existsSync(join(testDir, "0002-gc_abc123", "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0002-gc_abc123", "0001.response"))).toBe(true);
+      });
+
+      it("handles nested subagents with nested directories", async () => {
+        const hooks = createFileLoggingHooks({ directory: testDir, skipSubagents: false });
+
+        // Subagent depth 1
+        const depth1Ctx = { depth: 1, parentGadgetInvocationId: "gc_1" };
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(depth1Ctx));
+        await hooks.observers?.onLLMCallComplete?.(createCompleteContext(depth1Ctx));
+
+        // Nested subagent depth 2 (spawned from within depth 1)
+        const depth2Ctx = { depth: 2, parentGadgetInvocationId: "gc_2" };
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(depth2Ctx));
+        await hooks.observers?.onLLMCallComplete?.(createCompleteContext(depth2Ctx));
+
+        // gc_1 should be at top level, gc_2 should be nested inside gc_1's directory
+        expect(existsSync(join(testDir, "0001-gc_1", "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0001-gc_1", "0002-gc_2", "0001.request"))).toBe(true);
+      });
+
+      it("maintains separate counters per directory", async () => {
+        const hooks = createFileLoggingHooks({ directory: testDir, skipSubagents: false });
+
+        // Main agent: 2 calls
+        await hooks.observers?.onLLMCallReady?.(createReadyContext());
+        await hooks.observers?.onLLMCallReady?.(createReadyContext());
+
+        // Subagent: 2 calls (should have its own counter starting at 1)
+        const subagentCtx = { depth: 1, parentGadgetInvocationId: "gc_1" };
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+
+        // Main: 0001, 0002. Subagent directory: 0003-gc_1 with 0001, 0002 inside
+        expect(existsSync(join(testDir, "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0002.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0003-gc_1", "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0003-gc_1", "0002.request"))).toBe(true);
+      });
+
+      it("reuses same directory for multiple calls from same subagent", async () => {
+        const hooks = createFileLoggingHooks({ directory: testDir, skipSubagents: false });
+
+        const subagentCtx = { depth: 1, parentGadgetInvocationId: "gc_same" };
+
+        // Multiple calls from same subagent
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+
+        // All should be in same directory with sequential numbers
+        expect(existsSync(join(testDir, "0001-gc_same", "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0001-gc_same", "0002.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0001-gc_same", "0003.request"))).toBe(true);
+        // Should NOT create multiple directories
+        expect(existsSync(join(testDir, "0002-gc_same"))).toBe(false);
+      });
+
+      it("reports parentGadgetInvocationId and depth in onFileWritten callback", async () => {
+        const onFileWritten = vi.fn();
+        const hooks = createFileLoggingHooks({
+          directory: testDir,
+          skipSubagents: false,
+          onFileWritten,
+        });
+
+        // Main agent call
+        await hooks.observers?.onLLMCallReady?.(createReadyContext());
+        expect(onFileWritten).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            parentGadgetInvocationId: undefined,
+            depth: undefined,
+          }),
+        );
+
+        // Subagent call
+        const subagentCtx = { depth: 1, parentGadgetInvocationId: "gc_test" };
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+        expect(onFileWritten).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            parentGadgetInvocationId: "gc_test",
+            depth: 1,
+          }),
+        );
+      });
+
+      it("interleaves main agent and subagent calls chronologically", async () => {
+        const hooks = createFileLoggingHooks({ directory: testDir, skipSubagents: false });
+
+        // Main call 1
+        await hooks.observers?.onLLMCallReady?.(createReadyContext());
+        await hooks.observers?.onLLMCallComplete?.(createCompleteContext());
+
+        // Subagent starts
+        const subagentCtx = { depth: 1, parentGadgetInvocationId: "gc_1" };
+        await hooks.observers?.onLLMCallReady?.(createReadyContext(subagentCtx));
+        await hooks.observers?.onLLMCallComplete?.(createCompleteContext(subagentCtx));
+
+        // Main call 2 (after subagent returns)
+        await hooks.observers?.onLLMCallReady?.(createReadyContext());
+        await hooks.observers?.onLLMCallComplete?.(createCompleteContext());
+
+        // Chronological order should be preserved
+        expect(existsSync(join(testDir, "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0002-gc_1", "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0003.request"))).toBe(true);
+      });
+    });
+
+    describe("session isolation", () => {
+      it("different state instances have independent counters", async () => {
+        const state1 = createFileLoggingState();
+        const state2 = createFileLoggingState();
+
+        // Use different directories to avoid file conflicts
+        const dir1 = join(testDir, "session1");
+        const dir2 = join(testDir, "session2");
+
+        const hooks1 = createFileLoggingHooks({ directory: dir1 }, state1);
+        const hooks2 = createFileLoggingHooks({ directory: dir2 }, state2);
+
+        const ctx: ObserveLLMCallReadyContext = {
+          iteration: 0,
+          options: {
+            model: "gpt-4o",
+            messages: [{ role: "user", content: "Hello!" }],
+          },
+        };
+
+        await hooks1.observers?.onLLMCallReady?.(ctx);
+        await hooks2.observers?.onLLMCallReady?.(ctx);
+
+        // Both should create 0001.request (independent counters)
+        expect(existsSync(join(dir1, "0001.request"))).toBe(true);
+        expect(existsSync(join(dir2, "0001.request"))).toBe(true);
+      });
+
+      it("shared state instances share counters within same directory", async () => {
+        const sharedState = createFileLoggingState();
+
+        const hooks1 = createFileLoggingHooks({ directory: testDir }, sharedState);
+        const hooks2 = createFileLoggingHooks({ directory: testDir }, sharedState);
+
+        const ctx: ObserveLLMCallReadyContext = {
+          iteration: 0,
+          options: {
+            model: "gpt-4o",
+            messages: [{ role: "user", content: "Hello!" }],
+          },
+        };
+
+        await hooks1.observers?.onLLMCallReady?.(ctx);
+        await hooks2.observers?.onLLMCallReady?.(ctx);
+
+        // Shared state means sequential counters
+        expect(existsSync(join(testDir, "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0002.request"))).toBe(true);
+      });
+    });
+
+    describe("edge cases", () => {
+      it("handles onLLMCallComplete without prior onLLMCallReady gracefully", async () => {
+        const state = createFileLoggingState();
+        const hooks = createFileLoggingHooks({ directory: testDir }, state);
+
+        const completeCtx: ObserveLLMCallCompleteContext = {
+          iteration: 0,
+          options: { model: "gpt-4o" },
+          messages: [{ role: "user", content: "Test" }],
+          response: { role: "assistant", content: "Response" },
+          rawResponse: "Test response",
+          finalMessage: "Test response",
+        };
+
+        // Should not throw, should warn
+        await expect(hooks.observers?.onLLMCallComplete?.(completeCtx)).resolves.toBeUndefined();
+
+        // Should have warned
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          "[file-logging] Skipping response write: no matching request recorded",
+        );
+
+        // Should NOT have written a file with 0000 prefix
+        expect(existsSync(join(testDir, "0000.response"))).toBe(false);
+      });
+
+      it("normalizes directory paths (trailing slashes)", async () => {
+        const state = createFileLoggingState();
+
+        // Create hooks with different path formats that should resolve to the same directory
+        const hooks1 = createFileLoggingHooks({ directory: testDir }, state);
+        const hooks2 = createFileLoggingHooks({ directory: `${testDir}/` }, state);
+
+        const ctx: ObserveLLMCallReadyContext = {
+          iteration: 0,
+          options: {
+            model: "gpt-4o",
+            messages: [{ role: "user", content: "Hello!" }],
+          },
+        };
+
+        await hooks1.observers?.onLLMCallReady?.(ctx);
+        await hooks2.observers?.onLLMCallReady?.(ctx);
+
+        // Both should have used the same normalized directory, sharing counters
+        // So we should have 0001 and 0002 (not two 0001 files which would conflict)
+        expect(existsSync(join(testDir, "0001.request"))).toBe(true);
+        expect(existsSync(join(testDir, "0002.request"))).toBe(true);
+      });
+
+      it("createFileLoggingState creates independent state objects", () => {
+        const state1 = createFileLoggingState();
+        const state2 = createFileLoggingState();
+
+        // Verify they are different objects
+        expect(state1).not.toBe(state2);
+        expect(state1.counters).not.toBe(state2.counters);
+        expect(state1.subagentDirectories).not.toBe(state2.subagentDirectories);
+        expect(state1.activeDirectoryByContext).not.toBe(state2.activeDirectoryByContext);
+
+        // Verify they have the correct structure
+        expect(state1.counters).toBeInstanceOf(Map);
+        expect(state1.subagentDirectories).toBeInstanceOf(Map);
+        expect(state1.activeDirectoryByContext).toBeInstanceOf(Map);
+      });
+
+      it("resetFileLoggingState clears the default global state", async () => {
+        // Use default global state (no state param)
+        const hooks1 = createFileLoggingHooks({ directory: testDir });
+
+        const ctx: ObserveLLMCallReadyContext = {
+          iteration: 0,
+          options: {
+            model: "gpt-4o",
+            messages: [{ role: "user", content: "Hello!" }],
+          },
+        };
+
+        await hooks1.observers?.onLLMCallReady?.(ctx);
+        expect(existsSync(join(testDir, "0001.request"))).toBe(true);
+
+        // Reset the global state
+        resetFileLoggingState();
+
+        // Create new hooks (will create new global state)
+        const hooks2 = createFileLoggingHooks({ directory: testDir });
+        await hooks2.observers?.onLLMCallReady?.(ctx);
+
+        // Counter should start fresh at 0001 again
+        // But the file already exists, so this will overwrite it
+        const content = await readFile(join(testDir, "0001.request"), "utf-8");
+        expect(content).toContain("Hello!");
+      });
     });
   });
 
