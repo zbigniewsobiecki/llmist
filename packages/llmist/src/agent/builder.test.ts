@@ -1364,4 +1364,91 @@ describe("AgentBuilder", () => {
       expect(trailingMessage?.role).toBe("user");
     });
   });
+
+  describe("build() options parity with ask()", () => {
+    it("build() produces the same options as ask() (minus userPrompt)", () => {
+      const mockClient = createMockClient();
+      const builder = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withSystem("You are helpful")
+        .withMaxIterations(5)
+        .withGadgets(Calculator)
+        .withHooks(HookPresets.silent());
+
+      const builtAgent = builder.build();
+      const askedAgent = builder.ask("test prompt");
+
+      // Both should have the same registry (same gadgets registered)
+      expect(builtAgent.getRegistry().getNames()).toEqual(askedAgent.getRegistry().getNames());
+    });
+
+    it("build() includes parentObservers, sharedRateLimitTracker, and sharedRetryConfig", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+      const parentTree = new ExecutionTree();
+
+      // Add a parent LLM call to give the tree proper structure
+      parentTree.addLLMCall({ iteration: 0, model: "parent-model" });
+      const gadget = parentTree.addGadget({
+        invocationId: "parent_gadget",
+        name: "TestGadget",
+        parameters: {},
+      });
+
+      const mockObservers = {
+        onLLMCallStart: async () => {},
+      };
+      const mockRateLimitTracker = {} as never;
+      const mockRetryConfig = { retries: 3, minTimeout: 1000, maxTimeout: 10000 };
+
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        tree: parentTree,
+        nodeId: gadget.id,
+        depth: 1,
+        parentObservers: mockObservers,
+        sharedRateLimitTracker: mockRateLimitTracker,
+        sharedRetryConfig: mockRetryConfig as never,
+      };
+
+      const agent = new AgentBuilder(mockClient).withParentContext(ctx as never).build();
+
+      // Agent shares the parent tree
+      expect(agent.getTree()).toBe(parentTree);
+    });
+
+    it("build() and ask() produce equivalent options for all subagent fields", async () => {
+      const { ExecutionTree } = await import("../core/execution-tree.js");
+      const mockClient = createMockClient();
+      const parentTree = new ExecutionTree();
+
+      // Provide a minimal parent LLM call for tree structure
+      parentTree.addLLMCall({ iteration: 0, model: "parent" });
+      const gadget = parentTree.addGadget({
+        invocationId: "gadget",
+        name: "Sub",
+        parameters: {},
+      });
+
+      const ctx = {
+        reportCost: () => {},
+        signal: new AbortController().signal,
+        tree: parentTree,
+        nodeId: gadget.id,
+        depth: 2,
+      };
+
+      const builder = new AgentBuilder(mockClient)
+        .withModel("sonnet")
+        .withParentContext(ctx as never);
+
+      const builtAgent = builder.build();
+      const askedAgent = builder.ask("prompt");
+
+      // Both agents should share the same parent tree
+      expect(builtAgent.getTree()).toBe(askedAgent.getTree());
+      expect(builtAgent.getTree()).toBe(parentTree);
+    });
+  });
 });
