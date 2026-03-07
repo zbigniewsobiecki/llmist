@@ -13,13 +13,8 @@ import type { CLIEnvironment } from "./environment.js";
 import { readAudioFile, readImageFile, readSystemPromptFile } from "./file-utils.js";
 import { writeLogFile } from "./llm-logging.js";
 import { addCompleteOptions, type CLICompleteOptions } from "./option-helpers.js";
-import {
-  executeAction,
-  renderSummary,
-  resolvePrompt,
-  StreamPrinter,
-  StreamProgress,
-} from "./utils.js";
+import { renderSummary } from "./ui/formatters.js";
+import { executeAction, resolvePrompt, StreamPrinter, StreamProgress } from "./utils.js";
 
 /**
  * Executes the complete command.

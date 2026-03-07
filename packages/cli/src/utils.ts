@@ -152,10 +152,6 @@ export async function resolvePrompt(
   return pipedInput;
 }
 
-// Re-export summary rendering from formatters module
-// This maintains backward compatibility while organizing code better
-export { renderSummary, type SummaryMetadata } from "./ui/formatters.js";
-
 /**
  * Executes a CLI action with error handling.
  * Catches errors, writes to stderr, and sets exit code 1 on failure.
