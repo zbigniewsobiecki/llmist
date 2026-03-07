@@ -7,6 +7,7 @@ import {
   formatLLMCallOpening,
   formatNestedGadgetResult,
   formatTokens,
+  formatTokensLong,
   formatUserMessage,
   renderMarkdown,
   truncateValue,
@@ -120,6 +121,31 @@ describe("formatTokens", () => {
   it("handles edge cases", () => {
     expect(formatTokens(1234)).toBe("1.2k");
     expect(formatTokens(100000)).toBe("100.0k");
+  });
+});
+
+describe("formatTokensLong", () => {
+  it("returns small counts with 'tokens' suffix", () => {
+    expect(formatTokensLong(0)).toBe("0 tokens");
+    expect(formatTokensLong(100)).toBe("100 tokens");
+    expect(formatTokensLong(999)).toBe("999 tokens");
+  });
+
+  it("formats thousands with uppercase 'K tokens' suffix", () => {
+    expect(formatTokensLong(1000)).toBe("1K tokens");
+    expect(formatTokensLong(11500)).toBe("11K tokens");
+    expect(formatTokensLong(128000)).toBe("128K tokens");
+  });
+
+  it("formats millions with 'M tokens' suffix", () => {
+    expect(formatTokensLong(1_000_000)).toBe("1.0M tokens");
+    expect(formatTokensLong(2_000_000)).toBe("2.0M tokens");
+    expect(formatTokensLong(1_500_000)).toBe("1.5M tokens");
+  });
+
+  it("handles edge cases", () => {
+    expect(formatTokensLong(1234)).toBe("1K tokens");
+    expect(formatTokensLong(200000)).toBe("200K tokens");
   });
 });
 
