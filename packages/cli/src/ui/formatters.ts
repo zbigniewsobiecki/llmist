@@ -280,6 +280,27 @@ export function formatCost(cost: number): string {
 }
 
 /**
+ * Strips the provider prefix from a model name.
+ *
+ * Many model identifiers include a provider prefix separated by a colon
+ * (e.g., `"openai:gpt-4"`, `"anthropic:claude-3-5-sonnet-20241022"`).
+ * This utility extracts just the model portion for display and registry lookups.
+ *
+ * @param model - Model name, optionally prefixed with a provider (e.g., `"openai:gpt-4"`)
+ * @returns The model name without the provider prefix (e.g., `"gpt-4"`)
+ *
+ * @example
+ * ```typescript
+ * stripProviderPrefix("openai:gpt-4")           // "gpt-4"
+ * stripProviderPrefix("claude-3-5-sonnet")       // "claude-3-5-sonnet"
+ * stripProviderPrefix("")                        // ""
+ * ```
+ */
+export function stripProviderPrefix(model: string): string {
+  return model.includes(":") ? model.split(":")[1] : model;
+}
+
+/**
  * Display information for formatting an LLM call progress line.
  *
  * Used by both main agent display and nested subagent display.

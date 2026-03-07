@@ -1,7 +1,13 @@
 import chalk from "chalk";
 import type { ModelRegistry, TokenUsage } from "llmist";
 import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
-import { formatCost, formatGadgetLine, formatLLMCallLine, formatTokens } from "./ui/formatters.js";
+import {
+  formatCost,
+  formatGadgetLine,
+  formatLLMCallLine,
+  formatTokens,
+  stripProviderPrefix,
+} from "./ui/formatters.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_DELAY_MS = 500; // Don't show spinner for fast responses
@@ -254,7 +260,7 @@ export class StreamProgress {
         // Calculate cost using model registry (first-class subagent metric)
         // Use agent.* values which include preserved initial values from addNestedAgent()
         try {
-          const modelName = agent.model.includes(":") ? agent.model.split(":")[1] : agent.model;
+          const modelName = stripProviderPrefix(agent.model);
           const costResult = this.modelRegistry.estimateCost(
             modelName,
             agent.inputTokens ?? 0,
@@ -416,7 +422,7 @@ export class StreamProgress {
       if (this.modelRegistry && this.model) {
         try {
           // Strip provider prefix if present (e.g., "openai:gpt-5-nano" -> "gpt-5-nano")
-          const modelName = this.model.includes(":") ? this.model.split(":")[1] : this.model;
+          const modelName = stripProviderPrefix(this.model);
 
           const cost = this.modelRegistry.estimateCost(
             modelName,
@@ -851,7 +857,7 @@ export class StreamProgress {
 
     try {
       // Strip provider prefix if present (e.g., "anthropic:claude-sonnet-4-5" -> "claude-sonnet-4-5")
-      const modelName = this.model.includes(":") ? this.model.split(":")[1] : this.model;
+      const modelName = stripProviderPrefix(this.model);
 
       const cost = this.modelRegistry.estimateCost(
         modelName,
@@ -878,7 +884,7 @@ export class StreamProgress {
     }
 
     // Strip provider prefix if present (e.g., "anthropic:claude-sonnet-4-5" -> "claude-sonnet-4-5")
-    const modelName = this.model.includes(":") ? this.model.split(":")[1] : this.model;
+    const modelName = stripProviderPrefix(this.model);
 
     const limits = this.modelRegistry.getModelLimits(modelName);
     if (!limits?.contextWindow) {

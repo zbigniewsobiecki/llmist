@@ -10,6 +10,7 @@ import {
   formatTokensLong,
   formatUserMessage,
   renderMarkdown,
+  stripProviderPrefix,
   truncateValue,
 } from "./formatters.js";
 
@@ -1305,5 +1306,34 @@ describe("formatUserMessage", () => {
     const result = formatUserMessage("test");
     // The inverse block should have padding: " 👤 test "
     expect(result).toContain(" 👤 test ");
+  });
+});
+
+describe("stripProviderPrefix", () => {
+  it("strips provider prefix from model with colon separator", () => {
+    expect(stripProviderPrefix("openai:gpt-4")).toBe("gpt-4");
+  });
+
+  it("strips anthropic provider prefix", () => {
+    expect(stripProviderPrefix("anthropic:claude-3-5-sonnet-20241022")).toBe(
+      "claude-3-5-sonnet-20241022",
+    );
+  });
+
+  it("strips gemini provider prefix", () => {
+    expect(stripProviderPrefix("gemini:gemini-2.5-flash")).toBe("gemini-2.5-flash");
+  });
+
+  it("returns model unchanged when no colon prefix present", () => {
+    expect(stripProviderPrefix("claude-3")).toBe("claude-3");
+  });
+
+  it("returns empty string unchanged", () => {
+    expect(stripProviderPrefix("")).toBe("");
+  });
+
+  it("handles model name with multiple colons by taking the part between the first and second colon", () => {
+    // split(":")[1] returns the segment between the first and second colon
+    expect(stripProviderPrefix("openai:gpt-4:legacy")).toBe("gpt-4");
   });
 });
