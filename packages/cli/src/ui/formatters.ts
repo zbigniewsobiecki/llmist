@@ -221,6 +221,32 @@ export function formatTokens(tokens: number): string {
 }
 
 /**
+ * Formats token count in long form with uppercase suffix and "tokens" label.
+ *
+ * Designed for table display and verbose contexts where more detail is needed.
+ * Uses uppercase suffix and includes the word "tokens" for clarity.
+ *
+ * @param tokens - Number of tokens
+ * @returns Formatted string (e.g., "896 tokens", "11K tokens", "1.0M tokens")
+ *
+ * @example
+ * ```typescript
+ * formatTokensLong(896)      // "896 tokens"
+ * formatTokensLong(11500)    // "11K tokens"
+ * formatTokensLong(1000000)  // "1.0M tokens"
+ * ```
+ */
+export function formatTokensLong(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M tokens`;
+  }
+  if (tokens >= 1_000) {
+    return `${Math.floor(tokens / 1_000)}K tokens`;
+  }
+  return `${tokens} tokens`;
+}
+
+/**
  * Formats cost with appropriate precision based on magnitude.
  *
  * Uses variable precision to balance readability and accuracy:

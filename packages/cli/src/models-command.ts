@@ -4,6 +4,7 @@ import type { ImageModelSpec, ModelSpec, SpeechModelSpec } from "llmist";
 import { MODEL_ALIASES } from "llmist";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
+import { formatTokensLong } from "./ui/formatters.js";
 import { executeAction } from "./utils.js";
 
 interface ModelsCommandOptions {
@@ -164,7 +165,7 @@ function renderCompactTable(models: ModelSpec[], stream: NodeJS.WritableStream):
 
   // Rows
   for (const model of models) {
-    const contextFormatted = formatTokens(model.contextWindow);
+    const contextFormatted = formatTokensLong(model.contextWindow);
     const inputPrice = `$${model.pricing.input.toFixed(2)}`;
     const outputPrice = `$${model.pricing.output.toFixed(2)}`;
 
@@ -194,10 +195,10 @@ function renderVerboseTable(models: ModelSpec[], stream: NodeJS.WritableStream):
     stream.write(chalk.dim("  " + "─".repeat(60)) + "\n");
     stream.write(`  ${chalk.dim("Name:")}         ${chalk.white(model.displayName)}\n`);
     stream.write(
-      `  ${chalk.dim("Context:")}      ${chalk.yellow(formatTokens(model.contextWindow))}\n`,
+      `  ${chalk.dim("Context:")}      ${chalk.yellow(formatTokensLong(model.contextWindow))}\n`,
     );
     stream.write(
-      `  ${chalk.dim("Max Output:")}   ${chalk.yellow(formatTokens(model.maxOutputTokens))}\n`,
+      `  ${chalk.dim("Max Output:")}   ${chalk.yellow(formatTokensLong(model.maxOutputTokens))}\n`,
     );
     stream.write(
       `  ${chalk.dim("Pricing:")}      ${chalk.cyan(`$${model.pricing.input.toFixed(2)} input`)} ${chalk.dim("/")} ${chalk.cyan(`$${model.pricing.output.toFixed(2)} output`)} ${chalk.dim("(per 1M tokens)")}\n`,
@@ -525,16 +526,6 @@ function renderJSON(
   }
 
   stream.write(JSON.stringify(output, null, 2) + "\n");
-}
-
-function formatTokens(count: number): string {
-  if (count >= 1_000_000) {
-    return `${(count / 1_000_000).toFixed(1)}M tokens`;
-  } else if (count >= 1_000) {
-    return `${(count / 1_000).toFixed(0)}K tokens`;
-  } else {
-    return `${count} tokens`;
-  }
 }
 
 export function registerModelsCommand(program: Command, env: CLIEnvironment): void {
