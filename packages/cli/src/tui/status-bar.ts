@@ -8,7 +8,7 @@
 
 import type { Box } from "@unblessed/node";
 import type { ExecutionEvent, ExecutionTree, NodeId, RateLimitStats } from "llmist";
-import { formatCost, formatTokens } from "../ui/formatters.js";
+import { formatCost, formatTokens, stripProviderPrefix } from "../ui/formatters.js";
 import type { ContentFilterMode, FocusMode, TUIMetrics } from "./types.js";
 
 /** Rough estimate: ~4 characters per token for English text */
@@ -515,7 +515,7 @@ export class StatusBar {
    */
   private shortenModelName(model: string): string {
     // Remove provider prefix
-    const withoutProvider = model.includes(":") ? model.split(":")[1] : model;
+    const withoutProvider = stripProviderPrefix(model);
     // Shorten common patterns
     return withoutProvider
       .replace("claude-", "")
