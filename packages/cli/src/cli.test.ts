@@ -14,13 +14,8 @@ import {
   resolveGadgetSpecifier,
 } from "./gadgets.js";
 import { runCLI } from "./program.js";
-import {
-  createNumericParser,
-  executeAction,
-  renderSummary,
-  resolvePrompt,
-  StreamPrinter,
-} from "./utils.js";
+import { renderSummary } from "./ui/formatters.js";
+import { createNumericParser, executeAction, resolvePrompt, StreamPrinter } from "./utils.js";
 
 class TestGadget extends Gadget({
   name: "TestGadget",
