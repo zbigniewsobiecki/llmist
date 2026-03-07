@@ -336,6 +336,8 @@ export class HookPresets {
   /**
    * Tracks cumulative token usage across all LLM calls.
    *
+   * @public
+   *
    * **Output:**
    * - Per-call token count with 📊 emoji
    * - Cumulative total across all calls
@@ -631,6 +633,8 @@ export class HookPresets {
   /**
    * Logs detailed error information for debugging and troubleshooting.
    *
+   * @public
+   *
    * **Output:**
    * - LLM errors with ❌ emoji, including model and recovery status
    * - Gadget errors with full context (parameters, error message)
@@ -709,6 +713,8 @@ export class HookPresets {
 
   /**
    * Tracks context compaction events.
+   *
+   * @public
    *
    * **Output:**
    * - Compaction events with 🗜️ emoji
@@ -824,6 +830,8 @@ export class HookPresets {
 
   /**
    * Returns empty hook configuration for clean output without any logging.
+   *
+   * @public
    *
    * **Output:**
    * - None. Returns {} (empty object).
@@ -993,6 +1001,8 @@ export class HookPresets {
 
   /**
    * Composite preset combining logging, timing, tokenTracking, and errorLogging.
+   *
+   * @public
    *
    * This is the recommended preset for development and initial production deployments,
    * providing comprehensive observability with a single method call.

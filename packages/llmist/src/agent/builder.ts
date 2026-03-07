@@ -1239,9 +1239,11 @@ export class AgentBuilder {
    */
   /**
    * Build AgentOptions with the given user prompt.
-   * Centralizes options construction for ask(), askWithImage(), and askWithContent().
+   * Centralizes options construction for ask(), askWithImage(), askWithContent(), and build().
+   *
+   * @param userPrompt - Optional user prompt (omitted for build() which has no prompt)
    */
-  private buildAgentOptions(userPrompt: string | ContentPart[]): AgentOptions {
+  private buildAgentOptions(userPrompt?: string | ContentPart[]): AgentOptions {
     // Lazy import to avoid circular dependency
     if (!this.client) {
       const { LLMist: LLMistClass } =
@@ -1286,6 +1288,11 @@ export class AgentBuilder {
       parentTree: this.parentContext?.tree,
       parentNodeId: this.parentContext?.nodeId,
       baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
+      // Parent observer hooks for subagent visibility
+      parentObservers: this.parentObservers,
+      // Shared rate limit tracker and retry config (for coordinated limits across subagents)
+      sharedRateLimitTracker: this.sharedRateLimitTracker,
+      sharedRetryConfig: this.sharedRetryConfig,
     };
   }
 
@@ -1452,56 +1459,9 @@ export class AgentBuilder {
    * ```
    */
   build(): Agent {
-    // Lazy import to avoid circular dependency
-    if (!this.client) {
-      const { LLMist: LLMistClass } =
-        require("../core/client.js") as typeof import("../core/client.js");
-      this.client = new LLMistClass();
-    }
-    const registry = GadgetRegistry.from(this.gadgets);
-
-    const options: AgentOptions = {
-      client: this.client,
-      model: this.model ?? "openai:gpt-5-nano",
-      systemPrompt: this.systemPrompt,
-      // No userPrompt - agent.run() will throw if called directly
-      registry,
-      maxIterations: this.maxIterations,
-      budget: this.budget,
-      temperature: this.temperature,
-      logger: this.logger,
-      hooks: this.composeHooks(),
-      promptConfig: this.promptConfig,
-      initialMessages: this.initialMessages,
-      requestHumanInput: this.requestHumanInput,
-      gadgetStartPrefix: this.gadgetStartPrefix,
-      gadgetEndPrefix: this.gadgetEndPrefix,
-      gadgetArgPrefix: this.gadgetArgPrefix,
-      textOnlyHandler: this.textOnlyHandler,
-      textWithGadgetsHandler: this.textWithGadgetsHandler,
-      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-      gadgetExecutionMode: this.gadgetExecutionMode,
-      maxGadgetsPerResponse: this.maxGadgetsPerResponse,
-      gadgetOutputLimit: this.gadgetOutputLimit,
-      gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
-      compactionConfig: this.compactionConfig,
-      retryConfig: this.retryConfig,
-      rateLimitConfig: this.rateLimitConfig,
-      signal: this.signal,
-      reasoning: this.reasoningConfig,
-      caching: this.cachingConfig,
-      subagentConfig: this.subagentConfig,
-      // Tree context for shared tree model (subagents share parent's tree)
-      parentTree: this.parentContext?.tree,
-      parentNodeId: this.parentContext?.nodeId,
-      baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
-      // Parent observer hooks for subagent visibility
-      parentObservers: this.parentObservers,
-      // Shared rate limit tracker and retry config (for coordinated limits across subagents)
-      sharedRateLimitTracker: this.sharedRateLimitTracker,
-      sharedRetryConfig: this.sharedRetryConfig,
-    };
-
+    // Delegates to buildAgentOptions() without a userPrompt.
+    // agent.run() will throw if called directly (no prompt provided).
+    const options = this.buildAgentOptions();
     return new Agent(AGENT_INTERNAL_KEY, options);
   }
 }
