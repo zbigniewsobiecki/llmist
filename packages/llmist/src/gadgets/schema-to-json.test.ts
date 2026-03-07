@@ -171,11 +171,7 @@ describe("schemaToJSONSchema", () => {
     });
   });
 
-  describe("mismatch detection path via zod module mock", () => {
-    // We use vi.mock at module level to be able to control toJSONSchema output.
-    // These tests use a separate module factory approach by isolating the test
-    // to call schemaToJSONSchema with a carefully constructed scenario.
-
+  describe("no false positives with same Zod instance", () => {
     let warnSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
@@ -186,32 +182,24 @@ describe("schemaToJSONSchema", () => {
       vi.restoreAllMocks();
     });
 
-    it("logs warning when schema has descriptions in _def but they are missing from output", () => {
-      // Use a real zod schema that DOES have descriptions in _def.
-      // Since the same Zod instance is used, descriptions should NOT be lost normally.
-      // We test that the warning fires by verifying the no-warning case.
-      // The actual mismatch path requires a different Zod instance.
+    it("preserves description on primitive schema without warning", () => {
       const schemaWithDescription = z.string().describe("A string value");
       const result = schemaToJSONSchema(schemaWithDescription);
 
-      // With same instance, description is preserved, no warning
       expect(warnSpy).not.toHaveBeenCalled();
       expect(result.description).toBe("A string value");
     });
 
-    it("warning message format mentions instance mismatch and llmist import", () => {
-      // Verify the warning message content by examining the code path logic.
-      // We do this by testing the real mismatch warning message matches expectations
-      // through a spy on a schema that goes through the non-mismatch path.
+    it("preserves descriptions on object properties without warning", () => {
       const schema = z.object({
         field: z.string().describe("A field"),
       });
 
-      schemaToJSONSchema(schema);
+      const result = schemaToJSONSchema(schema);
 
-      // The warn spy should NOT have been called (same instance, no mismatch).
-      // This confirms the detection correctly avoids false positives.
       expect(warnSpy).not.toHaveBeenCalled();
+      const properties = result.properties as Record<string, { description?: string }>;
+      expect(properties.field.description).toBe("A field");
     });
   });
 
@@ -364,7 +352,6 @@ describe("schemaToJSONSchema", () => {
     });
 
     it("preserves description for optional field's inner type", () => {
-      // In Zod, .describe() on inner type sets description on the inner schema's _def
       const schema = z.object({
         nickname: z.string().describe("User nickname").optional(),
         bio: z.string().describe("User bio").optional(),
@@ -372,12 +359,10 @@ describe("schemaToJSONSchema", () => {
 
       const result = schemaToJSONSchema(schema);
 
-      // The description should be accessible from the schema
+      // Zod v4 preserves descriptions through optional wrappers at the property level
       const properties = result.properties as Record<string, { description?: string }>;
-      // Description may or may not appear depending on the Zod version serialization
-      // But the schema itself is valid
-      expect(properties.nickname).toBeDefined();
-      expect(properties.bio).toBeDefined();
+      expect(properties.nickname.description).toBe("User nickname");
+      expect(properties.bio.description).toBe("User bio");
     });
 
     it("handles optional field without description gracefully", () => {
@@ -408,8 +393,15 @@ describe("schemaToJSONSchema", () => {
       const result = schemaToJSONSchema(schema);
 
       expect(result.type).toBe("object");
-      const properties = result.properties as Record<string, unknown>;
-      expect(properties.metadata).toBeDefined();
+      // Zod v4 preserves descriptions through optional wrappers on objects
+      const properties = result.properties as Record<string, Record<string, unknown>>;
+      expect(properties.metadata.description).toBe("Optional metadata");
+      const metadataProps = properties.metadata.properties as Record<
+        string,
+        { description?: string }
+      >;
+      expect(metadataProps.key.description).toBe("Metadata key");
+      expect(metadataProps.value.description).toBe("Metadata value");
     });
   });
 
@@ -431,10 +423,15 @@ describe("schemaToJSONSchema", () => {
       const result = schemaToJSONSchema(schema);
 
       expect(result.type).toBe("object");
-      const properties = result.properties as Record<string, { description?: string }>;
-      // Both fields should exist in the output
-      expect(properties.middleName).toBeDefined();
-      expect(properties.parentId).toBeDefined();
+      // Zod v4 serializes nullable fields as anyOf with the description on the typed branch
+      const properties = result.properties as Record<
+        string,
+        { anyOf?: Array<{ type?: string; description?: string }> }
+      >;
+      const middleNameTyped = properties.middleName.anyOf?.find((b) => b.type === "string");
+      expect(middleNameTyped?.description).toBe("Middle name");
+      const parentIdTyped = properties.parentId.anyOf?.find((b) => b.type === "string");
+      expect(parentIdTyped?.description).toBe("Parent identifier");
     });
 
     it("handles nullable field without description gracefully", () => {
@@ -459,8 +456,13 @@ describe("schemaToJSONSchema", () => {
       const result = schemaToJSONSchema(schema);
 
       expect(result.type).toBe("object");
-      const properties = result.properties as Record<string, unknown>;
-      expect(properties.optionalNullable).toBeDefined();
+      // Zod v4 serializes nullable+optional as anyOf with description on the typed branch
+      const properties = result.properties as Record<
+        string,
+        { anyOf?: Array<{ type?: string; description?: string }> }
+      >;
+      const typedBranch = properties.optionalNullable.anyOf?.find((b) => b.type === "string");
+      expect(typedBranch?.description).toBe("Optional nullable field");
     });
   });
 
