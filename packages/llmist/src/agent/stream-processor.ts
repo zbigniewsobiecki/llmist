@@ -26,6 +26,7 @@ import type {
   SubagentConfigMap,
 } from "../gadgets/types.js";
 import { createLogger } from "../logging/logger.js";
+import { GadgetDependencyResolver } from "./gadget-dependency-resolver.js";
 import {
   validateAfterGadgetExecutionAction,
   validateBeforeGadgetExecutionAction,
@@ -223,13 +224,9 @@ export class StreamProcessor {
 
   private responseText = "";
 
-  // Dependency tracking for gadget execution DAG
-  /** Gadgets waiting for their dependencies to complete */
-  private gadgetsAwaitingDependencies: Map<string, ParsedGadgetCall> = new Map();
-  /** Completed gadget results, keyed by invocation ID */
-  private completedResults: Map<string, GadgetExecutionResult> = new Map();
-  /** Invocation IDs of gadgets that have failed (error or skipped due to dependency) */
-  private failedInvocations: Set<string> = new Set();
+  // Dependency resolution is delegated to GadgetDependencyResolver
+  private readonly dependencyResolver: GadgetDependencyResolver;
+
   /** Promises for independent gadgets currently executing (fire-and-forget) */
   private inFlightExecutions: Map<string, Promise<void>> = new Map();
   /** Queue of completed gadget results ready to be yielded (for real-time streaming) */
@@ -246,12 +243,6 @@ export class StreamProcessor {
   // Exclusive gadget support
   /** Queue of exclusive gadgets deferred until in-flight gadgets complete */
   private exclusiveQueue: ParsedGadgetCall[] = [];
-
-  // Cross-iteration dependency tracking
-  /** Invocation IDs completed in previous iterations (read-only reference from Agent) */
-  private readonly priorCompletedInvocations: Set<string>;
-  /** Invocation IDs that failed in previous iterations (read-only reference from Agent) */
-  private readonly priorFailedInvocations: Set<string>;
 
   // Parent observer hooks for subagent visibility
   private readonly parentObservers?: Observers;
@@ -275,9 +266,11 @@ export class StreamProcessor {
     // Initialize gadget execution mode
     this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
 
-    // Initialize cross-iteration dependency tracking (use empty sets if not provided)
-    this.priorCompletedInvocations = options.priorCompletedInvocations ?? new Set();
-    this.priorFailedInvocations = options.priorFailedInvocations ?? new Set();
+    // Initialize dependency resolver with cross-iteration state
+    this.dependencyResolver = new GadgetDependencyResolver({
+      priorCompletedInvocations: options.priorCompletedInvocations,
+      priorFailedInvocations: options.priorFailedInvocations,
+    });
 
     // Store subagent config for concurrency limiting
     this.subagentConfig = options.subagentConfig;
@@ -595,7 +588,7 @@ export class StreamProcessor {
           gadgetName: call.gadgetName,
           invocationId: call.invocationId,
         });
-        this.failedInvocations.add(call.invocationId);
+        this.dependencyResolver.markFailed(call.invocationId);
         const errorMessage = `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`;
         const skipEvent: GadgetSkippedEvent = {
           type: "gadget_skipped",
@@ -624,9 +617,7 @@ export class StreamProcessor {
       }
 
       // Check if any dependency has failed (including from prior iterations)
-      const failedDep = call.dependencies.find(
-        (dep) => this.failedInvocations.has(dep) || this.priorFailedInvocations.has(dep),
-      );
+      const failedDep = this.dependencyResolver.getFailedDependency(call);
       if (failedDep) {
         // Dependency failed - handle skip
         const skipEvents = await this.handleFailedDependency(call, failedDep);
@@ -637,17 +628,17 @@ export class StreamProcessor {
       }
 
       // Check if all dependencies are satisfied (including from prior iterations)
-      const unsatisfied = call.dependencies.filter(
-        (dep) => !this.completedResults.has(dep) && !this.priorCompletedInvocations.has(dep),
-      );
-      if (unsatisfied.length > 0) {
+      if (!this.dependencyResolver.isAllSatisfied(call)) {
+        const unsatisfied = call.dependencies.filter(
+          (dep) => !this.dependencyResolver.isCompleted(dep),
+        );
         // Queue for later execution - gadget_call already yielded above
         this.logger.debug("Queueing gadget for later - waiting on dependencies", {
           gadgetName: call.gadgetName,
           invocationId: call.invocationId,
           waitingOn: unsatisfied,
         });
-        this.gadgetsAwaitingDependencies.set(call.invocationId, call);
+        this.dependencyResolver.addPending(call);
         return; // Execution deferred, gadget_call already yielded
       }
 
@@ -974,10 +965,7 @@ export class StreamProcessor {
     });
 
     // Track completion for dependency resolution
-    this.completedResults.set(result.invocationId, result);
-    if (result.error) {
-      this.failedInvocations.add(result.invocationId);
-    }
+    this.dependencyResolver.markComplete(result);
 
     // Yield result event immediately
     yield { type: "gadget_result", result };
@@ -1121,7 +1109,7 @@ export class StreamProcessor {
     failedDep: string,
   ): Promise<StreamEvent[]> {
     const events: StreamEvent[] = [];
-    const depResult = this.completedResults.get(failedDep);
+    const depResult = this.dependencyResolver.getCompletedResult(failedDep);
     const depError = depResult?.error ?? "Dependency failed";
 
     // Call controller to allow customization of skip behavior
@@ -1141,7 +1129,7 @@ export class StreamProcessor {
 
     if (action.action === "skip") {
       // Mark as failed so downstream dependents also skip
-      this.failedInvocations.add(call.invocationId);
+      this.dependencyResolver.markFailed(call.invocationId);
 
       // Skip gadget in execution tree
       if (this.tree) {
@@ -1200,7 +1188,7 @@ export class StreamProcessor {
         result: action.fallbackResult,
         executionTimeMs: 0,
       };
-      this.completedResults.set(call.invocationId, fallbackResult);
+      this.dependencyResolver.markComplete(fallbackResult);
       events.push({ type: "gadget_result", result: fallbackResult });
 
       this.logger.info("Using fallback result for gadget with failed dependency", {
@@ -1243,7 +1231,7 @@ export class StreamProcessor {
         currentCount: this.gadgetStartedCount,
       });
 
-      this.failedInvocations.add(call.invocationId);
+      this.dependencyResolver.markFailed(call.invocationId);
 
       // Mark skipped in execution tree
       if (this.tree) {
@@ -1305,35 +1293,15 @@ export class StreamProcessor {
 
     let progress = true;
 
-    while (progress && this.gadgetsAwaitingDependencies.size > 0) {
+    while (progress && this.dependencyResolver.pendingCount > 0) {
       progress = false;
 
-      // Find all gadgets that are ready to execute
-      const readyToExecute: ParsedGadgetCall[] = [];
-      const readyToSkip: Array<{ call: ParsedGadgetCall; failedDep: string }> = [];
-
-      for (const [_invocationId, call] of this.gadgetsAwaitingDependencies) {
-        // Check for failed dependency (including from prior iterations)
-        const failedDep = call.dependencies.find(
-          (dep) => this.failedInvocations.has(dep) || this.priorFailedInvocations.has(dep),
-        );
-        if (failedDep) {
-          readyToSkip.push({ call, failedDep });
-          continue;
-        }
-
-        // Check if all dependencies are satisfied (including from prior iterations)
-        const allSatisfied = call.dependencies.every(
-          (dep) => this.completedResults.has(dep) || this.priorCompletedInvocations.has(dep),
-        );
-        if (allSatisfied) {
-          readyToExecute.push(call);
-        }
-      }
+      // Ask the resolver which gadgets are ready to execute or skip
+      const { readyToExecute, readyToSkip } = this.dependencyResolver.getReadyCalls();
 
       // Handle skipped gadgets
       for (const { call, failedDep } of readyToSkip) {
-        this.gadgetsAwaitingDependencies.delete(call.invocationId);
+        this.dependencyResolver.removePending(call.invocationId);
         const skipEvents = await this.handleFailedDependency(call, failedDep);
         for (const evt of skipEvents) {
           yield evt;
@@ -1345,7 +1313,7 @@ export class StreamProcessor {
       if (readyToExecute.length > 0) {
         // Remove from pending before executing
         for (const call of readyToExecute) {
-          this.gadgetsAwaitingDependencies.delete(call.invocationId);
+          this.dependencyResolver.removePending(call.invocationId);
         }
 
         if (this.gadgetExecutionMode === "sequential") {
@@ -1413,14 +1381,15 @@ export class StreamProcessor {
     }
 
     // Warn about any remaining unresolved gadgets (circular or missing dependencies)
-    if (this.gadgetsAwaitingDependencies.size > 0) {
+    if (this.dependencyResolver.pendingCount > 0) {
       // Collect all pending invocation IDs to detect circular dependencies
-      const pendingIds = new Set(this.gadgetsAwaitingDependencies.keys());
+      const pendingEntries = this.dependencyResolver.getPendingEntries();
+      const pendingIds = new Set(pendingEntries.map(([id]) => id));
 
-      for (const [invocationId, call] of this.gadgetsAwaitingDependencies) {
-        // Filter to deps that are not in current or prior completed sets
+      for (const [invocationId, call] of pendingEntries) {
+        // Filter to deps that are not completed (in current or prior iterations)
         const missingDeps = call.dependencies.filter(
-          (dep) => !this.completedResults.has(dep) && !this.priorCompletedInvocations.has(dep),
+          (dep) => !this.dependencyResolver.isCompleted(dep),
         );
 
         // Categorize the dependency issue
@@ -1447,7 +1416,7 @@ export class StreamProcessor {
         });
 
         // Mark as failed and emit skip event
-        this.failedInvocations.add(invocationId);
+        this.dependencyResolver.markFailed(invocationId);
         const skipEvent: GadgetSkippedEvent = {
           type: "gadget_skipped",
           gadgetName: call.gadgetName,
@@ -1472,7 +1441,7 @@ export class StreamProcessor {
           failedDependencyError: errorMessage,
         });
       }
-      this.gadgetsAwaitingDependencies.clear();
+      this.dependencyResolver.clearPending();
     }
   }
 
@@ -1499,7 +1468,7 @@ export class StreamProcessor {
    * Used by Agent to accumulate completed IDs across iterations.
    */
   getCompletedInvocationIds(): Set<string> {
-    return new Set(this.completedResults.keys());
+    return this.dependencyResolver.getCompletedInvocationIds();
   }
 
   /**
@@ -1507,6 +1476,6 @@ export class StreamProcessor {
    * Used by Agent to accumulate failed IDs across iterations.
    */
   getFailedInvocationIds(): Set<string> {
-    return new Set(this.failedInvocations);
+    return this.dependencyResolver.getFailedInvocationIds();
   }
 }

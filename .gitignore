@@ -162,3 +162,6 @@ e2e-test-results.txt
 gadget-test-output.log
 .dev-setup
 packages/docs/.astro/
+
+# Cascade tooling
+.cascade-progress-comment-id
