@@ -485,7 +485,7 @@ export class NodeStore {
   /**
    * Generate a unique node ID.
    */
-  generateId(prefix: string): string {
+  private generateId(prefix: string): string {
     return `${prefix}_${++this.nodeIdCounter}`;
   }
 
