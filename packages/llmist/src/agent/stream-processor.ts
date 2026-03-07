@@ -26,6 +26,7 @@ import type {
   SubagentConfigMap,
 } from "../gadgets/types.js";
 import { createLogger } from "../logging/logger.js";
+import { GadgetConcurrencyManager } from "./gadget-concurrency-manager.js";
 import { GadgetDependencyResolver } from "./gadget-dependency-resolver.js";
 import {
   validateAfterGadgetExecutionAction,
@@ -208,7 +209,6 @@ export interface StreamProcessingResult {
  */
 export class StreamProcessor {
   private readonly iteration: number;
-  private readonly registry: GadgetRegistry;
   private readonly hooks: AgentHooks;
   private readonly logger: Logger<ILogObj>;
   private readonly parser: GadgetCallParser;
@@ -227,22 +227,11 @@ export class StreamProcessor {
   // Dependency resolution is delegated to GadgetDependencyResolver
   private readonly dependencyResolver: GadgetDependencyResolver;
 
-  /** Promises for independent gadgets currently executing (fire-and-forget) */
-  private inFlightExecutions: Map<string, Promise<void>> = new Map();
+  // Concurrency management is delegated to GadgetConcurrencyManager
+  private readonly concurrencyManager: GadgetConcurrencyManager;
+
   /** Queue of completed gadget results ready to be yielded (for real-time streaming) */
   private completedResultsQueue: StreamEvent[] = [];
-
-  // Concurrency limiting
-  /** Subagent configuration map for checking maxConcurrent limits */
-  private readonly subagentConfig?: SubagentConfigMap;
-  /** Track active execution count per gadget name */
-  private activeCountByGadget: Map<string, number> = new Map();
-  /** Queue of gadgets waiting for a concurrency slot (per gadget name) */
-  private concurrencyQueue: Map<string, ParsedGadgetCall[]> = new Map();
-
-  // Exclusive gadget support
-  /** Queue of exclusive gadgets deferred until in-flight gadgets complete */
-  private exclusiveQueue: ParsedGadgetCall[] = [];
 
   // Parent observer hooks for subagent visibility
   private readonly parentObservers?: Observers;
@@ -254,7 +243,6 @@ export class StreamProcessor {
 
   constructor(options: StreamProcessorOptions) {
     this.iteration = options.iteration;
-    this.registry = options.registry;
     this.hooks = options.hooks ?? {};
     this.logger = options.logger ?? createLogger({ name: "llmist:stream-processor" });
 
@@ -272,8 +260,12 @@ export class StreamProcessor {
       priorFailedInvocations: options.priorFailedInvocations,
     });
 
-    // Store subagent config for concurrency limiting
-    this.subagentConfig = options.subagentConfig;
+    // Initialize concurrency manager (delegates all concurrency state/logic)
+    this.concurrencyManager = new GadgetConcurrencyManager({
+      registry: options.registry,
+      subagentConfig: options.subagentConfig,
+      logger: this.logger.getSubLogger({ name: "concurrency" }),
+    });
 
     // Store parent observers for subagent visibility
     this.parentObservers = options.parentObservers;
@@ -677,33 +669,19 @@ export class StreamProcessor {
     }
 
     // Check exclusive constraint: exclusive gadgets must run alone
-    const gadget = this.registry.get(call.gadgetName);
-    if (gadget?.exclusive && this.inFlightExecutions.size > 0) {
-      this.logger.debug("Deferring exclusive gadget until in-flight gadgets complete", {
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        inFlightCount: this.inFlightExecutions.size,
-      });
-      this.exclusiveQueue.push(call);
+    if (
+      this.concurrencyManager.isExclusive(call.gadgetName) &&
+      this.concurrencyManager.inFlightCount > 0
+    ) {
+      this.concurrencyManager.queueExclusive(call);
       return;
     }
 
-    // Check concurrency limit
-    const limit = this.getConcurrencyLimit(call.gadgetName);
-    const activeCount = this.activeCountByGadget.get(call.gadgetName) ?? 0;
-
-    if (limit > 0 && activeCount >= limit) {
+    // Check concurrency limit - queue for later if limit reached
+    if (!this.concurrencyManager.canStart(call)) {
       // Queue for later execution when a slot becomes available
       // Note: gadget already passed maxGadgetsPerResponse check and was counted
-      this.logger.debug("Gadget queued due to concurrency limit", {
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        activeCount,
-        limit,
-      });
-      const queue = this.concurrencyQueue.get(call.gadgetName) ?? [];
-      queue.push(call);
-      this.concurrencyQueue.set(call.gadgetName, queue);
+      this.concurrencyManager.queueForLater(call);
       return; // Don't start yet, will be processed when a slot opens
     }
 
@@ -720,70 +698,21 @@ export class StreamProcessor {
   }
 
   /**
-   * Get the effective concurrency limit for a gadget.
-   * Uses "most restrictive wins" strategy: the lowest non-zero value from
-   * external config (SubagentConfig) and gadget's intrinsic maxConcurrent.
-   *
-   * This ensures gadget authors can set safety floors (e.g., maxConcurrent: 1
-   * for file writers) that cannot be weakened by external configuration.
-   *
-   * @returns 0 if unlimited, otherwise the effective limit
-   */
-  private getConcurrencyLimit(gadgetName: string): number {
-    // External config limit (SubagentConfig)
-    const configLimit = this.subagentConfig?.[gadgetName]?.maxConcurrent;
-
-    // Gadget's intrinsic limit
-    const gadget = this.registry.get(gadgetName);
-    const gadgetLimit = gadget?.maxConcurrent;
-
-    // Most restrictive wins: lowest non-zero value
-    // Treat 0 and undefined as "unlimited" (Infinity for comparison)
-    const config = configLimit || Number.POSITIVE_INFINITY;
-    const intrinsic = gadgetLimit || Number.POSITIVE_INFINITY;
-    const effective = Math.min(config, intrinsic);
-
-    return effective === Number.POSITIVE_INFINITY ? 0 : effective;
-  }
-
-  /**
    * Start a gadget execution with concurrency tracking.
-   * Increments active count, starts execution, and schedules queue processing on completion.
+   * Delegates tracking to GadgetConcurrencyManager; schedules queue processing on completion.
    */
   private startGadgetWithConcurrencyTracking(call: ParsedGadgetCall): void {
     const gadgetName = call.gadgetName;
-    const currentCount = this.activeCountByGadget.get(gadgetName) ?? 0;
-    this.activeCountByGadget.set(gadgetName, currentCount + 1);
 
     const executionPromise = this.executeGadgetAndCollect(call).finally(() => {
-      // Decrement active count and process any queued gadgets
-      const newCount = (this.activeCountByGadget.get(gadgetName) ?? 1) - 1;
-      this.activeCountByGadget.set(gadgetName, newCount);
-      this.processQueuedGadget(gadgetName);
+      // Notify manager that this gadget completed - it returns the next queued call if any
+      const nextCall = this.concurrencyManager.onComplete(gadgetName);
+      if (nextCall) {
+        this.startGadgetWithConcurrencyTracking(nextCall);
+      }
     });
 
-    this.inFlightExecutions.set(call.invocationId, executionPromise);
-  }
-
-  /**
-   * Process the next queued gadget for a given gadget name if a slot is available.
-   */
-  private processQueuedGadget(gadgetName: string): void {
-    const queue = this.concurrencyQueue.get(gadgetName);
-    if (!queue || queue.length === 0) return;
-
-    const limit = this.getConcurrencyLimit(gadgetName);
-    const activeCount = this.activeCountByGadget.get(gadgetName) ?? 0;
-
-    if (limit === 0 || activeCount < limit) {
-      const nextCall = queue.shift()!;
-      this.logger.debug("Processing queued gadget", {
-        gadgetName,
-        invocationId: nextCall.invocationId,
-        remainingInQueue: queue.length,
-      });
-      this.startGadgetWithConcurrencyTracking(nextCall);
-    }
+    this.concurrencyManager.trackExecution(call.invocationId, gadgetName, executionPromise);
   }
 
   /**
@@ -1007,17 +936,16 @@ export class StreamProcessor {
    */
   private async *waitForInFlightExecutions(): AsyncGenerator<StreamEvent> {
     if (
-      this.inFlightExecutions.size === 0 &&
-      !this.hasQueuedGadgets() &&
-      this.exclusiveQueue.length === 0
+      this.concurrencyManager.inFlightCount === 0 &&
+      !this.concurrencyManager.hasQueuedGadgets() &&
+      !this.concurrencyManager.hasExclusiveQueued
     ) {
       return;
     }
 
     this.logger.debug("Waiting for in-flight gadget executions", {
-      count: this.inFlightExecutions.size,
-      invocationIds: Array.from(this.inFlightExecutions.keys()),
-      queuedCount: this.getQueuedGadgetCount(),
+      count: this.concurrencyManager.inFlightCount,
+      queuedCount: this.concurrencyManager.getQueuedGadgetCount(),
     });
 
     // Poll interval for draining queue (100ms provides responsive updates)
@@ -1025,12 +953,12 @@ export class StreamProcessor {
 
     // Poll loop: yield queued events while waiting for gadgets to complete
     // Continue while there are in-flight executions OR queued gadgets waiting
-    while (this.inFlightExecutions.size > 0 || this.hasQueuedGadgets()) {
+    while (
+      this.concurrencyManager.inFlightCount > 0 ||
+      this.concurrencyManager.hasQueuedGadgets()
+    ) {
       // Create a combined promise that resolves when current gadgets complete
-      const allDone =
-        this.inFlightExecutions.size > 0
-          ? Promise.all(this.inFlightExecutions.values()).then(() => "done" as const)
-          : Promise.resolve("done" as const);
+      const allDone = this.concurrencyManager.getAllDonePromise();
 
       // Race between: all current gadgets completing OR poll timeout
       const result = await Promise.race([
@@ -1041,7 +969,11 @@ export class StreamProcessor {
       // Yield any events that accumulated in the queue
       yield* this.drainCompletedResults();
 
-      if (result === "done" && this.getTotalActiveGadgetCount() === 0 && !this.hasQueuedGadgets()) {
+      if (
+        result === "done" &&
+        this.concurrencyManager.getTotalActiveGadgetCount() === 0 &&
+        !this.concurrencyManager.hasQueuedGadgets()
+      ) {
         // All gadgets complete (none active), no more queued - exit loop
         break;
       }
@@ -1050,54 +982,20 @@ export class StreamProcessor {
     }
 
     // Clear the map after all promises have completed
-    this.inFlightExecutions.clear();
+    this.concurrencyManager.clearInFlight();
 
     // Process exclusive gadgets now that all in-flight gadgets have completed
-    if (this.exclusiveQueue.length > 0) {
+    if (this.concurrencyManager.hasExclusiveQueued) {
+      const exclusiveQueue = this.concurrencyManager.drainExclusiveQueue();
       this.logger.debug("Processing deferred exclusive gadgets", {
-        count: this.exclusiveQueue.length,
+        count: exclusiveQueue.length,
       });
-      const queue = this.exclusiveQueue;
-      this.exclusiveQueue = [];
-      for (const call of queue) {
+      for (const call of exclusiveQueue) {
         for await (const evt of this.executeGadgetGenerator(call)) {
           yield evt;
         }
       }
     }
-  }
-
-  /**
-   * Check if there are any gadgets waiting in concurrency queues.
-   */
-  private hasQueuedGadgets(): boolean {
-    for (const queue of this.concurrencyQueue.values()) {
-      if (queue.length > 0) return true;
-    }
-    return false;
-  }
-
-  /**
-   * Get total count of queued gadgets across all queues.
-   */
-  private getQueuedGadgetCount(): number {
-    let count = 0;
-    for (const queue of this.concurrencyQueue.values()) {
-      count += queue.length;
-    }
-    return count;
-  }
-
-  /**
-   * Get total count of actively executing gadgets across all types.
-   * Used to know when all work is truly complete (not just when allDone resolves).
-   */
-  private getTotalActiveGadgetCount(): number {
-    let total = 0;
-    for (const count of this.activeCountByGadget.values()) {
-      total += count;
-    }
-    return total;
   }
 
   /**
