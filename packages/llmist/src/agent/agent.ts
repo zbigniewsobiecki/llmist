@@ -726,38 +726,29 @@ export class Agent {
           });
 
           // Stream creation and iteration with retry for errors during streaming.
-          // All retry orchestration is encapsulated in executeWithRetry().
-          let streamMetadata: StreamCompletionEvent | null = null;
-          let gadgetCallCount = 0;
-          const textOutputs: string[] = [];
-          const gadgetResults: StreamEvent[] = [];
+          // All retry orchestration is encapsulated in executeWithRetry(), which also
+          // tracks textOutputs, gadgetResults, and gadgetCallCount — resetting them
+          // between retry attempts so only data from the final successful attempt is returned.
 
-          // Iterate the retry generator manually to capture its return value (stream metadata).
-          // for-await-of discards the generator's final done-value, so we use .next() directly.
+          // Iterate the retry generator manually to capture its return value (stream metadata
+          // and accumulated tracking state). for-await-of discards the generator's final
+          // done-value, so we use .next() directly.
           const retryGen = this.executeWithRetry(llmOptions, currentIteration, currentLLMNodeId);
           let next = await retryGen.next();
           while (!next.done) {
-            const event = next.value;
-
-            // Track outputs for later conversation history updates
-            if (event.type === "text") {
-              textOutputs.push(event.content);
-            } else if (event.type === "gadget_result") {
-              gadgetCallCount++;
-              gadgetResults.push(event);
-            }
-
             // Yield event to consumer in real-time
-            yield event;
+            yield next.value;
             next = await retryGen.next();
           }
-          // When done === true, the value is the generator's return value (StreamCompletionEvent)
-          streamMetadata = next.value;
+          // When done === true, the value is the generator's return value
+          const retryResult = next.value;
 
           // Ensure we received the completion metadata
-          if (!streamMetadata) {
+          if (!retryResult) {
             throw new Error("Stream processing completed without metadata event");
           }
+
+          const { streamMetadata, textOutputs, gadgetResults, gadgetCallCount } = retryResult;
 
           // Use streamMetadata as the result for remaining logic
           const result = streamMetadata;
@@ -932,19 +923,29 @@ export class Agent {
    *
    * Handles stream creation, retry attempts with exponential backoff, error handling,
    * and state reset between attempts. Yields stream events in real-time and returns
-   * the final stream completion metadata once all retry logic is resolved.
-   *
-   * Note: Tracking of text outputs, gadget results, and gadget counts is done by the
-   * caller (run()) to allow real-time event forwarding while accumulating state.
+   * the final stream completion metadata along with accumulated tracking state
+   * (textOutputs, gadgetResults, gadgetCallCount) from the final successful attempt only.
+   * State is reset between retry attempts to prevent accumulation of partial data.
    */
   private async *executeWithRetry(
     llmOptions: LLMGenerationOptions,
     currentIteration: number,
     currentLLMNodeId: string,
-  ): AsyncGenerator<StreamEvent, StreamCompletionEvent | null> {
+  ): AsyncGenerator<
+    StreamEvent,
+    {
+      streamMetadata: StreamCompletionEvent;
+      textOutputs: string[];
+      gadgetResults: StreamEvent[];
+      gadgetCallCount: number;
+    } | null
+  > {
     const maxStreamAttempts = this.retryConfig.enabled ? this.retryConfig.retries + 1 : 1;
     let streamAttempt = 0;
     let streamMetadata: StreamCompletionEvent | null = null;
+    let gadgetCallCount = 0;
+    const textOutputs: string[] = [];
+    const gadgetResults: StreamEvent[] = [];
 
     while (streamAttempt < maxStreamAttempts) {
       streamAttempt++;
@@ -1001,6 +1002,14 @@ export class Agent {
               finishReason: event.finishReason,
               usage: event.usage,
             });
+          }
+
+          // Track outputs from this attempt for conversation history updates
+          if (event.type === "text") {
+            textOutputs.push(event.content);
+          } else if (event.type === "gadget_result") {
+            gadgetCallCount++;
+            gadgetResults.push(event);
           }
 
           // Yield event to consumer in real-time
@@ -1079,6 +1088,9 @@ export class Agent {
 
           // Reset state for retry attempt (clear any partial results from failed attempt)
           streamMetadata = null;
+          gadgetCallCount = 0;
+          textOutputs.length = 0;
+          gadgetResults.length = 0;
 
           continue;
         }
@@ -1096,7 +1108,9 @@ export class Agent {
       }
     }
 
-    return streamMetadata;
+    return streamMetadata !== null
+      ? { streamMetadata, textOutputs, gadgetResults, gadgetCallCount }
+      : null;
   }
 
   /**
