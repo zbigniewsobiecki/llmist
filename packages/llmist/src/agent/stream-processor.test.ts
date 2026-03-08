@@ -638,7 +638,7 @@ describe("StreamProcessor", () => {
     });
 
     it("transforms oversized error message", async () => {
-      const oversizedError = "x".repeat(1_000_000);
+      const oversizedError = "x".repeat(10_000);
       const errorGadget = createMockGadget({
         name: "ErrorGadget",
         error: oversizedError,
