@@ -119,7 +119,7 @@ export class ProgressRenderer {
     this.target.write("\r");
   }
 
-  render(): void {
+  private render(): void {
     // Clear previous multi-line render before drawing new content
     this.clearRenderedLines();
 
@@ -362,7 +362,7 @@ export class ProgressRenderer {
    * Uses the shared formatLLMCallLine() function for consistent formatting
    * between main agent and nested subagent displays.
    */
-  formatStreamingLine(spinner: string): string {
+  private formatStreamingLine(spinner: string): string {
     // Output tokens: use actual if available, otherwise estimate from chars
     const outTokens = this.callStatsTracker.callOutputTokensEstimated
       ? Math.round(this.callStatsTracker.callOutputChars / FALLBACK_CHARS_PER_TOKEN)
@@ -390,7 +390,7 @@ export class ProgressRenderer {
   /**
    * Format the cumulative mode progress line (returns string, doesn't write).
    */
-  formatCumulativeLine(spinner: string): string {
+  private formatCumulativeLine(spinner: string): string {
     const elapsed = ((Date.now() - this.callStatsTracker.totalStartTime) / 1000).toFixed(1);
 
     // Build status parts: model, total tokens, iterations, cost, total time
