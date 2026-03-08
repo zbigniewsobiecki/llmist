@@ -8,16 +8,20 @@ import {
   validateCompleteConfig,
   validateCustomConfig,
   validateGadgetApproval,
+  validateGlobalConfig,
   validateGlobalSubagentConfig,
+  validateImageConfig,
   validateInherits,
   validateInitialGadgets,
   validateLoggingConfig,
   validateNumber,
   validatePathString,
+  validatePromptsConfig,
   validateRateLimitsConfig,
   validateReasoningConfig,
   validateRetryConfig,
   validateSingleSubagentConfig,
+  validateSpeechConfig,
   validateString,
   validateStringArray,
   validateSubagentConfigMap,
@@ -1362,6 +1366,319 @@ describe("config-validators", () => {
 
     it("should throw when value is not an object", () => {
       expect(() => validateCustomConfig("bad", "my-cmd")).toThrow(ConfigError);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // validateGlobalConfig
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe("validateGlobalConfig", () => {
+    it("should accept empty object", () => {
+      expect(validateGlobalConfig({}, "global")).toEqual({});
+    });
+
+    it("should validate log-level", () => {
+      const result = validateGlobalConfig({ "log-level": "debug" }, "global");
+      expect(result["log-level"]).toBe("debug");
+    });
+
+    it("should accept all valid log levels", () => {
+      for (const level of ["silly", "trace", "debug", "info", "warn", "error", "fatal"]) {
+        const result = validateGlobalConfig({ "log-level": level }, "global");
+        expect(result["log-level"]).toBe(level);
+      }
+    });
+
+    it("should throw when log-level is invalid", () => {
+      expect(() => validateGlobalConfig({ "log-level": "verbose" }, "global")).toThrow(ConfigError);
+    });
+
+    it("should throw when an unknown key is provided", () => {
+      expect(() => validateGlobalConfig({ "unknown-key": "value" }, "global")).toThrow(ConfigError);
+      expect(() => validateGlobalConfig({ "unknown-key": "value" }, "global")).toThrow(
+        "[global].unknown-key is not a valid option",
+      );
+    });
+
+    it("should throw when value is not an object", () => {
+      expect(() => validateGlobalConfig("bad", "global")).toThrow(ConfigError);
+    });
+
+    it("should throw when value is null", () => {
+      expect(() => validateGlobalConfig(null, "global")).toThrow(ConfigError);
+    });
+
+    it("should throw when value is an array", () => {
+      expect(() => validateGlobalConfig([], "global")).toThrow(ConfigError);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // validateImageConfig
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe("validateImageConfig", () => {
+    it("should accept empty object", () => {
+      expect(validateImageConfig({}, "image")).toEqual({});
+    });
+
+    it("should validate model string", () => {
+      expect(validateImageConfig({ model: "dall-e-3" }, "image").model).toBe("dall-e-3");
+    });
+
+    it("should validate size string", () => {
+      expect(validateImageConfig({ size: "1024x1024" }, "image").size).toBe("1024x1024");
+    });
+
+    it("should validate quality string", () => {
+      expect(validateImageConfig({ quality: "hd" }, "image").quality).toBe("hd");
+    });
+
+    it("should validate count integer (1–10)", () => {
+      expect(validateImageConfig({ count: 1 }, "image").count).toBe(1);
+      expect(validateImageConfig({ count: 10 }, "image").count).toBe(10);
+      expect(validateImageConfig({ count: 3 }, "image").count).toBe(3);
+    });
+
+    it("should validate output path string with tilde expansion", () => {
+      const result = validateImageConfig({ output: "~/images/out.png" }, "image");
+      expect(result.output).toBe(`${homedir()}/images/out.png`);
+    });
+
+    it("should validate output path string without tilde", () => {
+      expect(validateImageConfig({ output: "/tmp/out.png" }, "image").output).toBe("/tmp/out.png");
+    });
+
+    it("should validate quiet boolean", () => {
+      expect(validateImageConfig({ quiet: true }, "image").quiet).toBe(true);
+      expect(validateImageConfig({ quiet: false }, "image").quiet).toBe(false);
+    });
+
+    it("should accept all fields together", () => {
+      const result = validateImageConfig(
+        {
+          model: "dall-e-3",
+          size: "1024x1024",
+          quality: "hd",
+          count: 2,
+          output: "/tmp/out.png",
+          quiet: true,
+        },
+        "image",
+      );
+      expect(result.model).toBe("dall-e-3");
+      expect(result.size).toBe("1024x1024");
+      expect(result.quality).toBe("hd");
+      expect(result.count).toBe(2);
+      expect(result.output).toBe("/tmp/out.png");
+      expect(result.quiet).toBe(true);
+    });
+
+    it("should throw when count is not an integer", () => {
+      expect(() => validateImageConfig({ count: 1.5 }, "image")).toThrow(ConfigError);
+    });
+
+    it("should throw when count is less than 1", () => {
+      expect(() => validateImageConfig({ count: 0 }, "image")).toThrow(ConfigError);
+    });
+
+    it("should throw when count exceeds 10", () => {
+      expect(() => validateImageConfig({ count: 11 }, "image")).toThrow(ConfigError);
+    });
+
+    it("should throw when model is not a string", () => {
+      expect(() => validateImageConfig({ model: 123 }, "image")).toThrow(ConfigError);
+    });
+
+    it("should throw when quiet is not a boolean", () => {
+      expect(() => validateImageConfig({ quiet: "yes" }, "image")).toThrow(ConfigError);
+    });
+
+    it("should throw when an unknown key is provided", () => {
+      expect(() => validateImageConfig({ "unknown-key": "value" }, "image")).toThrow(ConfigError);
+      expect(() => validateImageConfig({ "unknown-key": "value" }, "image")).toThrow(
+        "[image].unknown-key is not a valid option",
+      );
+    });
+
+    it("should throw when value is not an object", () => {
+      expect(() => validateImageConfig("bad", "image")).toThrow(ConfigError);
+    });
+
+    it("should throw when value is null", () => {
+      expect(() => validateImageConfig(null, "image")).toThrow(ConfigError);
+    });
+
+    it("should throw when value is an array", () => {
+      expect(() => validateImageConfig([], "image")).toThrow(ConfigError);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // validateSpeechConfig
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe("validateSpeechConfig", () => {
+    it("should accept empty object", () => {
+      expect(validateSpeechConfig({}, "speech")).toEqual({});
+    });
+
+    it("should validate model string", () => {
+      expect(validateSpeechConfig({ model: "tts-1" }, "speech").model).toBe("tts-1");
+    });
+
+    it("should validate voice string", () => {
+      expect(validateSpeechConfig({ voice: "alloy" }, "speech").voice).toBe("alloy");
+    });
+
+    it("should validate format string", () => {
+      expect(validateSpeechConfig({ format: "mp3" }, "speech").format).toBe("mp3");
+    });
+
+    it("should validate speed number (0.25–4.0)", () => {
+      expect(validateSpeechConfig({ speed: 1.0 }, "speech").speed).toBe(1.0);
+      expect(validateSpeechConfig({ speed: 0.25 }, "speech").speed).toBe(0.25);
+      expect(validateSpeechConfig({ speed: 4.0 }, "speech").speed).toBe(4.0);
+    });
+
+    it("should validate output path string with tilde expansion", () => {
+      const result = validateSpeechConfig({ output: "~/audio/out.mp3" }, "speech");
+      expect(result.output).toBe(`${homedir()}/audio/out.mp3`);
+    });
+
+    it("should validate output path string without tilde", () => {
+      expect(validateSpeechConfig({ output: "/tmp/out.mp3" }, "speech").output).toBe(
+        "/tmp/out.mp3",
+      );
+    });
+
+    it("should validate quiet boolean", () => {
+      expect(validateSpeechConfig({ quiet: true }, "speech").quiet).toBe(true);
+      expect(validateSpeechConfig({ quiet: false }, "speech").quiet).toBe(false);
+    });
+
+    it("should accept all fields together", () => {
+      const result = validateSpeechConfig(
+        {
+          model: "tts-1",
+          voice: "nova",
+          format: "opus",
+          speed: 1.5,
+          output: "/tmp/out.mp3",
+          quiet: false,
+        },
+        "speech",
+      );
+      expect(result.model).toBe("tts-1");
+      expect(result.voice).toBe("nova");
+      expect(result.format).toBe("opus");
+      expect(result.speed).toBe(1.5);
+      expect(result.output).toBe("/tmp/out.mp3");
+      expect(result.quiet).toBe(false);
+    });
+
+    it("should throw when speed is below 0.25", () => {
+      expect(() => validateSpeechConfig({ speed: 0.1 }, "speech")).toThrow(ConfigError);
+    });
+
+    it("should throw when speed exceeds 4.0", () => {
+      expect(() => validateSpeechConfig({ speed: 4.1 }, "speech")).toThrow(ConfigError);
+    });
+
+    it("should throw when model is not a string", () => {
+      expect(() => validateSpeechConfig({ model: 42 }, "speech")).toThrow(ConfigError);
+    });
+
+    it("should throw when speed is not a number", () => {
+      expect(() => validateSpeechConfig({ speed: "fast" }, "speech")).toThrow(ConfigError);
+    });
+
+    it("should throw when quiet is not a boolean", () => {
+      expect(() => validateSpeechConfig({ quiet: 1 }, "speech")).toThrow(ConfigError);
+    });
+
+    it("should throw when an unknown key is provided", () => {
+      expect(() => validateSpeechConfig({ "unknown-key": "value" }, "speech")).toThrow(ConfigError);
+      expect(() => validateSpeechConfig({ "unknown-key": "value" }, "speech")).toThrow(
+        "[speech].unknown-key is not a valid option",
+      );
+    });
+
+    it("should throw when value is not an object", () => {
+      expect(() => validateSpeechConfig("bad", "speech")).toThrow(ConfigError);
+    });
+
+    it("should throw when value is null", () => {
+      expect(() => validateSpeechConfig(null, "speech")).toThrow(ConfigError);
+    });
+
+    it("should throw when value is an array", () => {
+      expect(() => validateSpeechConfig([], "speech")).toThrow(ConfigError);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // validatePromptsConfig
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe("validatePromptsConfig", () => {
+    it("should accept empty object", () => {
+      expect(validatePromptsConfig({}, "prompts")).toEqual({});
+    });
+
+    it("should accept a single string-valued key", () => {
+      const result = validatePromptsConfig({ greeting: "Hello, {{name}}!" }, "prompts");
+      expect(result.greeting).toBe("Hello, {{name}}!");
+    });
+
+    it("should accept multiple string-valued keys", () => {
+      const result = validatePromptsConfig(
+        {
+          intro: "You are a helpful assistant.",
+          summary: "Summarize the following text:",
+        },
+        "prompts",
+      );
+      expect(result.intro).toBe("You are a helpful assistant.");
+      expect(result.summary).toBe("Summarize the following text:");
+    });
+
+    it("should accept empty string values", () => {
+      const result = validatePromptsConfig({ empty: "" }, "prompts");
+      expect(result.empty).toBe("");
+    });
+
+    it("should throw when a value is a number (not string)", () => {
+      expect(() => validatePromptsConfig({ greeting: 42 }, "prompts")).toThrow(ConfigError);
+      expect(() => validatePromptsConfig({ greeting: 42 }, "prompts")).toThrow(
+        "[prompts].greeting must be a string",
+      );
+    });
+
+    it("should throw when a value is boolean", () => {
+      expect(() => validatePromptsConfig({ flag: true }, "prompts")).toThrow(ConfigError);
+    });
+
+    it("should throw when a value is null", () => {
+      expect(() => validatePromptsConfig({ key: null }, "prompts")).toThrow(ConfigError);
+    });
+
+    it("should throw when a value is an object", () => {
+      expect(() => validatePromptsConfig({ nested: {} }, "prompts")).toThrow(ConfigError);
+    });
+
+    it("should throw when a value is an array", () => {
+      expect(() => validatePromptsConfig({ list: ["a", "b"] }, "prompts")).toThrow(ConfigError);
+    });
+
+    it("should throw when value is not an object", () => {
+      expect(() => validatePromptsConfig("bad", "prompts")).toThrow(ConfigError);
+      expect(() => validatePromptsConfig("bad", "prompts")).toThrow("[prompts] must be a table");
+    });
+
+    it("should throw when value is null", () => {
+      expect(() => validatePromptsConfig(null, "prompts")).toThrow(ConfigError);
     });
   });
 });
