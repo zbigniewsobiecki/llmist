@@ -19,7 +19,7 @@ describe("GadgetExecutor", () => {
 
   beforeEach(() => {
     registry = new GadgetRegistry();
-    executor = new GadgetExecutor(registry);
+    executor = new GadgetExecutor({ registry });
   });
 
   describe("successful execution", () => {
@@ -619,7 +619,10 @@ describe("GadgetExecutor", () => {
         return "Blue";
       };
 
-      const executorWithCallback = new GadgetExecutor(registry, mockCallback);
+      const executorWithCallback = new GadgetExecutor({
+        registry,
+        requestHumanInput: mockCallback,
+      });
       registry.registerByClass(new AskUserGadget());
 
       const call: ParsedGadgetCall = {
@@ -645,7 +648,10 @@ describe("GadgetExecutor", () => {
         throw new Error("User input cancelled");
       };
 
-      const executorWithCallback = new GadgetExecutor(registry, mockCallback);
+      const executorWithCallback = new GadgetExecutor({
+        registry,
+        requestHumanInput: mockCallback,
+      });
       registry.registerByClass(new AskUserGadget());
 
       const call: ParsedGadgetCall = {
@@ -672,7 +678,10 @@ describe("GadgetExecutor", () => {
         return `Answer to: ${question}`;
       };
 
-      const executorWithCallback = new GadgetExecutor(registry, mockCallback);
+      const executorWithCallback = new GadgetExecutor({
+        registry,
+        requestHumanInput: mockCallback,
+      });
       registry.registerByClass(new AskUserGadget());
 
       const call: ParsedGadgetCall = {
@@ -707,7 +716,10 @@ describe("GadgetExecutor", () => {
       }
 
       const mockCallback = async (q: string): Promise<string> => `answer to ${q}`;
-      const executorWithCallback = new GadgetExecutor(registry, mockCallback);
+      const executorWithCallback = new GadgetExecutor({
+        registry,
+        requestHumanInput: mockCallback,
+      });
       registry.registerByClass(new ContextCapture());
 
       const call: ParsedGadgetCall = {
@@ -796,7 +808,7 @@ describe("GadgetExecutor", () => {
     });
 
     it("times out when gadget exceeds default timeout", async () => {
-      const executorWithTimeout = new GadgetExecutor(registry, undefined, undefined, 50);
+      const executorWithTimeout = new GadgetExecutor({ registry, defaultGadgetTimeoutMs: 50 });
       registry.registerByClass(new SlowGadget());
 
       const call: ParsedGadgetCall = {
@@ -821,7 +833,7 @@ describe("GadgetExecutor", () => {
 
     it("gadget timeoutMs overrides default timeout", async () => {
       // Use a very short default timeout that would definitely fail
-      const executorWithTimeout = new GadgetExecutor(registry, undefined, undefined, 10);
+      const executorWithTimeout = new GadgetExecutor({ registry, defaultGadgetTimeoutMs: 10 });
       const slowGadget = new SlowGadget();
       slowGadget.timeoutMs = 2000; // Override with much longer timeout
       registry.registerByClass(slowGadget);
@@ -848,7 +860,7 @@ describe("GadgetExecutor", () => {
     });
 
     it("gadget with timeoutMs=0 disables timeout", async () => {
-      const executorWithTimeout = new GadgetExecutor(registry, undefined, undefined, 50);
+      const executorWithTimeout = new GadgetExecutor({ registry, defaultGadgetTimeoutMs: 50 });
       const slowGadget = new SlowGadget();
       slowGadget.timeoutMs = 0; // Explicitly disable timeout
       registry.registerByClass(slowGadget);
@@ -871,7 +883,7 @@ describe("GadgetExecutor", () => {
     });
 
     it("fast gadgets complete successfully with timeout configured", async () => {
-      const executorWithTimeout = new GadgetExecutor(registry, undefined, undefined, 100);
+      const executorWithTimeout = new GadgetExecutor({ registry, defaultGadgetTimeoutMs: 100 });
       registry.registerByClass(new FastGadget());
 
       const call: ParsedGadgetCall = {
@@ -913,7 +925,7 @@ describe("GadgetExecutor", () => {
     });
 
     it("timeout does not interfere with parameter validation", async () => {
-      const executorWithTimeout = new GadgetExecutor(registry, undefined, undefined, 50);
+      const executorWithTimeout = new GadgetExecutor({ registry, defaultGadgetTimeoutMs: 50 });
       registry.registerByClass(new SlowGadget());
 
       const call: ParsedGadgetCall = {
@@ -936,17 +948,10 @@ describe("GadgetExecutor", () => {
       registry.registerByClass(slowGadget);
 
       // Create executor with subagentConfig that provides a longer timeout
-      const executorWithSubagentConfig = new GadgetExecutor(
+      const executorWithSubagentConfig = new GadgetExecutor({
         registry,
-        undefined, // requestHumanInput
-        undefined, // logger
-        undefined, // defaultGadgetTimeoutMs
-        undefined, // errorFormatterOptions
-        undefined, // client
-        undefined, // mediaStore
-        undefined, // agentConfig
-        { SlowGadget: { timeoutMs: 500 } }, // subagentConfig - long enough to complete
-      );
+        subagentConfig: { SlowGadget: { timeoutMs: 500 } }, // subagentConfig - long enough to complete
+      });
 
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
@@ -970,17 +975,11 @@ describe("GadgetExecutor", () => {
       registry.registerByClass(new SlowGadget());
 
       // Create executor with short default timeout but longer subagentConfig timeout
-      const executorWithSubagentConfig = new GadgetExecutor(
+      const executorWithSubagentConfig = new GadgetExecutor({
         registry,
-        undefined, // requestHumanInput
-        undefined, // logger
-        30, // defaultGadgetTimeoutMs - would timeout
-        undefined, // errorFormatterOptions
-        undefined, // client
-        undefined, // mediaStore
-        undefined, // agentConfig
-        { SlowGadget: { timeoutMs: 500 } }, // subagentConfig - long enough to complete
-      );
+        defaultGadgetTimeoutMs: 30, // would timeout
+        subagentConfig: { SlowGadget: { timeoutMs: 500 } }, // subagentConfig - long enough to complete
+      });
 
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
@@ -1007,17 +1006,10 @@ describe("GadgetExecutor", () => {
       registry.registerByClass(slowGadget);
 
       // Create executor with subagentConfig that has other options but no timeout
-      const executorWithSubagentConfig = new GadgetExecutor(
+      const executorWithSubagentConfig = new GadgetExecutor({
         registry,
-        undefined, // requestHumanInput
-        undefined, // logger
-        undefined, // defaultGadgetTimeoutMs
-        undefined, // errorFormatterOptions
-        undefined, // client
-        undefined, // mediaStore
-        undefined, // agentConfig
-        { SlowGadget: { model: "sonnet" } }, // subagentConfig without timeout
-      );
+        subagentConfig: { SlowGadget: { model: "sonnet" } }, // subagentConfig without timeout
+      });
 
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",
@@ -1040,17 +1032,11 @@ describe("GadgetExecutor", () => {
       registry.registerByClass(slowGadget);
 
       // Create executor with subagentConfig that disables timeout
-      const executorWithSubagentConfig = new GadgetExecutor(
+      const executorWithSubagentConfig = new GadgetExecutor({
         registry,
-        undefined, // requestHumanInput
-        undefined, // logger
-        30, // defaultGadgetTimeoutMs - would timeout
-        undefined, // errorFormatterOptions
-        undefined, // client
-        undefined, // mediaStore
-        undefined, // agentConfig
-        { SlowGadget: { timeoutMs: 0 } }, // subagentConfig - disable timeout
-      );
+        defaultGadgetTimeoutMs: 30, // would timeout
+        subagentConfig: { SlowGadget: { timeoutMs: 0 } }, // subagentConfig - disable timeout
+      });
 
       const call: ParsedGadgetCall = {
         gadgetName: "SlowGadget",

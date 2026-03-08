@@ -279,29 +279,29 @@ export class StreamProcessor {
       argPrefix: options.gadgetArgPrefix,
     });
 
-    this.executor = new GadgetExecutor(
-      options.registry,
-      options.requestHumanInput,
-      this.logger.getSubLogger({ name: "executor" }),
-      options.defaultGadgetTimeoutMs,
-      { argPrefix: options.gadgetArgPrefix },
-      options.client,
-      options.mediaStore,
-      options.agentConfig,
-      options.subagentConfig,
+    this.executor = new GadgetExecutor({
+      registry: options.registry,
+      requestHumanInput: options.requestHumanInput,
+      logger: this.logger.getSubLogger({ name: "executor" }),
+      defaultGadgetTimeoutMs: options.defaultGadgetTimeoutMs,
+      errorFormatterOptions: { argPrefix: options.gadgetArgPrefix },
+      client: options.client,
+      mediaStore: options.mediaStore,
+      agentConfig: options.agentConfig,
+      subagentConfig: options.subagentConfig,
       // Tree context for gadget execution
-      options.tree,
-      options.parentNodeId,
-      options.baseDepth,
+      tree: options.tree,
+      parentNodeId: options.parentNodeId,
+      baseDepth: options.baseDepth,
       // Parent observer hooks for subagent visibility
-      options.parentObservers,
+      parentObservers: options.parentObservers,
       // Current agent's observers for subagent inheritance
-      options.hooks?.observers,
+      currentObservers: options.hooks?.observers,
       // Shared rate limit tracker for coordinated throttling across subagents
-      options.rateLimitTracker,
+      rateLimitTracker: options.rateLimitTracker,
       // Shared retry config for consistent backoff behavior across subagents
-      options.retryConfig,
-    );
+      retryConfig: options.retryConfig,
+    });
   }
 
   /**
