@@ -45,15 +45,19 @@ describe("config-resolution", () => {
 
     describe("legacy gadget field", () => {
       it("returns legacy gadget array when gadgets is not present", () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         const section = { gadget: ["ReadFile", "WriteFile"] };
         const result = resolveGadgets(section, [], "agent");
         expect(result).toEqual(["ReadFile", "WriteFile"]);
+        warnSpy.mockRestore();
       });
 
       it("replaces inherited gadgets with legacy gadget array", () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         const section = { gadget: ["WriteFile"] };
         const result = resolveGadgets(section, ["ReadFile"], "agent");
         expect(result).toEqual(["WriteFile"]);
+        warnSpy.mockRestore();
       });
 
       it("emits deprecation warning for legacy gadget field", () => {
@@ -79,9 +83,12 @@ describe("config-resolution", () => {
       });
 
       it("prefers gadgets (plural) over legacy gadget when both present (conflict throws)", () => {
-        // Both together is a conflict, handled in conflict test
-        // This just confirms gadgets takes precedence in the full-replacement path
-        // by checking the code path - the actual conflict check is tested separately
+        // When only gadgets (plural) is set, the legacy path is skipped entirely
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const result = resolveGadgets({ gadgets: ["X"] }, [], "agent");
+        expect(result).toEqual(["X"]);
+        expect(warnSpy).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
       });
     });
 
@@ -379,11 +386,8 @@ describe("config-resolution", () => {
           child: { inherits: "base" },
         } as CLIConfig;
         const result = resolveInheritance(config);
-        // gadgets should not be present if length is 0
         const childObj = result.child as Record<string, unknown>;
-        if ("gadgets" in childObj) {
-          expect(childObj.gadgets).not.toHaveLength(0);
-        }
+        expect(childObj).not.toHaveProperty("gadgets");
       });
     });
 
