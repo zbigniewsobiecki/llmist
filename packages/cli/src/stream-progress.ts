@@ -1,15 +1,10 @@
 import chalk from "chalk";
 import type { ModelRegistry, TokenUsage } from "llmist";
 import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
+import { CallStatsTracker } from "./progress/call-stats-tracker.js";
 import { GadgetTracker } from "./progress/gadget-tracker.js";
 import { NestedOperationTracker } from "./progress/nested-operation-tracker.js";
-import {
-  formatCost,
-  formatGadgetLine,
-  formatLLMCallLine,
-  formatTokens,
-  stripProviderPrefix,
-} from "./ui/formatters.js";
+import { formatCost, formatGadgetLine, formatLLMCallLine, formatTokens } from "./ui/formatters.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_DELAY_MS = 500; // Don't show spinner for fast responses
@@ -32,27 +27,8 @@ export class StreamProgress {
   private hasRendered = false;
   private lastRenderLineCount = 0; // Track lines rendered for multi-line clearing
 
-  // Current call stats (streaming mode)
-  private mode: ProgressMode = "cumulative";
-  private model = "";
-  private callStartTime = Date.now();
-  private callInputTokens = 0;
-  private callInputTokensEstimated = true;
-  private callOutputTokens = 0;
-  private callOutputTokensEstimated = true;
-  private callOutputChars = 0;
-  // Cache token tracking for live cost estimation during streaming
-  private callCachedInputTokens = 0;
-  private callCacheCreationInputTokens = 0;
-  // Reasoning token tracking for live cost estimation during streaming
-  private callReasoningTokens = 0;
-
-  // Cumulative stats (cumulative mode)
-  private totalStartTime = Date.now();
-  private totalTokens = 0;
-  private totalCost = 0;
-  private iterations = 0;
-  private currentIteration = 0;
+  // LLM call stats tracker (single responsibility for all call metrics)
+  private callStatsTracker: CallStatsTracker;
 
   // In-flight gadget tracking for concurrent status display
   private gadgetTracker = new GadgetTracker();
@@ -63,10 +39,72 @@ export class StreamProgress {
   constructor(
     private readonly target: NodeJS.WritableStream,
     private readonly isTTY: boolean,
-    private readonly modelRegistry?: ModelRegistry,
+    modelRegistry?: ModelRegistry,
   ) {
+    this.callStatsTracker = new CallStatsTracker(modelRegistry);
     this.nestedOperationTracker = new NestedOperationTracker(modelRegistry);
   }
+
+  // ===== Delegating accessors for test compatibility =====
+  // Tests access these via (progress as any).fieldName
+
+  private get mode(): ProgressMode {
+    return this.callStatsTracker.mode;
+  }
+
+  private get model(): string {
+    return this.callStatsTracker.model;
+  }
+
+  private get callStartTime(): number {
+    return this.callStatsTracker.callStartTime;
+  }
+
+  private get callInputTokens(): number {
+    return this.callStatsTracker.callInputTokens;
+  }
+
+  private get callInputTokensEstimated(): boolean {
+    return this.callStatsTracker.callInputTokensEstimated;
+  }
+
+  private get callOutputTokens(): number {
+    return this.callStatsTracker.callOutputTokens;
+  }
+
+  private get callOutputTokensEstimated(): boolean {
+    return this.callStatsTracker.callOutputTokensEstimated;
+  }
+
+  private get callOutputChars(): number {
+    return this.callStatsTracker.callOutputChars;
+  }
+
+  private set callOutputChars(value: number) {
+    this.callStatsTracker.callOutputChars = value;
+  }
+
+  private get totalStartTime(): number {
+    return this.callStatsTracker.totalStartTime;
+  }
+
+  private get totalTokens(): number {
+    return this.callStatsTracker.totalTokens;
+  }
+
+  private get totalCost(): number {
+    return this.callStatsTracker.totalCost;
+  }
+
+  private get iterations(): number {
+    return this.callStatsTracker.iterations;
+  }
+
+  private get currentIteration(): number {
+    return this.callStatsTracker.currentIteration;
+  }
+
+  // ===== End delegating accessors =====
 
   /**
    * Expose the underlying in-flight gadgets map for compatibility.
@@ -284,19 +322,7 @@ export class StreamProgress {
    *   via setInputTokens() during streaming if available.
    */
   startCall(model: string, estimatedInputTokens?: number): void {
-    this.mode = "streaming";
-    this.model = model;
-    this.callStartTime = Date.now();
-    this.currentIteration++;
-    this.callInputTokens = estimatedInputTokens ?? 0;
-    this.callInputTokensEstimated = true;
-    this.callOutputTokens = 0;
-    this.callOutputTokensEstimated = true;
-    this.callOutputChars = 0;
-    // Reset cache and reasoning tracking for new call
-    this.callCachedInputTokens = 0;
-    this.callCacheCreationInputTokens = 0;
-    this.callReasoningTokens = 0;
+    this.callStatsTracker.startCall(model, estimatedInputTokens);
     this.start();
   }
 
@@ -305,34 +331,8 @@ export class StreamProgress {
    * @param usage - Final token usage from the call (including cached tokens if available)
    */
   endCall(usage?: TokenUsage): void {
-    this.iterations++;
-    if (usage) {
-      this.totalTokens += usage.totalTokens;
-
-      // Calculate and accumulate cost if model registry is available
-      if (this.modelRegistry && this.model) {
-        try {
-          // Strip provider prefix if present (e.g., "openai:gpt-5-nano" -> "gpt-5-nano")
-          const modelName = stripProviderPrefix(this.model);
-
-          const cost = this.modelRegistry.estimateCost(
-            modelName,
-            usage.inputTokens,
-            usage.outputTokens,
-            usage.cachedInputTokens ?? 0,
-            usage.cacheCreationInputTokens ?? 0,
-            usage.reasoningTokens ?? 0,
-          );
-          if (cost) {
-            this.totalCost += cost.totalCost;
-          }
-        } catch {
-          // Ignore errors (e.g., unknown model) - just don't add to cost
-        }
-      }
-    }
+    this.callStatsTracker.endCall(usage);
     this.pause();
-    this.mode = "cumulative";
   }
 
   /**
@@ -340,9 +340,7 @@ export class StreamProgress {
    * Called when gadgets complete to include their costs (direct + subagent) in the total.
    */
   addGadgetCost(cost: number): void {
-    if (cost > 0) {
-      this.totalCost += cost;
-    }
+    this.callStatsTracker.addGadgetCost(cost);
   }
 
   /**
@@ -353,12 +351,7 @@ export class StreamProgress {
    *   Display shows ~ prefix only when estimated=true.
    */
   setInputTokens(tokens: number, estimated = false): void {
-    // Don't overwrite actual count with a new estimate
-    if (estimated && !this.callInputTokensEstimated) {
-      return;
-    }
-    this.callInputTokens = tokens;
-    this.callInputTokensEstimated = estimated;
+    this.callStatsTracker.setInputTokens(tokens, estimated);
   }
 
   /**
@@ -369,12 +362,7 @@ export class StreamProgress {
    *   Display shows ~ prefix only when estimated=true.
    */
   setOutputTokens(tokens: number, estimated = false): void {
-    // Don't overwrite actual count with a new estimate
-    if (estimated && !this.callOutputTokensEstimated) {
-      return;
-    }
-    this.callOutputTokens = tokens;
-    this.callOutputTokensEstimated = estimated;
+    this.callStatsTracker.setOutputTokens(tokens, estimated);
   }
 
   /**
@@ -384,8 +372,7 @@ export class StreamProgress {
    * @param cacheCreationInputTokens - Number of tokens written to cache (more expensive)
    */
   setCachedTokens(cachedInputTokens: number, cacheCreationInputTokens: number): void {
-    this.callCachedInputTokens = cachedInputTokens;
-    this.callCacheCreationInputTokens = cacheCreationInputTokens;
+    this.callStatsTracker.setCachedTokens(cachedInputTokens, cacheCreationInputTokens);
   }
 
   /**
@@ -394,7 +381,7 @@ export class StreamProgress {
    * @param reasoningTokens - Number of reasoning/thinking tokens (subset of outputTokens)
    */
   setReasoningTokens(reasoningTokens: number): void {
-    this.callReasoningTokens = reasoningTokens;
+    this.callStatsTracker.setReasoningTokens(reasoningTokens);
   }
 
   /**
@@ -402,8 +389,7 @@ export class StreamProgress {
    * @returns Elapsed time in seconds with 1 decimal place
    */
   getTotalElapsedSeconds(): number {
-    if (this.totalStartTime === 0) return 0;
-    return Number(((Date.now() - this.totalStartTime) / 1000).toFixed(1));
+    return this.callStatsTracker.getTotalElapsedSeconds();
   }
 
   /**
@@ -411,7 +397,7 @@ export class StreamProgress {
    * @returns Elapsed time in seconds with 1 decimal place
    */
   getCallElapsedSeconds(): number {
-    return Number(((Date.now() - this.callStartTime) / 1000).toFixed(1));
+    return this.callStatsTracker.getCallElapsedSeconds();
   }
 
   /**
@@ -435,7 +421,7 @@ export class StreamProgress {
    * @param totalChars - Total accumulated character count
    */
   update(totalChars: number): void {
-    this.callOutputChars = totalChars;
+    this.callStatsTracker.callOutputChars = totalChars;
   }
 
   private render(): void {
@@ -635,7 +621,6 @@ export class StreamProgress {
 
     // ACTIVE STREAMS SECTION: Show all actively streaming LLM calls at bottom
     // Ordered from innermost (top) to outermost (bottom) - like a call stack
-    // This shows nested streams first, then the main agent line below them
 
     // Nested active streams FIRST (they are "inside" the main agent context)
     for (const stream of activeNestedStreams) {
@@ -725,64 +710,18 @@ export class StreamProgress {
       iteration: this.currentIteration,
       model: this.model ?? "",
       inputTokens: this.callInputTokens,
-      cachedInputTokens: this.callCachedInputTokens,
+      cachedInputTokens: this.callStatsTracker.callCachedInputTokens,
       outputTokens: outTokens,
       elapsedSeconds: (Date.now() - this.callStartTime) / 1000,
-      cost: this.calculateCurrentCallCost(outTokens),
+      cost: this.callStatsTracker.calculateCurrentCallCost(outTokens),
       isStreaming: true,
       spinner,
-      contextPercent: this.getContextUsagePercent(),
+      contextPercent: this.callStatsTracker.getContextUsagePercent(),
       estimated: {
         input: this.callInputTokensEstimated,
         output: this.callOutputTokensEstimated,
       },
     });
-  }
-
-  /**
-   * Calculates live cost estimate for the current streaming call.
-   * Uses current input/output tokens and cached token counts.
-   */
-  private calculateCurrentCallCost(outputTokens: number): number {
-    if (!this.modelRegistry || !this.model) return 0;
-
-    try {
-      // Strip provider prefix if present (e.g., "anthropic:claude-sonnet-4-5" -> "claude-sonnet-4-5")
-      const modelName = stripProviderPrefix(this.model);
-
-      const cost = this.modelRegistry.estimateCost(
-        modelName,
-        this.callInputTokens,
-        outputTokens,
-        this.callCachedInputTokens,
-        this.callCacheCreationInputTokens,
-        this.callReasoningTokens,
-      );
-
-      return cost?.totalCost ?? 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  /**
-   * Calculates context window usage percentage.
-   * Returns null if model is unknown or context window unavailable.
-   */
-  private getContextUsagePercent(): number | null {
-    if (!this.modelRegistry || !this.model || this.callInputTokens === 0) {
-      return null;
-    }
-
-    // Strip provider prefix if present (e.g., "anthropic:claude-sonnet-4-5" -> "claude-sonnet-4-5")
-    const modelName = stripProviderPrefix(this.model);
-
-    const limits = this.modelRegistry.getModelLimits(modelName);
-    if (!limits?.contextWindow) {
-      return null;
-    }
-
-    return (this.callInputTokens / limits.contextWindow) * 100;
   }
 
   /**
@@ -844,7 +783,7 @@ export class StreamProgress {
    * Returns the total accumulated cost across all calls.
    */
   getTotalCost(): number {
-    return this.totalCost;
+    return this.callStatsTracker.totalCost;
   }
 
   /**
