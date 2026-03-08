@@ -277,7 +277,7 @@ export {
   TaskCompletionSignal,
   TimeoutException,
 } from "./gadgets/exceptions.js";
-export { GadgetExecutor } from "./gadgets/executor.js";
+export { GadgetExecutor, type GadgetExecutorOptions } from "./gadgets/executor.js";
 export { AbstractGadget } from "./gadgets/gadget.js";
 // Response and media output helpers for gadgets
 export {

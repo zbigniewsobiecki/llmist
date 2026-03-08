@@ -54,38 +54,104 @@ function getHostExportsInternal(): HostExports {
   };
 }
 
+/**
+ * Options for constructing a GadgetExecutor.
+ */
+export interface GadgetExecutorOptions {
+  /** Gadget registry used to look up and execute gadgets */
+  registry: GadgetRegistry;
+
+  /** Optional callback to request human input during gadget execution */
+  requestHumanInput?: (question: string) => Promise<string>;
+
+  /** Logger instance; defaults to a new "llmist:executor" logger if omitted */
+  logger?: Logger<ILogObj>;
+
+  /** Default timeout in milliseconds applied to all gadgets without an explicit timeout */
+  defaultGadgetTimeoutMs?: number;
+
+  /** Options for formatting gadget execution errors */
+  errorFormatterOptions?: ErrorFormatterOptions;
+
+  /** LLMist client made available to gadgets via ExecutionContext.llmist */
+  client?: LLMist;
+
+  /** Media store for persisting gadget media outputs */
+  mediaStore?: MediaStore;
+
+  /** Parent agent configuration inherited by subagents */
+  agentConfig?: AgentContextConfig;
+
+  /** Per-gadget configuration overrides (e.g., timeoutMs, model) */
+  subagentConfig?: SubagentConfigMap;
+
+  /** Execution tree for tracking LLM calls and gadget executions */
+  tree?: ExecutionTree;
+
+  /** Parent node ID in the execution tree */
+  parentNodeId?: NodeId | null;
+
+  /** Base depth for nodes created during execution */
+  baseDepth?: number;
+
+  /**
+   * Parent agent's observer hooks for subagent visibility.
+   * When a subagent uses withParentContext(ctx), these observers are also called
+   * for gadget events in addition to the subagent's own hooks.
+   */
+  parentObservers?: Observers;
+
+  /**
+   * Current agent's observers.
+   * Passed to ExecutionContext.parentObservers so gadgets creating subagents
+   * can inherit them via withParentContext(ctx).
+   */
+  currentObservers?: Observers;
+
+  /** Shared rate limit tracker for coordinated throttling across subagents */
+  rateLimitTracker?: RateLimitTracker;
+
+  /** Shared retry config for consistent backoff behavior across subagents */
+  retryConfig?: ResolvedRetryConfig;
+}
+
 export class GadgetExecutor {
+  private readonly registry: GadgetRegistry;
+  private readonly requestHumanInput?: (question: string) => Promise<string>;
+  private readonly defaultGadgetTimeoutMs?: number;
+  private readonly client?: LLMist;
+  private readonly mediaStore?: MediaStore;
+  private readonly agentConfig?: AgentContextConfig;
+  private readonly subagentConfig?: SubagentConfigMap;
+  private readonly tree?: ExecutionTree;
+  private readonly parentNodeId?: NodeId | null;
+  private readonly baseDepth?: number;
+  private readonly parentObservers?: Observers;
+  private readonly currentObservers?: Observers;
+  private readonly rateLimitTracker?: RateLimitTracker;
+  private readonly retryConfig?: ResolvedRetryConfig;
   private readonly logger: Logger<ILogObj>;
   private readonly errorFormatter: GadgetExecutionErrorFormatter;
   private readonly argPrefix: string;
 
-  constructor(
-    private readonly registry: GadgetRegistry,
-    private readonly requestHumanInput?: (question: string) => Promise<string>,
-    logger?: Logger<ILogObj>,
-    private readonly defaultGadgetTimeoutMs?: number,
-    errorFormatterOptions?: ErrorFormatterOptions,
-    private readonly client?: LLMist,
-    private readonly mediaStore?: MediaStore,
-    private readonly agentConfig?: AgentContextConfig,
-    private readonly subagentConfig?: SubagentConfigMap,
-    // Execution Tree context for gadget execution
-    private readonly tree?: ExecutionTree,
-    private readonly parentNodeId?: NodeId | null,
-    private readonly baseDepth?: number,
-    // Parent observer hooks for subagent visibility
-    private readonly parentObservers?: Observers,
-    // Current agent's observers - passed to ExecutionContext.parentObservers
-    // so gadgets creating subagents can inherit them via withParentContext(ctx)
-    private readonly currentObservers?: Observers,
-    // Shared rate limit tracker for coordinated throttling across subagents
-    private readonly rateLimitTracker?: RateLimitTracker,
-    // Shared retry config for consistent backoff behavior across subagents
-    private readonly retryConfig?: ResolvedRetryConfig,
-  ) {
-    this.logger = logger ?? createLogger({ name: "llmist:executor" });
-    this.errorFormatter = new GadgetExecutionErrorFormatter(errorFormatterOptions);
-    this.argPrefix = errorFormatterOptions?.argPrefix ?? GADGET_ARG_PREFIX;
+  constructor(options: GadgetExecutorOptions) {
+    this.registry = options.registry;
+    this.requestHumanInput = options.requestHumanInput;
+    this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
+    this.client = options.client;
+    this.mediaStore = options.mediaStore;
+    this.agentConfig = options.agentConfig;
+    this.subagentConfig = options.subagentConfig;
+    this.tree = options.tree;
+    this.parentNodeId = options.parentNodeId;
+    this.baseDepth = options.baseDepth;
+    this.parentObservers = options.parentObservers;
+    this.currentObservers = options.currentObservers;
+    this.rateLimitTracker = options.rateLimitTracker;
+    this.retryConfig = options.retryConfig;
+    this.logger = options.logger ?? createLogger({ name: "llmist:executor" });
+    this.errorFormatter = new GadgetExecutionErrorFormatter(options.errorFormatterOptions);
+    this.argPrefix = options.errorFormatterOptions?.argPrefix ?? GADGET_ARG_PREFIX;
   }
 
   /**
