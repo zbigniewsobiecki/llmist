@@ -5,3 +5,4 @@ export {
   type NestedGadgetEntry,
   NestedOperationTracker,
 } from "./nested-operation-tracker.js";
+export { ProgressRenderer } from "./progress-renderer.js";
