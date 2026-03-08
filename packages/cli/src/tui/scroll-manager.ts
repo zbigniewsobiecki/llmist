@@ -139,15 +139,13 @@ export class ScrollManager {
   /**
    * Apply bottom-alignment offset to all blocks and handle auto-scroll.
    * Called after rebuildBlocks() and repositionBlocks().
-   *
-   * @param applyOffset - Callback to apply vertical offset to each root tree
    */
-  applyBottomAlignmentAndScroll(applyOffset: (rootId: string, offset: number) => void): void {
+  applyBottomAlignmentAndScroll(): void {
     const offset = this.getBottomAlignmentOffset();
 
     if (offset > 0) {
       for (const rootId of this.accessors.getRootIds()) {
-        applyOffset(rootId, offset);
+        this.applyOffsetToNodeTree(rootId, offset);
       }
     }
 
@@ -167,9 +165,7 @@ export class ScrollManager {
     for (const rootId of this.accessors.getRootIds()) {
       top = repositionTree(rootId, top);
     }
-    this.applyBottomAlignmentAndScroll((rootId, offset) => {
-      this.applyOffsetToNodeTree(rootId, offset);
-    });
+    this.applyBottomAlignmentAndScroll();
   }
 
   // ───────────────────────────────────────────────────────────────────────────
