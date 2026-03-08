@@ -22,7 +22,7 @@ import {
 } from "../ui/block-formatters.js";
 import { formatUserMessage, renderMarkdown } from "../ui/formatters.js";
 import { type CompleteGadgetOptions, NodeStore } from "./node-store.js";
-import { ScrollManager } from "./scroll-manager.js";
+import { getBlockHeight, ScrollManager } from "./scroll-manager.js";
 import type {
   BlockNode,
   ContentFilterMode,
@@ -521,7 +521,7 @@ export class BlockRenderer {
       }
 
       // Calculate height of this block
-      const height = this.getBlockHeight(block);
+      const height = getBlockHeight(block);
       top += height;
     }
 
@@ -784,14 +784,6 @@ export class BlockRenderer {
   }
 
   /**
-   * Get the height (in lines) of a block.
-   */
-  private getBlockHeight(block: SelectableBlock): number {
-    const content = block.box.getContent();
-    return content.split("\n").length;
-  }
-
-  /**
    * Update a single block (after state change).
    */
   private updateBlock(nodeId: string): void {
@@ -802,7 +794,7 @@ export class BlockRenderer {
     const isSelected = this.selectableIds[this.selectedIndex] === nodeId;
     const content = this.formatBlockContent(node, isSelected, block.expanded);
 
-    const oldHeight = this.getBlockHeight(block);
+    const oldHeight = getBlockHeight(block);
     block.box.setContent(content);
     const newHeight = content.split("\n").length;
     block.box.height = newHeight;
@@ -850,7 +842,7 @@ export class BlockRenderer {
     const block = this.blocks.get(nodeId);
     if (block) {
       block.box.top = top;
-      const height = this.getBlockHeight(block);
+      const height = getBlockHeight(block);
       top += height;
     }
 
@@ -878,34 +870,11 @@ export class BlockRenderer {
 
   /**
    * Apply bottom-alignment offset to all blocks and handle auto-scroll.
-   * Delegates to ScrollManager, providing a callback to apply the offset to each tree.
+   * Delegates to ScrollManager.
    * Called after rebuildBlocks() and repositionBlocks().
    */
   private applyBottomAlignmentAndScroll(): void {
-    this.scrollManager.applyBottomAlignmentAndScroll((rootId, offset) => {
-      this.applyOffsetToNodeTree(rootId, offset);
-    });
-  }
-
-  /**
-   * Apply vertical offset to a node tree (for bottom alignment).
-   */
-  private applyOffsetToNodeTree(nodeId: string, offset: number): void {
-    const node = this.getNode(nodeId);
-    if (!node) return;
-
-    // Only apply offset to visible nodes (those with blocks)
-    const block = this.blocks.get(nodeId);
-    if (block) {
-      block.box.top = (block.box.top as number) + offset;
-    }
-
-    // Always traverse children even if parent is hidden
-    if ("children" in node) {
-      for (const childId of node.children) {
-        this.applyOffsetToNodeTree(childId, offset);
-      }
-    }
+    this.scrollManager.applyBottomAlignmentAndScroll();
   }
 
   /**
