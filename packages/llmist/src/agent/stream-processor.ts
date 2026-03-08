@@ -551,31 +551,10 @@ export class StreamProcessor {
           gadgetName: call.gadgetName,
           invocationId: call.invocationId,
         });
-        this.dependencyResolver.markFailed(call.invocationId);
         const errorMessage = `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`;
-        const skipEvent: GadgetSkippedEvent = {
-          type: "gadget_skipped",
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-          parameters: call.parameters ?? {},
-          failedDependency: call.invocationId,
-          failedDependencyError: errorMessage,
-        };
-        yield skipEvent;
-
-        // Notify onGadgetSkipped observers (AWAITED for proper ordering)
-        await notifyGadgetSkipped({
-          tree: this.tree,
-          hooks: this.hooks.observers,
-          parentObservers: this.parentObservers,
-          logger: this.logger,
-          iteration: this.iteration,
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
-          parameters: call.parameters ?? {},
-          failedDependency: call.invocationId,
-          failedDependencyError: errorMessage,
-        });
+        for await (const evt of this.emitGadgetSkipEvents(call, call.invocationId, errorMessage)) {
+          yield evt;
+        }
         return;
       }
 
@@ -1002,9 +981,6 @@ export class StreamProcessor {
     }
 
     if (action.action === "skip") {
-      // Mark as failed so downstream dependents also skip
-      this.dependencyResolver.markFailed(call.invocationId);
-
       // Skip gadget in execution tree
       if (this.tree) {
         const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
@@ -1013,30 +989,10 @@ export class StreamProcessor {
         }
       }
 
-      // Emit skip event (for stream consumers)
-      const skipEvent: GadgetSkippedEvent = {
-        type: "gadget_skipped",
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        parameters: call.parameters ?? {},
-        failedDependency: failedDep,
-        failedDependencyError: depError,
-      };
-      events.push(skipEvent);
-
-      // Notify onGadgetSkipped observers (AWAITED for proper ordering)
-      await notifyGadgetSkipped({
-        tree: this.tree,
-        hooks: this.hooks.observers,
-        parentObservers: this.parentObservers,
-        logger: this.logger,
-        iteration: this.iteration,
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        parameters: call.parameters ?? {},
-        failedDependency: failedDep,
-        failedDependencyError: depError,
-      });
+      // Emit skip event and notify observers (also marks as failed)
+      for await (const evt of this.emitGadgetSkipEvents(call, failedDep, depError)) {
+        events.push(evt);
+      }
 
       this.logger.info("Gadget skipped due to failed dependency", {
         gadgetName: call.gadgetName,
@@ -1105,8 +1061,6 @@ export class StreamProcessor {
         currentCount: this.gadgetStartedCount,
       });
 
-      this.dependencyResolver.markFailed(call.invocationId);
-
       // Mark skipped in execution tree
       if (this.tree) {
         const gadgetNode = this.tree.getNodeByInvocationId(call.invocationId);
@@ -1120,29 +1074,8 @@ export class StreamProcessor {
         }
       }
 
-      const skipEvent: GadgetSkippedEvent = {
-        type: "gadget_skipped",
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        parameters: call.parameters ?? {},
-        failedDependency: "maxGadgetsPerResponse",
-        failedDependencyError: errorMessage,
-      };
-      yield skipEvent;
-
-      // Notify onGadgetSkipped observers (AWAITED for proper ordering)
-      await notifyGadgetSkipped({
-        tree: this.tree,
-        hooks: this.hooks.observers,
-        parentObservers: this.parentObservers,
-        logger: this.logger,
-        iteration: this.iteration,
-        gadgetName: call.gadgetName,
-        invocationId: call.invocationId,
-        parameters: call.parameters ?? {},
-        failedDependency: "maxGadgetsPerResponse",
-        failedDependencyError: errorMessage,
-      });
+      // Emit skip event and notify observers (also marks as failed)
+      yield* this.emitGadgetSkipEvents(call, "maxGadgetsPerResponse", errorMessage);
 
       return true; // Limit exceeded, skip this gadget
     }
@@ -1290,33 +1223,50 @@ export class StreamProcessor {
         });
 
         // Mark as failed and emit skip event
-        this.dependencyResolver.markFailed(invocationId);
-        const skipEvent: GadgetSkippedEvent = {
-          type: "gadget_skipped",
-          gadgetName: call.gadgetName,
-          invocationId,
-          parameters: call.parameters ?? {},
-          failedDependency: missingDeps[0],
-          failedDependencyError: errorMessage,
-        };
-        yield skipEvent;
-
-        // Notify onGadgetSkipped observers (AWAITED for proper ordering)
-        await notifyGadgetSkipped({
-          tree: this.tree,
-          hooks: this.hooks.observers,
-          parentObservers: this.parentObservers,
-          logger: this.logger,
-          iteration: this.iteration,
-          gadgetName: call.gadgetName,
-          invocationId,
-          parameters: call.parameters ?? {},
-          failedDependency: missingDeps[0],
-          failedDependencyError: errorMessage,
-        });
+        yield* this.emitGadgetSkipEvents(call, missingDeps[0], errorMessage);
       }
       this.dependencyResolver.clearPending();
     }
+  }
+
+  /**
+   * Emit gadget skip events: marks the gadget as failed, yields a GadgetSkippedEvent,
+   * and notifies onGadgetSkipped observers.
+   *
+   * @param call - The parsed gadget call being skipped
+   * @param failedDep - The dependency (or reason) that caused the skip
+   * @param errorMessage - Human-readable error message describing why the gadget was skipped
+   */
+  private async *emitGadgetSkipEvents(
+    call: ParsedGadgetCall,
+    failedDep: string,
+    errorMessage: string,
+  ): AsyncGenerator<StreamEvent> {
+    this.dependencyResolver.markFailed(call.invocationId);
+
+    const skipEvent: GadgetSkippedEvent = {
+      type: "gadget_skipped",
+      gadgetName: call.gadgetName,
+      invocationId: call.invocationId,
+      parameters: call.parameters ?? {},
+      failedDependency: failedDep,
+      failedDependencyError: errorMessage,
+    };
+    yield skipEvent;
+
+    // Notify onGadgetSkipped observers (AWAITED for proper ordering)
+    await notifyGadgetSkipped({
+      tree: this.tree,
+      hooks: this.hooks.observers,
+      parentObservers: this.parentObservers,
+      logger: this.logger,
+      iteration: this.iteration,
+      gadgetName: call.gadgetName,
+      invocationId: call.invocationId,
+      parameters: call.parameters ?? {},
+      failedDependency: failedDep,
+      failedDependencyError: errorMessage,
+    });
   }
 
   /**
