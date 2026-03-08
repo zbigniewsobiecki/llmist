@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import type { ModelRegistry, TokenUsage } from "llmist";
 import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
+import { GadgetTracker } from "./progress/gadget-tracker.js";
 import {
   formatCost,
   formatGadgetLine,
@@ -53,16 +54,7 @@ export class StreamProgress {
   private currentIteration = 0;
 
   // In-flight gadget tracking for concurrent status display
-  private inFlightGadgets: Map<
-    string,
-    {
-      name: string;
-      params?: Record<string, unknown>;
-      startTime: number;
-      completed?: boolean;
-      completedTime?: number;
-    }
-  > = new Map();
+  private gadgetTracker = new GadgetTracker();
 
   // Nested agent tracking for hierarchical subagent display
   private nestedAgents: Map<
@@ -111,11 +103,19 @@ export class StreamProgress {
   ) {}
 
   /**
+   * Expose the underlying in-flight gadgets map for compatibility.
+   * @internal Used by tests and render logic to access gadget state directly.
+   */
+  private get inFlightGadgets() {
+    return this.gadgetTracker.getMap();
+  }
+
+  /**
    * Add a gadget to the in-flight tracking (called when gadget_call event received).
    * Triggers re-render to show the gadget in the status display.
    */
   addGadget(invocationId: string, name: string, params?: Record<string, unknown>): void {
-    this.inFlightGadgets.set(invocationId, { name, params, startTime: Date.now() });
+    this.gadgetTracker.addGadget(invocationId, name, params);
     // Re-render immediately to show the new gadget
     if (this.isRunning && this.isTTY) {
       this.render();
@@ -127,7 +127,7 @@ export class StreamProgress {
    * Triggers re-render to update the status display.
    */
   removeGadget(invocationId: string): void {
-    this.inFlightGadgets.delete(invocationId);
+    this.gadgetTracker.removeGadget(invocationId);
     // Re-render immediately to remove the gadget from display
     if (this.isRunning && this.isTTY) {
       this.render();
@@ -138,14 +138,14 @@ export class StreamProgress {
    * Check if there are any gadgets currently in flight.
    */
   hasInFlightGadgets(): boolean {
-    return this.inFlightGadgets.size > 0;
+    return this.gadgetTracker.hasInFlightGadgets();
   }
 
   /**
    * Get a gadget by ID (for accessing name, params, etc.).
    */
   getGadget(invocationId: string) {
-    return this.inFlightGadgets.get(invocationId);
+    return this.gadgetTracker.getGadget(invocationId);
   }
 
   /**
@@ -154,13 +154,9 @@ export class StreamProgress {
    * The gadget and its nested operations remain visible until clearCompletedGadgets() is called.
    */
   completeGadget(invocationId: string): void {
-    const gadget = this.inFlightGadgets.get(invocationId);
-    if (gadget) {
-      gadget.completed = true;
-      gadget.completedTime = Date.now();
-      if (this.isRunning && this.isTTY) {
-        this.render();
-      }
+    const found = this.gadgetTracker.completeGadget(invocationId);
+    if (found && this.isRunning && this.isTTY) {
+      this.render();
     }
   }
 
@@ -169,19 +165,17 @@ export class StreamProgress {
    * Called when new text output arrives to clean up the finished gadget section.
    */
   clearCompletedGadgets(): void {
-    for (const [id, gadget] of this.inFlightGadgets) {
-      if (gadget.completed) {
-        this.inFlightGadgets.delete(id);
-        // Also clean up nested operations for this gadget
-        for (const [nestedId, nested] of this.nestedAgents) {
-          if (nested.parentInvocationId === id) {
-            this.nestedAgents.delete(nestedId);
-          }
+    const clearedIds = this.gadgetTracker.clearCompletedGadgets();
+    // Also clean up nested operations for each cleared gadget
+    for (const id of clearedIds) {
+      for (const [nestedId, nested] of this.nestedAgents) {
+        if (nested.parentInvocationId === id) {
+          this.nestedAgents.delete(nestedId);
         }
-        for (const [nestedId, nested] of this.nestedGadgets) {
-          if (nested.parentInvocationId === id) {
-            this.nestedGadgets.delete(nestedId);
-          }
+      }
+      for (const [nestedId, nested] of this.nestedGadgets) {
+        if (nested.parentInvocationId === id) {
+          this.nestedGadgets.delete(nestedId);
         }
       }
     }
