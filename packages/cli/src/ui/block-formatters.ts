@@ -9,6 +9,7 @@
 
 import chalk from "chalk";
 import type { GadgetNode, LLMCallNode } from "../tui/types.js";
+import { formatExecutionTime } from "./format-time.js";
 import { formatCost, formatTokens, renderMarkdown } from "./formatters.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,7 +255,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
       const formatted = entries.map(([key, value]) => {
         const strValue = typeof value === "string" ? value : JSON.stringify(value);
         const truncated =
-          strValue.length > maxParamLen ? strValue.slice(0, maxParamLen - 3) + "..." : strValue;
+          strValue.length > maxParamLen ? `${strValue.slice(0, maxParamLen - 3)}...` : strValue;
         return `${chalk.dim(key)}=${chalk.cyan(truncated)}`;
       });
       paramsStr = `${chalk.dim("(")}${formatted.join(chalk.dim(", "))}${chalk.dim(")")}`;
@@ -264,7 +265,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   // Error preview
   let errorStr = "";
   if (node.error) {
-    const truncated = node.error.length > 40 ? node.error.slice(0, 37) + "..." : node.error;
+    const truncated = node.error.length > 40 ? `${node.error.slice(0, 37)}...` : node.error;
     errorStr = ` ${chalk.red("error:")} ${truncated}`;
   }
 
@@ -273,11 +274,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
 
   // Duration
   if (node.executionTimeMs !== undefined) {
-    const time =
-      node.executionTimeMs >= 1000
-        ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
-        : `${Math.round(node.executionTimeMs)}ms`;
-    metrics.push(time);
+    metrics.push(formatExecutionTime(node.executionTimeMs));
   }
 
   // Subagent token stats (if any LLM calls were made)
@@ -352,7 +349,7 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
       const maxValueLen = width - 10; // Leave room for indent and key
       if (valueLines.length === 1) {
         const truncated =
-          strValue.length > maxValueLen ? strValue.slice(0, maxValueLen - 3) + "..." : strValue;
+          strValue.length > maxValueLen ? `${strValue.slice(0, maxValueLen - 3)}...` : strValue;
         lines.push(
           `${indent}${chalk.dim(BOX.vertical)} ${chalk.dim(key)}: ${chalk.cyan(truncated)}`,
         );
@@ -413,7 +410,7 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
     const displayLines = contentLines.slice(0, maxLines);
 
     for (const line of displayLines) {
-      const truncated = line.length > width - 4 ? line.slice(0, width - 7) + "..." : line;
+      const truncated = line.length > width - 4 ? `${line.slice(0, width - 7)}...` : line;
       const color = node.error ? chalk.red : chalk.white;
       lines.push(`${indent}${chalk.dim(BOX.vertical)} ${color(truncated)}`);
     }
@@ -426,11 +423,9 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
 
     // Execution time
     if (node.executionTimeMs !== undefined) {
-      const time =
-        node.executionTimeMs >= 1000
-          ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
-          : `${Math.round(node.executionTimeMs)}ms`;
-      lines.push(`${indent}${chalk.dim(BOX.vertical)} Time: ${chalk.dim(time)}`);
+      lines.push(
+        `${indent}${chalk.dim(BOX.vertical)} Time: ${chalk.dim(formatExecutionTime(node.executionTimeMs))}`,
+      );
     }
 
     lines.push(`${indent}${chalk.dim(BOX.bottomLeft + BOX.horizontal.repeat(width - 1))}`);
@@ -453,7 +448,7 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
       // Truncate long paths from the start (keep the end which is more useful)
       const maxPathLen = width - 8; // Account for indent, border, emoji, and spacing
       const displayPath =
-        media.path.length > maxPathLen ? "..." + media.path.slice(-(maxPathLen - 3)) : media.path;
+        media.path.length > maxPathLen ? `...${media.path.slice(-(maxPathLen - 3))}` : media.path;
       lines.push(`${indent}${chalk.dim(BOX.vertical)} ${kindEmoji} ${chalk.cyan(displayPath)}`);
     }
 
@@ -477,11 +472,9 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
 
     // Duration
     if (node.executionTimeMs !== undefined) {
-      const time =
-        node.executionTimeMs >= 1000
-          ? `${(node.executionTimeMs / 1000).toFixed(1)}s`
-          : `${Math.round(node.executionTimeMs)}ms`;
-      lines.push(`${indent}${chalk.dim(BOX.vertical)} Duration: ${chalk.dim(time)}`);
+      lines.push(
+        `${indent}${chalk.dim(BOX.vertical)} Duration: ${chalk.dim(formatExecutionTime(node.executionTimeMs))}`,
+      );
     }
 
     // Output tokens (estimated from result)
@@ -542,5 +535,5 @@ export function getIndent(depth: number, isLast = false): string {
  */
 export function getContinuationIndent(depth: number): string {
   if (depth === 0) return "";
-  return "  ".repeat(depth) + "  ";
+  return `${"  ".repeat(depth)}  `;
 }

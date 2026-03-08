@@ -11,294 +11,38 @@
  * - Compact format optimized for terminal display
  *
  * **SHOWCASE:** Demonstrates how to build a polished CLI on top of llmist's core.
+ *
+ * **Architecture:**
+ * This file is the primary entry point. Focused sub-modules handle:
+ * - `markdown-renderer.ts` — markdown rendering, rainbow separators, user messages
+ * - `metric-formatters.ts` — token counts, costs, provider prefix stripping
+ * - `call-number.ts` — hierarchical call number formatting (#N, #N.gadgetId.M)
+ * - `format-time.ts` — execution time formatting (ms/s)
  */
 
 import chalk from "chalk";
 import type { StoredMedia, TokenUsage } from "llmist";
-import { type MarkedExtension, marked } from "marked";
-import { markedTerminal } from "marked-terminal";
+import { format } from "llmist";
+import { formatCallNumber } from "./call-number.js";
+import { formatExecutionTime } from "./format-time.js";
 
-/**
- * Lazy-initialized flag for marked-terminal configuration.
- *
- * We defer `marked.use(markedTerminal())` until first render because:
- * - markedTerminal() captures chalk's color level at call time
- * - At module import time, TTY detection may not be complete
- * - Lazy init ensures colors work in interactive terminals
- */
-let markedConfigured = false;
+// Re-export markdown rendering utilities so importers don't need to know the internal structure
+export {
+  formatUserMessage,
+  renderMarkdown,
+  renderMarkdownWithSeparators,
+} from "./markdown-renderer.js";
+// Re-export metric formatting utilities for backwards compatibility
+export {
+  formatCost,
+  formatTokens,
+  formatTokensLong,
+  stripProviderPrefix,
+} from "./metric-formatters.js";
 
-/**
- * Configure marked for terminal output (lazy initialization).
- *
- * Uses marked-terminal to convert markdown to ANSI-styled terminal output.
- * This enables rich formatting in TellUser messages and AskUser questions.
- *
- * We override marked-terminal's style functions with our own chalk instance
- * because marked-terminal bundles its own chalk that detects colors at module
- * load time. In some environments, the bundled chalk may detect level 0 (no colors)
- * due to TTY detection issues.
- *
- * By forcing `chalk.level = 3` on our imported chalk and passing custom style
- * functions, we ensure colors work regardless of TTY detection.
- *
- * Respects the NO_COLOR environment variable for accessibility.
- *
- * Note: Type assertion needed due to @types/marked-terminal lag behind the runtime API.
- */
-function ensureMarkedConfigured(): void {
-  if (!markedConfigured) {
-    // Respect NO_COLOR env var, otherwise force truecolor (level 3)
-    chalk.level = process.env.NO_COLOR ? 0 : 3;
-
-    // Override marked-terminal's style functions with our chalk instance
-    // to ensure consistent color output regardless of TTY detection
-    marked.use(
-      markedTerminal({
-        // Text styling
-        strong: chalk.bold,
-        em: chalk.italic,
-        del: chalk.dim.gray.strikethrough,
-
-        // Code styling
-        code: chalk.yellow,
-        codespan: chalk.yellow,
-
-        // Headings
-        heading: chalk.green.bold,
-        firstHeading: chalk.magenta.underline.bold,
-        showSectionPrefix: false, // Hide "###" prefix, use styling instead
-
-        // Links - will be overridden by OSC 8 renderer below
-        link: chalk.blue,
-        href: chalk.blue.underline,
-
-        // Block elements
-        blockquote: chalk.gray.italic,
-
-        // List formatting - reduce indentation and add bullet styling
-        tab: 2, // Reduce from default 4 to 2 spaces
-        listitem: chalk.reset, // Keep items readable (no dim)
-
-        // Width settings - use full terminal width to avoid truncation
-        // Default is 80 which cuts off TellUser messages
-        width: process.stdout.columns || 120,
-        reflowText: true,
-      }) as unknown as MarkedExtension,
-    );
-
-    // Override link rendering with OSC 8 hyperlinks for clickable terminal links
-    // This must come AFTER markedTerminal() to override its link handling
-    // OSC 8 format: ESC ] 8 ; ; URL ST text ESC ] 8 ; ; ST
-    // Terminals that don't support OSC 8 will ignore the sequences and show styled text
-    marked.use({
-      renderer: {
-        link({ href, text }) {
-          const linkStart = `\x1b]8;;${href}\x1b\\`;
-          const linkEnd = `\x1b]8;;\x1b\\`;
-          // Blue underline so it looks like a link even in non-OSC8 terminals
-          return `${linkStart}${chalk.blue.underline(text)}${linkEnd}`;
-        },
-      },
-    });
-
-    markedConfigured = true;
-  }
-}
-
-/**
- * Renders markdown text as styled terminal output.
- *
- * Converts markdown syntax to ANSI escape codes for terminal display:
- * - **bold** and *italic* text
- * - `inline code` and code blocks
- * - Lists (bulleted and numbered)
- * - Headers
- * - Links (clickable in supported terminals)
- *
- * @param text - Markdown text to render
- * @returns ANSI-styled string for terminal output
- *
- * @example
- * ```typescript
- * renderMarkdown("**Important:** Check the `config.json` file");
- * // Returns styled text with bold "Important:" and code-styled "config.json"
- * ```
- */
-export function renderMarkdown(text: string): string {
-  ensureMarkedConfigured();
-  let rendered = marked.parse(text) as string;
-
-  // Workaround for marked-terminal bug: inline markdown in list items
-  // is not processed. Post-process to handle **bold** and *italic*.
-  // See: https://github.com/mikaelbr/marked-terminal/issues
-  rendered = rendered
-    .replace(/\*\*(.+?)\*\*/g, (_, content) => chalk.bold(content))
-    // Italic: require non-space after * to avoid matching bullet points (  * )
-    .replace(/(?<!\*)\*(\S[^*]*)\*(?!\*)/g, (_, content) => chalk.italic(content));
-
-  // Remove trailing newlines that marked adds
-  return rendered.trimEnd();
-}
-
-/**
- * Creates a rainbow-colored horizontal line for visual emphasis.
- * Cycles through colors for each character segment.
- * Uses the full terminal width for a complete visual separator.
- *
- * @returns Rainbow-colored separator string spanning the terminal width
- */
-function createRainbowSeparator(): string {
-  const colors = [chalk.red, chalk.yellow, chalk.green, chalk.cyan, chalk.blue, chalk.magenta];
-  const char = "─";
-  // Use terminal width, fallback to 80 if not available (e.g., piped output)
-  const width = process.stdout.columns || 80;
-  let result = "";
-  for (let i = 0; i < width; i++) {
-    result += colors[i % colors.length](char);
-  }
-  return result;
-}
-
-/**
- * Renders markdown with colorful rainbow horizontal line separators above and below.
- * Use this for prominent markdown content that should stand out visually.
- *
- * @param text - Markdown text to render
- * @returns Rendered markdown with rainbow separators
- *
- * @example
- * ```typescript
- * renderMarkdownWithSeparators("**Hello** world!");
- * // Returns rainbow line + styled markdown + rainbow line
- * ```
- */
-export function renderMarkdownWithSeparators(text: string): string {
-  const rendered = renderMarkdown(text);
-  const separator = createRainbowSeparator();
-  return `\n${separator}\n${rendered}\n${separator}\n`;
-}
-
-/**
- * Formats a user message for display in the TUI REPL.
- *
- * Uses a distinct icon (👤) and cyan coloring to differentiate user input
- * from LLM responses. The message content is rendered with markdown support.
- *
- * @param message - The user's message text
- * @returns Formatted string with icon and markdown rendering
- *
- * @example
- * ```typescript
- * formatUserMessage("Can you add unit tests for this?");
- * // Returns: "\n[inverse] 👤 Can you add unit tests for this? [/inverse]\n"
- * ```
- */
-export function formatUserMessage(message: string): string {
-  const icon = "👤";
-  // User input is plain text, not markdown - render as clean inverse block
-  return `\n${chalk.inverse(` ${icon} ${message} `)}\n`;
-}
-
-/**
- * Formats token count with 'k' suffix for thousands.
- *
- * Uses compact notation to save terminal space while maintaining readability.
- * Numbers below 1000 are shown as-is, larger numbers use 'k' suffix with one decimal.
- *
- * @param tokens - Number of tokens
- * @returns Formatted string (e.g., "896" or "11.5k")
- *
- * @example
- * ```typescript
- * formatTokens(896)    // "896"
- * formatTokens(11500)  // "11.5k"
- * formatTokens(1234)   // "1.2k"
- * ```
- */
-export function formatTokens(tokens: number): string {
-  return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : `${tokens}`;
-}
-
-/**
- * Formats token count in long form with uppercase suffix and "tokens" label.
- *
- * Designed for table display and verbose contexts where more detail is needed.
- * Uses uppercase suffix and includes the word "tokens" for clarity.
- *
- * @param tokens - Number of tokens
- * @returns Formatted string (e.g., "896 tokens", "11K tokens", "1.0M tokens")
- *
- * @example
- * ```typescript
- * formatTokensLong(896)      // "896 tokens"
- * formatTokensLong(11500)    // "11K tokens"
- * formatTokensLong(1000000)  // "1.0M tokens"
- * ```
- */
-export function formatTokensLong(tokens: number): string {
-  if (tokens >= 1_000_000) {
-    return `${(tokens / 1_000_000).toFixed(1)}M tokens`;
-  }
-  if (tokens >= 1_000) {
-    return `${Math.floor(tokens / 1_000)}K tokens`;
-  }
-  return `${tokens} tokens`;
-}
-
-/**
- * Formats cost with appropriate precision based on magnitude.
- *
- * Uses variable precision to balance readability and accuracy:
- * - Very small costs (<$0.001): 5 decimal places to show meaningful value
- * - Small costs (<$0.01): 4 decimal places for precision
- * - Medium costs (<$1): 3 decimal places for clarity
- * - Larger costs (≥$1): 2 decimal places (standard currency format)
- *
- * @param cost - Cost in USD
- * @returns Formatted cost string without currency symbol (e.g., "0.0123")
- *
- * @example
- * ```typescript
- * formatCost(0.00012)  // "0.00012"
- * formatCost(0.0056)   // "0.0056"
- * formatCost(0.123)    // "0.123"
- * formatCost(1.5)      // "1.50"
- * ```
- */
-export function formatCost(cost: number): string {
-  if (cost < 0.001) {
-    return cost.toFixed(5);
-  }
-  if (cost < 0.01) {
-    return cost.toFixed(4);
-  }
-  if (cost < 1) {
-    return cost.toFixed(3);
-  }
-  return cost.toFixed(2);
-}
-
-/**
- * Strips the provider prefix from a model name.
- *
- * Many model identifiers include a provider prefix separated by a colon
- * (e.g., `"openai:gpt-4"`, `"anthropic:claude-3-5-sonnet-20241022"`).
- * This utility extracts just the model portion for display and registry lookups.
- *
- * @param model - Model name, optionally prefixed with a provider (e.g., `"openai:gpt-4"`)
- * @returns The model name without the provider prefix (e.g., `"gpt-4"`)
- *
- * @example
- * ```typescript
- * stripProviderPrefix("openai:gpt-4")           // "gpt-4"
- * stripProviderPrefix("claude-3-5-sonnet")       // "claude-3-5-sonnet"
- * stripProviderPrefix("")                        // ""
- * ```
- */
-export function stripProviderPrefix(model: string): string {
-  return model.includes(":") ? model.split(":")[1] : model;
-}
+import { renderMarkdownWithSeparators } from "./markdown-renderer.js";
+// Import for internal use (formatters.ts needs these to format LLM/gadget lines)
+import { formatCost, formatTokens } from "./metric-formatters.js";
 
 /**
  * Display information for formatting an LLM call progress line.
@@ -335,49 +79,6 @@ export interface LLMCallDisplayInfo {
   contextPercent?: number | null;
   /** Token estimation flags (when counts are estimated, not exact) */
   estimated?: { input?: boolean; output?: boolean };
-}
-
-/**
- * Formats an LLM call opening line for display.
- *
- * This is printed once when an LLM call starts, before streaming begins.
- * The opening line is static and never refreshed.
- *
- * **Format:** `→ #N model` (main agent) or `→ #N.gadgetId.M model` (subagent)
- *
- * @param iteration - Iteration/call number
- * @param model - Model name/ID
- * @param parentCallNumber - Parent call number for nested calls
- * @param gadgetInvocationId - Gadget invocation ID for unique subagent identification
- * @returns Formatted opening line string with ANSI colors
- *
- * @example
- * ```typescript
- * formatLLMCallOpening(1, "gemini:gemini-2.5-flash");
- * // Output: "→ #1 gemini:gemini-2.5-flash"
- *
- * formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1, "browse_web_1");
- * // Output: "→ #1.browse_web_1.2 gemini:gemini-2.5-flash"
- * ```
- */
-export function formatLLMCallOpening(
-  iteration: number,
-  model: string,
-  parentCallNumber?: number,
-  gadgetInvocationId?: string,
-): string {
-  let callNumber: string;
-  if (parentCallNumber !== undefined && gadgetInvocationId) {
-    // Subagent with full context: #parent.gadgetId.iteration
-    callNumber = `#${parentCallNumber}.${gadgetInvocationId}.${iteration}`;
-  } else if (parentCallNumber !== undefined) {
-    // Subagent without gadget ID (legacy): #parent.iteration
-    callNumber = `#${parentCallNumber}.${iteration}`;
-  } else {
-    // Main agent: #iteration
-    callNumber = `#${iteration}`;
-  }
-  return `${chalk.dim("→")} ${chalk.cyan(callNumber)} ${chalk.magenta(model)}`;
 }
 
 /**
@@ -434,17 +135,11 @@ export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
 
   // #N or #N.gadgetId.M model (iteration number + model name) - combined as one unit
   // Hierarchical format: parent.gadgetId.child (e.g., #1.browse_web_1.2 for 2nd call of gadget browse_web_1 in parent #1)
-  let callNumber: string;
-  if (info.parentCallNumber !== undefined && info.gadgetInvocationId) {
-    // Subagent with full context: #parent.gadgetId.iteration
-    callNumber = `#${info.parentCallNumber}.${info.gadgetInvocationId}.${info.iteration}`;
-  } else if (info.parentCallNumber !== undefined) {
-    // Subagent without gadget ID (legacy): #parent.iteration
-    callNumber = `#${info.parentCallNumber}.${info.iteration}`;
-  } else {
-    // Main agent: #iteration
-    callNumber = `#${info.iteration}`;
-  }
+  const callNumber = formatCallNumber(
+    info.iteration,
+    info.parentCallNumber,
+    info.gadgetInvocationId,
+  );
   parts.push(`${chalk.cyan(callNumber)} ${chalk.magenta(info.model)}`);
 
   // Context usage percentage (color-coded by usage level, main agent only)
@@ -630,77 +325,6 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
 }
 
 /**
- * Metadata for generating overall execution summaries.
- *
- * Used for the final accumulated summary at the end of agent execution.
- */
-export interface OverallSummaryMetadata {
-  /** Total tokens across all calls */
-  totalTokens?: number;
-
-  /** Number of agent iterations (LLM calls) */
-  iterations?: number;
-
-  /** Total elapsed time in seconds */
-  elapsedSeconds?: number;
-
-  /** Total cost in USD */
-  cost?: number;
-}
-
-/**
- * Renders overall accumulated execution summary as a distinct styled line.
- *
- * This is displayed at the end of agent execution to show total metrics.
- * Uses a "total:" prefix to distinguish from per-call summaries.
- *
- * **Format:** `total: 3.5k | #2 | 19s | $0.0021`
- *
- * @param metadata - Overall summary metadata
- * @returns Formatted summary string, or null if no fields are populated
- *
- * @example
- * ```typescript
- * renderOverallSummary({
- *   totalTokens: 3500,
- *   iterations: 2,
- *   elapsedSeconds: 19,
- *   cost: 0.0021
- * });
- * // Output: "total: 3.5k | #2 | 19s | $0.0021"
- * ```
- */
-export function renderOverallSummary(metadata: OverallSummaryMetadata): string | null {
-  const parts: string[] = [];
-
-  // Total tokens - primary metric for overall summary
-  if (metadata.totalTokens !== undefined && metadata.totalTokens > 0) {
-    parts.push(chalk.dim("total:") + chalk.magenta(` ${formatTokens(metadata.totalTokens)}`));
-  }
-
-  // Iteration count (#N)
-  if (metadata.iterations !== undefined && metadata.iterations > 0) {
-    parts.push(chalk.cyan(`#${metadata.iterations}`));
-  }
-
-  // Total elapsed time
-  if (metadata.elapsedSeconds !== undefined && metadata.elapsedSeconds > 0) {
-    parts.push(chalk.dim(`${metadata.elapsedSeconds}s`));
-  }
-
-  // Total cost
-  if (metadata.cost !== undefined && metadata.cost > 0) {
-    parts.push(chalk.cyan(`$${formatCost(metadata.cost)}`));
-  }
-
-  if (parts.length === 0) {
-    return null;
-  }
-
-  return parts.join(chalk.dim(" | "));
-}
-
-/**
  * Aggregated metrics from subagent LLM calls.
  *
  * These metrics are collected from all nested LLM calls that occur during
@@ -753,46 +377,6 @@ export interface GadgetResult {
   subagentMetrics?: SubagentMetrics;
 }
 
-/**
- * Formats a gadget execution result as a 2-line output for stderr.
- *
- * Provides visual feedback for gadget execution during agent runs.
- *
- * **Format (2 lines):**
- * - Line 1 (call): `→ GadgetName(param=value, ...)` - shows "was called"
- * - Line 2 (result): `  ✓ GadgetName ↓ 248 4ms: preview` - shows execution result
- * - Error: Line 2 becomes `  ✗ GadgetName error: message 2ms`
- *
- * **Design:**
- * - All parameters shown inline (truncated if too long)
- * - Output shown as token count (via provider API) or bytes as fallback
- * - Execution time always shown at the end
- *
- * @param result - Gadget execution result with timing and output info
- * @returns Formatted 2-line string with ANSI colors
- *
- * @example
- * ```typescript
- * // Successful gadget execution with token count
- * formatGadgetSummary({
- *   gadgetName: "ListDirectory",
- *   executionTimeMs: 4,
- *   parameters: { path: ".", recursive: true },
- *   result: "Type | Name | Size...",
- *   tokenCount: 248
- * });
- * // Output: "→ ListDirectory(path=., recursive=true)\n  ✓ ListDirectory ↓ 248 4ms: ..."
- *
- * // Error case
- * formatGadgetSummary({
- *   gadgetName: "ReadFile",
- *   executionTimeMs: 2,
- *   parameters: { path: "/missing.txt" },
- *   error: "File not found"
- * });
- * // Output: "→ ReadFile(path=/missing.txt)\n  ✗ ReadFile error: File not found 2ms"
- * ```
- */
 /**
  * Gets the raw string value for a parameter (without truncation or colors).
  */
@@ -892,82 +476,6 @@ export function formatParametersInline(
       return `${chalk.dim(key)}${chalk.dim("=")}${chalk.cyan(formatted)}`;
     })
     .join(chalk.dim(", "));
-}
-
-/**
- * Formats a gadget opening line (printed once when gadget is called).
- *
- * Shows the call indicator (`→`) for static opening lines.
- *
- * Format: `→ GadgetName(param=value, ...)`
- *
- * @param gadgetName - Name of the gadget being executed
- * @param parameters - Parameters passed to the gadget
- * @returns Formatted one-liner string with ANSI colors
- */
-export function formatGadgetOpening(
-  gadgetName: string,
-  parameters?: Record<string, unknown>,
-): string {
-  // Get terminal width (default to 80 if not available)
-  const terminalWidth = process.stdout.columns || 80;
-
-  const gadgetLabel = chalk.magenta.bold(gadgetName);
-
-  // Calculate fixed parts length: "→ " + gadgetName + "()"
-  // Arrow=2, parens=2
-  const fixedLength = 2 + gadgetName.length + 2;
-
-  // Available width for parameters
-  const availableForParams = Math.max(40, terminalWidth - fixedLength - 3); // -3 safety margin
-
-  const paramsStr = formatParametersInline(parameters, availableForParams);
-  const paramsLabel = paramsStr ? `${chalk.dim("(")}${paramsStr}${chalk.dim(")")}` : "";
-
-  return `${chalk.dim("→")} ${gadgetLabel}${paramsLabel}`;
-}
-
-/**
- * Formats a single-line gadget result (for nested gadgets).
- *
- * Unlike `formatGadgetLine()` which returns 2 lines for completed gadgets,
- * this returns a single result line. Used for nested gadgets where the
- * opening line was already printed separately.
- *
- * Format: `✓ GadgetName [↑ in | ↓ out | $cost |] time`
- *
- * @param info - Result information
- * @returns Formatted single-line result string with ANSI colors
- */
-export function formatNestedGadgetResult(info: {
-  name: string;
-  elapsedSeconds: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  cost?: number;
-  error?: string;
-}): string {
-  const parts: string[] = [];
-
-  // Add token metrics if present
-  if (info.inputTokens && info.inputTokens > 0) {
-    parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(info.inputTokens)}`));
-  }
-  if (info.outputTokens && info.outputTokens > 0) {
-    parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(info.outputTokens)}`));
-  }
-  if (info.cost && info.cost > 0) {
-    parts.push(chalk.cyan(`$${formatCost(info.cost)}`));
-  }
-
-  const metricsStr = parts.length > 0 ? ` ${parts.join(chalk.dim(" | "))} ${chalk.dim("|")}` : "";
-  const timeStr = chalk.dim(`${info.elapsedSeconds.toFixed(1)}s`);
-  const gadgetLabel = chalk.magenta.bold(info.name);
-
-  // Use error indicator if failed
-  const icon = info.error ? chalk.red("✗") : chalk.green("✓");
-
-  return `${icon} ${gadgetLabel}${metricsStr} ${timeStr}`;
 }
 
 /**
@@ -1099,7 +607,7 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
     // Use same format as LLM calls: "↓ 1.2k" with dim arrow and green number
     outputLabel = chalk.dim("↓") + chalk.green(` ${formatTokens(info.tokenCount)} `);
   } else if (info.outputBytes !== undefined && info.outputBytes > 0) {
-    outputLabel = chalk.green(formatBytes(info.outputBytes)) + " ";
+    outputLabel = `${chalk.green(format.bytes(info.outputBytes))} `;
   } else {
     outputLabel = ""; // No output to show
   }
@@ -1119,22 +627,6 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
 }
 
 /**
- * Formats byte count in human-readable form.
- *
- * @param bytes - Number of bytes
- * @returns Formatted string like "245 bytes" or "1.2 KB"
- */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} bytes`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/**
  * Truncates output text for preview display.
  * Normalizes whitespace (collapses newlines/tabs to single spaces) and truncates with ellipsis.
  *
@@ -1146,7 +638,7 @@ function truncateOutputPreview(output: string, maxWidth: number): string {
   // Normalize whitespace (collapse newlines/tabs to single spaces)
   const normalized = output.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxWidth) return normalized;
-  return normalized.slice(0, maxWidth - 1) + "…";
+  return `${normalized.slice(0, maxWidth - 1)}…`;
 }
 
 /**
@@ -1182,7 +674,7 @@ function formatMediaLine(media: StoredMedia): string {
   const icon = getMediaIcon(media.kind);
   const id = chalk.cyan(media.id);
   const mimeType = chalk.dim(media.mimeType);
-  const size = chalk.yellow(formatBytes(media.sizeBytes));
+  const size = chalk.yellow(format.bytes(media.sizeBytes));
   const path = chalk.dim(media.path);
 
   return `${chalk.dim("[")}${icon} ${id} ${mimeType} ${size}${chalk.dim("]")} ${chalk.dim("→")} ${path}`;
@@ -1192,14 +684,7 @@ export function formatGadgetSummary(result: GadgetResult): string {
   // Get terminal width (default to 80 if not available)
   const terminalWidth = process.stdout.columns || 80;
 
-  // Format gadget name
-  const gadgetLabel = chalk.magenta.bold(result.gadgetName);
-
-  // Show seconds for values >= 1000ms, otherwise milliseconds
-  const timeStr =
-    result.executionTimeMs >= 1000
-      ? `${(result.executionTimeMs / 1000).toFixed(1)}s`
-      : `${Math.round(result.executionTimeMs)}ms`;
+  const timeStr = formatExecutionTime(result.executionTimeMs);
   const timeLabel = chalk.dim(timeStr);
 
   // Note: Opening line (→ GadgetName(params)) is now printed separately on gadget_call
@@ -1221,9 +706,9 @@ export function formatGadgetSummary(result: GadgetResult): string {
   } else if (!hasSubagentMetrics && result.result) {
     const outputBytes = Buffer.byteLength(result.result, "utf-8");
     if (outputBytes > 0) {
-      const bytesStr = formatBytes(outputBytes);
-      outputLabel = chalk.green(bytesStr) + " ";
-      outputStrRaw = bytesStr + " ";
+      const bytesStr = format.bytes(outputBytes);
+      outputLabel = `${chalk.green(bytesStr)} `;
+      outputStrRaw = `${bytesStr} `;
     } else {
       outputLabel = "";
       outputStrRaw = "";
@@ -1330,7 +815,7 @@ export function formatGadgetSummary(result: GadgetResult): string {
   // Add media lines if present (images, audio, etc.)
   if (result.media && result.media.length > 0) {
     const mediaLines = result.media.map(formatMediaLine);
-    output += "\n" + mediaLines.join("\n");
+    output += `\n${mediaLines.join("\n")}`;
   }
 
   // TellUser gadget: display full message content below (with markdown and separators)

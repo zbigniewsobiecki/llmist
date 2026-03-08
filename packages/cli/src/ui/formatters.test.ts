@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { formatCallNumber } from "./call-number.js";
+import { formatExecutionTime } from "./format-time.js";
 import {
   formatGadgetLine,
-  formatGadgetOpening,
   formatGadgetSummary,
   formatLLMCallLine,
-  formatLLMCallOpening,
-  formatNestedGadgetResult,
   formatTokens,
   formatTokensLong,
   formatUserMessage,
@@ -250,7 +249,7 @@ describe("formatGadgetSummary", () => {
         result: "files",
       });
       expect(result).toContain("ListDirectory");
-      expect(result).toContain("5 bytes");
+      expect(result).toContain("5 B");
     });
 
     it("returns single line for result (no opening line)", () => {
@@ -288,7 +287,7 @@ describe("formatGadgetSummary", () => {
         result: "hello",
         // No tokenCount - should fall back to bytes
       });
-      expect(result).toContain("5 bytes");
+      expect(result).toContain("5 B");
     });
 
     it("shows KB for larger outputs", () => {
@@ -527,191 +526,52 @@ describe("width-aware parameter truncation", () => {
     });
   });
 
-  describe("formatGadgetOpening", () => {
-    it("formats gadget name with arrow indicator", () => {
-      const result = formatGadgetOpening("Navigate", { url: "https://example.com" });
-      expect(result).toContain("→");
-      expect(result).toContain("Navigate");
-      expect(result).toContain("url");
-      expect(result).toContain("example.com");
+  describe("formatExecutionTime", () => {
+    it("formats milliseconds for durations under 1 second", () => {
+      expect(formatExecutionTime(0)).toBe("0ms");
+      expect(formatExecutionTime(123)).toBe("123ms");
+      expect(formatExecutionTime(999)).toBe("999ms");
     });
 
-    it("handles gadget with no parameters", () => {
-      const result = formatGadgetOpening("GetPageContent");
-      expect(result).toContain("→");
-      expect(result).toContain("GetPageContent");
-      // No parentheses when no params
-      expect(result).not.toContain("()");
+    it("formats seconds for durations >= 1 second", () => {
+      expect(formatExecutionTime(1000)).toBe("1.0s");
+      expect(formatExecutionTime(1500)).toBe("1.5s");
+      expect(formatExecutionTime(22900)).toBe("22.9s");
     });
 
-    it("handles gadget with empty parameters object", () => {
-      const result = formatGadgetOpening("ReadFile", {});
-      expect(result).toContain("→");
-      expect(result).toContain("ReadFile");
-    });
-
-    it("truncates long parameter values", () => {
-      Object.defineProperty(process.stdout, "columns", {
-        value: 80,
-        writable: true,
-      });
-      const result = formatGadgetOpening("WriteFile", {
-        path: "/very/long/path/that/should/be/truncated/because/it/is/too/long.txt",
-        content: "a".repeat(200),
-      });
-      expect(result).toContain("WriteFile");
-      expect(result).toContain("…"); // Unicode ellipsis
-    });
-
-    it("expands parameters on wide terminals", () => {
-      Object.defineProperty(process.stdout, "columns", {
-        value: 150,
-        writable: true,
-      });
-
-      const result = formatGadgetOpening("BrowseWeb", {
-        task: "Extract the core features and key selling points",
-        url: "https://github.com/vadimdemedes/ink",
-      });
-
-      expect(result).toContain("Extract");
-      expect(result).toContain("github.com");
-    });
-  });
-
-  describe("formatNestedGadgetResult", () => {
-    it("formats basic success result with time", () => {
-      const result = formatNestedGadgetResult({
-        name: "Navigate",
-        elapsedSeconds: 0.5,
-      });
-      expect(result).toContain("✓");
-      expect(result).toContain("Navigate");
-      expect(result).toContain("0.5s");
-    });
-
-    it("shows input tokens when provided", () => {
-      const result = formatNestedGadgetResult({
-        name: "BrowseWeb",
-        elapsedSeconds: 2.5,
-        inputTokens: 5200,
-      });
-      expect(result).toContain("✓");
-      expect(result).toContain("BrowseWeb");
-      expect(result).toContain("↑");
-      expect(result).toContain("5.2k");
-    });
-
-    it("shows output tokens when provided", () => {
-      const result = formatNestedGadgetResult({
-        name: "ReadFile",
-        elapsedSeconds: 0.1,
-        outputTokens: 1500,
-      });
-      expect(result).toContain("✓");
-      expect(result).toContain("↓");
-      expect(result).toContain("1.5k");
-    });
-
-    it("shows cost when provided", () => {
-      const result = formatNestedGadgetResult({
-        name: "APICall",
-        elapsedSeconds: 1.0,
-        cost: 0.005,
-      });
-      expect(result).toContain("✓");
-      expect(result).toContain("$0.005");
-    });
-
-    it("shows all metrics together", () => {
-      const result = formatNestedGadgetResult({
-        name: "BrowseWeb",
-        elapsedSeconds: 45.2,
-        inputTokens: 50000,
-        outputTokens: 300,
-        cost: 0.01,
-      });
-      expect(result).toContain("✓");
-      expect(result).toContain("BrowseWeb");
-      expect(result).toContain("↑");
-      expect(result).toContain("50.0k");
-      expect(result).toContain("↓");
-      expect(result).toContain("300");
-      expect(result).toContain("$0.01");
-      expect(result).toContain("45.2s");
-    });
-
-    it("shows error indicator for failed gadgets", () => {
-      const result = formatNestedGadgetResult({
-        name: "FailedGadget",
-        elapsedSeconds: 0.1,
-        error: "Connection failed",
-      });
-      expect(result).toContain("✗");
-      expect(result).toContain("FailedGadget");
-    });
-
-    it("does not show metrics when zero", () => {
-      const result = formatNestedGadgetResult({
-        name: "QuickGadget",
-        elapsedSeconds: 0.0,
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-      });
-      expect(result).toContain("✓");
-      expect(result).not.toContain("↑");
-      expect(result).not.toContain("↓");
-      expect(result).not.toContain("$");
+    it("rounds milliseconds", () => {
+      expect(formatExecutionTime(123.7)).toBe("124ms");
     });
   });
 });
 
-describe("formatLLMCallOpening", () => {
-  it("formats basic opening line", () => {
-    const result = formatLLMCallOpening(1, "gemini:gemini-2.5-flash");
-    expect(result).toContain("→");
-    expect(result).toContain("#1");
-    expect(result).toContain("gemini:gemini-2.5-flash");
+describe("formatCallNumber", () => {
+  it("formats main agent call number", () => {
+    expect(formatCallNumber(1)).toBe("#1");
+    expect(formatCallNumber(0)).toBe("#0");
+    expect(formatCallNumber(5)).toBe("#5");
   });
 
-  it("formats nested call with parent number", () => {
-    const result = formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1);
-    expect(result).toContain("→");
-    expect(result).toContain("#1.2");
-    expect(result).toContain("gemini:gemini-2.5-flash");
+  it("formats nested call with parent number (legacy)", () => {
+    expect(formatCallNumber(2, 1)).toBe("#1.2");
+    expect(formatCallNumber(3, 5)).toBe("#5.3");
   });
 
-  it("handles iteration 0", () => {
-    const result = formatLLMCallOpening(0, "openai:gpt-4o");
-    expect(result).toContain("#0");
-    expect(result).toContain("openai:gpt-4o");
+  it("formats nested call with gadget invocation ID", () => {
+    expect(formatCallNumber(2, 6, "browse_web_1")).toBe("#6.browse_web_1.2");
+    expect(formatCallNumber(1, 6, "browse_web_github")).toBe("#6.browse_web_github.1");
+    expect(formatCallNumber(1, 6, "browse_web_npm")).toBe("#6.browse_web_npm.1");
   });
 
-  it("formats deeply nested call", () => {
-    const result = formatLLMCallOpening(3, "anthropic:claude-sonnet", 5);
-    expect(result).toContain("#5.3");
-  });
-
-  it("formats call with gadget invocation ID for unique subagent identification", () => {
-    const result = formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 6, "browse_web_1");
-    expect(result).toContain("→");
-    expect(result).toContain("#6.browse_web_1.2");
-    expect(result).toContain("gemini:gemini-2.5-flash");
-  });
-
-  it("uses gadget invocation ID to distinguish parallel subagents", () => {
-    const result1 = formatLLMCallOpening(1, "gemini:gemini-2.5-flash", 6, "browse_web_github");
-    const result2 = formatLLMCallOpening(1, "gemini:gemini-2.5-flash", 6, "browse_web_npm");
-    // Both have same parent (6) and iteration (1), but different gadget IDs
-    expect(result1).toContain("#6.browse_web_github.1");
-    expect(result2).toContain("#6.browse_web_npm.1");
+  it("distinguishes parallel subagents by gadget invocation ID", () => {
+    const result1 = formatCallNumber(1, 6, "browse_web_github");
+    const result2 = formatCallNumber(1, 6, "browse_web_npm");
     expect(result1).not.toEqual(result2);
   });
 
-  it("falls back to legacy format when gadgetInvocationId is not provided", () => {
-    const result = formatLLMCallOpening(2, "gemini:gemini-2.5-flash", 1, undefined);
-    expect(result).toContain("#1.2");
+  it("falls back to legacy format when gadgetInvocationId is undefined", () => {
+    const result = formatCallNumber(2, 1, undefined);
+    expect(result).toBe("#1.2");
     expect(result).not.toContain("undefined");
   });
 });
@@ -1142,7 +1002,7 @@ describe("formatGadgetLine", () => {
         isComplete: true,
         outputBytes: 256,
       });
-      expect(result).toContain("256 bytes");
+      expect(result).toContain("256 B");
     });
 
     it("shows KB for larger outputs", () => {
