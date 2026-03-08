@@ -2,6 +2,7 @@ import chalk from "chalk";
 import type { ModelRegistry, TokenUsage } from "llmist";
 import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
 import { GadgetTracker } from "./progress/gadget-tracker.js";
+import { NestedOperationTracker } from "./progress/nested-operation-tracker.js";
 import {
   formatCost,
   formatGadgetLine,
@@ -56,51 +57,16 @@ export class StreamProgress {
   // In-flight gadget tracking for concurrent status display
   private gadgetTracker = new GadgetTracker();
 
-  // Nested agent tracking for hierarchical subagent display
-  private nestedAgents: Map<
-    string,
-    {
-      parentInvocationId: string;
-      depth: number;
-      model: string;
-      iteration: number;
-      /** Parent call number for hierarchical display (e.g., #1.2) */
-      parentCallNumber?: number;
-      /** Gadget invocation ID for unique subagent identification (e.g., #6.browse_web_1.2) */
-      gadgetInvocationId?: string;
-      startTime: number;
-      inputTokens?: number;
-      outputTokens?: number;
-      // First-class subagent metrics (cached tokens, cost, finish reason)
-      cachedInputTokens?: number;
-      cacheCreationInputTokens?: number;
-      reasoningTokens?: number;
-      finishReason?: string;
-      cost?: number;
-      completed?: boolean;
-      completedTime?: number;
-    }
-  > = new Map();
-
-  // Nested gadget tracking for hierarchical subagent display
-  private nestedGadgets: Map<
-    string,
-    {
-      depth: number;
-      parentInvocationId: string;
-      name: string;
-      parameters?: Record<string, unknown>;
-      startTime: number;
-      completed?: boolean;
-      completedTime?: number;
-    }
-  > = new Map();
+  // Nested agent + gadget tracking for hierarchical subagent display
+  private nestedOperationTracker: NestedOperationTracker;
 
   constructor(
     private readonly target: NodeJS.WritableStream,
     private readonly isTTY: boolean,
     private readonly modelRegistry?: ModelRegistry,
-  ) {}
+  ) {
+    this.nestedOperationTracker = new NestedOperationTracker(modelRegistry);
+  }
 
   /**
    * Expose the underlying in-flight gadgets map for compatibility.
@@ -168,16 +134,7 @@ export class StreamProgress {
     const clearedIds = this.gadgetTracker.clearCompletedGadgets();
     // Also clean up nested operations for each cleared gadget
     for (const id of clearedIds) {
-      for (const [nestedId, nested] of this.nestedAgents) {
-        if (nested.parentInvocationId === id) {
-          this.nestedAgents.delete(nestedId);
-        }
-      }
-      for (const [nestedId, nested] of this.nestedGadgets) {
-        if (nested.parentInvocationId === id) {
-          this.nestedGadgets.delete(nestedId);
-        }
-      }
+      this.nestedOperationTracker.clearByParentInvocationId(id);
     }
     if (this.isRunning && this.isTTY) {
       this.render();
@@ -203,17 +160,16 @@ export class StreamProgress {
     parentCallNumber?: number,
     gadgetInvocationId?: string,
   ): void {
-    this.nestedAgents.set(id, {
+    this.nestedOperationTracker.addNestedAgent(
+      id,
       parentInvocationId,
       depth,
       model,
       iteration,
+      info,
       parentCallNumber,
       gadgetInvocationId,
-      startTime: Date.now(),
-      inputTokens: info?.inputTokens,
-      cachedInputTokens: info?.cachedInputTokens,
-    });
+    );
     if (this.isRunning && this.isTTY) {
       this.render();
     }
@@ -236,44 +192,10 @@ export class StreamProgress {
       cost?: number;
     },
   ): void {
-    const agent = this.nestedAgents.get(id);
-    if (agent) {
-      // Only update if new value is defined - preserve initial values from addNestedAgent()
-      if (info.inputTokens !== undefined) agent.inputTokens = info.inputTokens;
-      if (info.outputTokens !== undefined) agent.outputTokens = info.outputTokens;
-      if (info.cachedInputTokens !== undefined) agent.cachedInputTokens = info.cachedInputTokens;
-      if (info.cacheCreationInputTokens !== undefined)
-        agent.cacheCreationInputTokens = info.cacheCreationInputTokens;
-      if (info.reasoningTokens !== undefined) agent.reasoningTokens = info.reasoningTokens;
-      if (info.finishReason !== undefined) agent.finishReason = info.finishReason;
-
-      // Calculate cost if not provided and we have model registry
-      if (info.cost !== undefined) {
-        agent.cost = info.cost;
-      } else if (this.modelRegistry && agent.model && agent.outputTokens) {
-        // Calculate cost using model registry (first-class subagent metric)
-        // Use agent.* values which include preserved initial values from addNestedAgent()
-        try {
-          const modelName = stripProviderPrefix(agent.model);
-          const costResult = this.modelRegistry.estimateCost(
-            modelName,
-            agent.inputTokens ?? 0,
-            agent.outputTokens,
-            agent.cachedInputTokens,
-            agent.cacheCreationInputTokens,
-            agent.reasoningTokens,
-          );
-          agent.cost = costResult?.totalCost;
-        } catch {
-          // Ignore cost calculation errors
-        }
-      }
-
-      agent.completed = true;
-      agent.completedTime = Date.now();
-      if (this.isRunning && this.isTTY) {
-        this.render();
-      }
+    const hadAgent = this.nestedOperationTracker.getNestedAgent(id) !== undefined;
+    this.nestedOperationTracker.updateNestedAgent(id, info);
+    if (hadAgent && this.isRunning && this.isTTY) {
+      this.render();
     }
   }
 
@@ -281,7 +203,7 @@ export class StreamProgress {
    * Remove a nested agent (called when the nested LLM call completes).
    */
   removeNestedAgent(id: string): void {
-    this.nestedAgents.delete(id);
+    this.nestedOperationTracker.removeNestedAgent(id);
     if (this.isRunning && this.isTTY) {
       this.render();
     }
@@ -291,7 +213,7 @@ export class StreamProgress {
    * Get a nested agent by ID (for accessing startTime, etc.).
    */
   getNestedAgent(id: string) {
-    return this.nestedAgents.get(id);
+    return this.nestedOperationTracker.getNestedAgent(id);
   }
 
   /**
@@ -305,23 +227,7 @@ export class StreamProgress {
     cost: number;
     callCount: number;
   } {
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let cachedInputTokens = 0;
-    let cost = 0;
-    let callCount = 0;
-
-    for (const [, nested] of this.nestedAgents) {
-      if (nested.parentInvocationId === parentInvocationId) {
-        inputTokens += nested.inputTokens ?? 0;
-        outputTokens += nested.outputTokens ?? 0;
-        cachedInputTokens += nested.cachedInputTokens ?? 0;
-        cost += nested.cost ?? 0;
-        callCount++;
-      }
-    }
-
-    return { inputTokens, outputTokens, cachedInputTokens, cost, callCount };
+    return this.nestedOperationTracker.getAggregatedSubagentMetrics(parentInvocationId);
   }
 
   /**
@@ -334,13 +240,7 @@ export class StreamProgress {
     name: string,
     parameters?: Record<string, unknown>,
   ): void {
-    this.nestedGadgets.set(id, {
-      depth,
-      parentInvocationId,
-      name,
-      parameters,
-      startTime: Date.now(),
-    });
+    this.nestedOperationTracker.addNestedGadget(id, depth, parentInvocationId, name, parameters);
     if (this.isRunning && this.isTTY) {
       this.render();
     }
@@ -350,7 +250,7 @@ export class StreamProgress {
    * Remove a nested gadget (called when nested gadget_result event received).
    */
   removeNestedGadget(id: string): void {
-    this.nestedGadgets.delete(id);
+    this.nestedOperationTracker.removeNestedGadget(id);
     if (this.isRunning && this.isTTY) {
       this.render();
     }
@@ -360,7 +260,7 @@ export class StreamProgress {
    * Get a nested gadget by ID (for accessing startTime, name, etc.).
    */
   getNestedGadget(id: string) {
-    return this.nestedGadgets.get(id);
+    return this.nestedOperationTracker.getNestedGadget(id);
   }
 
   /**
@@ -368,13 +268,10 @@ export class StreamProgress {
    * Records completion time to freeze the elapsed timer.
    */
   completeNestedGadget(id: string): void {
-    const gadget = this.nestedGadgets.get(id);
-    if (gadget) {
-      gadget.completed = true;
-      gadget.completedTime = Date.now();
-      if (this.isRunning && this.isTTY) {
-        this.render();
-      }
+    const hadGadget = this.nestedOperationTracker.getNestedGadget(id) !== undefined;
+    this.nestedOperationTracker.completeNestedGadget(id);
+    if (hadGadget && this.isRunning && this.isTTY) {
+      this.render();
     }
   }
 
@@ -626,7 +523,7 @@ export class StreamProgress {
         }> = [];
 
         // Collect nested agents for this parent
-        for (const [_agentId, nested] of this.nestedAgents) {
+        for (const [_agentId, nested] of this.nestedOperationTracker.getNestedAgentsMap()) {
           if (nested.parentInvocationId === gadgetId) {
             nestedOps.push({
               type: "agent",
@@ -665,7 +562,7 @@ export class StreamProgress {
         }
 
         // Collect nested gadgets for this parent
-        for (const [nestedId, nestedGadget] of this.nestedGadgets) {
+        for (const [nestedId, nestedGadget] of this.nestedOperationTracker.getNestedGadgetsMap()) {
           if (nestedGadget.parentInvocationId === gadgetId) {
             nestedOps.push({
               type: "gadget",
