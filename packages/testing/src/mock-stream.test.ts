@@ -8,30 +8,10 @@
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "llmist";
 import { describe, expect, it, vi } from "vitest";
 import { createMockStream, createTextMockStream } from "./mock-stream.js";
-
-// Helper to collect all chunks from a stream
-async function collectChunks(
-  stream: AsyncIterable<{
-    text?: string;
-    finishReason?: string;
-    usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
-  }>,
-) {
-  const chunks = [];
-  for await (const chunk of stream) {
-    chunks.push(chunk);
-  }
-  return chunks;
-}
-
-// Helper to collect all text from a stream
-async function collectText(stream: AsyncIterable<{ text?: string }>) {
-  let text = "";
-  for await (const chunk of stream) {
-    text += chunk.text ?? "";
-  }
-  return text;
-}
+import {
+  collectStream as collectChunks,
+  collectStreamText as collectText,
+} from "./stream-helpers.js";
 
 describe("createMockStream", () => {
   describe("text chunks", () => {
@@ -434,42 +414,6 @@ describe("createMockStream", () => {
   });
 
   describe("abort handling", () => {
-    it("can be aborted via AbortController", async () => {
-      vi.useFakeTimers();
-      try {
-        const controller = new AbortController();
-        const stream = createMockStream({
-          text: "This is a long text that would take many iterations to stream completely",
-          streamDelayMs: 50,
-        });
-
-        const chunks: unknown[] = [];
-
-        // Start iterating and abort after first chunk
-        const gen = stream[Symbol.asyncIterator]();
-        const firstPromise = gen.next();
-        await vi.advanceTimersByTimeAsync(0);
-        const firstResult = await firstPromise;
-        if (!firstResult.done) {
-          chunks.push(firstResult.value);
-        }
-
-        // Abort before getting more chunks
-        controller.abort();
-
-        // The generator is a plain async generator (no abort signal integration),
-        // so we verify we can return from it by calling .return()
-        if (gen.return) {
-          await gen.return(undefined);
-        }
-
-        // We collected at least some chunks before stopping
-        expect(chunks.length).toBeGreaterThanOrEqual(0);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
     it("generator can be forcibly stopped using .return()", async () => {
       const stream = createMockStream({
         text: "Hello world text content",
