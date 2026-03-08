@@ -363,7 +363,7 @@ describe("StreamProgress nested operations", () => {
         inputTokens: 5000,
       });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       expect(nestedAgents.size).toBe(1);
 
       const agent = nestedAgents.get("agent:0");
@@ -390,7 +390,7 @@ describe("StreamProgress nested operations", () => {
         "browse_web_github", // gadgetInvocationId
       );
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       expect(agent).toBeDefined();
       expect(agent.parentCallNumber).toBe(6);
@@ -424,7 +424,7 @@ describe("StreamProgress nested operations", () => {
         "browse_web_npm",
       );
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
 
       const agent0 = nestedAgents.get("agent:0");
       const agent1 = nestedAgents.get("agent:1");
@@ -445,7 +445,7 @@ describe("StreamProgress nested operations", () => {
       // Add without gadgetInvocationId (legacy behavior)
       progress.addNestedAgent("agent:0", "parent-123", 1, "test", 1, { inputTokens: 1000 });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       expect(agent.gadgetInvocationId).toBeUndefined();
       expect(agent.parentCallNumber).toBeUndefined();
@@ -464,7 +464,7 @@ describe("StreamProgress nested operations", () => {
         finishReason: "stop",
       });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       expect(agent.outputTokens).toBe(500);
       expect(agent.finishReason).toBe("stop");
@@ -483,7 +483,7 @@ describe("StreamProgress nested operations", () => {
         outputTokens: 100,
       });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       expect(agent.cachedInputTokens).toBe(4000);
     });
@@ -499,7 +499,7 @@ describe("StreamProgress nested operations", () => {
         cost: 0.0025,
       });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       expect(agent.cost).toBe(0.0025);
     });
@@ -518,7 +518,7 @@ describe("StreamProgress nested operations", () => {
         // No cost provided - should calculate
       });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       // Cost should be calculated: (10000/1M * 0.15) + (500/1M * 0.60) = 0.0015 + 0.0003 = 0.0018
       expect(agent.cost).toBeCloseTo(0.0018, 4);
@@ -542,7 +542,7 @@ describe("StreamProgress nested operations", () => {
       }).not.toThrow();
 
       // Cost should remain undefined
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       expect(agent.cost).toBeUndefined();
     });
@@ -576,7 +576,7 @@ describe("StreamProgress nested operations", () => {
         finishReason: "stop",
       });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
 
       // Should preserve initial inputTokens, not overwrite with undefined
@@ -597,7 +597,7 @@ describe("StreamProgress nested operations", () => {
         outputTokens: 100,
       });
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       const agent = nestedAgents.get("agent:0");
       expect(agent.inputTokens).toBe(5500);
     });
@@ -696,7 +696,7 @@ describe("StreamProgress nested operations", () => {
         task: "Find info",
       });
 
-      const nestedGadgets = (progress as any).nestedGadgets;
+      const nestedGadgets = (progress as any).nestedOperationTracker.getNestedGadgetsMap();
       expect(nestedGadgets.size).toBe(1);
 
       const gadget = nestedGadgets.get("gadget-123");
@@ -716,7 +716,7 @@ describe("StreamProgress nested operations", () => {
 
       progress.addNestedGadget("gadget-123", 1, "parent-456", "Finish");
 
-      const nestedGadgets = (progress as any).nestedGadgets;
+      const nestedGadgets = (progress as any).nestedOperationTracker.getNestedGadgetsMap();
       const gadget = nestedGadgets.get("gadget-123");
       expect(gadget.parameters).toBeUndefined();
     });
@@ -730,7 +730,7 @@ describe("StreamProgress nested operations", () => {
       progress.addNestedGadget("gadget-123", 1, "parent-456", "ReadFile");
       progress.completeNestedGadget("gadget-123");
 
-      const nestedGadgets = (progress as any).nestedGadgets;
+      const nestedGadgets = (progress as any).nestedOperationTracker.getNestedGadgetsMap();
       const gadget = nestedGadgets.get("gadget-123");
       expect(gadget.completed).toBe(true);
       expect(gadget.completedTime).toBeDefined();
@@ -822,7 +822,7 @@ describe("StreamProgress nested operations", () => {
       progress.clearCompletedGadgets();
 
       const inFlightGadgets = (progress as any).inFlightGadgets;
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
 
       expect(inFlightGadgets.size).toBe(0);
       expect(nestedAgents.size).toBe(0);
@@ -843,7 +843,7 @@ describe("StreamProgress nested operations", () => {
       progress.clearCompletedGadgets();
 
       const inFlightGadgets = (progress as any).inFlightGadgets;
-      const nestedGadgets = (progress as any).nestedGadgets;
+      const nestedGadgets = (progress as any).nestedOperationTracker.getNestedGadgetsMap();
 
       expect(inFlightGadgets.size).toBe(0);
       expect(nestedGadgets.size).toBe(0);
@@ -865,7 +865,7 @@ describe("StreamProgress nested operations", () => {
       progress.completeGadget("parent-1");
       progress.clearCompletedGadgets();
 
-      const nestedAgents = (progress as any).nestedAgents;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
       expect(nestedAgents.size).toBe(1);
       expect(nestedAgents.has("agent-2:0")).toBe(true); // Still there
     });
@@ -888,8 +888,8 @@ describe("StreamProgress nested operations", () => {
       // For this test, we verify the structure is set up correctly
       progress.addNestedAgent("nested-agent:0", "parent-gadget", 1, "test-model", 0, 1000);
 
-      const nestedAgents = (progress as any).nestedAgents;
-      const nestedGadgets = (progress as any).nestedGadgets;
+      const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
+      const nestedGadgets = (progress as any).nestedOperationTracker.getNestedGadgetsMap();
 
       // Both should be tracked
       expect(nestedAgents.size).toBe(1);
