@@ -726,186 +726,29 @@ export class Agent {
           });
 
           // Stream creation and iteration with retry for errors during streaming.
-          // pRetry in createStreamWithRetry() only catches errors during the initial stream() call,
-          // but 429/5xx errors can also occur DURING iteration over the stream.
-          // This outer retry loop catches those iteration errors and retries the entire LLM call.
-          const maxStreamAttempts = this.retryConfig.enabled ? this.retryConfig.retries + 1 : 1;
-          let streamAttempt = 0;
-          let streamMetadata: StreamCompletionEvent | null = null;
-          let gadgetCallCount = 0;
-          const textOutputs: string[] = [];
-          const gadgetResults: StreamEvent[] = [];
+          // All retry orchestration is encapsulated in executeWithRetry(), which also
+          // tracks textOutputs, gadgetResults, and gadgetCallCount — resetting them
+          // between retry attempts so only data from the final successful attempt is returned.
 
-          while (streamAttempt < maxStreamAttempts) {
-            streamAttempt++;
-
-            try {
-              // Create LLM stream with rate limiting (retry is handled by this outer loop)
-              const stream = await this.createStream(
-                llmOptions,
-                currentIteration,
-                currentLLMNodeId,
-              );
-
-              // Process stream - ALL complexity delegated to StreamProcessor
-              const processor = new StreamProcessor({
-                iteration: currentIteration,
-                registry: this.registry,
-                gadgetStartPrefix: this.gadgetStartPrefix,
-                gadgetEndPrefix: this.gadgetEndPrefix,
-                gadgetArgPrefix: this.gadgetArgPrefix,
-                hooks: this.hooks,
-                logger: this.logger.getSubLogger({ name: "stream-processor" }),
-                requestHumanInput: this.requestHumanInput,
-                defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-                gadgetExecutionMode: this.gadgetExecutionMode,
-                client: this.client,
-                mediaStore: this.mediaStore,
-                agentConfig: this.agentContextConfig,
-                subagentConfig: this.subagentConfig,
-                // Tree context for execution tracking
-                tree: this.tree,
-                parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
-                baseDepth: this.baseDepth,
-                // Cross-iteration dependency tracking
-                priorCompletedInvocations: this.completedInvocationIds,
-                priorFailedInvocations: this.failedInvocationIds,
-                // Parent observer hooks for subagent visibility
-                parentObservers: this.parentObservers,
-                // Shared rate limit tracker and retry config for subagents
-                rateLimitTracker: this.rateLimitTracker,
-                retryConfig: this.retryConfig,
-                // Gadget limiting
-                maxGadgetsPerResponse: this.maxGadgetsPerResponse,
-              });
-
-              // Consume the stream processor generator, yielding events in real-time
-              // The final event is a StreamCompletionEvent containing metadata
-              for await (const event of processor.process(stream)) {
-                if (event.type === "stream_complete") {
-                  // Completion event - extract metadata, don't yield to consumer
-                  streamMetadata = event;
-                  continue;
-                }
-
-                // Track outputs for later conversation history updates
-                if (event.type === "text") {
-                  textOutputs.push(event.content);
-                } else if (event.type === "gadget_result") {
-                  gadgetCallCount++;
-                  gadgetResults.push(event);
-                } else if (event.type === "llm_response_end") {
-                  // Signal that LLM finished generating (before gadgets complete)
-                  // This allows consumers to track "LLM thinking time" separately
-                  this.tree.endLLMResponse(currentLLMNodeId!, {
-                    finishReason: event.finishReason,
-                    usage: event.usage,
-                  });
-                }
-
-                // Yield event to consumer in real-time
-                // (includes subagent events from completedResultsQueue for real-time streaming)
-                yield event;
-              }
-
-              // Collect completed/failed invocation IDs for cross-iteration dependency tracking
-              for (const id of processor.getCompletedInvocationIds()) {
-                this.completedInvocationIds.add(id);
-              }
-              for (const id of processor.getFailedInvocationIds()) {
-                this.failedInvocationIds.add(id);
-              }
-
-              // Stream completed successfully - break retry loop
-              break;
-            } catch (streamError) {
-              // Check if this is a retryable error and we have attempts remaining
-              const error = streamError as Error;
-              const canRetry = this.retryConfig.enabled && streamAttempt < maxStreamAttempts;
-              const shouldRetryError = this.retryConfig.shouldRetry
-                ? this.retryConfig.shouldRetry(error)
-                : isRetryableError(error);
-
-              if (canRetry && shouldRetryError) {
-                // Extract Retry-After hint if present
-                const retryAfterMs = this.retryConfig.respectRetryAfter
-                  ? extractRetryAfterMs(error)
-                  : null;
-
-                // Calculate delay: use Retry-After if available, otherwise exponential backoff
-                const baseDelay =
-                  this.retryConfig.minTimeout * this.retryConfig.factor ** (streamAttempt - 1);
-                const cappedBaseDelay = Math.min(baseDelay, this.retryConfig.maxTimeout);
-                const delay =
-                  retryAfterMs !== null
-                    ? Math.min(retryAfterMs, this.retryConfig.maxRetryAfterMs)
-                    : cappedBaseDelay;
-
-                // Add jitter if randomize is enabled
-                const finalDelay = this.retryConfig.randomize
-                  ? delay * (0.5 + Math.random())
-                  : delay;
-
-                this.logger.warn(
-                  `Stream iteration failed (attempt ${streamAttempt}/${maxStreamAttempts}), retrying...`,
-                  {
-                    error: error.message,
-                    retriesLeft: maxStreamAttempts - streamAttempt,
-                    delayMs: Math.round(finalDelay),
-                    retryAfterMs,
-                  },
-                );
-
-                // Call retry callback
-                this.retryConfig.onRetry?.(error, streamAttempt);
-
-                // Emit observer hook for retry attempt
-                await safeObserve(async () => {
-                  if (this.hooks.observers?.onRetryAttempt) {
-                    // currentLLMNodeId is guaranteed to be defined at this point (set in prepareLLMCall)
-                    const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
-                    const hookContext: ObserveRetryAttemptContext = {
-                      iteration: currentIteration,
-                      attemptNumber: streamAttempt,
-                      retriesLeft: maxStreamAttempts - streamAttempt,
-                      error,
-                      retryAfterMs: retryAfterMs ?? undefined,
-                      logger: this.logger,
-                      subagentContext,
-                    };
-                    await this.hooks.observers.onRetryAttempt(hookContext);
-                  }
-                }, this.logger);
-
-                // Wait before retrying
-                await this.sleep(finalDelay);
-
-                // Reset state for retry attempt (clear any partial results from failed attempt)
-                streamMetadata = null;
-                gadgetCallCount = 0;
-                textOutputs.length = 0;
-                gadgetResults.length = 0;
-
-                continue;
-              }
-
-              // Not retryable or retries exhausted
-              if (streamAttempt > 1) {
-                // We had at least one retry - call exhausted callback
-                this.logger.error(`Stream iteration failed after ${streamAttempt} attempts`, {
-                  error: error.message,
-                  iteration: currentIteration,
-                });
-                this.retryConfig.onRetriesExhausted?.(error, streamAttempt);
-              }
-              throw error;
-            }
+          // Iterate the retry generator manually to capture its return value (stream metadata
+          // and accumulated tracking state). for-await-of discards the generator's final
+          // done-value, so we use .next() directly.
+          const retryGen = this.executeWithRetry(llmOptions, currentIteration, currentLLMNodeId);
+          let next = await retryGen.next();
+          while (!next.done) {
+            // Yield event to consumer in real-time
+            yield next.value;
+            next = await retryGen.next();
           }
+          // When done === true, the value is the generator's return value
+          const retryResult = next.value;
 
           // Ensure we received the completion metadata
-          if (!streamMetadata) {
+          if (!retryResult) {
             throw new Error("Stream processing completed without metadata event");
           }
+
+          const { streamMetadata, textOutputs, gadgetResults, gadgetCallCount } = retryResult;
 
           // Use streamMetadata as the result for remaining logic
           const result = streamMetadata;
@@ -1073,6 +916,201 @@ export class Agent {
       // Always clean up the bridge subscription
       unsubscribeBridge();
     }
+  }
+
+  /**
+   * Execute a single LLM call attempt with full retry orchestration.
+   *
+   * Handles stream creation, retry attempts with exponential backoff, error handling,
+   * and state reset between attempts. Yields stream events in real-time and returns
+   * the final stream completion metadata along with accumulated tracking state
+   * (textOutputs, gadgetResults, gadgetCallCount) from the final successful attempt only.
+   * State is reset between retry attempts to prevent accumulation of partial data.
+   */
+  private async *executeWithRetry(
+    llmOptions: LLMGenerationOptions,
+    currentIteration: number,
+    currentLLMNodeId: string,
+  ): AsyncGenerator<
+    StreamEvent,
+    {
+      streamMetadata: StreamCompletionEvent;
+      textOutputs: string[];
+      gadgetResults: StreamEvent[];
+      gadgetCallCount: number;
+    } | null
+  > {
+    const maxStreamAttempts = this.retryConfig.enabled ? this.retryConfig.retries + 1 : 1;
+    let streamAttempt = 0;
+    let streamMetadata: StreamCompletionEvent | null = null;
+    let gadgetCallCount = 0;
+    const textOutputs: string[] = [];
+    const gadgetResults: StreamEvent[] = [];
+
+    while (streamAttempt < maxStreamAttempts) {
+      streamAttempt++;
+
+      try {
+        // Create LLM stream with rate limiting (retry is handled by this outer loop)
+        const stream = await this.createStream(llmOptions, currentIteration, currentLLMNodeId);
+
+        // Process stream - ALL complexity delegated to StreamProcessor
+        const processor = new StreamProcessor({
+          iteration: currentIteration,
+          registry: this.registry,
+          gadgetStartPrefix: this.gadgetStartPrefix,
+          gadgetEndPrefix: this.gadgetEndPrefix,
+          gadgetArgPrefix: this.gadgetArgPrefix,
+          hooks: this.hooks,
+          logger: this.logger.getSubLogger({ name: "stream-processor" }),
+          requestHumanInput: this.requestHumanInput,
+          defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+          gadgetExecutionMode: this.gadgetExecutionMode,
+          client: this.client,
+          mediaStore: this.mediaStore,
+          agentConfig: this.agentContextConfig,
+          subagentConfig: this.subagentConfig,
+          // Tree context for execution tracking
+          tree: this.tree,
+          parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
+          baseDepth: this.baseDepth,
+          // Cross-iteration dependency tracking
+          priorCompletedInvocations: this.completedInvocationIds,
+          priorFailedInvocations: this.failedInvocationIds,
+          // Parent observer hooks for subagent visibility
+          parentObservers: this.parentObservers,
+          // Shared rate limit tracker and retry config for subagents
+          rateLimitTracker: this.rateLimitTracker,
+          retryConfig: this.retryConfig,
+          // Gadget limiting
+          maxGadgetsPerResponse: this.maxGadgetsPerResponse,
+        });
+
+        // Consume the stream processor generator, yielding events in real-time.
+        // The final event is a StreamCompletionEvent containing metadata.
+        for await (const event of processor.process(stream)) {
+          if (event.type === "stream_complete") {
+            // Completion event - extract metadata, don't yield to consumer
+            streamMetadata = event;
+            continue;
+          }
+
+          if (event.type === "llm_response_end") {
+            // Signal that LLM finished generating (before gadgets complete).
+            // This allows consumers to track "LLM thinking time" separately.
+            this.tree.endLLMResponse(currentLLMNodeId, {
+              finishReason: event.finishReason,
+              usage: event.usage,
+            });
+          }
+
+          // Track outputs from this attempt for conversation history updates
+          if (event.type === "text") {
+            textOutputs.push(event.content);
+          } else if (event.type === "gadget_result") {
+            gadgetCallCount++;
+            gadgetResults.push(event);
+          }
+
+          // Yield event to consumer in real-time
+          // (includes subagent events from completedResultsQueue for real-time streaming)
+          yield event;
+        }
+
+        // Collect completed/failed invocation IDs for cross-iteration dependency tracking
+        for (const id of processor.getCompletedInvocationIds()) {
+          this.completedInvocationIds.add(id);
+        }
+        for (const id of processor.getFailedInvocationIds()) {
+          this.failedInvocationIds.add(id);
+        }
+
+        // Stream completed successfully - break retry loop
+        break;
+      } catch (streamError) {
+        // Check if this is a retryable error and we have attempts remaining
+        const error = streamError as Error;
+        const canRetry = this.retryConfig.enabled && streamAttempt < maxStreamAttempts;
+        const shouldRetryError = this.retryConfig.shouldRetry
+          ? this.retryConfig.shouldRetry(error)
+          : isRetryableError(error);
+
+        if (canRetry && shouldRetryError) {
+          // Extract Retry-After hint if present
+          const retryAfterMs = this.retryConfig.respectRetryAfter
+            ? extractRetryAfterMs(error)
+            : null;
+
+          // Calculate delay: use Retry-After if available, otherwise exponential backoff
+          const baseDelay =
+            this.retryConfig.minTimeout * this.retryConfig.factor ** (streamAttempt - 1);
+          const cappedBaseDelay = Math.min(baseDelay, this.retryConfig.maxTimeout);
+          const delay =
+            retryAfterMs !== null
+              ? Math.min(retryAfterMs, this.retryConfig.maxRetryAfterMs)
+              : cappedBaseDelay;
+
+          // Add jitter if randomize is enabled
+          const finalDelay = this.retryConfig.randomize ? delay * (0.5 + Math.random()) : delay;
+
+          this.logger.warn(
+            `Stream iteration failed (attempt ${streamAttempt}/${maxStreamAttempts}), retrying...`,
+            {
+              error: error.message,
+              retriesLeft: maxStreamAttempts - streamAttempt,
+              delayMs: Math.round(finalDelay),
+              retryAfterMs,
+            },
+          );
+
+          // Call retry callback
+          this.retryConfig.onRetry?.(error, streamAttempt);
+
+          // Emit observer hook for retry attempt
+          await safeObserve(async () => {
+            if (this.hooks.observers?.onRetryAttempt) {
+              const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId);
+              const hookContext: ObserveRetryAttemptContext = {
+                iteration: currentIteration,
+                attemptNumber: streamAttempt,
+                retriesLeft: maxStreamAttempts - streamAttempt,
+                error,
+                retryAfterMs: retryAfterMs ?? undefined,
+                logger: this.logger,
+                subagentContext,
+              };
+              await this.hooks.observers.onRetryAttempt(hookContext);
+            }
+          }, this.logger);
+
+          // Wait before retrying
+          await this.sleep(finalDelay);
+
+          // Reset state for retry attempt (clear any partial results from failed attempt)
+          streamMetadata = null;
+          gadgetCallCount = 0;
+          textOutputs.length = 0;
+          gadgetResults.length = 0;
+
+          continue;
+        }
+
+        // Not retryable or retries exhausted
+        if (streamAttempt > 1) {
+          // We had at least one retry - call exhausted callback
+          this.logger.error(`Stream iteration failed after ${streamAttempt} attempts`, {
+            error: error.message,
+            iteration: currentIteration,
+          });
+          this.retryConfig.onRetriesExhausted?.(error, streamAttempt);
+        }
+        throw error;
+      }
+    }
+
+    return streamMetadata !== null
+      ? { streamMetadata, textOutputs, gadgetResults, gadgetCallCount }
+      : null;
   }
 
   /**
