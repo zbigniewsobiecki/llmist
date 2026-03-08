@@ -21,6 +21,7 @@ import {
   getIndent,
 } from "../ui/block-formatters.js";
 import { formatUserMessage, renderMarkdown } from "../ui/formatters.js";
+import { NodeStore } from "./node-store.js";
 import type {
   BlockNode,
   ContentFilterMode,
@@ -28,8 +29,6 @@ import type {
   LLMCallNode,
   SelectableBlock,
   SystemMessageNode,
-  TextNode,
-  ThinkingNode,
 } from "./types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,11 +64,8 @@ export class BlockRenderer {
   private renderCallback: () => void;
   private renderNowCallback: () => void;
 
-  /** All nodes in the tree (flat for easy lookup) */
-  private nodes = new Map<string, BlockNode>();
-
-  /** Root node IDs (top-level LLM calls and text) */
-  private rootIds: string[] = [];
+  /** Node store — manages all node CRUD, idempotency, and session tracking */
+  private nodeStore: NodeStore;
 
   /** Rendered blocks with UI state */
   private blocks = new Map<string, SelectableBlock>();
@@ -79,15 +75,6 @@ export class BlockRenderer {
 
   /** Currently selected block index (-1 = none) */
   private selectedIndex = -1;
-
-  /** Counter for generating unique node IDs */
-  private nodeIdCounter = 0;
-
-  /** Current LLM call node (for adding gadget children) */
-  private currentLLMCallId: string | null = null;
-
-  /** Current thinking block (accumulates chunks during streaming) */
-  private currentThinkingId: string | null = null;
 
   /** Persisted expanded states (survives rebuildBlocks) */
   private expandedStates = new Map<string, boolean>();
@@ -100,21 +87,6 @@ export class BlockRenderer {
 
   /** Threshold in pixels for detecting "at bottom" position */
   private static readonly AT_BOTTOM_THRESHOLD = 5;
-
-  /** Track main agent LLM calls by iteration for idempotency */
-  private llmCallByIteration = new Map<number, string>();
-
-  /** Track gadgets by invocationId for idempotency */
-  private gadgetByInvocationId = new Map<string, string>();
-
-  /** Track nested LLM calls by parentId_iteration for idempotency */
-  private nestedLLMCallByKey = new Map<string, string>();
-
-  /** Current session ID (increments each new REPL turn) */
-  private currentSessionId = 0;
-
-  /** Previous session ID (for deferred cleanup) */
-  private previousSessionId: number | null = null;
 
   /** Callback for content state changes (empty to non-empty or vice versa) */
   private onHasContentChangeCallback: ((hasContent: boolean) => void) | null = null;
@@ -130,6 +102,13 @@ export class BlockRenderer {
     this.container = container;
     this.renderCallback = renderCallback;
     this.renderNowCallback = renderNowCallback ?? renderCallback;
+
+    // Create NodeStore and wire callbacks
+    this.nodeStore = new NodeStore();
+    this.nodeStore.setCallbacks({
+      onNodeAdded: () => this.rebuildBlocks(),
+      onNodeUpdated: (nodeId: string) => this.updateBlock(nodeId),
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -152,75 +131,14 @@ export class BlockRenderer {
     parentGadgetId?: string,
     isNested?: boolean,
   ): string {
-    // Idempotency check - return existing block if already created
-    // isNested flag differentiates root vs nested calls with same iteration number
-    if (!parentGadgetId && !isNested) {
-      const existingId = this.llmCallByIteration.get(iteration);
-      if (existingId) {
-        // Idempotent - return existing block
-        this.currentLLMCallId = existingId;
-        return existingId;
-      }
-    } else if (parentGadgetId) {
-      // Check nested subagent LLM calls by parent + iteration
-      const nestedKey = `${parentGadgetId}_${iteration}`;
-      const existingId = this.nestedLLMCallByKey.get(nestedKey);
-      if (existingId) {
-        // Idempotent - return existing block
-        this.currentLLMCallId = existingId;
-        return existingId;
-      }
-    }
-
-    const id = this.generateId("llm");
-    const parentNode = parentGadgetId ? this.getNode(parentGadgetId) : undefined;
-    const depth = parentNode ? parentNode.depth + 1 : 0;
-
-    const node: LLMCallNode = {
-      id,
-      type: "llm_call",
-      depth,
-      parentId: parentGadgetId ?? null,
-      sessionId: this.currentSessionId,
-      iteration,
-      model,
-      isComplete: false,
-      children: [],
-    };
-
-    this.nodes.set(id, node);
-
-    if (parentGadgetId) {
-      // Nested LLM call - add to parent gadget's children
-      const parent = this.getNode(parentGadgetId) as GadgetNode;
-      parent.children.push(id);
-      // Track for idempotency
-      const nestedKey = `${parentGadgetId}_${iteration}`;
-      this.nestedLLMCallByKey.set(nestedKey, id);
-    } else {
-      // Top-level LLM call - track by iteration for idempotency
-      this.rootIds.push(id);
-      this.llmCallByIteration.set(iteration, id);
-    }
-
-    this.currentLLMCallId = id;
-    this.rebuildBlocks();
-    return id;
+    return this.nodeStore.addLLMCall(iteration, model, parentGadgetId, isNested);
   }
 
   /**
    * Complete an LLM call with details and optional raw response.
    */
   completeLLMCall(id: string, details: LLMCallNode["details"], rawResponse?: string): void {
-    const node = this.getNode(id) as LLMCallNode | undefined;
-    if (!node || node.type !== "llm_call") return;
-
-    node.isComplete = true;
-    node.details = details;
-    if (rawResponse !== undefined) {
-      node.rawResponse = rawResponse;
-    }
-    this.updateBlock(id);
+    this.nodeStore.completeLLMCall(id, details, rawResponse);
   }
 
   /**
@@ -228,9 +146,7 @@ export class BlockRenderer {
    * Called when the LLM call is ready (after controller modifications).
    */
   setLLMCallRequest(id: string, messages: import("llmist").LLMMessage[]): void {
-    const node = this.getNode(id) as LLMCallNode | undefined;
-    if (!node || node.type !== "llm_call") return;
-    node.rawRequest = messages;
+    this.nodeStore.setLLMCallRequest(id, messages);
   }
 
   /**
@@ -240,130 +156,21 @@ export class BlockRenderer {
    * They appear indented and are visible when the parent is rendered.
    */
   addGadget(invocationId: string, name: string, parameters?: Record<string, unknown>): string {
-    // Idempotency check - return existing block if already created
-    const existingId = this.gadgetByInvocationId.get(invocationId);
-    if (existingId) {
-      // Idempotent - return existing block
-      return existingId;
-    }
-
-    const id = this.generateId("gadget");
-    const parentLLMCallId = this.currentLLMCallId;
-
-    // Calculate depth based on parent
-    let depth = 0;
-    if (parentLLMCallId) {
-      const parent = this.getNode(parentLLMCallId);
-      if (parent) {
-        depth = parent.depth + 1;
-      }
-    }
-
-    const node: GadgetNode = {
-      id,
-      type: "gadget",
-      depth,
-      parentId: parentLLMCallId,
-      sessionId: this.currentSessionId,
-      invocationId,
-      name,
-      isComplete: false,
-      parameters,
-      children: [], // Used for subagent nested LLM calls
-    };
-
-    this.nodes.set(id, node);
-
-    if (parentLLMCallId) {
-      // Nest under parent LLM call
-      const parent = this.getNode(parentLLMCallId) as LLMCallNode;
-      parent.children.push(id);
-    } else {
-      // No parent LLM call - add to root
-      this.rootIds.push(id);
-    }
-
-    // Track for idempotency
-    this.gadgetByInvocationId.set(invocationId, id);
-
-    this.rebuildBlocks();
-    return id;
+    return this.nodeStore.addGadget(invocationId, name, parameters);
   }
 
   /**
    * Complete a gadget with result.
    */
   completeGadget(invocationId: string, options: CompleteGadgetOptions = {}): void {
-    // Find gadget by invocationId
-    const node = this.findGadgetByInvocationId(invocationId);
-    if (!node) return;
-
-    const { result, error, executionTimeMs, cost, mediaOutputs } = options;
-
-    node.isComplete = true;
-    node.result = result;
-    node.error = error;
-    node.executionTimeMs = executionTimeMs;
-    node.cost = cost;
-    node.mediaOutputs = mediaOutputs;
-
-    // Estimate result tokens (rough: ~4 chars per token)
-    if (result) {
-      node.resultTokens = Math.ceil(result.length / 4);
-    }
-
-    // Aggregate subagent stats from child LLM call nodes
-    if (node.children.length > 0) {
-      node.subagentStats = this.aggregateSubagentStats(node.children);
-    }
-
-    this.updateBlock(node.id);
-  }
-
-  /**
-   * Aggregate token/cost stats from child LLM call nodes.
-   */
-  private aggregateSubagentStats(childIds: string[]): GadgetNode["subagentStats"] {
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let cachedTokens = 0;
-    let cost = 0;
-    let llmCallCount = 0;
-
-    for (const childId of childIds) {
-      const child = this.nodes.get(childId);
-      if (child?.type === "llm_call" && child.details) {
-        inputTokens += child.details.inputTokens ?? 0;
-        outputTokens += child.details.outputTokens ?? 0;
-        cachedTokens += child.details.cachedInputTokens ?? 0;
-        cost += child.details.cost ?? 0;
-        llmCallCount++;
-      }
-    }
-
-    return { inputTokens, outputTokens, cachedTokens, cost, llmCallCount };
+    this.nodeStore.completeGadget(invocationId, options);
   }
 
   /**
    * Add a text node (flows between LLM calls).
    */
   addText(content: string): string {
-    const id = this.generateId("text");
-
-    const node: TextNode = {
-      id,
-      type: "text",
-      depth: 0,
-      parentId: null,
-      sessionId: this.currentSessionId,
-      content,
-      children: [] as never[],
-    };
-
-    this.nodes.set(id, node);
-    this.rootIds.push(id);
-    this.rebuildBlocks();
-    return id;
+    return this.nodeStore.addText(content);
   }
 
   /**
@@ -380,23 +187,7 @@ export class BlockRenderer {
     message: string,
     category: "throttle" | "retry" | "info" | "warning" | "error",
   ): string {
-    const id = this.generateId("system");
-
-    const node: SystemMessageNode = {
-      id,
-      type: "system_message",
-      depth: 0,
-      parentId: null,
-      sessionId: this.currentSessionId,
-      message,
-      category,
-      children: [] as never[],
-    };
-
-    this.nodes.set(id, node);
-    this.rootIds.push(id);
-    this.rebuildBlocks();
-    return id;
+    return this.nodeStore.addSystemMessage(message, category);
   }
 
   /**
@@ -408,52 +199,7 @@ export class BlockRenderer {
    * @param thinkingType - Whether this is actual thinking or redacted content
    */
   addThinking(content: string, thinkingType: "thinking" | "redacted"): void {
-    if (this.currentThinkingId) {
-      // Append to existing thinking block
-      const node = this.getNode(this.currentThinkingId) as ThinkingNode | undefined;
-      if (node && node.type === "thinking") {
-        node.content += content;
-        this.updateBlock(this.currentThinkingId);
-        return;
-      }
-    }
-
-    // Create new thinking block as child of current LLM call
-    const id = this.generateId("thinking");
-    const parentLLMCallId = this.currentLLMCallId;
-
-    let depth = 0;
-    if (parentLLMCallId) {
-      const parent = this.getNode(parentLLMCallId);
-      if (parent) {
-        depth = parent.depth + 1;
-      }
-    }
-
-    const node: ThinkingNode = {
-      id,
-      type: "thinking",
-      depth,
-      parentId: parentLLMCallId,
-      sessionId: this.currentSessionId,
-      content,
-      thinkingType,
-      isComplete: false,
-      children: [] as never[],
-    };
-
-    this.nodes.set(id, node);
-
-    if (parentLLMCallId) {
-      // Nest under parent LLM call
-      const parent = this.getNode(parentLLMCallId) as LLMCallNode;
-      parent.children.push(id);
-    } else {
-      this.rootIds.push(id);
-    }
-
-    this.currentThinkingId = id;
-    this.rebuildBlocks();
+    this.nodeStore.addThinking(content, thinkingType);
   }
 
   /**
@@ -461,15 +207,7 @@ export class BlockRenderer {
    * Called when the LLM call finishes to mark thinking as complete.
    */
   completeThinking(): void {
-    if (!this.currentThinkingId) return;
-
-    const node = this.getNode(this.currentThinkingId) as ThinkingNode | undefined;
-    if (node && node.type === "thinking") {
-      node.isComplete = true;
-      this.updateBlock(this.currentThinkingId);
-    }
-
-    this.currentThinkingId = null;
+    this.nodeStore.completeThinking();
   }
 
   /**
@@ -482,24 +220,7 @@ export class BlockRenderer {
    * @returns The block ID
    */
   addUserMessage(message: string): string {
-    const id = this.generateId("user");
-    // Store raw message - formatting happens in formatBlockContent
-    // to avoid double markdown rendering
-
-    const node: TextNode = {
-      id,
-      type: "text",
-      depth: 0,
-      parentId: null,
-      sessionId: this.currentSessionId,
-      content: message,
-      children: [] as never[],
-    };
-
-    this.nodes.set(id, node);
-    this.rootIds.push(id);
-    this.rebuildBlocks();
-    return id;
+    return this.nodeStore.addUserMessage(message);
   }
 
   /**
@@ -507,10 +228,7 @@ export class BlockRenderer {
    * Uses O(1) Map lookup instead of linear search.
    */
   findGadgetByInvocationId(invocationId: string): GadgetNode | undefined {
-    const blockId = this.gadgetByInvocationId.get(invocationId);
-    if (!blockId) return undefined;
-    const node = this.nodes.get(blockId);
-    return node?.type === "gadget" ? (node as GadgetNode) : undefined;
+    return this.nodeStore.findGadgetByInvocationId(invocationId);
   }
 
   /**
@@ -519,7 +237,7 @@ export class BlockRenderer {
    * under the correct subagent LLM call.
    */
   setCurrentLLMCall(llmCallId: string | null): void {
-    this.currentLLMCallId = llmCallId;
+    this.nodeStore.currentLLMCallId = llmCallId;
   }
 
   /**
@@ -530,7 +248,7 @@ export class BlockRenderer {
    * determined by event.parentId in handleTreeEvent(), not by this method.
    */
   getCurrentLLMCallId(): string | null {
-    return this.currentLLMCallId;
+    return this.nodeStore.currentLLMCallId;
   }
 
   /**
@@ -546,26 +264,18 @@ export class BlockRenderer {
    * Use this when tree handles completion but hooks have raw data.
    */
   setLLMCallResponse(id: string, rawResponse: string): void {
-    const node = this.getNode(id) as LLMCallNode | undefined;
-    if (!node || node.type !== "llm_call") return;
-    node.rawResponse = rawResponse;
+    this.nodeStore.setLLMCallResponse(id, rawResponse);
   }
 
   /**
    * Clear all blocks.
    */
   clear(): void {
-    this.nodes.clear();
+    this.nodeStore.clear();
     this.blocks.clear();
     this.expandedStates.clear();
-    this.llmCallByIteration.clear();
-    this.gadgetByInvocationId.clear();
-    this.nestedLLMCallByKey.clear();
-    this.rootIds = [];
     this.selectableIds = [];
     this.selectedIndex = -1;
-    this.currentLLMCallId = null;
-    this.currentThinkingId = null;
 
     // Clear container children
     for (const child of [...this.container.children]) {
@@ -591,8 +301,7 @@ export class BlockRenderer {
    * Increments the session counter so new blocks get the new sessionId.
    */
   startNewSession(): void {
-    this.previousSessionId = this.currentSessionId;
-    this.currentSessionId++;
+    this.nodeStore.startNewSession();
   }
 
   /**
@@ -601,13 +310,12 @@ export class BlockRenderer {
    * The previous session's content was kept visible during this session for context.
    */
   clearPreviousSession(): void {
-    if (this.previousSessionId === null) return;
-
-    const prevSessionId = this.previousSessionId;
+    const prevSessionId = this.nodeStore.getPreviousSessionId();
+    if (prevSessionId === null) return;
 
     // Collect IDs of nodes from the previous session
     const nodesToRemove: string[] = [];
-    for (const [id, node] of this.nodes.entries()) {
+    for (const [id, node] of this.nodeStore.nodes.entries()) {
       if (node.sessionId === prevSessionId) {
         nodesToRemove.push(id);
       }
@@ -615,7 +323,7 @@ export class BlockRenderer {
 
     // Remove nodes and their widgets
     for (const id of nodesToRemove) {
-      this.nodes.delete(id);
+      this.nodeStore.nodes.delete(id);
       const block = this.blocks.get(id);
       if (block?.box) {
         block.box.detach();
@@ -625,7 +333,7 @@ export class BlockRenderer {
     }
 
     // Update rootIds - filter out removed nodes
-    this.rootIds = this.rootIds.filter((id) => !nodesToRemove.includes(id));
+    this.nodeStore.rootIds = this.nodeStore.rootIds.filter((id) => !nodesToRemove.includes(id));
 
     // Update selectableIds - filter out removed nodes
     this.selectableIds = this.selectableIds.filter((id) => !nodesToRemove.includes(id));
@@ -636,7 +344,7 @@ export class BlockRenderer {
     }
 
     // Clear the previous session marker
-    this.previousSessionId = null;
+    this.nodeStore.clearPreviousSessionId();
 
     this.renderCallback();
     this.notifyHasContentChange();
@@ -646,7 +354,7 @@ export class BlockRenderer {
    * Get the current session ID (for node creation).
    */
   getCurrentSessionId(): number {
-    return this.currentSessionId;
+    return this.nodeStore.getCurrentSessionId();
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -758,12 +466,8 @@ export class BlockRenderer {
     }
   }
 
-  private generateId(prefix: string): string {
-    return `${prefix}_${++this.nodeIdCounter}`;
-  }
-
   private getNode(id: string): BlockNode | undefined {
-    return this.nodes.get(id);
+    return this.nodeStore.getNode(id);
   }
 
   /**
@@ -785,7 +489,7 @@ export class BlockRenderer {
     let top = 0;
 
     // Traverse tree in order
-    for (const rootId of this.rootIds) {
+    for (const rootId of this.nodeStore.rootIds) {
       top = this.renderNodeTree(rootId, top);
     }
 
@@ -1153,7 +857,7 @@ export class BlockRenderer {
    */
   private repositionBlocks(): void {
     let top = 0;
-    for (const rootId of this.rootIds) {
+    for (const rootId of this.nodeStore.rootIds) {
       top = this.repositionNodeTree(rootId, top);
     }
 
@@ -1224,7 +928,7 @@ export class BlockRenderer {
    */
   private getTotalContentHeight(): number {
     let totalHeight = 0;
-    for (const rootId of this.rootIds) {
+    for (const rootId of this.nodeStore.rootIds) {
       totalHeight = this.sumNodeTreeHeight(rootId, totalHeight);
     }
     return totalHeight;
@@ -1296,7 +1000,7 @@ export class BlockRenderer {
 
     // Apply offset to all blocks if content is shorter than viewport
     if (offset > 0) {
-      for (const rootId of this.rootIds) {
+      for (const rootId of this.nodeStore.rootIds) {
         this.applyOffsetToNodeTree(rootId, offset);
       }
     }
@@ -1405,7 +1109,7 @@ export class BlockRenderer {
     let top = 0;
 
     // Traverse tree in order
-    for (const rootId of this.rootIds) {
+    for (const rootId of this.nodeStore.rootIds) {
       top = this.renderNodeTree(rootId, top);
     }
 
@@ -1504,9 +1208,7 @@ export class BlockRenderer {
 
     // Clear all mappings for a fresh start with the new tree
     this.treeNodeToBlockId.clear();
-    this.llmCallByIteration.clear();
-    this.gadgetByInvocationId.clear();
-    this.nestedLLMCallByKey.clear();
+    this.nodeStore.clearIdempotencyMaps();
 
     // Subscribe to all events
     this.treeUnsubscribe = tree.onAll((event: ExecutionEvent) => {
@@ -1528,7 +1230,7 @@ export class BlockRenderer {
     switch (event.type) {
       case "llm_call_start": {
         // Reset thinking tracker for new LLM call
-        this.currentThinkingId = null;
+        this.nodeStore.currentThinkingId = null;
 
         // Find parent block ID if this is a nested LLM call
         let parentBlockId: string | undefined;
@@ -1593,7 +1295,7 @@ export class BlockRenderer {
         }
 
         // Temporarily set current LLM call for proper parenting
-        const previousLLMCallId = this.currentLLMCallId;
+        const previousLLMCallId = this.nodeStore.currentLLMCallId;
         if (parentBlockId) {
           this.setCurrentLLMCall(parentBlockId);
         }
@@ -1602,7 +1304,7 @@ export class BlockRenderer {
         this.treeNodeToBlockId.set(event.nodeId, blockId);
 
         // Restore previous context
-        this.currentLLMCallId = previousLLMCallId;
+        this.nodeStore.currentLLMCallId = previousLLMCallId;
         break;
       }
 
