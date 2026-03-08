@@ -21,7 +21,7 @@ import {
   getIndent,
 } from "../ui/block-formatters.js";
 import { formatUserMessage, renderMarkdown } from "../ui/formatters.js";
-import { NodeStore, type CompleteGadgetOptions } from "./node-store.js";
+import { type CompleteGadgetOptions, NodeStore } from "./node-store.js";
 import type {
   BlockNode,
   ContentFilterMode,
@@ -298,17 +298,11 @@ export class BlockRenderer {
     const prevSessionId = this.nodeStore.getPreviousSessionId();
     if (prevSessionId === null) return;
 
-    // Collect IDs of nodes from the previous session
-    const nodesToRemove: string[] = [];
-    for (const [id, node] of this.nodeStore.nodes.entries()) {
-      if (node.sessionId === prevSessionId) {
-        nodesToRemove.push(id);
-      }
-    }
+    // Delegate node removal (including rootIds + idempotency map cleanup) to NodeStore
+    const nodesToRemove = this.nodeStore.removeSessionNodes(prevSessionId);
 
-    // Remove nodes and their widgets
+    // Clean up BlockRenderer-owned UI state for removed nodes
     for (const id of nodesToRemove) {
-      this.nodeStore.nodes.delete(id);
       const block = this.blocks.get(id);
       if (block?.box) {
         block.box.detach();
@@ -316,9 +310,6 @@ export class BlockRenderer {
       this.blocks.delete(id);
       this.expandedStates.delete(id);
     }
-
-    // Update rootIds - filter out removed nodes
-    this.nodeStore.rootIds = this.nodeStore.rootIds.filter((id) => !nodesToRemove.includes(id));
 
     // Update selectableIds - filter out removed nodes
     this.selectableIds = this.selectableIds.filter((id) => !nodesToRemove.includes(id));
@@ -1215,7 +1206,7 @@ export class BlockRenderer {
     switch (event.type) {
       case "llm_call_start": {
         // Reset thinking tracker for new LLM call
-        this.nodeStore.currentThinkingId = null;
+        this.nodeStore.resetCurrentThinking();
 
         // Find parent block ID if this is a nested LLM call
         let parentBlockId: string | undefined;
@@ -1280,7 +1271,7 @@ export class BlockRenderer {
         }
 
         // Temporarily set current LLM call for proper parenting
-        const previousLLMCallId = this.nodeStore.currentLLMCallId;
+        const previousLLMCallId = this.getCurrentLLMCallId();
         if (parentBlockId) {
           this.setCurrentLLMCall(parentBlockId);
         }
@@ -1289,7 +1280,7 @@ export class BlockRenderer {
         this.treeNodeToBlockId.set(event.nodeId, blockId);
 
         // Restore previous context
-        this.nodeStore.currentLLMCallId = previousLLMCallId;
+        this.setCurrentLLMCall(previousLLMCallId);
         break;
       }
 
