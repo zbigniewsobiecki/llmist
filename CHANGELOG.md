@@ -1,3 +1,12 @@
+## [16.0.4](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.3...v16.0.4) (2026-03-08)
+
+### Bug Fixes
+
+* **agent:** apply interceptGadgetResult to error messages, not just results ([2d392c6](https://github.com/zbigniewsobiecki/llmist/commit/2d392c6b9848d21737eecee5bc84ff55ebaea1e1))
+* **cli:** make NodeStore.generateId private to match original visibility ([1c434dd](https://github.com/zbigniewsobiecki/llmist/commit/1c434dd1b848ef48b7533134d1b597e8c7ecfd4d))
+* **gadgets:** address code review concerns in schema-to-json tests ([fa5570c](https://github.com/zbigniewsobiecki/llmist/commit/fa5570ceb2661a6e5660bb72bd1ea27e265883cb))
+* **test:** reduce oversized error string to prevent CI hang ([4e028f2](https://github.com/zbigniewsobiecki/llmist/commit/4e028f2afa5cd40d8f5ac0ebea4e8f16b3a27135))
+
 ## [16.0.3](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.2...v16.0.3) (2026-03-06)
 
 ## [16.0.2](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.1...v16.0.2) (2026-03-04)
