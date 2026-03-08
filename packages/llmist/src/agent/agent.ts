@@ -955,36 +955,7 @@ export class Agent {
         const stream = await this.createStream(llmOptions, currentIteration, currentLLMNodeId);
 
         // Process stream - ALL complexity delegated to StreamProcessor
-        const processor = new StreamProcessor({
-          iteration: currentIteration,
-          registry: this.registry,
-          gadgetStartPrefix: this.gadgetStartPrefix,
-          gadgetEndPrefix: this.gadgetEndPrefix,
-          gadgetArgPrefix: this.gadgetArgPrefix,
-          hooks: this.hooks,
-          logger: this.logger.getSubLogger({ name: "stream-processor" }),
-          requestHumanInput: this.requestHumanInput,
-          defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-          gadgetExecutionMode: this.gadgetExecutionMode,
-          client: this.client,
-          mediaStore: this.mediaStore,
-          agentConfig: this.agentContextConfig,
-          subagentConfig: this.subagentConfig,
-          // Tree context for execution tracking
-          tree: this.tree,
-          parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
-          baseDepth: this.baseDepth,
-          // Cross-iteration dependency tracking
-          priorCompletedInvocations: this.completedInvocationIds,
-          priorFailedInvocations: this.failedInvocationIds,
-          // Parent observer hooks for subagent visibility
-          parentObservers: this.parentObservers,
-          // Shared rate limit tracker and retry config for subagents
-          rateLimitTracker: this.rateLimitTracker,
-          retryConfig: this.retryConfig,
-          // Gadget limiting
-          maxGadgetsPerResponse: this.maxGadgetsPerResponse,
-        });
+        const processor = this.createStreamProcessor(currentIteration, currentLLMNodeId);
 
         // Consume the stream processor generator, yielding events in real-time.
         // The final event is a StreamCompletionEvent containing metadata.
@@ -1154,6 +1125,45 @@ export class Agent {
     }
 
     return this.client.stream(llmOptions);
+  }
+
+  /**
+   * Factory method for constructing a StreamProcessor for a given iteration.
+   *
+   * Encapsulates all StreamProcessor configuration, keeping executeWithRetry()
+   * focused on retry orchestration rather than processor construction details.
+   */
+  private createStreamProcessor(iteration: number, llmNodeId: string): StreamProcessor {
+    return new StreamProcessor({
+      iteration,
+      registry: this.registry,
+      gadgetStartPrefix: this.gadgetStartPrefix,
+      gadgetEndPrefix: this.gadgetEndPrefix,
+      gadgetArgPrefix: this.gadgetArgPrefix,
+      hooks: this.hooks,
+      logger: this.logger.getSubLogger({ name: "stream-processor" }),
+      requestHumanInput: this.requestHumanInput,
+      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+      gadgetExecutionMode: this.gadgetExecutionMode,
+      client: this.client,
+      mediaStore: this.mediaStore,
+      agentConfig: this.agentContextConfig,
+      subagentConfig: this.subagentConfig,
+      // Tree context for execution tracking
+      tree: this.tree,
+      parentNodeId: llmNodeId, // Gadgets are children of this LLM call
+      baseDepth: this.baseDepth,
+      // Cross-iteration dependency tracking
+      priorCompletedInvocations: this.completedInvocationIds,
+      priorFailedInvocations: this.failedInvocationIds,
+      // Parent observer hooks for subagent visibility
+      parentObservers: this.parentObservers,
+      // Shared rate limit tracker and retry config for subagents
+      rateLimitTracker: this.rateLimitTracker,
+      retryConfig: this.retryConfig,
+      // Gadget limiting
+      maxGadgetsPerResponse: this.maxGadgetsPerResponse,
+    });
   }
 
   /**
