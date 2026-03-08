@@ -424,6 +424,54 @@ export class NodeStore {
   }
 
   /**
+   * Reset the current thinking block tracker.
+   * Called at the start of a new LLM call to clear any stale thinking state.
+   */
+  resetCurrentThinking(): void {
+    this.currentThinkingId = null;
+  }
+
+  /**
+   * Remove all nodes belonging to a session and return their IDs.
+   * Handles node deletion, rootIds filtering, and idempotency map cleanup internally.
+   * Returns the removed node IDs so BlockRenderer can clean up its own UI state.
+   */
+  removeSessionNodes(sessionId: number): string[] {
+    const nodesToRemove: string[] = [];
+    for (const [id, node] of this.nodes.entries()) {
+      if (node.sessionId === sessionId) {
+        nodesToRemove.push(id);
+      }
+    }
+
+    for (const id of nodesToRemove) {
+      this.nodes.delete(id);
+    }
+
+    // Filter rootIds to remove deleted nodes
+    this.rootIds = this.rootIds.filter((id) => !nodesToRemove.includes(id));
+
+    // Clean up idempotency maps — remove entries pointing to deleted nodes
+    for (const [iteration, nodeId] of this.llmCallByIteration.entries()) {
+      if (nodesToRemove.includes(nodeId)) {
+        this.llmCallByIteration.delete(iteration);
+      }
+    }
+    for (const [invocationId, nodeId] of this.gadgetByInvocationId.entries()) {
+      if (nodesToRemove.includes(nodeId)) {
+        this.gadgetByInvocationId.delete(invocationId);
+      }
+    }
+    for (const [key, nodeId] of this.nestedLLMCallByKey.entries()) {
+      if (nodesToRemove.includes(nodeId)) {
+        this.nestedLLMCallByKey.delete(key);
+      }
+    }
+
+    return nodesToRemove;
+  }
+
+  /**
    * Clear all nodes and reset state.
    */
   clear(): void {
