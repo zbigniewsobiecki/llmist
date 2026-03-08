@@ -108,7 +108,7 @@ describe("StreamProgress", () => {
       // Call 2: (2000/1M * $30) + (1000/1M * $60) = $0.06 + $0.06 = $0.12
       // Total: $0.18
 
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBeCloseTo(0.18, 5);
     });
 
@@ -120,7 +120,7 @@ describe("StreamProgress", () => {
       progress.endCall({ inputTokens: 1000, outputTokens: 500, totalTokens: 1500 });
 
       // Should not throw and cost should remain 0
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBe(0);
     });
 
@@ -136,7 +136,7 @@ describe("StreamProgress", () => {
       progress.endCall({ inputTokens: 1000, outputTokens: 500, totalTokens: 1500 });
 
       // Should not throw and cost should remain 0
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBe(0);
     });
 
@@ -154,7 +154,7 @@ describe("StreamProgress", () => {
       }).not.toThrow();
 
       // Cost should remain 0
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBe(0);
     });
 
@@ -169,7 +169,7 @@ describe("StreamProgress", () => {
       progress.endCall(); // No usage provided
 
       // Cost should remain 0
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBe(0);
     });
 
@@ -181,7 +181,7 @@ describe("StreamProgress", () => {
       progress.addGadgetCost(0.037); // BrowseWeb cost
       progress.addGadgetCost(0.001); // Another gadget
 
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBeCloseTo(0.038, 5);
     });
 
@@ -193,7 +193,7 @@ describe("StreamProgress", () => {
       progress.addGadgetCost(0); // Should be ignored
       progress.addGadgetCost(-0.005); // Should be ignored
 
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBeCloseTo(0.01, 5);
     });
 
@@ -211,7 +211,7 @@ describe("StreamProgress", () => {
       // Add gadget cost
       progress.addGadgetCost(0.037);
 
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       // Total should be $0.06 (LLM) + $0.037 (gadget) = $0.097
       expect(totalCost).toBeCloseTo(0.097, 5);
     });
@@ -281,7 +281,7 @@ describe("StreamProgress", () => {
       progress.endCall({ inputTokens: 1000, outputTokens: 500, totalTokens: 1500 });
 
       // Verify total tokens
-      const totalTokens = (progress as any).totalTokens;
+      const totalTokens = (progress as any).callStatsTracker.totalTokens;
       expect(totalTokens).toBe(750 + 2250 + 1500); // 4500
 
       // Verify total cost
@@ -289,11 +289,11 @@ describe("StreamProgress", () => {
       // Call 2: (1500/1M * $30) + (750/1M * $60) = $0.045 + $0.045 = $0.09
       // Call 3: (1000/1M * $30) + (500/1M * $60) = $0.03 + $0.03 = $0.06
       // Total: $0.18
-      const totalCost = (progress as any).totalCost;
+      const totalCost = (progress as any).callStatsTracker.totalCost;
       expect(totalCost).toBeCloseTo(0.18, 5);
 
       // Verify iterations
-      const iterations = (progress as any).iterations;
+      const iterations = (progress as any).callStatsTracker.iterations;
       expect(iterations).toBe(3);
     });
 
@@ -312,14 +312,14 @@ describe("StreamProgress", () => {
       progress.startCall("gpt-3.5-turbo", 500);
 
       // Verify call state was reset
-      const model = (progress as any).model;
+      const model = (progress as any).callStatsTracker.model;
       expect(model).toBe("gpt-3.5-turbo");
 
-      const callInputTokens = (progress as any).callInputTokens;
+      const callInputTokens = (progress as any).callStatsTracker.callInputTokens;
       expect(callInputTokens).toBe(500);
 
       // But cumulative stats should be preserved
-      const totalTokens = (progress as any).totalTokens;
+      const totalTokens = (progress as any).callStatsTracker.totalTokens;
       expect(totalTokens).toBe(1500); // From first call
     });
 
@@ -745,7 +745,7 @@ describe("StreamProgress nested operations", () => {
       progress.addGadget("gadget-123", "BrowseWeb", { url: "https://example.com" });
       progress.completeGadget("gadget-123");
 
-      const inFlightGadgets = (progress as any).inFlightGadgets;
+      const inFlightGadgets = (progress as any).gadgetTracker.getMap();
       expect(inFlightGadgets.size).toBe(1); // Still in map
 
       const gadget = inFlightGadgets.get("gadget-123");
@@ -758,12 +758,12 @@ describe("StreamProgress nested operations", () => {
       const progress = new StreamProgress(stream, false);
 
       progress.addGadget("gadget-123", "BrowseWeb");
-      const gadgetBefore = (progress as any).inFlightGadgets.get("gadget-123");
+      const gadgetBefore = (progress as any).gadgetTracker.getMap().get("gadget-123");
       const startTime = gadgetBefore.startTime;
 
       progress.completeGadget("gadget-123");
 
-      const gadgetAfter = (progress as any).inFlightGadgets.get("gadget-123");
+      const gadgetAfter = (progress as any).gadgetTracker.getMap().get("gadget-123");
       expect(gadgetAfter.completedTime).toBeGreaterThanOrEqual(startTime);
     });
 
@@ -787,7 +787,7 @@ describe("StreamProgress nested operations", () => {
       progress.completeGadget("gadget-123");
       progress.clearCompletedGadgets();
 
-      const inFlightGadgets = (progress as any).inFlightGadgets;
+      const inFlightGadgets = (progress as any).gadgetTracker.getMap();
       expect(inFlightGadgets.size).toBe(0);
     });
 
@@ -800,7 +800,7 @@ describe("StreamProgress nested operations", () => {
       progress.completeGadget("gadget-1"); // Complete only one
       progress.clearCompletedGadgets();
 
-      const inFlightGadgets = (progress as any).inFlightGadgets;
+      const inFlightGadgets = (progress as any).gadgetTracker.getMap();
       expect(inFlightGadgets.size).toBe(1);
       expect(inFlightGadgets.has("gadget-2")).toBe(true);
     });
@@ -821,7 +821,7 @@ describe("StreamProgress nested operations", () => {
       progress.completeGadget("parent-gadget");
       progress.clearCompletedGadgets();
 
-      const inFlightGadgets = (progress as any).inFlightGadgets;
+      const inFlightGadgets = (progress as any).gadgetTracker.getMap();
       const nestedAgents = (progress as any).nestedOperationTracker.getNestedAgentsMap();
 
       expect(inFlightGadgets.size).toBe(0);
@@ -842,7 +842,7 @@ describe("StreamProgress nested operations", () => {
       progress.completeGadget("parent-gadget");
       progress.clearCompletedGadgets();
 
-      const inFlightGadgets = (progress as any).inFlightGadgets;
+      const inFlightGadgets = (progress as any).gadgetTracker.getMap();
       const nestedGadgets = (progress as any).nestedOperationTracker.getNestedGadgetsMap();
 
       expect(inFlightGadgets.size).toBe(0);
