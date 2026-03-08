@@ -21,7 +21,7 @@ import {
   getIndent,
 } from "../ui/block-formatters.js";
 import { formatUserMessage, renderMarkdown } from "../ui/formatters.js";
-import { NodeStore } from "./node-store.js";
+import { NodeStore, type CompleteGadgetOptions } from "./node-store.js";
 import type {
   BlockNode,
   ContentFilterMode,
@@ -30,21 +30,6 @@ import type {
   SelectableBlock,
   SystemMessageNode,
 } from "./types.js";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BlockRenderer Types
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Options for completing a gadget execution.
- */
-export interface CompleteGadgetOptions {
-  result?: string;
-  error?: string;
-  executionTimeMs?: number;
-  cost?: number;
-  mediaOutputs?: GadgetNode["mediaOutputs"];
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BlockRenderer Class
