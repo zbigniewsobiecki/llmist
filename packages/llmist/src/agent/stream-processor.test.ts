@@ -636,6 +636,58 @@ describe("StreamProcessor", () => {
         (capturedContext as { executionTimeMs: number }).executionTimeMs,
       ).toBeGreaterThanOrEqual(8);
     });
+
+    it("transforms oversized error message", async () => {
+      const oversizedError = "x".repeat(1_000_000);
+      const errorGadget = createMockGadget({
+        name: "ErrorGadget",
+        error: oversizedError,
+      });
+      registry.registerByClass(errorGadget);
+
+      const interceptGadgetResult = vi.fn((result: string) => `[modified] ${result.slice(0, 10)}`);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        hooks: { interceptors: { interceptGadgetResult } },
+      });
+      const stream = createTextStream(createGadgetCallString("ErrorGadget"));
+
+      const result = await consumeStream(processor, stream);
+
+      expect(interceptGadgetResult).toHaveBeenCalledOnce();
+      expect(interceptGadgetResult).toHaveBeenCalledWith(oversizedError, expect.any(Object));
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toBe(
+        "[modified] xxxxxxxxxx",
+      );
+    });
+
+    it("calls interceptor on error messages", async () => {
+      const errorGadget = createMockGadget({
+        name: "ErrorGadget",
+        error: "Command failed with exit code 1",
+      });
+      registry.registerByClass(errorGadget);
+
+      const interceptGadgetResult = vi.fn((result: string) => `[modified] ${result}`);
+
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        hooks: { interceptors: { interceptGadgetResult } },
+      });
+      const stream = createTextStream(createGadgetCallString("ErrorGadget"));
+
+      const result = await consumeStream(processor, stream);
+
+      expect(interceptGadgetResult).toHaveBeenCalledOnce();
+      const gadgetResults = result.outputs.filter((e) => e.type === "gadget_result");
+      expect(gadgetResults[0].type === "gadget_result" && gadgetResults[0].result.error).toBe(
+        "[modified] Command failed with exit code 1",
+      );
+    });
   });
 
   describe("Controller: afterGadgetExecution", () => {

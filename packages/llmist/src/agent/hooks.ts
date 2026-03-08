@@ -46,7 +46,7 @@
  *   interceptTextChunk: (chunk, ctx) =>
  *     chunk.includes('[INTERNAL]') ? null : chunk,
  *
- *   // Add metadata to results
+ *   // Add metadata to results and errors
  *   interceptGadgetResult: (result, ctx) =>
  *     `[${ctx.gadgetName}] ${result}`
  * }
@@ -531,12 +531,13 @@ export interface Interceptors {
   ) => Record<string, unknown>;
 
   /**
-   * Intercept and transform gadget results after execution.
+   * Intercept and transform gadget results and error messages after execution.
    * This affects what gets sent back to the LLM and stored in history.
+   * Called for both successful results (result.result) and errors (result.error).
    *
-   * @param result - The gadget result text
+   * @param result - The gadget result or error text
    * @param context - Context information including parameters and execution time
-   * @returns Transformed result text (cannot be suppressed)
+   * @returns Transformed text (cannot be suppressed)
    */
   interceptGadgetResult?: (result: string, context: GadgetResultInterceptorContext) => string;
 }

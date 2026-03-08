@@ -90,7 +90,7 @@ Synchronous transformations:
       return { ...params, modified: true };
     },
 
-    // Transform gadget result before LLM sees it
+    // Transform gadget result or error before LLM sees it
     interceptGadgetResult: (result, ctx) => {
       return `Result: ${result}`;
     },

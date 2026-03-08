@@ -811,8 +811,8 @@ export class StreamProcessor {
       result = await this.executor.execute(call);
     }
 
-    // Step 5: Interceptor - Transform result (modifies result.result)
-    if (result.result && this.hooks.interceptors?.interceptGadgetResult) {
+    // Step 5: Interceptor - Transform result and/or error text
+    if ((result.result || result.error) && this.hooks.interceptors?.interceptGadgetResult) {
       const context: GadgetResultInterceptorContext = {
         iteration: this.iteration,
         gadgetName: result.gadgetName,
@@ -821,7 +821,12 @@ export class StreamProcessor {
         executionTimeMs: result.executionTimeMs,
         logger: this.logger,
       };
-      result.result = this.hooks.interceptors.interceptGadgetResult(result.result, context);
+      if (result.result) {
+        result.result = this.hooks.interceptors.interceptGadgetResult(result.result, context);
+      }
+      if (result.error) {
+        result.error = this.hooks.interceptors.interceptGadgetResult(result.error, context);
+      }
     }
 
     // Step 6: Controller - After execution (can further modify result)
