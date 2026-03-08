@@ -317,9 +317,10 @@ export class StreamProcessor {
   async *process(stream: AsyncIterable<LLMStreamChunk>): AsyncGenerator<StreamEvent> {
     let finishReason: string | null = null;
     let usage: TokenUsage | undefined;
-    let didExecuteGadgets = false;
-    let shouldBreakLoop = false;
     let thinkingContent = "";
+
+    // Mutable state for gadget result tracking (passed to trackGadgetResult helper)
+    const state = { didExecuteGadgets: false, shouldBreakLoop: false };
 
     // Process stream chunks
     for await (const chunk of stream) {
@@ -390,12 +391,7 @@ export class StreamProcessor {
           yield processedEvent;
 
           // Track gadget execution
-          if (processedEvent.type === "gadget_result") {
-            didExecuteGadgets = true;
-            if (processedEvent.result.breaksLoop) {
-              shouldBreakLoop = true;
-            }
-          }
+          this.trackGadgetResult(processedEvent, state);
         }
       }
 
@@ -404,12 +400,7 @@ export class StreamProcessor {
       for (const evt of this.drainCompletedResults()) {
         yield evt;
 
-        if (evt.type === "gadget_result") {
-          didExecuteGadgets = true;
-          if (evt.result.breaksLoop) {
-            shouldBreakLoop = true;
-          }
-        }
+        this.trackGadgetResult(evt, state);
       }
 
       // Step 5: Break stream loop if gadget limit exceeded
@@ -431,12 +422,7 @@ export class StreamProcessor {
       for await (const processedEvent of this.processEventGenerator(event)) {
         yield processedEvent;
 
-        if (processedEvent.type === "gadget_result") {
-          didExecuteGadgets = true;
-          if (processedEvent.result.breaksLoop) {
-            shouldBreakLoop = true;
-          }
-        }
+        this.trackGadgetResult(processedEvent, state);
       }
     }
 
@@ -445,24 +431,14 @@ export class StreamProcessor {
     for await (const evt of this.waitForInFlightExecutions()) {
       yield evt;
 
-      if (evt.type === "gadget_result") {
-        didExecuteGadgets = true;
-        if (evt.result.breaksLoop) {
-          shouldBreakLoop = true;
-        }
-      }
+      this.trackGadgetResult(evt, state);
     }
 
     // Drain any remaining completed results (stragglers that finished after final poll)
     for (const evt of this.drainCompletedResults()) {
       yield evt;
 
-      if (evt.type === "gadget_result") {
-        didExecuteGadgets = true;
-        if (evt.result.breaksLoop) {
-          shouldBreakLoop = true;
-        }
-      }
+      this.trackGadgetResult(evt, state);
     }
 
     // Final pass to process any remaining pending gadgets
@@ -471,12 +447,7 @@ export class StreamProcessor {
     for await (const evt of this.processPendingGadgetsGenerator()) {
       yield evt;
 
-      if (evt.type === "gadget_result") {
-        didExecuteGadgets = true;
-        if (evt.result.breaksLoop) {
-          shouldBreakLoop = true;
-        }
-      }
+      this.trackGadgetResult(evt, state);
     }
 
     // Step 4: Interceptor - Transform final message
@@ -493,8 +464,8 @@ export class StreamProcessor {
     // Yield completion event with all metadata
     const completionEvent: StreamCompletionEvent = {
       type: "stream_complete",
-      shouldBreakLoop,
-      didExecuteGadgets,
+      shouldBreakLoop: state.shouldBreakLoop,
+      didExecuteGadgets: state.didExecuteGadgets,
       finishReason,
       usage,
       rawResponse: this.responseText,
@@ -1345,6 +1316,26 @@ export class StreamProcessor {
         });
       }
       this.dependencyResolver.clearPending();
+    }
+  }
+
+  /**
+   * Update gadget result tracking flags based on a stream event.
+   * Checks if the event is a gadget_result and, if so, marks gadgets as executed
+   * and sets the break-loop flag when the result requests it.
+   *
+   * @param evt - The stream event to inspect
+   * @param state - Mutable state object holding the tracking flags
+   */
+  private trackGadgetResult(
+    evt: StreamEvent,
+    state: { didExecuteGadgets: boolean; shouldBreakLoop: boolean },
+  ): void {
+    if (evt.type === "gadget_result") {
+      state.didExecuteGadgets = true;
+      if (evt.result.breaksLoop) {
+        state.shouldBreakLoop = true;
+      }
     }
   }
 
