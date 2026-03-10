@@ -48,7 +48,8 @@ import type { OutputLimitConfig } from "./output-limit-manager.js";
 import { OutputLimitManager } from "./output-limit-manager.js";
 import { RetryOrchestrator } from "./retry-orchestrator.js";
 import { safeObserve } from "./safe-observe.js";
-import { StreamProcessor } from "./stream-processor.js";
+import type { StreamProcessor } from "./stream-processor.js";
+import { StreamProcessorFactory } from "./stream-processor-factory.js";
 import { bridgeTreeToHooks, getSubagentContextForNode } from "./tree-hook-bridge.js";
 
 /**
@@ -248,13 +249,8 @@ export class Agent {
   private readonly hooks: AgentHooks;
   private readonly conversation: ConversationManager;
   private readonly registry: GadgetRegistry;
-  private readonly gadgetStartPrefix?: string;
-  private readonly gadgetEndPrefix?: string;
-  private readonly gadgetArgPrefix?: string;
-  private readonly requestHumanInput?: (question: string) => Promise<string>;
+  private readonly prefixConfig?: PrefixConfig;
   private readonly conversationUpdater: ConversationUpdater;
-  private readonly defaultGadgetTimeoutMs?: number;
-  private readonly gadgetExecutionMode: GadgetExecutionMode;
   private readonly defaultMaxTokens?: number;
   private hasUserPrompt: boolean;
 
@@ -272,18 +268,11 @@ export class Agent {
   private readonly reasoning?: ReasoningConfig;
   private readonly caching?: CachingConfig;
 
-  // Retry configuration
+  // Retry configuration (shared reference also passed to StreamProcessorFactory)
   private readonly retryConfig: ResolvedRetryConfig;
 
   // Rate limit tracker for proactive throttling
   private readonly rateLimitTracker?: RateLimitTracker;
-
-  // Subagent configuration
-  private readonly agentContextConfig: AgentContextConfig;
-  private readonly subagentConfig?: SubagentConfigMap;
-
-  // Gadget limiting
-  private readonly maxGadgetsPerResponse: number;
 
   // Cross-iteration dependency tracking - allows gadgets to depend on results from prior iterations
   private readonly completedInvocationIds: Set<string> = new Set();
@@ -295,10 +284,9 @@ export class Agent {
   // Execution Tree - first-class model for nested subagent support
   private readonly tree: ExecutionTree;
   private readonly parentNodeId: NodeId | null;
-  private readonly baseDepth: number;
 
-  // Parent observer hooks for subagent visibility
-  private readonly parentObservers?: Observers;
+  // StreamProcessor factory - encapsulates all pass-through StreamProcessor config
+  private readonly streamProcessorFactory: StreamProcessorFactory;
 
   // LLM call lifecycle helper (encapsulates prepareLLMCall, completeLLMCall, notifyLLMError)
   private readonly llmCallLifecycle: LLMCallLifecycle;
@@ -322,15 +310,9 @@ export class Agent {
     this.logger = options.logger ?? createLogger({ name: "llmist:agent" });
     this.registry = options.registry;
 
-    // Read prefix config
-    const prefixConfig = options.prefixConfig;
-    this.gadgetStartPrefix = prefixConfig?.gadgetStartPrefix;
-    this.gadgetEndPrefix = prefixConfig?.gadgetEndPrefix;
-    this.gadgetArgPrefix = prefixConfig?.gadgetArgPrefix;
+    // Store prefix config as a single object (used by conversation and factory)
+    this.prefixConfig = options.prefixConfig;
 
-    this.requestHumanInput = options.requestHumanInput;
-    this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
-    this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
     // Read output limit config
@@ -352,6 +334,7 @@ export class Agent {
     this.mediaStore = new MediaStore();
 
     // Chain output limiter interceptor with user hooks
+    // NOTE: this.hooks must be set BEFORE creating StreamProcessorFactory
     this.hooks = this.outputLimitManager.getHooks(options.hooks);
 
     // Build conversation
@@ -361,9 +344,9 @@ export class Agent {
     }
 
     baseBuilder.addGadgets(this.registry.getAll(), {
-      startPrefix: this.gadgetStartPrefix,
-      endPrefix: this.gadgetEndPrefix,
-      argPrefix: this.gadgetArgPrefix,
+      startPrefix: this.prefixConfig?.gadgetStartPrefix,
+      endPrefix: this.prefixConfig?.gadgetEndPrefix,
+      argPrefix: this.prefixConfig?.gadgetArgPrefix,
     });
     const baseMessages = baseBuilder.build();
 
@@ -373,9 +356,9 @@ export class Agent {
     }));
 
     this.conversation = new ConversationManager(baseMessages, initialMessages, {
-      startPrefix: this.gadgetStartPrefix,
-      endPrefix: this.gadgetEndPrefix,
-      argPrefix: this.gadgetArgPrefix,
+      startPrefix: this.prefixConfig?.gadgetStartPrefix,
+      endPrefix: this.prefixConfig?.gadgetEndPrefix,
+      argPrefix: this.prefixConfig?.gadgetArgPrefix,
     });
     this.hasUserPrompt = !!options.userPrompt;
     if (options.userPrompt) {
@@ -424,22 +407,34 @@ export class Agent {
       }
     }
 
-    // Build agent context config for subagents to inherit
-    this.agentContextConfig = {
-      model: this.model,
-      temperature: this.temperature,
-    };
-    this.subagentConfig = options.subagentConfig;
-
-    // Initialize gadget limiting (0 = unlimited)
-    this.maxGadgetsPerResponse = options.maxGadgetsPerResponse ?? 0;
-
     // Initialize Execution Tree from treeConfig (or create a new one for root agents)
     const treeConfig = options.treeConfig;
     this.tree = treeConfig?.tree ?? new ExecutionTree();
     this.parentNodeId = treeConfig?.parentNodeId ?? null;
-    this.baseDepth = treeConfig?.baseDepth ?? 0;
-    this.parentObservers = treeConfig?.parentObservers;
+
+    // Initialize StreamProcessor factory — encapsulates all pass-through StreamProcessor config
+    this.streamProcessorFactory = new StreamProcessorFactory({
+      registry: this.registry,
+      prefixConfig: this.prefixConfig,
+      hooks: this.hooks,
+      logger: this.logger,
+      requestHumanInput: options.requestHumanInput,
+      defaultGadgetTimeoutMs: options.defaultGadgetTimeoutMs,
+      gadgetExecutionMode: options.gadgetExecutionMode ?? "parallel",
+      client: this.client,
+      mediaStore: this.mediaStore,
+      agentContextConfig: {
+        model: this.model,
+        temperature: this.temperature,
+      },
+      subagentConfig: options.subagentConfig,
+      tree: this.tree,
+      baseDepth: treeConfig?.baseDepth ?? 0,
+      parentObservers: treeConfig?.parentObservers,
+      rateLimitTracker: this.rateLimitTracker,
+      retryConfig: this.retryConfig,
+      maxGadgetsPerResponse: options.maxGadgetsPerResponse ?? 0,
+    });
 
     // Initialize LLM call lifecycle helper
     this.llmCallLifecycle = new LLMCallLifecycle({
@@ -982,39 +977,13 @@ export class Agent {
   /**
    * Factory method for constructing a StreamProcessor for a given iteration.
    *
-   * Encapsulates all StreamProcessor configuration, keeping executeWithRetry()
-   * focused on retry orchestration rather than processor construction details.
+   * Delegates to StreamProcessorFactory, which encapsulates all static
+   * StreamProcessor configuration. Cross-iteration mutable state is passed here.
    */
   private createStreamProcessor(iteration: number, llmNodeId: string): StreamProcessor {
-    return new StreamProcessor({
-      iteration,
-      registry: this.registry,
-      gadgetStartPrefix: this.gadgetStartPrefix,
-      gadgetEndPrefix: this.gadgetEndPrefix,
-      gadgetArgPrefix: this.gadgetArgPrefix,
-      hooks: this.hooks,
-      logger: this.logger.getSubLogger({ name: "stream-processor" }),
-      requestHumanInput: this.requestHumanInput,
-      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-      gadgetExecutionMode: this.gadgetExecutionMode,
-      client: this.client,
-      mediaStore: this.mediaStore,
-      agentConfig: this.agentContextConfig,
-      subagentConfig: this.subagentConfig,
-      // Tree context for execution tracking
-      tree: this.tree,
-      parentNodeId: llmNodeId, // Gadgets are children of this LLM call
-      baseDepth: this.baseDepth,
-      // Cross-iteration dependency tracking
+    return this.streamProcessorFactory.create(iteration, llmNodeId, {
       priorCompletedInvocations: this.completedInvocationIds,
       priorFailedInvocations: this.failedInvocationIds,
-      // Parent observer hooks for subagent visibility
-      parentObservers: this.parentObservers,
-      // Shared rate limit tracker and retry config for subagents
-      rateLimitTracker: this.rateLimitTracker,
-      retryConfig: this.retryConfig,
-      // Gadget limiting
-      maxGadgetsPerResponse: this.maxGadgetsPerResponse,
     });
   }
 
