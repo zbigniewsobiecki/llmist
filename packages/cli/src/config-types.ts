@@ -150,8 +150,6 @@ export interface AgentConfig extends SharedCommandConfig {
   gadgets?: string[]; // Full replacement (preferred)
   "gadget-add"?: string[]; // Add to inherited gadgets
   "gadget-remove"?: string[]; // Remove from inherited gadgets
-  /** @deprecated Use `gadgets` (plural) instead. Will be removed in a future version. */
-  gadget?: string[]; // DEPRECATED: alias for gadgets
   builtins?: boolean;
   "builtin-interaction"?: boolean;
   "gadget-start-prefix"?: string;
@@ -253,7 +251,6 @@ export const AGENT_CONFIG_KEYS = new Set([
   "gadgets", // Full replacement (preferred)
   "gadget-add", // Add to inherited gadgets
   "gadget-remove", // Remove from inherited gadgets
-  "gadget", // DEPRECATED: alias for gadgets
   "builtins",
   "builtin-interaction",
   "gadget-start-prefix",

@@ -262,13 +262,6 @@ export interface ObserveGadgetCompleteContext {
   gadgetName: string;
   invocationId: string;
   parameters: Readonly<Record<string, unknown>>;
-  /**
-   * Original result before interceptors.
-   * @deprecated No longer populated. Use `finalResult` instead.
-   * With the unified event architecture, observers receive the final (post-interceptor)
-   * result from the ExecutionTree.
-   */
-  originalResult?: string;
   /** Final result after interceptors (the value stored in ExecutionTree) */
   finalResult?: string;
   error?: string;

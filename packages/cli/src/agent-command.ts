@@ -359,7 +359,6 @@ export async function executeAgent(
           });
 
           if (response === "yes" || response === "always") {
-            // TODO: Handle "always" by updating gadgetApprovals
             return { action: "proceed" };
           }
           return {

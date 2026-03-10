@@ -14,7 +14,7 @@ import {
  * Handles gadgets (full replacement), gadget-add (append), and gadget-remove (filter).
  *
  * Resolution order:
- * 1. If `gadgets` is present (or deprecated `gadget`), use it as full replacement
+ * 1. If `gadgets` is present, use it as full replacement
  * 2. Otherwise, start with inherited gadgets and apply add/remove
  *
  * @param section - The section's own values (not yet merged)
@@ -31,19 +31,11 @@ export function resolveGadgets(
   configPath?: string,
 ): string[] {
   const hasGadgets = "gadgets" in section;
-  const hasGadgetLegacy = "gadget" in section;
   const hasGadgetAdd = "gadget-add" in section;
   const hasGadgetRemove = "gadget-remove" in section;
 
-  // Warn on deprecated 'gadget' usage
-  if (hasGadgetLegacy && !hasGadgets) {
-    console.warn(
-      `[config] Warning: [${sectionName}].gadget is deprecated, use 'gadgets' (plural) instead`,
-    );
-  }
-
   // Error if both full replacement AND add/remove
-  if ((hasGadgets || hasGadgetLegacy) && (hasGadgetAdd || hasGadgetRemove)) {
+  if (hasGadgets && (hasGadgetAdd || hasGadgetRemove)) {
     throw new ConfigError(
       `[${sectionName}] Cannot use 'gadgets' with 'gadget-add'/'gadget-remove'. ` +
         `Use either full replacement (gadgets) OR modification (gadget-add/gadget-remove).`,
@@ -51,12 +43,9 @@ export function resolveGadgets(
     );
   }
 
-  // Full replacement mode (new `gadgets` takes precedence over deprecated `gadget`)
+  // Full replacement mode
   if (hasGadgets) {
     return section.gadgets as string[];
-  }
-  if (hasGadgetLegacy) {
-    return section.gadget as string[];
   }
 
   // Modification mode: start with inherited
@@ -136,7 +125,6 @@ export function resolveInheritance(config: CLIConfig, configPath?: string): CLIC
     const {
       inherits: _inherits,
       gadgets: _gadgets,
-      gadget: _gadget,
       "gadget-add": _gadgetAdd,
       "gadget-remove": _gadgetRemove,
       ...ownValues
@@ -149,8 +137,7 @@ export function resolveInheritance(config: CLIConfig, configPath?: string): CLIC
       merged.gadgets = resolvedGadgets;
     }
 
-    // Clean up legacy/modification fields from output
-    delete merged.gadget;
+    // Clean up modification fields from output
     delete merged["gadget-add"];
     delete merged["gadget-remove"];
 

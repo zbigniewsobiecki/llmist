@@ -22,7 +22,7 @@ class SchemaGadget extends Gadget({
 describe("BaseGadget", () => {
   it("includes parameters in plain text format (default)", () => {
     const gadget = new SchemaGadget();
-    const instruction = gadget.instruction;
+    const instruction = gadget.getInstruction();
 
     // Should use plain text format with required/optional sections
     expect(instruction).toContain("Parameters:");

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   resolveGadgets,
   resolveInheritance,
@@ -40,55 +40,6 @@ describe("config-resolution", () => {
         const section = { gadgets: [] as string[] };
         const result = resolveGadgets(section, ["ReadFile"], "agent");
         expect(result).toEqual([]);
-      });
-    });
-
-    describe("legacy gadget field", () => {
-      it("returns legacy gadget array when gadgets is not present", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const section = { gadget: ["ReadFile", "WriteFile"] };
-        const result = resolveGadgets(section, [], "agent");
-        expect(result).toEqual(["ReadFile", "WriteFile"]);
-        warnSpy.mockRestore();
-      });
-
-      it("replaces inherited gadgets with legacy gadget array", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const section = { gadget: ["WriteFile"] };
-        const result = resolveGadgets(section, ["ReadFile"], "agent");
-        expect(result).toEqual(["WriteFile"]);
-        warnSpy.mockRestore();
-      });
-
-      it("emits deprecation warning for legacy gadget field", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const section = { gadget: ["ReadFile"] };
-        resolveGadgets(section, [], "my-profile");
-        expect(warnSpy).toHaveBeenCalledOnce();
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("my-profile"));
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("deprecated"));
-        warnSpy.mockRestore();
-      });
-
-      it("does not emit deprecation warning when gadgets (plural) is also present", () => {
-        // gadgets takes precedence; warning only shown when gadget exists without gadgets
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        // Having both gadgets AND gadget would be a conflict error, so this test
-        // confirms the guard: if hasGadgets is true, the deprecation branch is skipped
-        // We can't test the no-warn case for gadget+gadgets because it throws.
-        // Instead verify the message does NOT appear when only gadgets (plural) is set.
-        resolveGadgets({ gadgets: ["ReadFile"] }, [], "agent");
-        expect(warnSpy).not.toHaveBeenCalled();
-        warnSpy.mockRestore();
-      });
-
-      it("prefers gadgets (plural) over legacy gadget when both present (conflict throws)", () => {
-        // When only gadgets (plural) is set, the legacy path is skipped entirely
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const result = resolveGadgets({ gadgets: ["X"] }, [], "agent");
-        expect(result).toEqual(["X"]);
-        expect(warnSpy).not.toHaveBeenCalled();
-        warnSpy.mockRestore();
       });
     });
 
@@ -142,20 +93,6 @@ describe("config-resolution", () => {
       it("throws ConfigError when gadgets and gadget-remove are both present", () => {
         const section = { gadgets: ["ReadFile"], "gadget-remove": ["WriteFile"] };
         expect(() => resolveGadgets(section, [], "agent")).toThrow(ConfigError);
-      });
-
-      it("throws ConfigError when legacy gadget and gadget-add are both present", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const section = { gadget: ["ReadFile"], "gadget-add": ["WriteFile"] };
-        expect(() => resolveGadgets(section, [], "agent")).toThrow(ConfigError);
-        warnSpy.mockRestore();
-      });
-
-      it("throws ConfigError when legacy gadget and gadget-remove are both present", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const section = { gadget: ["ReadFile"], "gadget-remove": ["WriteFile"] };
-        expect(() => resolveGadgets(section, [], "agent")).toThrow(ConfigError);
-        warnSpy.mockRestore();
       });
 
       it("conflict error message mentions section name", () => {
@@ -367,17 +304,6 @@ describe("config-resolution", () => {
         const result = resolveInheritance(config);
         expect(result.child).not.toHaveProperty("gadget-add");
         expect(result.child).not.toHaveProperty("gadget-remove");
-      });
-
-      it("cleans up legacy gadget key from resolved output", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const config: CLIConfig = {
-          child: { gadget: ["ReadFile"] },
-        } as CLIConfig;
-        const result = resolveInheritance(config);
-        expect(result.child).not.toHaveProperty("gadget");
-        expect(result.child).toMatchObject({ gadgets: ["ReadFile"] });
-        warnSpy.mockRestore();
       });
 
       it("does not add empty gadgets key when no gadgets configured", () => {

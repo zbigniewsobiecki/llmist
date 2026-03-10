@@ -441,15 +441,6 @@ export abstract class AbstractGadget {
   }
 
   /**
-   * Auto-generated instruction text for the LLM.
-   * Combines name, description, and parameter schema into a formatted instruction.
-   * @deprecated Use getInstruction() instead
-   */
-  get instruction(): string {
-    return this.getInstruction();
-  }
-
-  /**
    * Generate instruction text for the LLM.
    * Combines name, description, and parameter schema into a formatted instruction.
    *

@@ -213,7 +213,7 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
     ...previous,
     value,
   ];
-  const defaultGadgets = defaults?.gadgets ?? defaults?.gadget ?? [];
+  const defaultGadgets = defaults?.gadgets ?? [];
 
   return (
     cmd
@@ -357,9 +357,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
   if (config.temperature !== undefined) result.temperature = config.temperature;
   if (config["max-iterations"] !== undefined) result.maxIterations = config["max-iterations"];
   if (config.budget !== undefined) result.budget = config.budget;
-  // Prefer gadgets (plural) from resolved config, fall back to legacy gadget (singular)
-  const gadgets = config.gadgets ?? config.gadget;
-  if (gadgets !== undefined) result.gadget = gadgets;
+  if (config.gadgets !== undefined) result.gadget = config.gadgets;
   if (config.builtins !== undefined) result.builtins = config.builtins;
   if (config["builtin-interaction"] !== undefined)
     result.builtinInteraction = config["builtin-interaction"];

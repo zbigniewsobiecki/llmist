@@ -175,7 +175,7 @@ describe("GadgetRegistry", () => {
       registry.registerByClass(gadget);
 
       const retrieved = registry.get("MathGadget");
-      expect(retrieved?.instruction).toBe(gadget.instruction);
+      expect(retrieved?.getInstruction()).toBe(gadget.getInstruction());
     });
 
     it("allows instruction access from getAll", () => {
@@ -184,8 +184,8 @@ describe("GadgetRegistry", () => {
 
       const gadgets = registry.getAll();
 
-      expect(gadgets[0]?.instruction).toBeTruthy();
-      expect(gadgets[1]?.instruction).toBeTruthy();
+      expect(gadgets[0]?.getInstruction()).toBeTruthy();
+      expect(gadgets[1]?.getInstruction()).toBeTruthy();
     });
   });
 
