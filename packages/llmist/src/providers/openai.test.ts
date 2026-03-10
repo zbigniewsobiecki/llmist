@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { OpenAIChatProvider } from "./openai.js";
 import { openaiImageModels } from "./openai-image-models.js";
+import { openaiSpeechModels } from "./openai-speech-models.js";
 
 describe("OpenAIChatProvider", () => {
   describe("supports", () => {
@@ -1003,6 +1004,326 @@ describe("OpenAIChatProvider", () => {
         expect(callArgs).toHaveProperty("n", 1);
         // Should use spec's defaultSize "1024x1024"
         expect(callArgs).toHaveProperty("size", "1024x1024");
+      });
+    });
+  });
+
+  describe("speech generation", () => {
+    describe("getSpeechModelSpecs", () => {
+      it("returns the full list of openai speech model specs", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const specs = provider.getSpeechModelSpecs();
+
+        expect(specs).toBe(openaiSpeechModels);
+        expect(specs.length).toBeGreaterThan(0);
+        // Should include tts-1, tts-1-hd models
+        const modelIds = specs.map((s) => s.modelId);
+        expect(modelIds).toContain("tts-1");
+        expect(modelIds).toContain("tts-1-hd");
+      });
+
+      it("returns specs with correct structure", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const specs = provider.getSpeechModelSpecs();
+        const tts1Spec = specs.find((s) => s.modelId === "tts-1");
+
+        expect(tts1Spec).toBeDefined();
+        expect(tts1Spec?.provider).toBe("openai");
+        expect(tts1Spec?.defaultVoice).toBe("alloy");
+        expect(tts1Spec?.defaultFormat).toBe("mp3");
+        expect(tts1Spec?.voices).toContain("alloy");
+        expect(tts1Spec?.voices).toContain("nova");
+      });
+    });
+
+    describe("supportsSpeechGeneration", () => {
+      it("returns true for tts-1", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsSpeechGeneration("tts-1")).toBe(true);
+      });
+
+      it("returns true for tts-1-hd", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsSpeechGeneration("tts-1-hd")).toBe(true);
+      });
+
+      it("returns false for non-speech models", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsSpeechGeneration("gpt-4")).toBe(false);
+        expect(provider.supportsSpeechGeneration("dall-e-3")).toBe(false);
+        expect(provider.supportsSpeechGeneration("tts-unknown")).toBe(false);
+      });
+    });
+
+    describe("generateSpeech", () => {
+      it("calls client.audio.speech.create and returns ArrayBuffer", async () => {
+        const mockArrayBuffer = new ArrayBuffer(1024);
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => mockArrayBuffer,
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input: "Hello, world!",
+          voice: "alloy",
+          responseFormat: "mp3",
+          speed: 1.0,
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledTimes(1);
+        expect(result.audio).toBe(mockArrayBuffer);
+        expect(result.model).toBe("tts-1");
+        expect(result.format).toBe("mp3");
+      });
+
+      it("resolves default voice to alloy when not specified", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            voice: "alloy",
+          }),
+        );
+      });
+
+      it("resolves default format to mp3 when not specified", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            response_format: "mp3",
+          }),
+        );
+
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+        expect(result.format).toBe("mp3");
+      });
+
+      it("resolves default speed to 1.0 when not specified", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            speed: 1.0,
+          }),
+        );
+      });
+
+      it("uses custom voice, format, and speed when provided", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1-hd",
+          input: "Custom params test",
+          voice: "nova",
+          responseFormat: "opus",
+          speed: 1.5,
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "tts-1-hd",
+            input: "Custom params test",
+            voice: "nova",
+            response_format: "opus",
+            speed: 1.5,
+          }),
+        );
+      });
+
+      it("includes cost calculation in the result", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const input = "Hello, this is a test for cost calculation.";
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input,
+        });
+
+        // tts-1 pricing: $0.000015 per character
+        const expectedCost = input.length * 0.000015;
+        expect(result.cost).toBeDefined();
+        expect(result.cost).toBeCloseTo(expectedCost, 10);
+      });
+
+      it("includes cost calculation for tts-1-hd (higher rate)", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const input = "HD quality test";
+        const result = await provider.generateSpeech({
+          model: "tts-1-hd",
+          input,
+        });
+
+        // tts-1-hd pricing: $0.00003 per character (2x tts-1)
+        const expectedCost = input.length * 0.00003;
+        expect(result.cost).toBeDefined();
+        expect(result.cost).toBeCloseTo(expectedCost, 10);
+      });
+
+      it("returns correct usage with character count", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const input = "Count my characters";
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input,
+        });
+
+        expect(result.usage).toEqual({
+          characterCount: input.length,
+        });
+      });
+
+      it("passes the input text to the API", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const inputText = "The quick brown fox jumps over the lazy dog";
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: inputText,
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            input: inputText,
+            model: "tts-1",
+          }),
+        );
       });
     });
   });
