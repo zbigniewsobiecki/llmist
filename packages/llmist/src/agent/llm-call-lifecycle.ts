@@ -464,6 +464,12 @@ export class LLMCallLifecycle {
 
   /**
    * Process afterLLMCall controller and return modified final message.
+   *
+   * Skips controller invocation for interrupted calls (`finishReason === "interrupted"`)
+   * to preserve the original Agent behavior: the `afterLLMCall` controller was never
+   * invoked for interrupted calls in the pre-extraction code. Skipping it here prevents
+   * side effects (e.g., `append_messages` mutating conversation state) during cleanup
+   * of an already-exited run loop.
    */
   private async processAfterLLMCallController(
     iteration: number,
@@ -473,7 +479,10 @@ export class LLMCallLifecycle {
   ): Promise<string> {
     let finalMessage = result.finalMessage;
 
-    if (!this.hooks.controllers?.afterLLMCall) {
+    // Skip controller for interrupted calls — the run loop has already exited,
+    // so controller side effects (append_messages, append_and_modify) would mutate
+    // conversation state with no subsequent LLM call to consume those messages.
+    if (!this.hooks.controllers?.afterLLMCall || result.finishReason === "interrupted") {
       return finalMessage;
     }
 
