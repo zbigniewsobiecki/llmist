@@ -235,7 +235,7 @@ export class ExecutionTree {
 
   // For async event streaming
   private eventQueue: ExecutionEvent[] = [];
-  private eventWaiters: Array<(event: ExecutionEvent) => void> = [];
+  private eventWaiters: Array<(event: ExecutionEvent | null) => void> = [];
   private isCompleted = false;
 
   /**
@@ -303,8 +303,8 @@ export class ExecutionTree {
 
     // Push to async queue
     if (this.eventWaiters.length > 0) {
-      const waiter = this.eventWaiters.shift();
-      if (waiter) waiter(event);
+      const waiter = this.eventWaiters.shift()!;
+      waiter(event);
     } else {
       this.eventQueue.push(event);
     }
@@ -769,16 +769,25 @@ export class ExecutionTree {
   // ===========================================================================
 
   /**
+   * Extract the cost from a single execution node (0 if not set).
+   */
+  private getNodeCost(node: ExecutionNode): number {
+    if (node.type === "llm_call") {
+      return (node as LLMCallNode).cost ?? 0;
+    }
+    if (node.type === "gadget") {
+      return (node as GadgetNode).cost ?? 0;
+    }
+    return 0;
+  }
+
+  /**
    * Get total cost for entire tree.
    */
   getTotalCost(): number {
     let total = 0;
     for (const node of this.nodes.values()) {
-      if (node.type === "llm_call" && (node as LLMCallNode).cost) {
-        total += (node as LLMCallNode).cost!;
-      } else if (node.type === "gadget" && (node as GadgetNode).cost) {
-        total += (node as GadgetNode).cost!;
-      }
+      total += this.getNodeCost(node);
     }
     return total;
   }
@@ -790,24 +799,10 @@ export class ExecutionTree {
     const node = this.nodes.get(nodeId);
     if (!node) return 0;
 
-    let total = 0;
-
-    // Add node's own cost
-    if (node.type === "llm_call" && (node as LLMCallNode).cost) {
-      total += (node as LLMCallNode).cost!;
-    } else if (node.type === "gadget" && (node as GadgetNode).cost) {
-      total += (node as GadgetNode).cost!;
-    }
-
-    // Add descendants' costs
+    let total = this.getNodeCost(node);
     for (const descendant of this.getDescendants(nodeId)) {
-      if (descendant.type === "llm_call" && (descendant as LLMCallNode).cost) {
-        total += (descendant as LLMCallNode).cost!;
-      } else if (descendant.type === "gadget" && (descendant as GadgetNode).cost) {
-        total += (descendant as GadgetNode).cost!;
-      }
+      total += this.getNodeCost(descendant);
     }
-
     return total;
   }
 
@@ -966,8 +961,8 @@ export class ExecutionTree {
 
       if (this.isCompleted) break;
 
-      // Wait for next event
-      const event = await new Promise<ExecutionEvent>((resolve) => {
+      // Wait for next event (null signals tree completion)
+      const event = await new Promise<ExecutionEvent | null>((resolve) => {
         // Check queue again in case events arrived while setting up
         if (this.eventQueue.length > 0) {
           resolve(this.eventQueue.shift()!);
@@ -976,6 +971,7 @@ export class ExecutionTree {
         }
       });
 
+      if (event === null) break;
       yield event;
     }
 
@@ -987,12 +983,13 @@ export class ExecutionTree {
 
   /**
    * Mark the tree as complete (no more events will be emitted).
+   * Wakes up any consumers waiting in the events() async generator.
    */
   complete(): void {
     this.isCompleted = true;
-    // Wake up any waiters with a dummy event that signals completion
+    // Wake up all pending waiters with a null completion signal
     for (const waiter of this.eventWaiters) {
-      // Push a completion marker so waiters can exit
+      waiter(null);
     }
     this.eventWaiters = [];
   }
