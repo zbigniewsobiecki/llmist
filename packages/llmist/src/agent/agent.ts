@@ -380,9 +380,10 @@ export class Agent {
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
     // Resolve output limit config: sub-config object takes precedence over individual fields
-    const outputLimitConfig: OutputLimitConfig = options.outputLimitConfig ?? {
-      enabled: options.gadgetOutputLimit,
-      limitPercent: options.gadgetOutputLimitPercent,
+    const olc = options.outputLimitConfig;
+    const outputLimitConfig: OutputLimitConfig = {
+      enabled: olc?.enabled ?? options.gadgetOutputLimit,
+      limitPercent: olc?.limitPercent ?? options.gadgetOutputLimitPercent,
     };
 
     // Initialize gadget output limiting
