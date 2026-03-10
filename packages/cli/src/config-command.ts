@@ -112,7 +112,7 @@ function showProfile(name: string, config: CLIConfig, env: CLIEnvironment): void
   );
 
   // Gadgets
-  const gadgets = section.gadgets ?? section.gadget;
+  const gadgets = section.gadgets;
   if (gadgets && gadgets.length > 0) {
     env.stdout.write("\nGadgets:\n");
     for (const g of gadgets) {

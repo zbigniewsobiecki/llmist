@@ -72,7 +72,7 @@ describe("config", () => {
           system: "You are helpful.",
           temperature: 0.7,
           "max-iterations": 10,
-          gadget: ["~/gadgets/tools.ts", "./local-gadget.ts"],
+          gadgets: ["~/gadgets/tools.ts", "./local-gadget.ts"],
           builtins: true,
           "builtin-interaction": false,
         },
@@ -83,7 +83,7 @@ describe("config", () => {
       expect(result.agent).toBeDefined();
       expect(result.agent?.model).toBe("anthropic:claude-sonnet-4-5");
       expect(result.agent?.["max-iterations"]).toBe(10);
-      expect(result.agent?.gadget).toEqual(["~/gadgets/tools.ts", "./local-gadget.ts"]);
+      expect(result.agent?.gadgets).toEqual(["~/gadgets/tools.ts", "./local-gadget.ts"]);
       expect(result.agent?.builtins).toBe(true);
       expect(result.agent?.["builtin-interaction"]).toBe(false);
     });
@@ -95,7 +95,7 @@ describe("config", () => {
           description: "Review code for bugs.",
           model: "anthropic:claude-sonnet-4-5",
           system: "You are a code reviewer.",
-          gadget: ["~/gadgets/code-tools.ts"],
+          gadgets: ["~/gadgets/code-tools.ts"],
         },
       };
 
@@ -300,26 +300,26 @@ describe("config", () => {
         expect(() => validateConfig(raw)).toThrow("[agent].budget must be >= 0");
       });
 
-      it("should reject invalid gadget array", () => {
+      it("should reject invalid gadgets array", () => {
         const raw = {
           agent: {
-            gadget: "not-an-array",
+            gadgets: "not-an-array",
           },
         };
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
-        expect(() => validateConfig(raw)).toThrow("[agent].gadget must be an array");
+        expect(() => validateConfig(raw)).toThrow("[agent].gadgets must be an array");
       });
 
-      it("should reject non-string elements in gadget array", () => {
+      it("should reject non-string elements in gadgets array", () => {
         const raw = {
           agent: {
-            gadget: ["valid", 123],
+            gadgets: ["valid", 123],
           },
         };
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
-        expect(() => validateConfig(raw)).toThrow("[agent].gadget[1] must be a string");
+        expect(() => validateConfig(raw)).toThrow("[agent].gadgets[1] must be a string");
       });
 
       it("should reject invalid builtins type", () => {
@@ -979,21 +979,6 @@ describe("config", () => {
         const cmd = result["my-command"] as Record<string, unknown>;
 
         expect(cmd.gadgets).toBeUndefined();
-      });
-
-      it("should support legacy gadget (singular) field", () => {
-        // Using console.warn spy would be needed to test warning
-        const config: CLIConfig = {
-          agent: { gadget: ["ListDirectory", "ReadFile"] },
-          "my-command": { inherits: "agent" },
-        };
-
-        const result = resolveInheritance(config);
-        const cmd = result["my-command"] as Record<string, unknown>;
-
-        // Legacy gadget should be normalized to gadgets
-        expect(cmd.gadgets).toEqual(["ListDirectory", "ReadFile"]);
-        expect(cmd.gadget).toBeUndefined(); // cleaned up
       });
     });
 

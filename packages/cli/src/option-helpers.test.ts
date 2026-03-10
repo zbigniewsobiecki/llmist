@@ -279,21 +279,6 @@ describe("configToAgentOptions", () => {
       expect(result.gadget).toEqual(["ReadFile", "ListDirectory"]);
     });
 
-    it("falls back to legacy gadget (singular) when gadgets is absent", () => {
-      const config: CustomCommandConfig = { gadget: ["ReadFile"] };
-      const result = configToAgentOptions(config);
-      expect(result.gadget).toEqual(["ReadFile"]);
-    });
-
-    it("prefers gadgets (plural) over legacy gadget (singular) when both present", () => {
-      const config: CustomCommandConfig = {
-        gadgets: ["WriteFile"],
-        gadget: ["ReadFile"],
-      };
-      const result = configToAgentOptions(config);
-      expect(result.gadget).toEqual(["WriteFile"]);
-    });
-
     it("maps builtins as-is", () => {
       const config: CustomCommandConfig = { builtins: false };
       const result = configToAgentOptions(config);
