@@ -579,9 +579,4 @@ export class GadgetExecutor {
       };
     }
   }
-
-  // Execute multiple gadget calls in parallel
-  async executeAll(calls: ParsedGadgetCall[]): Promise<GadgetExecutionResult[]> {
-    return Promise.all(calls.map((call) => this.execute(call)));
-  }
 }
