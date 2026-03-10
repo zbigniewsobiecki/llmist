@@ -7,12 +7,6 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
-import {
-  CHARS_PER_TOKEN,
-  DEFAULT_GADGET_OUTPUT_LIMIT,
-  DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT,
-  FALLBACK_CONTEXT_WINDOW,
-} from "../core/constants.js";
 import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
 import type { ContentPart } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
@@ -27,7 +21,6 @@ import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
 import { resolveRetryConfig } from "../core/retry.js";
 import { BudgetPricingUnavailableError } from "../gadgets/exceptions.js";
 import { MediaStore } from "../gadgets/media-store.js";
-import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
   AgentContextConfig,
@@ -43,7 +36,6 @@ import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compa
 import { CompactionManager } from "./compaction/manager.js";
 import { ConversationManager } from "./conversation-manager.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
-import { GadgetOutputStore } from "./gadget-output-store.js";
 import {
   validateAfterLLMCallAction,
   validateAfterLLMErrorAction,
@@ -55,7 +47,6 @@ import type {
   AfterLLMErrorAction,
   AgentHooks,
   BeforeLLMCallAction,
-  GadgetResultInterceptorContext,
   LLMCallControllerContext,
   LLMErrorControllerContext,
   ObserveAbortContext,
@@ -67,6 +58,7 @@ import type {
   Observers,
 } from "./hooks.js";
 import type { IConversationManager } from "./interfaces.js";
+import { OutputLimitManager } from "./output-limit-manager.js";
 import { RetryOrchestrator } from "./retry-orchestrator.js";
 import { safeObserve } from "./safe-observe.js";
 import { StreamProcessor } from "./stream-processor.js";
@@ -266,9 +258,7 @@ export class Agent {
   private hasUserPrompt: boolean;
 
   // Gadget output limiting
-  private readonly outputStore: GadgetOutputStore;
-  private readonly outputLimitEnabled: boolean;
-  private readonly outputLimitCharLimit: number;
+  private readonly outputLimitManager: OutputLimitManager;
 
   // Context compaction
   private readonly compactionManager?: CompactionManager;
@@ -341,29 +331,22 @@ export class Agent {
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
     // Initialize gadget output limiting
-    this.outputLimitEnabled = options.gadgetOutputLimit ?? DEFAULT_GADGET_OUTPUT_LIMIT;
-    this.outputStore = new GadgetOutputStore();
+    this.outputLimitManager = new OutputLimitManager(
+      this.client,
+      this.model,
+      {
+        enabled: options.gadgetOutputLimit,
+        limitPercent: options.gadgetOutputLimitPercent,
+      },
+      this.registry,
+      this.logger,
+    );
 
     // Initialize media storage for gadgets returning images, audio, etc.
     this.mediaStore = new MediaStore();
 
-    // Calculate character limit from model context window
-    const limitPercent = options.gadgetOutputLimitPercent ?? DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT;
-    const limits = this.client.modelRegistry.getModelLimits(this.model);
-    const contextWindow = limits?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
-    this.outputLimitCharLimit = Math.floor(contextWindow * (limitPercent / 100) * CHARS_PER_TOKEN);
-
-    // Auto-register GadgetOutputViewer when limiting is enabled
-    // Pass the same character limit so viewer output is also bounded
-    if (this.outputLimitEnabled) {
-      this.registry.register(
-        "GadgetOutputViewer",
-        createGadgetOutputViewer(this.outputStore, this.outputLimitCharLimit),
-      );
-    }
-
     // Chain output limiter interceptor with user hooks
-    this.hooks = this.chainOutputLimiterWithUserHooks(options.hooks);
+    this.hooks = this.outputLimitManager.getHooks(options.hooks);
 
     // Build conversation
     const baseBuilder = new LLMMessageBuilder(options.promptConfig);
@@ -1137,60 +1120,6 @@ export class Agent {
     }
 
     return this.client.modelRegistry.getModelLimits(unprefixedModelId)?.maxOutputTokens;
-  }
-
-  /**
-   * Chain the output limiter interceptor with user-provided hooks.
-   * The limiter runs first, then chains to any user interceptor.
-   */
-  private chainOutputLimiterWithUserHooks(userHooks?: AgentHooks): AgentHooks {
-    if (!this.outputLimitEnabled) {
-      return userHooks ?? {};
-    }
-
-    const limiterInterceptor = (result: string, ctx: GadgetResultInterceptorContext): string => {
-      // Skip limiting for GadgetOutputViewer itself to avoid recursion
-      if (ctx.gadgetName === "GadgetOutputViewer") {
-        return result;
-      }
-
-      if (result.length > this.outputLimitCharLimit) {
-        const id = this.outputStore.store(ctx.gadgetName, result);
-        const lines = result.split("\n").length;
-        const bytes = new TextEncoder().encode(result).length;
-
-        this.logger.info("Gadget output exceeded limit, stored for browsing", {
-          gadgetName: ctx.gadgetName,
-          outputId: id,
-          bytes,
-          lines,
-          charLimit: this.outputLimitCharLimit,
-        });
-
-        return (
-          `[Gadget "${ctx.gadgetName}" returned too much data: ` +
-          `${bytes.toLocaleString()} bytes, ${lines.toLocaleString()} lines. ` +
-          `Use GadgetOutputViewer with id "${id}" to read it]`
-        );
-      }
-
-      return result;
-    };
-
-    // Chain with any user-provided interceptor (limiter runs first)
-    const userInterceptor = userHooks?.interceptors?.interceptGadgetResult;
-    const chainedInterceptor = userInterceptor
-      ? (result: string, ctx: GadgetResultInterceptorContext) =>
-          userInterceptor(limiterInterceptor(result, ctx), ctx)
-      : limiterInterceptor;
-
-    return {
-      ...userHooks,
-      interceptors: {
-        ...userHooks?.interceptors,
-        interceptGadgetResult: chainedInterceptor,
-      },
-    };
   }
 
   // ==========================================================================
