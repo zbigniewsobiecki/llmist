@@ -10,8 +10,7 @@ import type { LLMist } from "../core/client.js";
 import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
 import type { ContentPart } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
-import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
-import type { ModelSpec } from "../core/model-catalog.js";
+import { LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { CachingConfig, LLMGenerationOptions, ReasoningConfig } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
@@ -36,28 +35,14 @@ import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compa
 import { CompactionManager } from "./compaction/manager.js";
 import { ConversationManager } from "./conversation-manager.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
-import {
-  validateAfterLLMCallAction,
-  validateAfterLLMErrorAction,
-  validateBeforeLLMCallAction,
-} from "./hook-validators.js";
 import type {
-  AfterLLMCallAction,
-  AfterLLMCallControllerContext,
-  AfterLLMErrorAction,
   AgentHooks,
-  BeforeLLMCallAction,
-  LLMCallControllerContext,
-  LLMErrorControllerContext,
   ObserveAbortContext,
-  ObserveLLMCallContext,
-  ObserveLLMCallReadyContext,
-  ObserveLLMCompleteContext,
-  ObserveLLMErrorContext,
   ObserveRateLimitThrottleContext,
   Observers,
 } from "./hooks.js";
 import type { IConversationManager } from "./interfaces.js";
+import { LLMCallLifecycle } from "./llm-call-lifecycle.js";
 import { OutputLimitManager } from "./output-limit-manager.js";
 import { RetryOrchestrator } from "./retry-orchestrator.js";
 import { safeObserve } from "./safe-observe.js";
@@ -302,6 +287,9 @@ export class Agent {
   // Parent observer hooks for subagent visibility
   private readonly parentObservers?: Observers;
 
+  // LLM call lifecycle helper (encapsulates prepareLLMCall, completeLLMCall, notifyLLMError)
+  private readonly llmCallLifecycle: LLMCallLifecycle;
+
   /**
    * Creates a new Agent instance.
    * @internal This constructor is private. Use LLMist.createAgent() or AgentBuilder instead.
@@ -426,6 +414,25 @@ export class Agent {
     this.parentNodeId = options.parentNodeId ?? null;
     this.baseDepth = options.baseDepth ?? 0;
     this.parentObservers = options.parentObservers;
+
+    // Initialize LLM call lifecycle helper
+    this.llmCallLifecycle = new LLMCallLifecycle({
+      client: this.client,
+      conversation: this.conversation,
+      tree: this.tree,
+      hooks: this.hooks,
+      logger: this.logger,
+      rateLimitTracker: this.rateLimitTracker,
+      signal: this.signal,
+      temperature: this.temperature,
+      reasoning: this.reasoning,
+      caching: this.caching,
+      model: this.model,
+      defaultMaxTokens: this.defaultMaxTokens,
+      maxIterations: this.maxIterations,
+      budget: this.budget,
+      parentNodeId: this.parentNodeId,
+    });
 
     // Validate budget against model pricing
     if (this.budget !== undefined) {
@@ -687,7 +694,7 @@ export class Agent {
           }
 
           // Prepare LLM call (creates tree node and calls onLLMCallStart/Ready hooks)
-          const prepared = await this.prepareLLMCall(currentIteration);
+          const prepared = await this.llmCallLifecycle.prepareLLMCall(currentIteration);
           llmOptions = prepared.options;
           currentLLMNodeId = prepared.llmNodeId;
 
@@ -745,34 +752,13 @@ export class Agent {
             rawResponse: result.rawResponse,
           });
 
-          // Observer: LLM call complete
-          await safeObserve(async () => {
-            if (this.hooks.observers?.onLLMCallComplete) {
-              // At this point, currentLLMNodeId and llmOptions are guaranteed to be defined
-              const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
-              const context: ObserveLLMCompleteContext = {
-                iteration: currentIteration,
-                options: llmOptions!,
-                finishReason: result.finishReason,
-                usage: result.usage,
-                rawResponse: result.rawResponse,
-                finalMessage: result.finalMessage,
-                thinkingContent: result.thinkingContent,
-                logger: this.logger,
-                subagentContext,
-              };
-              await this.hooks.observers.onLLMCallComplete(context);
-            }
-          }, this.logger);
-
-          // Complete LLM call in execution tree (with cost calculation)
-          this.completeLLMCallInTree(currentLLMNodeId!, result);
-
-          // Process afterLLMCall controller (may modify finalMessage or append messages)
-          const finalMessage = await this.processAfterLLMCallController(
+          // Complete LLM call: fire onLLMCallComplete observer, update tree with cost,
+          // process afterLLMCall controller (may modify finalMessage or append messages)
+          const finalMessage = await this.llmCallLifecycle.completeLLMCall(
+            currentLLMNodeId!,
+            result,
             currentIteration,
             llmOptions!,
-            result,
             gadgetCallCount,
           );
 
@@ -806,36 +792,17 @@ export class Agent {
             }
           }
         } catch (error) {
-          // Handle LLM error
-          const errorHandled = await this.handleLLMError(error as Error, currentIteration);
+          // Delegate error handling and observer notification to lifecycle helper
+          const action = await this.llmCallLifecycle.notifyLLMError(
+            currentIteration,
+            currentLLMNodeId,
+            error as Error,
+          );
 
-          // Observer: LLM error
-          await safeObserve(async () => {
-            if (this.hooks.observers?.onLLMCallError) {
-              // Use llmOptions if available, fallback to constructing options
-              const options = llmOptions ?? {
-                model: this.model,
-                messages: this.conversation.getMessages(),
-                temperature: this.temperature,
-                maxTokens: this.defaultMaxTokens,
-              };
-              // Get SubagentContext if we have a node ID
-              const subagentContext = currentLLMNodeId
-                ? getSubagentContextForNode(this.tree, currentLLMNodeId)
-                : undefined;
-              const context: ObserveLLMErrorContext = {
-                iteration: currentIteration,
-                options,
-                error: error as Error,
-                recovered: errorHandled,
-                logger: this.logger,
-                subagentContext,
-              };
-              await this.hooks.observers.onLLMCallError(context);
-            }
-          }, this.logger);
-
-          if (!errorHandled) {
+          if (action.action === "recover") {
+            this.logger.info("Controller recovered from LLM error");
+            this.conversation.addAssistantMessage(action.fallbackResponse);
+          } else {
             throw error;
           }
         }
@@ -866,33 +833,27 @@ export class Agent {
       if (currentLLMNodeId) {
         const node = this.tree.getNode(currentLLMNodeId);
         if (node && node.type === "llm_call" && !node.completedAt) {
-          // Call observer hook for the interrupted request
-          await safeObserve(async () => {
-            if (this.hooks.observers?.onLLMCallComplete) {
-              const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
-              const context: ObserveLLMCompleteContext = {
-                iteration: currentIteration,
-                options: llmOptions ?? {
-                  model: this.model,
-                  messages: this.conversation.getMessages(),
-                  temperature: this.temperature,
-                  maxTokens: this.defaultMaxTokens,
-                },
-                finishReason: "interrupted",
-                usage: undefined,
-                rawResponse: "", // No response available for interrupted request
-                finalMessage: "", // No final message for interrupted request
-                logger: this.logger,
-                subagentContext,
-              };
-              await this.hooks.observers.onLLMCallComplete(context);
-            }
-          }, this.logger);
-
-          // Complete the LLM call in the execution tree
-          this.tree.completeLLMCall(currentLLMNodeId, {
-            finishReason: "interrupted",
-          });
+          // Delegate to lifecycle helper: fires onLLMCallComplete observer and updates tree
+          await this.llmCallLifecycle.completeLLMCall(
+            currentLLMNodeId,
+            {
+              type: "stream_complete",
+              finishReason: "interrupted",
+              usage: undefined,
+              rawResponse: "", // No response available for interrupted request
+              finalMessage: "", // No final message for interrupted request
+              didExecuteGadgets: false,
+              shouldBreakLoop: false,
+            },
+            currentIteration,
+            llmOptions ?? {
+              model: this.model,
+              messages: this.conversation.getMessages(),
+              temperature: this.temperature,
+              maxTokens: this.defaultMaxTokens,
+            },
+            0, // gadgetCallCount: no gadgets for interrupted call
+          );
         }
       }
 
@@ -1040,39 +1001,6 @@ export class Agent {
   }
 
   /**
-   * Handle LLM error through controller.
-   */
-  private async handleLLMError(error: Error, iteration: number): Promise<boolean> {
-    this.logger.error("LLM call failed", { error: error.message });
-
-    if (this.hooks.controllers?.afterLLMError) {
-      const context: LLMErrorControllerContext = {
-        iteration,
-        options: {
-          model: this.model,
-          messages: this.conversation.getMessages(),
-          temperature: this.temperature,
-          maxTokens: this.defaultMaxTokens,
-        },
-        error,
-        logger: this.logger,
-      };
-      const action: AfterLLMErrorAction = await this.hooks.controllers.afterLLMError(context);
-
-      // Validate the action
-      validateAfterLLMErrorAction(action);
-
-      if (action.action === "recover") {
-        this.logger.info("Controller recovered from LLM error");
-        this.conversation.addAssistantMessage(action.fallbackResponse);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
    * Handle text-only response (no gadgets called).
    */
   private async handleTextOnlyResponse(_text: string): Promise<boolean> {
@@ -1186,217 +1114,6 @@ export class Agent {
     }, this.logger);
 
     return { type: "compaction", event: compactionEvent } as StreamEvent;
-  }
-
-  /**
-   * Resolve reasoning configuration with auto-enable logic.
-   *
-   * Priority: explicit config > auto-enable for reasoning models > undefined
-   * When a model has `features.reasoning: true` and no explicit config is set,
-   * reasoning is automatically enabled at "medium" effort.
-   */
-  private resolveReasoningConfig(spec: ModelSpec | undefined): ReasoningConfig | undefined {
-    // Explicit config always wins
-    if (this.reasoning !== undefined) return this.reasoning;
-    // Auto-enable for reasoning-capable models
-    if (spec?.features?.reasoning) {
-      return { enabled: true, effort: "medium" };
-    }
-    return undefined;
-  }
-
-  /**
-   * Resolve caching configuration.
-   *
-   * Priority: explicit config > default enabled (preserves Anthropic's existing behavior)
-   * Default is `{ enabled: true }` which means:
-   * - Anthropic: `cache_control` markers are added (existing behavior preserved)
-   * - Gemini: Cache manager is consulted but skips if no explicit config was set
-   * - OpenAI: No-op (server-side automatic)
-   */
-  private resolveCachingConfig(): CachingConfig | undefined {
-    // Explicit config always wins
-    if (this.caching !== undefined) return this.caching;
-    // Default: enabled (preserves Anthropic's existing always-on caching behavior)
-    return { enabled: true };
-  }
-
-  /**
-   * Prepare LLM call options, create tree node, and process beforeLLMCall controller.
-   * @returns options, node ID, and optional skipWithSynthetic response if controller wants to skip
-   */
-  private async prepareLLMCall(
-    iteration: number,
-  ): Promise<{ options: LLMGenerationOptions; llmNodeId: string; skipWithSynthetic?: string }> {
-    // Resolve reasoning config: explicit config > auto-enable for reasoning models > none
-    const spec = this.client.modelRegistry?.getModelSpec?.(this.model);
-    const reasoning = this.resolveReasoningConfig(spec);
-
-    // Resolve caching config: explicit config > default enabled
-    const caching = this.resolveCachingConfig();
-
-    let llmOptions: LLMGenerationOptions = {
-      model: this.model,
-      messages: this.conversation.getMessages(),
-      temperature: this.temperature,
-      maxTokens: this.defaultMaxTokens,
-      signal: this.signal,
-      reasoning,
-      caching,
-    };
-
-    // Create LLM call node in execution tree BEFORE hooks
-    // This allows hooks to receive SubagentContext
-    const llmNode = this.tree.addLLMCall({
-      iteration,
-      model: llmOptions.model,
-      parentId: this.parentNodeId,
-      request: llmOptions.messages,
-    });
-
-    // Observer: LLM call start
-    await safeObserve(async () => {
-      if (this.hooks.observers?.onLLMCallStart) {
-        const subagentContext = getSubagentContextForNode(this.tree, llmNode.id);
-        const context: ObserveLLMCallContext = {
-          iteration,
-          options: llmOptions,
-          logger: this.logger,
-          subagentContext,
-        };
-        await this.hooks.observers.onLLMCallStart(context);
-      }
-    }, this.logger);
-
-    // Controller: Before LLM call
-    if (this.hooks.controllers?.beforeLLMCall) {
-      const context: LLMCallControllerContext = {
-        iteration,
-        maxIterations: this.maxIterations,
-        budget: this.budget,
-        totalCost: this.tree.getTotalCost(),
-        options: llmOptions,
-        logger: this.logger,
-      };
-      const action: BeforeLLMCallAction = await this.hooks.controllers.beforeLLMCall(context);
-
-      // Validate the action
-      validateBeforeLLMCallAction(action);
-
-      if (action.action === "skip") {
-        this.logger.info("Controller skipped LLM call, using synthetic response");
-        return {
-          options: llmOptions,
-          llmNodeId: llmNode.id,
-          skipWithSynthetic: action.syntheticResponse,
-        };
-      } else if (action.action === "proceed" && action.modifiedOptions) {
-        llmOptions = { ...llmOptions, ...action.modifiedOptions };
-      }
-    }
-
-    // Observer: LLM call ready (after controller modifications)
-    await safeObserve(async () => {
-      if (this.hooks.observers?.onLLMCallReady) {
-        const subagentContext = getSubagentContextForNode(this.tree, llmNode.id);
-        const context: ObserveLLMCallReadyContext = {
-          iteration,
-          maxIterations: this.maxIterations,
-          budget: this.budget,
-          totalCost: this.tree.getTotalCost(),
-          options: llmOptions,
-          logger: this.logger,
-          subagentContext,
-        };
-        await this.hooks.observers.onLLMCallReady(context);
-      }
-    }, this.logger);
-
-    return { options: llmOptions, llmNodeId: llmNode.id };
-  }
-
-  /**
-   * Calculate cost and complete LLM call in execution tree.
-   * Also records usage to rate limit tracker for proactive throttling.
-   */
-  private completeLLMCallInTree(nodeId: NodeId, result: StreamCompletionEvent): void {
-    const inputTokens = result.usage?.inputTokens ?? 0;
-    const outputTokens = result.usage?.outputTokens ?? 0;
-
-    // Record usage to rate limit tracker for proactive throttling
-    if (this.rateLimitTracker) {
-      this.rateLimitTracker.recordUsage(inputTokens, outputTokens);
-    }
-
-    // Calculate cost using ModelRegistry (if available)
-    const llmCost = this.client.modelRegistry?.estimateCost?.(
-      this.model,
-      inputTokens,
-      outputTokens,
-      result.usage?.cachedInputTokens ?? 0,
-      result.usage?.cacheCreationInputTokens ?? 0,
-      result.usage?.reasoningTokens ?? 0,
-    )?.totalCost;
-
-    // Complete LLM call in execution tree (including cost for automatic aggregation)
-    this.tree.completeLLMCall(nodeId, {
-      response: result.rawResponse,
-      usage: result.usage,
-      finishReason: result.finishReason,
-      cost: llmCost,
-      thinkingContent: result.thinkingContent,
-    });
-  }
-
-  /**
-   * Process afterLLMCall controller and return modified final message.
-   */
-  private async processAfterLLMCallController(
-    iteration: number,
-    llmOptions: LLMGenerationOptions,
-    result: StreamCompletionEvent,
-    gadgetCallCount: number,
-  ): Promise<string> {
-    let finalMessage = result.finalMessage;
-
-    if (!this.hooks.controllers?.afterLLMCall) {
-      return finalMessage;
-    }
-
-    const context: AfterLLMCallControllerContext = {
-      iteration,
-      maxIterations: this.maxIterations,
-      budget: this.budget,
-      totalCost: this.tree.getTotalCost(),
-      options: llmOptions,
-      finishReason: result.finishReason,
-      usage: result.usage,
-      finalMessage: result.finalMessage,
-      gadgetCallCount,
-      logger: this.logger,
-    };
-    const action: AfterLLMCallAction = await this.hooks.controllers.afterLLMCall(context);
-
-    // Validate the action
-    validateAfterLLMCallAction(action);
-
-    if (action.action === "modify_and_continue" || action.action === "append_and_modify") {
-      finalMessage = action.modifiedMessage;
-    }
-
-    if (action.action === "append_messages" || action.action === "append_and_modify") {
-      for (const msg of action.messages) {
-        if (msg.role === "user") {
-          this.conversation.addUserMessage(msg.content);
-        } else if (msg.role === "assistant") {
-          this.conversation.addAssistantMessage(extractMessageText(msg.content));
-        } else if (msg.role === "system") {
-          this.conversation.addUserMessage(`[System] ${extractMessageText(msg.content)}`);
-        }
-      }
-    }
-
-    return finalMessage;
   }
 
   /**
