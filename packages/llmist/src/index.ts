@@ -69,7 +69,11 @@ export type {
   ObserveRateLimitThrottleContext,
   ObserveRetryAttemptContext,
   Observers,
+  // Gadget output limit configuration
+  OutputLimitConfig,
   ParallelGadgetHintOptions,
+  // Gadget prefix configuration
+  PrefixConfig,
   ResolvedCompactionConfig,
   // Gadget output limiting
   StoredOutput,
@@ -77,6 +81,8 @@ export type {
   StreamProcessorOptions,
   // Subagent context for hook observers
   SubagentContext,
+  // Execution tree configuration
+  TreeConfig,
 } from "./agent/index.js";
 export {
   // Compaction exports
