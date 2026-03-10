@@ -6,6 +6,24 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMockClient, getMockManager, mockLLM } from "../../../../testing/src/index.js";
+import type { ModelSpec } from "../model-catalog.js";
+
+// Helper to create a minimal vision-capable ModelSpec for testing
+const createVisionModelSpec = (modelId: string, provider = "openai", hasVision = true): ModelSpec =>
+  ({
+    modelId,
+    provider,
+    displayName: `Test ${modelId}`,
+    contextWindow: 128_000,
+    maxOutputTokens: 4096,
+    pricing: { input: 5.0, output: 15.0 },
+    knowledgeCutoff: "2024-12",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: hasVision,
+    },
+  }) as ModelSpec;
 
 describe("VisionNamespace", () => {
   beforeEach(() => {
@@ -287,6 +305,28 @@ describe("VisionNamespace", () => {
       // Mock client doesn't have real model registry, so all models return false
       expect(client.vision.supportsModel("unknown-model-xyz")).toBe(false);
     });
+
+    it("returns true for a registered vision-capable model", () => {
+      const client = createMockClient();
+      const spec = createVisionModelSpec("gpt-4o", "openai", true);
+      client.modelRegistry.registerModel(spec);
+
+      expect(client.vision.supportsModel("gpt-4o")).toBe(true);
+    });
+
+    it("returns false for a registered model without vision feature", () => {
+      const client = createMockClient();
+      const spec = createVisionModelSpec("gpt-3.5-turbo", "openai", false);
+      client.modelRegistry.registerModel(spec);
+
+      expect(client.vision.supportsModel("gpt-3.5-turbo")).toBe(false);
+    });
+
+    it("returns false for unknown model not in registry", () => {
+      const client = createMockClient();
+
+      expect(client.vision.supportsModel("completely-unknown-model")).toBe(false);
+    });
   });
 
   describe("listModels()", () => {
@@ -297,6 +337,114 @@ describe("VisionNamespace", () => {
 
       // Should return an array (may be empty for mock client)
       expect(Array.isArray(models)).toBe(true);
+    });
+
+    it("returns only models with vision feature", () => {
+      const client = createMockClient();
+      client.modelRegistry.registerModel(createVisionModelSpec("vision-model-1", "openai", true));
+      client.modelRegistry.registerModel(
+        createVisionModelSpec("vision-model-2", "anthropic", true),
+      );
+      client.modelRegistry.registerModel(createVisionModelSpec("no-vision-model", "openai", false));
+
+      const models = client.vision.listModels();
+
+      expect(models).toContain("vision-model-1");
+      expect(models).toContain("vision-model-2");
+      expect(models).not.toContain("no-vision-model");
+    });
+
+    it("filters out models without vision feature", () => {
+      const client = createMockClient();
+      client.modelRegistry.registerModel(createVisionModelSpec("text-only-a", "openai", false));
+      client.modelRegistry.registerModel(createVisionModelSpec("text-only-b", "anthropic", false));
+
+      const models = client.vision.listModels();
+
+      expect(models).not.toContain("text-only-a");
+      expect(models).not.toContain("text-only-b");
+    });
+
+    it("handles empty registry by returning empty array", () => {
+      const client = createMockClient();
+
+      const models = client.vision.listModels();
+
+      expect(models).toEqual([]);
+    });
+  });
+
+  describe("buildImageMessage edge cases", () => {
+    it("throws error for invalid data URL format", async () => {
+      const client = createMockClient();
+
+      await expect(
+        client.vision.analyze({
+          model: "openai:gpt-4o",
+          image: "data:invalid-no-base64",
+          prompt: "Describe",
+        }),
+      ).rejects.toThrow("Invalid data URL format");
+    });
+
+    it("throws error for malformed data URL missing base64 content", async () => {
+      const client = createMockClient();
+
+      await expect(
+        client.vision.analyze({
+          model: "openai:gpt-4o",
+          image: "data:image/png;base64,",
+          prompt: "Describe",
+        }),
+      ).rejects.toThrow("Invalid data URL format");
+    });
+
+    it("handles very large base64 strings", async () => {
+      mockLLM().whenMessageHasImage().returns("Large image analyzed").register();
+
+      const client = createMockClient();
+      // Generate a large base64 string (simulating ~1MB image data)
+      const largeBase64 = Buffer.alloc(1024 * 1024, 0x89).toString("base64");
+
+      const result = await client.vision.analyze({
+        model: "openai:gpt-4o",
+        image: largeBase64,
+        prompt: "Describe this large image",
+        mimeType: "image/png",
+      });
+
+      expect(result).toBe("Large image analyzed");
+    });
+
+    it("throws error for unsupported image format when buffer cannot be detected", async () => {
+      const client = createMockClient();
+      // Use random bytes that don't match any known magic bytes, without a mimeType hint
+      const unknownBuffer = Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
+
+      await expect(
+        client.vision.analyze({
+          model: "openai:gpt-4o",
+          image: unknownBuffer,
+          prompt: "Describe",
+        }),
+      ).rejects.toThrow("Could not detect image MIME type");
+    });
+
+    it("accepts supported image format with explicit mimeType override", async () => {
+      mockLLM().whenMessageHasImage().returns("Custom format handled").register();
+
+      const client = createMockClient();
+      // Random bytes but with explicit mimeType
+      const rawBuffer = Buffer.from([0x00, 0x01, 0x02, 0x03]);
+
+      const result = await client.vision.analyze({
+        model: "openai:gpt-4o",
+        image: rawBuffer,
+        prompt: "Describe",
+        mimeType: "image/jpeg",
+      });
+
+      expect(result).toBe("Custom format handled");
     });
   });
 });
