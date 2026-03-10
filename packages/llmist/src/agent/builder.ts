@@ -1267,16 +1267,22 @@ export class AgentBuilder {
       promptConfig: this.promptConfig,
       initialMessages: this.initialMessages,
       requestHumanInput: this.requestHumanInput,
-      gadgetStartPrefix: this.gadgetStartPrefix,
-      gadgetEndPrefix: this.gadgetEndPrefix,
-      gadgetArgPrefix: this.gadgetArgPrefix,
+      // Prefix configuration sub-config
+      prefixConfig: {
+        gadgetStartPrefix: this.gadgetStartPrefix,
+        gadgetEndPrefix: this.gadgetEndPrefix,
+        gadgetArgPrefix: this.gadgetArgPrefix,
+      },
       textOnlyHandler: this.textOnlyHandler,
       textWithGadgetsHandler: this.textWithGadgetsHandler,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
       gadgetExecutionMode: this.gadgetExecutionMode,
       maxGadgetsPerResponse: this.maxGadgetsPerResponse,
-      gadgetOutputLimit: this.gadgetOutputLimit,
-      gadgetOutputLimitPercent: this.gadgetOutputLimitPercent,
+      // Output limit configuration sub-config
+      outputLimitConfig: {
+        enabled: this.gadgetOutputLimit,
+        limitPercent: this.gadgetOutputLimitPercent,
+      },
       compactionConfig: this.compactionConfig,
       retryConfig: this.retryConfig,
       rateLimitConfig: this.rateLimitConfig,
@@ -1284,12 +1290,13 @@ export class AgentBuilder {
       reasoning: this.reasoningConfig,
       caching: this.cachingConfig,
       subagentConfig: this.subagentConfig,
-      // Tree context for shared tree model (subagents share parent's tree)
-      parentTree: this.parentContext?.tree,
-      parentNodeId: this.parentContext?.nodeId,
-      baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
-      // Parent observer hooks for subagent visibility
-      parentObservers: this.parentObservers,
+      // Tree configuration sub-config (for shared tree model with subagents)
+      treeConfig: {
+        tree: this.parentContext?.tree,
+        parentNodeId: this.parentContext?.nodeId,
+        baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
+        parentObservers: this.parentObservers,
+      },
       // Shared rate limit tracker and retry config (for coordinated limits across subagents)
       sharedRateLimitTracker: this.sharedRateLimitTracker,
       sharedRetryConfig: this.sharedRetryConfig,

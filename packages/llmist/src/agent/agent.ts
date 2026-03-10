@@ -44,11 +44,59 @@ import type {
 } from "./hooks.js";
 import type { IConversationManager } from "./interfaces.js";
 import { LLMCallLifecycle } from "./llm-call-lifecycle.js";
+import type { OutputLimitConfig } from "./output-limit-manager.js";
 import { OutputLimitManager } from "./output-limit-manager.js";
 import { RetryOrchestrator } from "./retry-orchestrator.js";
 import { safeObserve } from "./safe-observe.js";
 import { StreamProcessor } from "./stream-processor.js";
 import { bridgeTreeToHooks, getSubagentContextForNode } from "./tree-hook-bridge.js";
+
+/**
+ * Configuration for the execution tree context (shared tree model with subagents).
+ */
+export interface TreeConfig {
+  /**
+   * Shared execution tree for tracking all LLM calls and gadget executions.
+   * If provided (by a parent subagent), nodes are added to this tree.
+   * If not provided, the Agent creates its own tree.
+   */
+  tree?: ExecutionTree;
+
+  /**
+   * Parent node ID in the tree (when this agent is a subagent).
+   * Used to set parentId on all nodes created by this agent.
+   */
+  parentNodeId?: NodeId;
+
+  /**
+   * Base depth for nodes created by this agent.
+   * Root agents use 0; subagents use (parentDepth + 1).
+   */
+  baseDepth?: number;
+
+  /**
+   * Parent agent's observer hooks for subagent visibility.
+   *
+   * When a subagent is created with withParentContext(ctx), these observers
+   * are also called for gadget events (in addition to the subagent's own hooks),
+   * enabling the parent to observe subagent gadget activity.
+   */
+  parentObservers?: Observers;
+}
+
+/**
+ * Configuration for custom gadget block format prefixes.
+ */
+export interface PrefixConfig {
+  /** Custom gadget start prefix */
+  gadgetStartPrefix?: string;
+
+  /** Custom gadget end prefix */
+  gadgetEndPrefix?: string;
+
+  /** Custom gadget argument prefix for block format parameters */
+  gadgetArgPrefix?: string;
+}
 
 /**
  * Configuration options for the Agent.
@@ -87,6 +135,12 @@ export interface AgentOptions {
   /** Callback for requesting human input during execution */
   requestHumanInput?: (question: string) => Promise<string>;
 
+  /**
+   * Gadget prefix configuration (start/end/arg prefixes for block format).
+   * When set, takes precedence over the individual gadgetStartPrefix/gadgetEndPrefix/gadgetArgPrefix fields.
+   */
+  prefixConfig?: PrefixConfig;
+
   /** Custom gadget start prefix */
   gadgetStartPrefix?: string;
 
@@ -124,6 +178,12 @@ export interface AgentOptions {
   /** Custom prompt configuration for gadget system prompts */
   promptConfig?: PromptTemplateConfig;
 
+  /**
+   * Gadget output limit configuration.
+   * When set, takes precedence over the individual gadgetOutputLimit/gadgetOutputLimitPercent fields.
+   */
+  outputLimitConfig?: OutputLimitConfig;
+
   /** Enable gadget output limiting (default: true) */
   gadgetOutputLimit?: boolean;
 
@@ -157,6 +217,12 @@ export interface AgentOptions {
   // ==========================================================================
   // Execution Tree Context (for shared tree model with subagents)
   // ==========================================================================
+
+  /**
+   * Execution tree configuration (shared tree model with subagents).
+   * When set, takes precedence over the individual parentTree/parentNodeId/baseDepth/parentObservers fields.
+   */
+  treeConfig?: TreeConfig;
 
   /**
    * Shared execution tree for tracking all LLM calls and gadget executions.
@@ -301,22 +367,29 @@ export class Agent {
     this.temperature = options.temperature;
     this.logger = options.logger ?? createLogger({ name: "llmist:agent" });
     this.registry = options.registry;
-    this.gadgetStartPrefix = options.gadgetStartPrefix;
-    this.gadgetEndPrefix = options.gadgetEndPrefix;
-    this.gadgetArgPrefix = options.gadgetArgPrefix;
+
+    // Resolve prefix config: sub-config object takes precedence over individual fields
+    const prefixConfig = options.prefixConfig;
+    this.gadgetStartPrefix = prefixConfig?.gadgetStartPrefix ?? options.gadgetStartPrefix;
+    this.gadgetEndPrefix = prefixConfig?.gadgetEndPrefix ?? options.gadgetEndPrefix;
+    this.gadgetArgPrefix = prefixConfig?.gadgetArgPrefix ?? options.gadgetArgPrefix;
+
     this.requestHumanInput = options.requestHumanInput;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
     this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
+    // Resolve output limit config: sub-config object takes precedence over individual fields
+    const outputLimitConfig: OutputLimitConfig = options.outputLimitConfig ?? {
+      enabled: options.gadgetOutputLimit,
+      limitPercent: options.gadgetOutputLimitPercent,
+    };
+
     // Initialize gadget output limiting
     this.outputLimitManager = new OutputLimitManager(
       this.client,
       this.model,
-      {
-        enabled: options.gadgetOutputLimit,
-        limitPercent: options.gadgetOutputLimitPercent,
-      },
+      outputLimitConfig,
       this.registry,
       this.logger,
     );
@@ -334,9 +407,9 @@ export class Agent {
     }
 
     baseBuilder.addGadgets(this.registry.getAll(), {
-      startPrefix: options.gadgetStartPrefix,
-      endPrefix: options.gadgetEndPrefix,
-      argPrefix: options.gadgetArgPrefix,
+      startPrefix: this.gadgetStartPrefix,
+      endPrefix: this.gadgetEndPrefix,
+      argPrefix: this.gadgetArgPrefix,
     });
     const baseMessages = baseBuilder.build();
 
@@ -346,9 +419,9 @@ export class Agent {
     }));
 
     this.conversation = new ConversationManager(baseMessages, initialMessages, {
-      startPrefix: options.gadgetStartPrefix,
-      endPrefix: options.gadgetEndPrefix,
-      argPrefix: options.gadgetArgPrefix,
+      startPrefix: this.gadgetStartPrefix,
+      endPrefix: this.gadgetEndPrefix,
+      argPrefix: this.gadgetArgPrefix,
     });
     this.hasUserPrompt = !!options.userPrompt;
     if (options.userPrompt) {
@@ -407,12 +480,14 @@ export class Agent {
     // Initialize gadget limiting (0 = unlimited)
     this.maxGadgetsPerResponse = options.maxGadgetsPerResponse ?? 0;
 
+    // Resolve tree config: sub-config object takes precedence over individual fields
+    const treeConfig = options.treeConfig;
     // Initialize Execution Tree
     // If a parent tree is provided (subagent case), share it; otherwise create a new tree
-    this.tree = options.parentTree ?? new ExecutionTree();
-    this.parentNodeId = options.parentNodeId ?? null;
-    this.baseDepth = options.baseDepth ?? 0;
-    this.parentObservers = options.parentObservers;
+    this.tree = treeConfig?.tree ?? options.parentTree ?? new ExecutionTree();
+    this.parentNodeId = treeConfig?.parentNodeId ?? options.parentNodeId ?? null;
+    this.baseDepth = treeConfig?.baseDepth ?? options.baseDepth ?? 0;
+    this.parentObservers = treeConfig?.parentObservers ?? options.parentObservers;
 
     // Initialize LLM call lifecycle helper
     this.llmCallLifecycle = new LLMCallLifecycle({
