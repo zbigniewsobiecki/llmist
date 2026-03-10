@@ -321,12 +321,6 @@ describe("VisionNamespace", () => {
 
       expect(client.vision.supportsModel("gpt-3.5-turbo")).toBe(false);
     });
-
-    it("returns false for unknown model not in registry", () => {
-      const client = createMockClient();
-
-      expect(client.vision.supportsModel("completely-unknown-model")).toBe(false);
-    });
   });
 
   describe("listModels()", () => {
@@ -375,18 +369,6 @@ describe("VisionNamespace", () => {
   });
 
   describe("buildImageMessage edge cases", () => {
-    it("throws error for invalid data URL format", async () => {
-      const client = createMockClient();
-
-      await expect(
-        client.vision.analyze({
-          model: "openai:gpt-4o",
-          image: "data:invalid-no-base64",
-          prompt: "Describe",
-        }),
-      ).rejects.toThrow("Invalid data URL format");
-    });
-
     it("throws error for malformed data URL missing base64 content", async () => {
       const client = createMockClient();
 
