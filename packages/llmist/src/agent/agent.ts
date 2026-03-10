@@ -34,6 +34,7 @@ import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.j
 import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
 import { CompactionManager } from "./compaction/manager.js";
 import { ConversationManager } from "./conversation-manager.js";
+import { ConversationUpdater } from "./conversation-updater.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
 import type {
   AgentHooks,
@@ -231,12 +232,7 @@ export class Agent {
   private readonly gadgetEndPrefix?: string;
   private readonly gadgetArgPrefix?: string;
   private readonly requestHumanInput?: (question: string) => Promise<string>;
-  private readonly textOnlyHandler: TextOnlyHandler;
-  private readonly textWithGadgetsHandler?: {
-    gadgetName: string;
-    parameterMapping: (text: string) => Record<string, unknown>;
-    resultMapping?: (text: string) => string;
-  };
+  private readonly conversationUpdater: ConversationUpdater;
   private readonly defaultGadgetTimeoutMs?: number;
   private readonly gadgetExecutionMode: GadgetExecutionMode;
   private readonly defaultMaxTokens?: number;
@@ -268,9 +264,6 @@ export class Agent {
 
   // Gadget limiting
   private readonly maxGadgetsPerResponse: number;
-
-  // Counter for generating synthetic invocation IDs for wrapped text content
-  private syntheticInvocationCounter = 0;
 
   // Cross-iteration dependency tracking - allows gadgets to depend on results from prior iterations
   private readonly completedInvocationIds: Set<string> = new Set();
@@ -312,8 +305,6 @@ export class Agent {
     this.gadgetEndPrefix = options.gadgetEndPrefix;
     this.gadgetArgPrefix = options.gadgetArgPrefix;
     this.requestHumanInput = options.requestHumanInput;
-    this.textOnlyHandler = options.textOnlyHandler ?? "terminate";
-    this.textWithGadgetsHandler = options.textWithGadgetsHandler;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
     this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
@@ -363,6 +354,14 @@ export class Agent {
     if (options.userPrompt) {
       this.conversation.addUserMessage(options.userPrompt);
     }
+
+    // Initialize conversation updater (owns text-only and text-with-gadgets handling)
+    this.conversationUpdater = new ConversationUpdater(
+      this.conversation,
+      options.textOnlyHandler ?? "terminate",
+      options.textWithGadgetsHandler,
+      this.logger,
+    );
 
     // Initialize context compaction (enabled by default)
     const compactionEnabled = options.compactionConfig?.enabled ?? true;
@@ -763,8 +762,7 @@ export class Agent {
           );
 
           // Update conversation with results (gadgets or text-only)
-          const shouldBreakFromTextOnly = await this.updateConversationWithResults(
-            result.didExecuteGadgets,
+          const shouldBreakFromTextOnly = this.conversationUpdater.updateWithResults(
             textOutputs,
             gadgetResults,
             finalMessage,
@@ -1001,34 +999,6 @@ export class Agent {
   }
 
   /**
-   * Handle text-only response (no gadgets called).
-   */
-  private async handleTextOnlyResponse(_text: string): Promise<boolean> {
-    const handler = this.textOnlyHandler;
-
-    if (typeof handler === "string") {
-      switch (handler) {
-        case "terminate":
-          this.logger.info("No gadgets called, ending loop");
-          return true;
-        case "acknowledge":
-          this.logger.info("No gadgets called, continuing loop");
-          return false;
-        case "wait_for_input":
-          this.logger.info("No gadgets called, waiting for input");
-          return true;
-        default:
-          this.logger.warn(`Unknown text-only strategy: ${handler}, defaulting to terminate`);
-          return true;
-      }
-    }
-
-    // For gadget and custom handlers, they would need to be implemented
-    // This is simplified for now
-    return true;
-  }
-
-  /**
    * Resolve max tokens from model catalog.
    */
   private resolveMaxTokensFromCatalog(modelId: string): number | undefined {
@@ -1114,62 +1084,6 @@ export class Agent {
     }, this.logger);
 
     return { type: "compaction", event: compactionEvent } as StreamEvent;
-  }
-
-  /**
-   * Update conversation history with gadget results or text-only response.
-   * @returns true if loop should break (text-only handler requested termination)
-   */
-  private async updateConversationWithResults(
-    didExecuteGadgets: boolean,
-    textOutputs: string[],
-    gadgetResults: StreamEvent[],
-    finalMessage: string,
-  ): Promise<boolean> {
-    if (didExecuteGadgets) {
-      // If configured, wrap accompanying text as a synthetic gadget call
-      if (this.textWithGadgetsHandler) {
-        const textContent = textOutputs.join("");
-
-        if (textContent.trim()) {
-          const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
-          const syntheticId = `gc_text_${++this.syntheticInvocationCounter}`;
-          this.conversation.addGadgetCallResult(
-            gadgetName,
-            parameterMapping(textContent),
-            resultMapping ? resultMapping(textContent) : textContent,
-            syntheticId,
-          );
-        }
-      }
-
-      // Add all gadget results to conversation
-      for (const output of gadgetResults) {
-        if (output.type === "gadget_result") {
-          const gadgetResult = output.result;
-          this.conversation.addGadgetCallResult(
-            gadgetResult.gadgetName,
-            gadgetResult.parameters,
-            gadgetResult.error ?? gadgetResult.result ?? "",
-            gadgetResult.invocationId,
-            gadgetResult.media,
-            gadgetResult.mediaIds,
-            gadgetResult.storedMedia,
-          );
-        }
-      }
-
-      return false; // Don't break loop
-    }
-
-    // No gadgets executed - add text as assistant message
-    // (Use textWithGadgetsHandler if gadget wrapping is needed)
-    if (finalMessage.trim()) {
-      this.conversation.addAssistantMessage(finalMessage);
-    }
-
-    // Handle text-only responses
-    return await this.handleTextOnlyResponse(finalMessage);
   }
 
   /**
