@@ -457,34 +457,7 @@ export class BlockRenderer {
    * Called when nodes are added/removed.
    */
   private rebuildBlocks(): void {
-    // Clear existing blocks
-    for (const child of [...this.container.children]) {
-      child.detach();
-    }
-    // Clear any direct content on the container (e.g., from appendQuestionToBody)
-    // This prevents stale content from persisting across mode switches
-    this.container.setContent("");
-    this.blocks.clear();
-    this.selectableIds = [];
-
-    // Track vertical position (starts at 0, will be offset for bottom-alignment)
-    let top = 0;
-
-    // Traverse tree in order
-    for (const rootId of this.nodeStore.rootIds) {
-      top = this.renderNodeTree(rootId, top);
-    }
-
-    // Restore selection if possible
-    if (this.selectedIndex >= this.selectableIds.length) {
-      this.selectedIndex = this.selectableIds.length - 1;
-    }
-
-    // Apply bottom alignment and auto-scroll (chat-like behavior)
-    this.applyBottomAlignmentAndScroll();
-
-    this.renderCallback();
-    this.notifyHasContentChange();
+    this.rebuildBlocksCore(false);
   }
 
   /**
@@ -934,18 +907,32 @@ export class BlockRenderer {
    * Used for mode switches where we need to ensure the screen is fully cleared.
    */
   private rebuildBlocksImmediate(): void {
+    this.rebuildBlocksCore(true);
+  }
+
+  /**
+   * Shared implementation for rebuildBlocks and rebuildBlocksImmediate.
+   *
+   * @param immediate - When true, forces a synchronous render pass before
+   *   and after building blocks to clear visual artifacts (used on mode switch).
+   *   When false, defers a single render to the end via renderCallback.
+   */
+  private rebuildBlocksCore(immediate: boolean): void {
     // Clear existing blocks
     for (const child of [...this.container.children]) {
       child.detach();
     }
-    // Clear any direct content on the container
+    // Clear any direct content on the container (e.g., from appendQuestionToBody)
+    // This prevents stale content from persisting across mode switches
     this.container.setContent("");
     this.blocks.clear();
     this.selectableIds = [];
 
-    // Force immediate render to clear old visual artifacts BEFORE creating new blocks
-    // This is critical for mode switches to prevent content overlay
-    this.renderNowCallback();
+    if (immediate) {
+      // Force immediate render to clear old visual artifacts BEFORE creating new blocks
+      // This is critical for mode switches to prevent content overlay
+      this.renderNowCallback();
+    }
 
     // Track vertical position (starts at 0, will be offset for bottom-alignment)
     let top = 0;
@@ -963,8 +950,12 @@ export class BlockRenderer {
     // Apply bottom alignment and auto-scroll (chat-like behavior)
     this.applyBottomAlignmentAndScroll();
 
-    // Render again with new content
-    this.renderNowCallback();
+    if (immediate) {
+      // Render again with new content
+      this.renderNowCallback();
+    } else {
+      this.renderCallback();
+    }
     this.notifyHasContentChange();
   }
 
