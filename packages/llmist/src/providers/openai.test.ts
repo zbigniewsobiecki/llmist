@@ -2,6 +2,7 @@ import type OpenAI from "openai";
 import { describe, expect, it, vi } from "vitest";
 
 import { OpenAIChatProvider } from "./openai.js";
+import { openaiImageModels } from "./openai-image-models.js";
 
 describe("OpenAIChatProvider", () => {
   describe("supports", () => {
@@ -677,6 +678,332 @@ describe("OpenAIChatProvider", () => {
         }),
         undefined,
       );
+    });
+  });
+
+  describe("image generation", () => {
+    describe("getImageModelSpecs", () => {
+      it("returns the full list of openai image model specs", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const specs = provider.getImageModelSpecs();
+
+        expect(specs).toBe(openaiImageModels);
+        expect(specs.length).toBeGreaterThan(0);
+        // Should include DALL-E 2, DALL-E 3, and GPT Image models
+        const modelIds = specs.map((s) => s.modelId);
+        expect(modelIds).toContain("dall-e-2");
+        expect(modelIds).toContain("dall-e-3");
+        expect(modelIds).toContain("gpt-image-1");
+      });
+    });
+
+    describe("supportsImageGeneration", () => {
+      it("returns true for DALL-E 3", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("dall-e-3")).toBe(true);
+      });
+
+      it("returns true for DALL-E 2", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("dall-e-2")).toBe(true);
+      });
+
+      it("returns true for GPT Image models", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("gpt-image-1")).toBe(true);
+        expect(provider.supportsImageGeneration("gpt-image-1.5")).toBe(true);
+        expect(provider.supportsImageGeneration("gpt-image-1-mini")).toBe(true);
+      });
+
+      it("returns false for non-image models", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("gpt-4")).toBe(false);
+        expect(provider.supportsImageGeneration("gpt-4o")).toBe(false);
+        expect(provider.supportsImageGeneration("dall-e-unknown")).toBe(false);
+      });
+    });
+
+    describe("generateImage", () => {
+      it("generates image with DALL-E 3 including quality and response_format", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/dalle3-image.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "A futuristic city skyline",
+          size: "1024x1024",
+          quality: "hd",
+          responseFormat: "url",
+        });
+
+        expect(generateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "dall-e-3",
+            prompt: "A futuristic city skyline",
+            size: "1024x1024",
+            quality: "hd",
+            response_format: "url",
+          }),
+        );
+        // DALL-E 3 should NOT be flagged as isDallE2 or isGptImage
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).toHaveProperty("quality");
+        expect(callArgs).toHaveProperty("response_format");
+        expect(result.images).toHaveLength(1);
+        expect(result.images[0].url).toBe("https://example.com/dalle3-image.png");
+        expect(result.model).toBe("dall-e-3");
+      });
+
+      it("generates image with DALL-E 3 using default quality when not specified", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/dalle3-standard.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "A peaceful mountain landscape",
+        });
+
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        // quality defaults to "standard" from spec
+        expect(callArgs).toHaveProperty("quality", "standard");
+        // response_format defaults to "url" when not specified
+        expect(callArgs).toHaveProperty("response_format", "url");
+      });
+
+      it("generates image with DALL-E 2 without quality parameter", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/dalle2-image.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-2",
+          prompt: "A cartoon cat",
+          size: "512x512",
+          n: 2,
+        });
+
+        expect(generateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "dall-e-2",
+            prompt: "A cartoon cat",
+            size: "512x512",
+            n: 2,
+          }),
+        );
+
+        // DALL-E 2 must NOT include the quality parameter
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).not.toHaveProperty("quality");
+        // DALL-E 2 must NOT include response_format
+        expect(callArgs).not.toHaveProperty("response_format");
+
+        expect(result.images).toHaveLength(1);
+        expect(result.model).toBe("dall-e-2");
+        expect(result.usage.size).toBe("512x512");
+      });
+
+      it("generates image with GPT Image model without quality or response_format", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/gpt-image.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "gpt-image-1",
+          prompt: "A photorealistic apple",
+          size: "1024x1024",
+          quality: "high",
+        });
+
+        expect(generateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "gpt-image-1",
+            prompt: "A photorealistic apple",
+            size: "1024x1024",
+          }),
+        );
+
+        // GPT Image models must NOT include quality (uses different API param) or response_format
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).not.toHaveProperty("quality");
+        expect(callArgs).not.toHaveProperty("response_format");
+
+        expect(result.images).toHaveLength(1);
+        expect(result.model).toBe("gpt-image-1");
+      });
+
+      it("generates image with gpt-image-1.5 model (also a GPT Image model)", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/gpt-image-1-5.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateImage({
+          model: "gpt-image-1.5",
+          prompt: "A vibrant sunset",
+        });
+
+        // gpt-image-1.5 starts with "gpt-image" so isGptImage is true
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).not.toHaveProperty("quality");
+        expect(callArgs).not.toHaveProperty("response_format");
+      });
+
+      it("returns correct usage metadata in result", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [
+            { url: "https://example.com/img1.png", b64_json: null },
+            { url: "https://example.com/img2.png", b64_json: null },
+          ],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-2",
+          prompt: "Two cute dogs",
+          size: "256x256",
+          n: 2,
+        });
+
+        expect(result.usage).toEqual({
+          imagesGenerated: 2,
+          size: "256x256",
+          quality: "standard",
+        });
+      });
+
+      it("handles response with revised_prompt", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [
+            {
+              url: "https://example.com/revised.png",
+              b64_json: null,
+              revised_prompt: "A vivid, photorealistic futuristic city skyline at dusk",
+            },
+          ],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "Futuristic city at dusk",
+        });
+
+        expect(result.images[0].revisedPrompt).toBe(
+          "A vivid, photorealistic futuristic city skyline at dusk",
+        );
+        expect(result.images[0].url).toBe("https://example.com/revised.png");
+      });
+
+      it("handles empty data array from API response", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "Nothing",
+        });
+
+        expect(result.images).toHaveLength(0);
+        expect(result.usage.imagesGenerated).toBe(0);
+      });
+
+      it("uses default size and n=1 when not specified", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/default.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "A simple test",
+        });
+
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).toHaveProperty("n", 1);
+        // Should use spec's defaultSize "1024x1024"
+        expect(callArgs).toHaveProperty("size", "1024x1024");
+      });
     });
   });
 
