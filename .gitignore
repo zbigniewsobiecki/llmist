@@ -165,3 +165,4 @@ packages/docs/.astro/
 
 # Cascade tooling
 .cascade-progress-comment-id
+.cascade/
