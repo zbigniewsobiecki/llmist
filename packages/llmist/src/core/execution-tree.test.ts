@@ -745,4 +745,51 @@ describe("ExecutionTree", () => {
       expect(tree.getRoots()).toEqual([]);
     });
   });
+
+  describe("complete()", () => {
+    test("complete() marks tree as complete", () => {
+      expect(tree.isComplete()).toBe(false);
+      tree.complete();
+      expect(tree.isComplete()).toBe(true);
+    });
+
+    test("events() terminates when complete() is called while waiting for events", async () => {
+      const receivedEvents: ExecutionEvent[] = [];
+
+      // Start consuming events in background — will wait since no events are emitted yet
+      const consumer = (async () => {
+        for await (const event of tree.events()) {
+          receivedEvents.push(event);
+        }
+      })();
+
+      // Emit one event, then complete the tree
+      tree.addLLMCall({ iteration: 1, model: "sonnet" });
+      tree.complete();
+
+      await consumer;
+
+      // Should have received exactly one event, then terminated cleanly
+      expect(receivedEvents.length).toBe(1);
+      expect(receivedEvents[0].type).toBe("llm_call_start");
+    });
+
+    test("complete() resolves pending waiters so events() exits cleanly", async () => {
+      let consumerFinished = false;
+
+      const consumer = (async () => {
+        // biome-ignore lint/correctness/noUnusedVariables: consuming events
+        for await (const _event of tree.events()) {
+          // consume all events
+        }
+        consumerFinished = true;
+      })();
+
+      // Complete immediately with no events
+      tree.complete();
+      await consumer;
+
+      expect(consumerFinished).toBe(true);
+    });
+  });
 });

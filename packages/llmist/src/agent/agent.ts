@@ -137,18 +137,8 @@ export interface AgentOptions {
 
   /**
    * Gadget prefix configuration (start/end/arg prefixes for block format).
-   * When set, takes precedence over the individual gadgetStartPrefix/gadgetEndPrefix/gadgetArgPrefix fields.
    */
   prefixConfig?: PrefixConfig;
-
-  /** Custom gadget start prefix */
-  gadgetStartPrefix?: string;
-
-  /** Custom gadget end prefix */
-  gadgetEndPrefix?: string;
-
-  /** Custom gadget argument prefix for block format parameters */
-  gadgetArgPrefix?: string;
 
   /** Initial messages. User messages support multimodal content. */
   initialMessages?: Array<{ role: "system" | "user" | "assistant"; content: MessageContent }>;
@@ -180,15 +170,8 @@ export interface AgentOptions {
 
   /**
    * Gadget output limit configuration.
-   * When set, takes precedence over the individual gadgetOutputLimit/gadgetOutputLimitPercent fields.
    */
   outputLimitConfig?: OutputLimitConfig;
-
-  /** Enable gadget output limiting (default: true) */
-  gadgetOutputLimit?: boolean;
-
-  /** Max gadget output as % of model context window (default: 15) */
-  gadgetOutputLimitPercent?: number;
 
   /** Context compaction configuration (enabled by default) */
   compactionConfig?: CompactionConfig;
@@ -220,37 +203,8 @@ export interface AgentOptions {
 
   /**
    * Execution tree configuration (shared tree model with subagents).
-   * When set, takes precedence over the individual parentTree/parentNodeId/baseDepth/parentObservers fields.
    */
   treeConfig?: TreeConfig;
-
-  /**
-   * Shared execution tree for tracking all LLM calls and gadget executions.
-   * If provided (by a parent subagent), nodes are added to this tree.
-   * If not provided, the Agent creates its own tree.
-   */
-  parentTree?: ExecutionTree;
-
-  /**
-   * Parent node ID in the tree (when this agent is a subagent).
-   * Used to set parentId on all nodes created by this agent.
-   */
-  parentNodeId?: NodeId;
-
-  /**
-   * Base depth for nodes created by this agent.
-   * Root agents use 0; subagents use (parentDepth + 1).
-   */
-  baseDepth?: number;
-
-  /**
-   * Parent agent's observer hooks for subagent visibility.
-   *
-   * When a subagent is created with withParentContext(ctx), these observers
-   * are also called for gadget events (in addition to the subagent's own hooks),
-   * enabling the parent to observe subagent gadget activity.
-   */
-  parentObservers?: Observers;
 
   /**
    * Shared rate limit tracker from parent agent.
@@ -368,22 +322,21 @@ export class Agent {
     this.logger = options.logger ?? createLogger({ name: "llmist:agent" });
     this.registry = options.registry;
 
-    // Resolve prefix config: sub-config object takes precedence over individual fields
+    // Read prefix config
     const prefixConfig = options.prefixConfig;
-    this.gadgetStartPrefix = prefixConfig?.gadgetStartPrefix ?? options.gadgetStartPrefix;
-    this.gadgetEndPrefix = prefixConfig?.gadgetEndPrefix ?? options.gadgetEndPrefix;
-    this.gadgetArgPrefix = prefixConfig?.gadgetArgPrefix ?? options.gadgetArgPrefix;
+    this.gadgetStartPrefix = prefixConfig?.gadgetStartPrefix;
+    this.gadgetEndPrefix = prefixConfig?.gadgetEndPrefix;
+    this.gadgetArgPrefix = prefixConfig?.gadgetArgPrefix;
 
     this.requestHumanInput = options.requestHumanInput;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
     this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
-    // Resolve output limit config: sub-config object takes precedence over individual fields
-    const olc = options.outputLimitConfig;
+    // Read output limit config
     const outputLimitConfig: OutputLimitConfig = {
-      enabled: olc?.enabled ?? options.gadgetOutputLimit,
-      limitPercent: olc?.limitPercent ?? options.gadgetOutputLimitPercent,
+      enabled: options.outputLimitConfig?.enabled,
+      limitPercent: options.outputLimitConfig?.limitPercent,
     };
 
     // Initialize gadget output limiting
@@ -481,14 +434,12 @@ export class Agent {
     // Initialize gadget limiting (0 = unlimited)
     this.maxGadgetsPerResponse = options.maxGadgetsPerResponse ?? 0;
 
-    // Resolve tree config: sub-config object takes precedence over individual fields
+    // Initialize Execution Tree from treeConfig (or create a new one for root agents)
     const treeConfig = options.treeConfig;
-    // Initialize Execution Tree
-    // If a parent tree is provided (subagent case), share it; otherwise create a new tree
-    this.tree = treeConfig?.tree ?? options.parentTree ?? new ExecutionTree();
-    this.parentNodeId = treeConfig?.parentNodeId ?? options.parentNodeId ?? null;
-    this.baseDepth = treeConfig?.baseDepth ?? options.baseDepth ?? 0;
-    this.parentObservers = treeConfig?.parentObservers ?? options.parentObservers;
+    this.tree = treeConfig?.tree ?? new ExecutionTree();
+    this.parentNodeId = treeConfig?.parentNodeId ?? null;
+    this.baseDepth = treeConfig?.baseDepth ?? 0;
+    this.parentObservers = treeConfig?.parentObservers;
 
     // Initialize LLM call lifecycle helper
     this.llmCallLifecycle = new LLMCallLifecycle({
