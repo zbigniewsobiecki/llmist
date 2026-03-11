@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 
+import type { AudioContentPart, ImageContentPart } from "../core/input-content.js";
 import { AnthropicMessagesProvider } from "./anthropic.js";
 
 describe("AnthropicMessagesProvider", () => {
@@ -684,6 +685,376 @@ describe("AnthropicMessagesProvider", () => {
           ],
         }),
       );
+    });
+  });
+
+  describe("generateImage (not supported)", () => {
+    it("throws a not supported error", async () => {
+      const mockClient = {} as Anthropic;
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      await expect(provider.generateImage()).rejects.toThrow(
+        "Anthropic does not support image generation",
+      );
+    });
+
+    it("error message mentions alternative providers", async () => {
+      const mockClient = {} as Anthropic;
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      await expect(provider.generateImage()).rejects.toThrow("OpenAI");
+    });
+  });
+
+  describe("generateSpeech (not supported)", () => {
+    it("throws a not supported error", async () => {
+      const mockClient = {} as Anthropic;
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      await expect(provider.generateSpeech()).rejects.toThrow(
+        "Anthropic does not support speech generation",
+      );
+    });
+
+    it("error message mentions alternative providers", async () => {
+      const mockClient = {} as Anthropic;
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      await expect(provider.generateSpeech()).rejects.toThrow("OpenAI");
+    });
+  });
+
+  describe("audio content rejection", () => {
+    it("throws descriptive error when audio content is in a message", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const audioContent: AudioContentPart[] = [
+        {
+          type: "audio",
+          source: { type: "base64", mediaType: "audio/mp3", data: "dGVzdA==" },
+        },
+      ];
+
+      const streamCall = provider
+        .stream(
+          {
+            model: "claude-3",
+            messages: [{ role: "user" as const, content: audioContent }],
+          },
+          { provider: "anthropic", name: "claude-3" },
+        )
+        .next();
+
+      await expect(streamCall).rejects.toThrow("Anthropic does not support audio input");
+    });
+
+    it("error message mentions Gemini as alternative", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const audioContent: AudioContentPart[] = [
+        {
+          type: "audio",
+          source: { type: "base64", mediaType: "audio/wav", data: "dGVzdA==" },
+        },
+      ];
+
+      const streamCall = provider
+        .stream(
+          {
+            model: "claude-3",
+            messages: [{ role: "user" as const, content: audioContent }],
+          },
+          { provider: "anthropic", name: "claude-3" },
+        )
+        .next();
+
+      await expect(streamCall).rejects.toThrow("Gemini");
+    });
+  });
+
+  describe("URL-based image content rejection", () => {
+    it("throws error when image content uses URL source", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const imageContent: ImageContentPart[] = [
+        {
+          type: "image",
+          source: { type: "url", url: "https://example.com/photo.jpg" },
+        },
+      ];
+
+      const streamCall = provider
+        .stream(
+          {
+            model: "claude-3",
+            messages: [{ role: "user" as const, content: imageContent }],
+          },
+          { provider: "anthropic", name: "claude-3" },
+        )
+        .next();
+
+      await expect(streamCall).rejects.toThrow("Anthropic does not support image URLs");
+    });
+
+    it("error message advises base64-encoded data", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const imageContent: ImageContentPart[] = [
+        {
+          type: "image",
+          source: { type: "url", url: "https://example.com/photo.jpg" },
+        },
+      ];
+
+      const streamCall = provider
+        .stream(
+          {
+            model: "claude-3",
+            messages: [{ role: "user" as const, content: imageContent }],
+          },
+          { provider: "anthropic", name: "claude-3" },
+        )
+        .next();
+
+      await expect(streamCall).rejects.toThrow("base64");
+    });
+  });
+
+  describe("thinking events (extended thinking / reasoning mode)", () => {
+    it("yields thinking chunk from content_block_start with thinking type", async () => {
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "thinking", thinking: "" },
+        };
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks = [];
+      for await (const chunk of provider.stream(
+        { model: "claude-3", messages: [{ role: "user" as const, content: "Think" }] },
+        { provider: "anthropic", name: "claude-3" },
+      )) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toContainEqual(
+        expect.objectContaining({ thinking: { content: "", type: "thinking" } }),
+      );
+    });
+
+    it("yields redacted thinking chunk from content_block_start with redacted_thinking type", async () => {
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "redacted_thinking", data: "encrypted" },
+        };
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks = [];
+      for await (const chunk of provider.stream(
+        { model: "claude-3", messages: [{ role: "user" as const, content: "Think" }] },
+        { provider: "anthropic", name: "claude-3" },
+      )) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toContainEqual(
+        expect.objectContaining({ thinking: { content: "", type: "redacted" } }),
+      );
+    });
+
+    it("yields thinking delta content from thinking_delta events", async () => {
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "thinking_delta", thinking: "I am reasoning about this..." },
+        };
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks = [];
+      for await (const chunk of provider.stream(
+        { model: "claude-3", messages: [{ role: "user" as const, content: "Think" }] },
+        { provider: "anthropic", name: "claude-3" },
+      )) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toContainEqual(
+        expect.objectContaining({
+          thinking: { content: "I am reasoning about this...", type: "thinking" },
+        }),
+      );
+    });
+
+    it("yields signature from signature_delta events", async () => {
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "signature_delta", signature: "abc123signature" },
+        };
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks = [];
+      for await (const chunk of provider.stream(
+        { model: "claude-3", messages: [{ role: "user" as const, content: "Think" }] },
+        { provider: "anthropic", name: "claude-3" },
+      )) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toContainEqual(
+        expect.objectContaining({
+          thinking: { content: "", type: "thinking", signature: "abc123signature" },
+        }),
+      );
+    });
+
+    it("yields text and thinking chunks in a combined thinking + answer stream", async () => {
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "thinking", thinking: "" },
+        };
+        yield {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "thinking_delta", thinking: "Let me think..." },
+        };
+        yield {
+          type: "content_block_start",
+          index: 1,
+          content_block: { type: "text", text: "" },
+        };
+        yield {
+          type: "content_block_delta",
+          index: 1,
+          delta: { type: "text_delta", text: "The answer is 42." },
+        };
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks = [];
+      for await (const chunk of provider.stream(
+        {
+          model: "claude-3",
+          messages: [{ role: "user" as const, content: "What is the answer?" }],
+        },
+        { provider: "anthropic", name: "claude-3" },
+      )) {
+        chunks.push(chunk);
+      }
+
+      const thinkingChunks = chunks.filter((c) => c.thinking);
+      const textChunks = chunks.filter((c) => c.text && !c.thinking);
+
+      expect(thinkingChunks.length).toBeGreaterThan(0);
+      expect(textChunks).toContainEqual(expect.objectContaining({ text: "The answer is 42." }));
+    });
+  });
+
+  describe("prompt caching disabled path", () => {
+    it("applies cache_control by default (caching config is undefined)", async () => {
+      const createSpy = vi.fn().mockReturnValue((async function* () {})());
+
+      const mockClient = {
+        messages: {
+          create: createSpy,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const options = {
+        model: "claude-3",
+        messages: [
+          { role: "system" as const, content: "Be helpful" },
+          { role: "user" as const, content: "Hello" },
+        ],
+        // caching is explicitly undefined here — default enabled behavior
+        caching: undefined,
+      };
+
+      await provider.stream(options, { provider: "anthropic", name: "claude-3" }).next();
+
+      const payload = createSpy.mock.calls[0][0];
+      // Default (undefined caching) should preserve cache_control on system block
+      expect(payload.system[0]).toHaveProperty("cache_control");
     });
   });
 });
