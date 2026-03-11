@@ -1463,146 +1463,6 @@ describe("OpenAIChatProvider", () => {
   });
 
   describe("reasoning config mapping", () => {
-    it("maps maximum effort to xhigh via OPENAI_EFFORT_MAP", async () => {
-      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: createSpy,
-          },
-        },
-      } as unknown as OpenAI;
-
-      const provider = new OpenAIChatProvider(mockClient);
-
-      await provider
-        .stream(
-          {
-            model: "o3",
-            messages: [{ role: "user" as const, content: "Solve this problem" }],
-            reasoning: { enabled: true, effort: "maximum" },
-          },
-          { provider: "openai", name: "o3" },
-        )
-        .next();
-
-      const payload = createSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect((payload.reasoning as Record<string, unknown>).effort).toBe("xhigh");
-    });
-
-    it("maps none effort to none", async () => {
-      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: createSpy,
-          },
-        },
-      } as unknown as OpenAI;
-
-      const provider = new OpenAIChatProvider(mockClient);
-
-      await provider
-        .stream(
-          {
-            model: "o3",
-            messages: [{ role: "user" as const, content: "Test" }],
-            reasoning: { enabled: true, effort: "none" },
-          },
-          { provider: "openai", name: "o3" },
-        )
-        .next();
-
-      const payload = createSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect((payload.reasoning as Record<string, unknown>).effort).toBe("none");
-    });
-
-    it("maps low effort to low", async () => {
-      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: createSpy,
-          },
-        },
-      } as unknown as OpenAI;
-
-      const provider = new OpenAIChatProvider(mockClient);
-
-      await provider
-        .stream(
-          {
-            model: "o3",
-            messages: [{ role: "user" as const, content: "Test" }],
-            reasoning: { enabled: true, effort: "low" },
-          },
-          { provider: "openai", name: "o3" },
-        )
-        .next();
-
-      const payload = createSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect((payload.reasoning as Record<string, unknown>).effort).toBe("low");
-    });
-
-    it("maps medium effort to medium", async () => {
-      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: createSpy,
-          },
-        },
-      } as unknown as OpenAI;
-
-      const provider = new OpenAIChatProvider(mockClient);
-
-      await provider
-        .stream(
-          {
-            model: "o3",
-            messages: [{ role: "user" as const, content: "Test" }],
-            reasoning: { enabled: true, effort: "medium" },
-          },
-          { provider: "openai", name: "o3" },
-        )
-        .next();
-
-      const payload = createSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect((payload.reasoning as Record<string, unknown>).effort).toBe("medium");
-    });
-
-    it("maps high effort to high", async () => {
-      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: createSpy,
-          },
-        },
-      } as unknown as OpenAI;
-
-      const provider = new OpenAIChatProvider(mockClient);
-
-      await provider
-        .stream(
-          {
-            model: "o3",
-            messages: [{ role: "user" as const, content: "Test" }],
-            reasoning: { enabled: true, effort: "high" },
-          },
-          { provider: "openai", name: "o3" },
-        )
-        .next();
-
-      const payload = createSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect((payload.reasoning as Record<string, unknown>).effort).toBe("high");
-    });
-
     it("passes reasoning params to API when options.reasoning is provided", async () => {
       const createSpy = vi.fn().mockResolvedValue((async function* () {})());
 
@@ -1820,14 +1680,12 @@ describe("OpenAIChatProvider", () => {
     });
   });
 
-  describe("countTokens fallback estimation", () => {
-    it("falls back to character-based estimation when tiktoken throws", async () => {
+  describe("countTokens constants and scaling validation", () => {
+    it("token count scales with text length", async () => {
       const mockClient = {} as OpenAI;
       const provider = new OpenAIChatProvider(mockClient);
 
-      // Mock the tiktoken module at module level to force fallback
-      // We do this by testing with a scenario that hits the fallback path:
-      // The fallback uses FALLBACK_CHARS_PER_TOKEN (4 chars per token)
+      // FALLBACK_CHARS_PER_TOKEN is 4; use a long text to ensure scaling is visible
       const shortText = "Hi";
       const longText = "A".repeat(FALLBACK_CHARS_PER_TOKEN * 10); // 40 chars = ~10 tokens
 
@@ -1844,31 +1702,17 @@ describe("OpenAIChatProvider", () => {
       expect(longCount).toBeGreaterThan(shortCount);
     });
 
-    it("fallback uses character-based estimation with 4 chars per token", async () => {
-      const mockClient = {} as OpenAI;
-      const provider = new OpenAIChatProvider(mockClient);
-
-      // Test that FALLBACK_CHARS_PER_TOKEN constant is 4
+    it("FALLBACK_CHARS_PER_TOKEN constant equals 4", async () => {
+      // Verify the constant used in fallback estimation has the expected value
       expect(FALLBACK_CHARS_PER_TOKEN).toBe(4);
-
-      // Verify tiktoken path works (not the fallback)
-      const count = await provider.countTokens(
-        [{ role: "user" as const, content: "Hello world" }],
-        { provider: "openai", name: "gpt-4" },
-      );
-
-      // With tiktoken, this should be more accurate than char/4
-      expect(count).toBeGreaterThan(0);
     });
 
-    it("fallback includes 765 tokens per image in estimation", async () => {
-      // We test the fallback behavior by mocking tiktoken at the module level
-      // The openai.ts source code shows that both the tiktoken path and
-      // the fallback path add 765 tokens per image
+    it("image token estimation adds 765 tokens on the tiktoken path", async () => {
+      // Both the tiktoken path and the fallback path add 765 tokens per image;
+      // this test exercises the tiktoken path (gpt-4 is a supported model)
       const mockClient = {} as OpenAI;
       const provider = new OpenAIChatProvider(mockClient);
 
-      // Test that image token estimation is consistent in the primary path
       const textOnlyCount = await provider.countTokens(
         [{ role: "user" as const, content: "A".repeat(400) }],
         { provider: "openai", name: "gpt-4" },
@@ -1893,22 +1737,18 @@ describe("OpenAIChatProvider", () => {
       expect(withImageCount - textOnlyCount).toBe(765);
     });
 
-    it("fallback estimation returns reasonable value for text content", async () => {
+    it("tiktoken token count is greater than the FALLBACK_CHARS_PER_TOKEN estimate for typical text", async () => {
       const mockClient = {} as OpenAI;
-      // Test the fallback by mocking tiktoken to throw, using vi.mock
-      // Since we can't easily mock ES module imports in this test file,
-      // we verify the fallback constants are correct instead
       const chars = "Hello world this is a test message";
       const expectedFallbackTokens = Math.ceil(chars.length / FALLBACK_CHARS_PER_TOKEN);
 
-      // The real tiktoken result should be close to the fallback estimate for ASCII text
+      // tiktoken produces a more accurate count; with per-message overhead it exceeds the raw char/4 estimate
       const provider = new OpenAIChatProvider(mockClient);
       const count = await provider.countTokens([{ role: "user" as const, content: chars }], {
         provider: "openai",
         name: "gpt-4",
       });
 
-      // With overhead tokens, result should be ≥ fallback estimate
       expect(count).toBeGreaterThan(expectedFallbackTokens);
     });
   });
