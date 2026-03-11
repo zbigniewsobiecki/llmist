@@ -470,6 +470,67 @@ describe("GeminiGenerativeProvider", () => {
 
       warnSpy.mockRestore();
     });
+
+    it("returns zero when messages array is empty", async () => {
+      const mockCountTokens = vi.fn().mockResolvedValue({ totalTokens: 0 });
+
+      const mockClient = {
+        models: {
+          countTokens: mockCountTokens,
+        },
+      } as unknown as GoogleGenAI;
+
+      const provider = new GeminiGenerativeProvider(mockClient);
+
+      const count = await provider.countTokens([], {
+        provider: "gemini",
+        name: "gemini-1.5-pro",
+      });
+
+      // Empty messages → no contents → returns 0 immediately, skipping API call
+      expect(count).toBe(0);
+      expect(mockCountTokens).not.toHaveBeenCalled();
+    });
+
+    it("handles audio content in fallback estimation", async () => {
+      const mockCountTokens = vi.fn().mockRejectedValue(new Error("API error"));
+
+      const mockClient = {
+        models: {
+          countTokens: mockCountTokens,
+        },
+      } as unknown as GoogleGenAI;
+
+      const provider = new GeminiGenerativeProvider(mockClient);
+
+      // Suppress console.warn for this test
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const count = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "What do you hear?" }, // 17 chars
+              {
+                type: "audio" as const,
+                source: {
+                  type: "base64" as const,
+                  mediaType: "audio/mp3",
+                  data: "SGVsbG8=",
+                },
+              },
+            ],
+          },
+        ],
+        { provider: "gemini", name: "gemini-1.5-pro" },
+      );
+
+      // 17 chars / 4 = 4.25 → 5 tokens + 258 tokens for audio = 263
+      expect(count).toBe(263);
+
+      warnSpy.mockRestore();
+    });
   });
 
   describe("multimodal content conversion", () => {
@@ -594,6 +655,73 @@ describe("GeminiGenerativeProvider", () => {
       const stream = provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" });
 
       await expect(stream.next()).rejects.toThrow("Gemini does not support image URLs directly");
+    });
+
+    it("should throw error for unsupported content type", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-1.5-flash",
+        messages: [
+          {
+            role: "user" as const,
+            // Inject an unsupported content part type via type coercion
+            content: [{ type: "video" as any, source: { type: "url", url: "http://x.com" } }],
+          },
+        ],
+      };
+
+      const stream = provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" });
+
+      await expect(stream.next()).rejects.toThrow("Unsupported content type");
+    });
+
+    it("should convert audio inline data with wav mimeType to Gemini inlineData format", async () => {
+      const { client, generateContentStream } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const options = {
+        model: "gemini-1.5-flash",
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Describe this audio" },
+              {
+                type: "audio" as const,
+                source: {
+                  type: "base64" as const,
+                  mediaType: "audio/wav",
+                  data: "UklGRiQAAABXQVZFZm10IBAAAA==",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const stream = provider.stream(options, { provider: "gemini", name: "gemini-1.5-flash" });
+      await stream.next();
+
+      expect(generateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: "Describe this audio" },
+                {
+                  inlineData: {
+                    mimeType: "audio/wav",
+                    data: "UklGRiQAAABXQVZFZm10IBAAAA==",
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      );
     });
   });
 
@@ -918,6 +1046,298 @@ describe("GeminiGenerativeProvider", () => {
         totalTokens: 15,
         cachedInputTokens: 0, // Defaults to 0
       });
+    });
+
+    it("should yield ThinkingChunk when chunk has thought: true parts", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "I am reasoning about this...", thought: true }],
+              },
+            },
+          ],
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // Thinking chunk should be yielded with thinking property
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].thinking).toBeDefined();
+      expect(chunks[0].thinking.type).toBe("thinking");
+      expect(chunks[0].thinking.content).toBe("I am reasoning about this...");
+    });
+
+    it("should normalize text content from thinking chunks correctly", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "First, let me think...", thought: true }],
+              },
+            },
+          ],
+        },
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "More thoughts here.", thought: true }],
+              },
+            },
+          ],
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // Each thinking chunk should yield a separate ThinkingChunk
+      expect(chunks).toHaveLength(2);
+      expect(chunks[0].thinking.content).toBe("First, let me think...");
+      expect(chunks[1].thinking.content).toBe("More thoughts here.");
+      // text property should be empty string for thinking-only chunks
+      expect(chunks[0].text).toBe("");
+      expect(chunks[1].text).toBe("");
+    });
+
+    it("should yield ThinkingChunk and TextChunk separately when chunk has both", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { text: "Let me think about this.", thought: true },
+                  { text: "The answer is 42." },
+                ],
+              },
+            },
+          ],
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // Should yield 2 chunks: thinking chunk + text chunk
+      expect(chunks).toHaveLength(2);
+
+      // First chunk is the thinking chunk
+      expect(chunks[0].thinking).toBeDefined();
+      expect(chunks[0].thinking.type).toBe("thinking");
+      expect(chunks[0].thinking.content).toBe("Let me think about this.");
+
+      // Second chunk is the text chunk
+      expect(chunks[1].text).toBe("The answer is 42.");
+      expect(chunks[1].thinking).toBeUndefined();
+    });
+
+    it("should include thoughtSignature in ThinkingChunk when present", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: "Thinking deeply...",
+                    thought: true,
+                    thoughtSignature: "sig_abc123",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].thinking.signature).toBe("sig_abc123");
+    });
+
+    it("should handle stream with thinking chunks, text chunks, and final usage", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "Thinking...", thought: true }],
+              },
+            },
+          ],
+        },
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "Final answer." }],
+              },
+            },
+          ],
+        },
+        {
+          candidates: [{ finishReason: "STOP" }],
+          usageMetadata: {
+            promptTokenCount: 20,
+            candidatesTokenCount: 8,
+            totalTokenCount: 28,
+            thoughtsTokenCount: 15,
+          },
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // Thinking chunk + text chunk + usage chunk
+      expect(chunks.length).toBeGreaterThanOrEqual(3);
+
+      const thinkingChunk = chunks.find((c) => c.thinking);
+      expect(thinkingChunk).toBeDefined();
+      expect(thinkingChunk.thinking.content).toBe("Thinking...");
+
+      const textChunk = chunks.find((c) => c.text === "Final answer.");
+      expect(textChunk).toBeDefined();
+
+      const usageChunk = chunks.find((c) => c.usage);
+      expect(usageChunk).toBeDefined();
+      expect(usageChunk.usage.reasoningTokens).toBe(15);
+      expect(usageChunk.finishReason).toBe("STOP");
+    });
+
+    it("should handle empty parts array in candidate", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [], // Empty parts
+              },
+            },
+          ],
+        },
+        {
+          candidates: [{ content: { parts: [{ text: "After empty" }] } }],
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // Empty parts should produce no output; only the valid chunk counts
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].text).toBe("After empty");
+    });
+
+    it("should handle candidate with no content property", async () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const mockChunks = [
+        {
+          candidates: [
+            {
+              // No content property at all
+              finishReason: "STOP",
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 5,
+            candidatesTokenCount: 2,
+            totalTokenCount: 7,
+          },
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      // Should produce usage/finishReason chunk but no text/thinking
+      const usageChunk = chunks.find((c) => c.finishReason === "STOP");
+      expect(usageChunk).toBeDefined();
+      expect(usageChunk.usage.inputTokens).toBe(5);
     });
   });
 
