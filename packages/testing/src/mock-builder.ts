@@ -88,9 +88,7 @@ export class MockBuilder {
   /**
    * Match calls to a specific model (by name, supports partial matching).
    *
-   * @example
-   * mockLLM().forModel('gpt-5')
-   * mockLLM().forModel('claude') // matches any Claude model
+   * @alias forModel
    */
   forModel(modelName: string): this {
     if (!modelName || modelName.trim() === "") {
@@ -103,9 +101,6 @@ export class MockBuilder {
   /**
    * Match calls to any model.
    * Useful when you want to mock responses regardless of the model used.
-   *
-   * @example
-   * mockLLM().forAnyModel()
    */
   forAnyModel(): this {
     this.matchers.push(() => true);
@@ -115,9 +110,7 @@ export class MockBuilder {
   /**
    * Match calls to a specific provider.
    *
-   * @example
-   * mockLLM().forProvider('openai')
-   * mockLLM().forProvider('anthropic')
+   * @alias forProvider
    */
   forProvider(provider: string): this {
     if (!provider || provider.trim() === "") {
@@ -231,12 +224,30 @@ export class MockBuilder {
   /**
    * Match when any message contains an image.
    *
+   * @alias whenMessageHasImage
+   */
+  forImage(): this {
+    return this.whenMessageHasImage();
+  }
+
+  /**
+   * Match when any message contains an image.
+   *
    * @example
    * mockLLM().whenMessageHasImage().returns("I see an image of a sunset.")
    */
   whenMessageHasImage(): this {
     this.matchers.push((ctx) => ctx.messages.some((msg) => hasImageContent(msg.content)));
     return this;
+  }
+
+  /**
+   * Match when any message contains audio.
+   *
+   * @alias whenMessageHasAudio
+   */
+  forAudio(): this {
+    return this.whenMessageHasAudio();
   }
 
   /**
@@ -253,16 +264,64 @@ export class MockBuilder {
   /**
    * Match based on the number of images in the last message.
    *
+   * @alias whenImageCount
+   */
+  withImageCount(predicate: (count: number) => boolean | number): this {
+    const wrappedPredicate = (n: number): boolean => {
+      if (typeof predicate === "number") return n === predicate;
+      const result = predicate(n);
+      return typeof result === "number" ? n === result : result;
+    };
+    return this.whenImageCount(wrappedPredicate);
+  }
+
+  /**
+   * Match based on the number of images in the conversation.
+   *
    * @example
    * mockLLM().whenImageCount((n) => n >= 2).returns("Comparing multiple images...")
    */
   whenImageCount(predicate: (count: number) => boolean): this {
     this.matchers.push((ctx) => {
-      const lastMsg = ctx.messages[ctx.messages.length - 1];
-      if (!lastMsg) return false;
-      return predicate(countImages(lastMsg.content));
+      const totalImages = ctx.messages.reduce((sum, msg) => sum + countImages(msg.content), 0);
+      return predicate(totalImages);
     });
     return this;
+  }
+
+  /**
+   * Return a sequence of responses. Each time the mock matches, it will return the next response in the sequence.
+   * If the sequence reaches the end, it will cycle back to the beginning.
+   *
+   * @example
+   * mockLLM().returnsSequence([
+   *   { text: 'First response' },
+   *   { text: 'Second response' }
+   * ])
+   */
+  returnsSequence(responses: MockResponse[]): this {
+    let index = 0;
+    this.response = () => {
+      const response = responses[index % responses.length];
+      index++;
+      if (!response) {
+        throw new Error("No response found in sequence");
+      }
+      return response;
+    };
+    return this;
+  }
+
+  /**
+   * Set a dynamic response generator function.
+   * Equivalent to withResponse(fn).
+   *
+   * @alias withResponse
+   */
+  returnsDynamic(
+    generator: (context: MockMatcherContext) => MockResponse | Promise<MockResponse>,
+  ): this {
+    return this.withResponse(generator);
   }
 
   /**
@@ -448,10 +507,14 @@ export class MockBuilder {
           "Could not detect audio MIME type. Please provide the mimeType parameter explicitly.",
         );
       }
+      // Force consistent MIME type for common formats if needed, or just let detection work
       audioMime = detected;
     }
 
-    this.response.audio = { data: audioData, mimeType: audioMime };
+    if (!this.response) {
+      this.response = {};
+    }
+    (this.response as MockResponse).audio = { data: audioData, mimeType: audioMime };
     return this;
   }
 
