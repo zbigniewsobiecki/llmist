@@ -18,7 +18,6 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
-import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "../core/constants.js";
 import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
 import type { ContentPart, ImageMimeType } from "../core/input-content.js";
 import { detectImageMimeType, text, toBase64 } from "../core/input-content.js";
@@ -38,6 +37,7 @@ import type {
 } from "../gadgets/types.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
+import { formatGadgetCall } from "./builder-utils.js";
 import type { CompactionConfig } from "./compaction/config.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
 import { getEnvFileLoggingHooks } from "./file-logging.js";
@@ -1094,15 +1094,16 @@ export class AgentBuilder {
     result: string,
     invocationId: string,
   ): this {
-    const startPrefix = this.gadgetStartPrefix ?? GADGET_START_PREFIX;
-    const endPrefix = this.gadgetEndPrefix ?? GADGET_END_PREFIX;
-
-    const paramStr = this.formatBlockParameters(parameters, "");
+    const content = formatGadgetCall(gadgetName, invocationId, parameters, {
+      start: this.gadgetStartPrefix,
+      end: this.gadgetEndPrefix,
+      arg: this.gadgetArgPrefix,
+    });
 
     // Assistant message with gadget call (including invocation ID)
     this.initialMessages.push({
       role: "assistant",
-      content: `${startPrefix}${gadgetName}:${invocationId}\n${paramStr}\n${endPrefix}`,
+      content,
     });
 
     // User message with result (including invocation ID so LLM can reference it)
@@ -1185,37 +1186,6 @@ export class AgentBuilder {
         beforeLLMCall: trailingMessageController,
       },
     };
-  }
-
-  /**
-   * Format parameters as block format with JSON Pointer paths.
-   */
-  private formatBlockParameters(params: Record<string, unknown>, prefix: string): string {
-    const lines: string[] = [];
-    const argPrefix = this.gadgetArgPrefix ?? GADGET_ARG_PREFIX;
-
-    for (const [key, value] of Object.entries(params)) {
-      const fullPath = prefix ? `${prefix}/${key}` : key;
-
-      if (Array.isArray(value)) {
-        value.forEach((item, index) => {
-          const itemPath = `${fullPath}/${index}`;
-          if (typeof item === "object" && item !== null) {
-            lines.push(this.formatBlockParameters(item as Record<string, unknown>, itemPath));
-          } else {
-            lines.push(`${argPrefix}${itemPath}`);
-            lines.push(String(item));
-          }
-        });
-      } else if (typeof value === "object" && value !== null) {
-        lines.push(this.formatBlockParameters(value as Record<string, unknown>, fullPath));
-      } else {
-        lines.push(`${argPrefix}${fullPath}`);
-        lines.push(String(value));
-      }
-    }
-
-    return lines.join("\n");
   }
 
   /**
