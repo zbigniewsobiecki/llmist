@@ -78,7 +78,7 @@ export {
   type RecordedCall,
 } from "./mock-gadget.js";
 // Core mock management
-export { getMockManager, MockManager } from "./mock-manager.js";
+export { getMockManager, MockManager, resetMocks } from "./mock-manager.js";
 // Stream utilities
 export { createMockStream, createTextMockStream } from "./mock-stream.js";
 // Types
