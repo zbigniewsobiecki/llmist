@@ -1,0 +1,11 @@
+CI=true
+
+# Provider-backed E2E tests use keys from the repository .env file.
+# Keep this file secret-free; use it only as committed guidance.
+
+# OPENAI_API_KEY=
+# ANTHROPIC_API_KEY=
+# GEMINI_API_KEY=
+
+# Optional E2E debugging
+# DEBUG_E2E=true
