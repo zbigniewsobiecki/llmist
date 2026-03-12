@@ -40,14 +40,9 @@ import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import { formatGadgetCall } from "./builder-utils.js";
 import type { CompactionConfig } from "./compaction/config.js";
 import { collectText, type EventHandlers } from "./event-handlers.js";
-import { getEnvFileLoggingHooks } from "./file-logging.js";
+import { HookComposer, type TrailingMessage } from "./hook-composer.js";
 import { HookPresets } from "./hook-presets.js";
-import type {
-  AgentHooks,
-  BeforeLLMCallAction,
-  LLMCallControllerContext,
-  Observers,
-} from "./hooks.js";
+import type { AgentHooks, Observers } from "./hooks.js";
 
 /**
  * Message for conversation history.
@@ -57,21 +52,6 @@ export type HistoryMessage =
   | { user: string | ContentPart[] }
   | { assistant: string }
   | { system: string };
-
-/**
- * Context available to trailing message functions.
- * Provides iteration information for dynamic message generation.
- */
-export type TrailingMessageContext = Pick<
-  LLMCallControllerContext,
-  "iteration" | "maxIterations" | "budget" | "totalCost"
->;
-
-/**
- * Trailing message can be a static string or a function that generates the message.
- * The function receives context about the current iteration.
- */
-export type TrailingMessage = string | ((ctx: TrailingMessageContext) => string);
 
 /**
  * Fluent builder for creating agents.
@@ -1117,75 +1097,9 @@ export class AgentBuilder {
 
   /**
    * Compose the final hooks, including trailing message injection if configured.
-   *
-   * Note: Subagent event visibility is now handled entirely by the ExecutionTree.
-   * When a subagent uses withParentContext(ctx), it shares the parent's tree,
-   * and all events are automatically visible to tree subscribers (like the TUI).
-   *
-   * Environment-based file logging (via LLMIST_LOG_RAW_DIRECTORY) is automatically
-   * injected if the env var is set. User-provided hooks take precedence.
    */
   private composeHooks(): AgentHooks | undefined {
-    let hooks = this.hooks;
-
-    // Auto-inject environment-based file logging if LLMIST_LOG_RAW_DIRECTORY is set
-    const envFileLogging = getEnvFileLoggingHooks();
-    if (envFileLogging) {
-      // Merge env hooks with user hooks (user hooks take precedence)
-      hooks = hooks ? HookPresets.merge(envFileLogging, hooks) : envFileLogging;
-    }
-
-    // Handle trailing message injection
-    if (!this.trailingMessage) {
-      return hooks;
-    }
-
-    const trailingMsg = this.trailingMessage;
-    const existingBeforeLLMCall = hooks?.controllers?.beforeLLMCall;
-
-    const trailingMessageController = async (
-      ctx: LLMCallControllerContext,
-    ): Promise<BeforeLLMCallAction> => {
-      // Run existing beforeLLMCall first if present
-      const result: BeforeLLMCallAction = existingBeforeLLMCall
-        ? await existingBeforeLLMCall(ctx)
-        : { action: "proceed" };
-
-      // If action is "skip", don't inject trailing message
-      if (result.action === "skip") {
-        return result;
-      }
-
-      // Get messages (possibly already modified by existing controller)
-      const messages = [...(result.modifiedOptions?.messages || ctx.options.messages)];
-
-      // Generate trailing message content
-      const content =
-        typeof trailingMsg === "function"
-          ? trailingMsg({
-              iteration: ctx.iteration,
-              maxIterations: ctx.maxIterations,
-              budget: ctx.budget,
-              totalCost: ctx.totalCost,
-            })
-          : trailingMsg;
-
-      // Append as ephemeral user message
-      messages.push({ role: "user", content });
-
-      return {
-        action: "proceed",
-        modifiedOptions: { ...result.modifiedOptions, messages },
-      };
-    };
-
-    return {
-      ...hooks,
-      controllers: {
-        ...hooks?.controllers,
-        beforeLLMCall: trailingMessageController,
-      },
-    };
+    return HookComposer.compose(this.hooks, this.trailingMessage);
   }
 
   /**
