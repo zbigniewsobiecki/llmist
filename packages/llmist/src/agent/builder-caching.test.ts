@@ -16,7 +16,8 @@ describe("AgentBuilder caching API", () => {
       const builder = new AgentBuilder();
       builder.withCaching();
 
-      const config = (builder as unknown as { cachingConfig: CachingConfig }).cachingConfig;
+      const config = (builder as unknown as { core: { cachingConfig: CachingConfig } }).core
+        .cachingConfig;
 
       expect(config.enabled).toBe(true);
     });
@@ -25,7 +26,8 @@ describe("AgentBuilder caching API", () => {
       const builder = new AgentBuilder();
       builder.withCaching({ enabled: true, scope: "system", ttl: "7200s" });
 
-      const config = (builder as unknown as { cachingConfig: CachingConfig }).cachingConfig;
+      const config = (builder as unknown as { core: { cachingConfig: CachingConfig } }).core
+        .cachingConfig;
 
       expect(config.enabled).toBe(true);
       expect(config.scope).toBe("system");
@@ -36,7 +38,8 @@ describe("AgentBuilder caching API", () => {
       const builder = new AgentBuilder();
       builder.withCaching({ enabled: true, minTokenThreshold: 16384 });
 
-      const config = (builder as unknown as { cachingConfig: CachingConfig }).cachingConfig;
+      const config = (builder as unknown as { core: { cachingConfig: CachingConfig } }).core
+        .cachingConfig;
 
       expect(config.enabled).toBe(true);
       expect(config.minTokenThreshold).toBe(16384);
@@ -58,7 +61,8 @@ describe("AgentBuilder caching API", () => {
       builder.withCaching({ enabled: true, scope: "system" });
       builder.withCaching({ enabled: true, scope: "conversation" });
 
-      const config = (builder as unknown as { cachingConfig: CachingConfig }).cachingConfig;
+      const config = (builder as unknown as { core: { cachingConfig: CachingConfig } }).core
+        .cachingConfig;
 
       expect(config.scope).toBe("conversation");
     });
@@ -76,7 +80,8 @@ describe("AgentBuilder caching API", () => {
       const builder = new AgentBuilder();
       builder.withoutCaching();
 
-      const config = (builder as unknown as { cachingConfig: CachingConfig }).cachingConfig;
+      const config = (builder as unknown as { core: { cachingConfig: CachingConfig } }).core
+        .cachingConfig;
 
       expect(config.enabled).toBe(false);
     });
@@ -86,7 +91,8 @@ describe("AgentBuilder caching API", () => {
       builder.withCaching({ enabled: true, scope: "system" });
       builder.withoutCaching();
 
-      const config = (builder as unknown as { cachingConfig: CachingConfig }).cachingConfig;
+      const config = (builder as unknown as { core: { cachingConfig: CachingConfig } }).core
+        .cachingConfig;
 
       expect(config.enabled).toBe(false);
     });
