@@ -54,6 +54,9 @@ class MockStdin extends EventEmitter {
 
 /**
  * Creates a mock LLMist client with configurable streaming behavior.
+ *
+ * @param chunks - Stream chunks to yield
+ * @param options - Configuration options
  */
 function createMockClient(
   chunks: StreamChunk[],
@@ -176,6 +179,135 @@ describe("executeAgent piped mode", () => {
 
       expect(env.stdout.output).toContain("Hello world!");
     });
+
+    test("completes successfully with empty response", async () => {
+      const chunks: StreamChunk[] = [{ text: "", finishReason: "stop" }];
+      const mockClient = createMockClient(chunks);
+      const env = createMockEnv(mockClient);
+
+      await executeAgent("test prompt", defaultOptions, env);
+
+      // Should complete without error
+      expect(env.stderr.output).not.toContain("Error");
+    });
+
+    test("handles multiple chunks correctly", async () => {
+      const chunks: StreamChunk[] = [
+        { text: "Part 1, " },
+        { text: "Part 2, " },
+        { text: "Part 3" },
+        { text: ".", finishReason: "stop" },
+      ];
+      const mockClient = createMockClient(chunks);
+      const env = createMockEnv(mockClient);
+
+      await executeAgent("test prompt", defaultOptions, env);
+
+      expect(env.stdout.output).toBe("Part 1, Part 2, Part 3.");
+    });
+  });
+
+  describe("SIGINT handling in piped mode", () => {
+    let originalProcessOnce: typeof process.once;
+    let originalProcessExit: typeof process.exit;
+    let sigintHandler: (() => void) | null;
+    let exitCode: number | undefined;
+    let exitCalled: boolean;
+
+    beforeEach(() => {
+      originalProcessOnce = process.once;
+      originalProcessExit = process.exit;
+      sigintHandler = null;
+      exitCode = undefined;
+      exitCalled = false;
+
+      // Capture SIGINT handler
+      process.once = ((event: string, handler: () => void) => {
+        if (event === "SIGINT") {
+          sigintHandler = handler;
+        }
+        return process;
+      }) as typeof process.once;
+
+      // Mock process.exit
+      process.exit = ((code?: number) => {
+        exitCode = code;
+        exitCalled = true;
+        throw new Error("process.exit called");
+      }) as typeof process.exit;
+    });
+
+    afterEach(() => {
+      process.once = originalProcessOnce;
+      process.exit = originalProcessExit;
+    });
+
+    test("registers SIGINT handler in piped mode", async () => {
+      const chunks: StreamChunk[] = [{ text: "Response", finishReason: "stop" }];
+      const mockClient = createMockClient(chunks);
+      const env = createMockEnv(mockClient);
+
+      await executeAgent("test prompt", defaultOptions, env);
+
+      // SIGINT handler should be registered
+      expect(sigintHandler).not.toBeNull();
+    });
+
+    test("SIGINT exits with code 130 in piped mode", async () => {
+      const chunks: StreamChunk[] = [{ text: "Response " }, { text: "text", finishReason: "stop" }];
+      const mockClient = createMockClient(chunks, { delayBetweenChunks: 500 });
+      const env = createMockEnv(mockClient);
+
+      const promise = executeAgent("test prompt", defaultOptions, env);
+
+      // Wait for SIGINT handler to be registered
+      await new Promise((r) => setTimeout(r, 50));
+
+      try {
+        // Trigger SIGINT
+        if (sigintHandler) {
+          sigintHandler();
+        }
+        await promise;
+      } catch (e) {
+        // Expected: process.exit throws
+        expect((e as Error).message).toBe("process.exit called");
+      }
+
+      expect(exitCalled).toBe(true);
+      expect(exitCode).toBe(130);
+    });
+  });
+});
+
+describe("executeAgent with gadgets", () => {
+  test("streams text output even when gadget calls are present", async () => {
+    // Test that text output works alongside gadget calls
+    // Note: Full gadget execution requires the complete agent machinery
+    // which isn't available with the simplified mock client
+    const chunks: StreamChunk[] = [
+      { text: "Processing your request..." },
+      {
+        text: "",
+        gadgetCalls: [
+          {
+            invocationId: "tell-1",
+            gadgetName: "TellUser",
+            parameters: { message: "Hello from gadget!", done: false, type: "info" },
+            dependencies: [],
+          },
+        ],
+      },
+      { text: " Done!", finishReason: "stop" },
+    ];
+    const mockClient = createMockClient(chunks);
+    const env = createMockEnv(mockClient);
+
+    await executeAgent("test prompt", { ...defaultOptions, builtins: true }, env);
+
+    // Text output should appear in stdout
+    expect(env.stdout.output).toContain("Processing your request...");
+    expect(env.stdout.output).toContain("Done!");
   });
 });
 

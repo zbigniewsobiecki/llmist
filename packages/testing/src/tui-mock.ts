@@ -1,5 +1,8 @@
 import { vi } from "vitest";
 
+/**
+ * Mock TUI App interface.
+ */
 export interface MockTUIApp {
   setProfiles: any;
   setFocusMode: any;
@@ -30,6 +33,11 @@ export interface MockTUIApp {
   getAbortSignal: any;
 }
 
+/**
+ * Creates a mock TUI app for testing.
+ *
+ * NOTE: This currently uses Vitest's `vi` for mocks.
+ */
 export const createMockTUIApp = (): MockTUIApp => {
   const abortController = new AbortController();
 
@@ -64,8 +72,11 @@ export const createMockTUIApp = (): MockTUIApp => {
   };
 
   // Only return a prompt once, then throw to break the loop in executeAgent
-  mock.waitForPrompt.mockResolvedValueOnce("first prompt").mockImplementation(() => {
-    const error = new Error("AbortError");
+  mock.waitForPrompt.mockImplementation(async () => {
+    if (mock.waitForPrompt.mock.calls.length === 1) {
+      return "first prompt";
+    }
+    const error = new Error("Loop broken for testing purposes");
     (error as any).name = "AbortError";
     throw error;
   });
