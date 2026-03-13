@@ -36,10 +36,12 @@ describe("createSubagent", () => {
       gadgets: [],
     });
 
-    // Access the private requestHumanInput field via type assertion
+    // Access the private core.requestHumanInput field via type assertion
     // This verifies that onHumanInput was called with the parent's callback
-    const builderInternal = builder as unknown as { requestHumanInput?: typeof mockCallback };
-    expect(builderInternal.requestHumanInput).toBe(mockCallback);
+    const builderInternal = builder as unknown as {
+      core: { requestHumanInput?: typeof mockCallback };
+    };
+    expect(builderInternal.core.requestHumanInput).toBe(mockCallback);
   });
 
   it("should not set onHumanInput when parent context has no callback", () => {
@@ -55,8 +57,8 @@ describe("createSubagent", () => {
       gadgets: [],
     });
 
-    const builderInternal = builder as unknown as { requestHumanInput?: unknown };
-    expect(builderInternal.requestHumanInput).toBeUndefined();
+    const builderInternal = builder as unknown as { core: { requestHumanInput?: unknown } };
+    expect(builderInternal.core.requestHumanInput).toBeUndefined();
   });
 
   it("should share parent context for tree and signal", () => {
@@ -78,8 +80,8 @@ describe("createSubagent", () => {
     });
 
     // Verify signal was forwarded
-    const builderInternal = builder as unknown as { signal?: AbortSignal };
-    expect(builderInternal.signal).toBe(abortController.signal);
+    const builderInternal = builder as unknown as { core: { signal?: AbortSignal } };
+    expect(builderInternal.core.signal).toBe(abortController.signal);
   });
 
   it("should forward systemPrompt from options to builder", () => {
@@ -98,8 +100,8 @@ describe("createSubagent", () => {
     });
 
     // Verify systemPrompt was forwarded to the builder
-    const builderInternal = builder as unknown as { systemPrompt?: string };
-    expect(builderInternal.systemPrompt).toBe(systemPrompt);
+    const builderInternal = builder as unknown as { core: { systemPrompt?: string } };
+    expect(builderInternal.core.systemPrompt).toBe(systemPrompt);
   });
 
   it("should not set systemPrompt when not provided in options", () => {
@@ -115,8 +117,8 @@ describe("createSubagent", () => {
       // No systemPrompt
     });
 
-    const builderInternal = builder as unknown as { systemPrompt?: string };
-    expect(builderInternal.systemPrompt).toBeUndefined();
+    const builderInternal = builder as unknown as { core: { systemPrompt?: string } };
+    expect(builderInternal.core.systemPrompt).toBeUndefined();
   });
 
   it("should forward hooks from options to builder", () => {
@@ -139,8 +141,8 @@ describe("createSubagent", () => {
     });
 
     // Verify hooks were forwarded to the builder
-    const builderInternal = builder as unknown as { hooks?: AgentHooks };
-    expect(builderInternal.hooks).toBe(hooks);
+    const builderInternal = builder as unknown as { core: { hooks?: AgentHooks } };
+    expect(builderInternal.core.hooks).toBe(hooks);
   });
 
   it("should not set hooks when not provided in options", () => {
@@ -156,8 +158,8 @@ describe("createSubagent", () => {
       // No hooks
     });
 
-    const builderInternal = builder as unknown as { hooks?: AgentHooks };
-    expect(builderInternal.hooks).toBeUndefined();
+    const builderInternal = builder as unknown as { core: { hooks?: AgentHooks } };
+    expect(builderInternal.core.hooks).toBeUndefined();
   });
 
   it("should forward temperature from options to builder", () => {
@@ -176,8 +178,8 @@ describe("createSubagent", () => {
     });
 
     // Verify temperature was forwarded to the builder
-    const builderInternal = builder as unknown as { temperature?: number };
-    expect(builderInternal.temperature).toBe(temperature);
+    const builderInternal = builder as unknown as { core: { temperature?: number } };
+    expect(builderInternal.core.temperature).toBe(temperature);
   });
 
   it("should not set temperature when not provided in options", () => {
@@ -193,8 +195,8 @@ describe("createSubagent", () => {
       // No temperature
     });
 
-    const builderInternal = builder as unknown as { temperature?: number };
-    expect(builderInternal.temperature).toBeUndefined();
+    const builderInternal = builder as unknown as { core: { temperature?: number } };
+    expect(builderInternal.core.temperature).toBeUndefined();
   });
 
   it("should forward logger from context to builder", () => {
@@ -218,8 +220,8 @@ describe("createSubagent", () => {
     });
 
     // Verify logger was forwarded from context to the builder
-    const builderInternal = builder as unknown as { logger?: Logger<ILogObj> };
-    expect(builderInternal.logger).toBe(mockLogger);
+    const builderInternal = builder as unknown as { core: { logger?: Logger<ILogObj> } };
+    expect(builderInternal.core.logger).toBe(mockLogger);
   });
 
   it("should not set logger when context has no logger", () => {
@@ -235,8 +237,8 @@ describe("createSubagent", () => {
       gadgets: [],
     });
 
-    const builderInternal = builder as unknown as { logger?: Logger<ILogObj> };
-    expect(builderInternal.logger).toBeUndefined();
+    const builderInternal = builder as unknown as { core: { logger?: Logger<ILogObj> } };
+    expect(builderInternal.core.logger).toBeUndefined();
   });
 
   it("should correctly resolve model with inherit support - uses parent model when inherit keyword", () => {
@@ -258,8 +260,8 @@ describe("createSubagent", () => {
     });
 
     // When model is "inherit", should use parent's model from agentConfig
-    const builderInternal = builder as unknown as { model?: string };
-    expect(builderInternal.model).toBe("anthropic:claude-sonnet-4-5");
+    const builderInternal = builder as unknown as { core: { model?: string } };
+    expect(builderInternal.core.model).toBe("anthropic:claude-sonnet-4-5");
   });
 
   it("should correctly resolve model - uses runtime model when explicitly provided", () => {
@@ -281,8 +283,8 @@ describe("createSubagent", () => {
     });
 
     // Runtime model should take precedence over parent model
-    const builderInternal = builder as unknown as { model?: string };
-    expect(builderInternal.model).toBe(runtimeModel);
+    const builderInternal = builder as unknown as { core: { model?: string } };
+    expect(builderInternal.core.model).toBe(runtimeModel);
   });
 
   it("should correctly resolve model - falls back to defaultModel when no parent config", () => {
@@ -300,8 +302,8 @@ describe("createSubagent", () => {
     });
 
     // Should fall back to defaultModel
-    const builderInternal = builder as unknown as { model?: string };
-    expect(builderInternal.model).toBe("anthropic:claude-haiku-4-5");
+    const builderInternal = builder as unknown as { core: { model?: string } };
+    expect(builderInternal.core.model).toBe("anthropic:claude-haiku-4-5");
   });
 
   it("should correctly resolve model from subagentConfig when available", () => {
@@ -323,8 +325,8 @@ describe("createSubagent", () => {
     });
 
     // subagentConfig model should override defaultModel
-    const builderInternal = builder as unknown as { model?: string };
-    expect(builderInternal.model).toBe("anthropic:claude-haiku-4-5");
+    const builderInternal = builder as unknown as { core: { model?: string } };
+    expect(builderInternal.core.model).toBe("anthropic:claude-haiku-4-5");
   });
 
   it("should verify builder methods called via spies", () => {

@@ -59,45 +59,58 @@ export type HistoryMessage =
  * Provides a chainable API for configuring and creating agents,
  * making the code more expressive and easier to read.
  */
-export class AgentBuilder {
-  private client?: LLMist;
-  private model?: string;
-  private systemPrompt?: string;
-  private temperature?: number;
-  private maxIterations?: number;
-  private budget?: number;
-  private logger?: Logger<ILogObj>;
-  private hooks?: AgentHooks;
-  private promptConfig?: PromptTemplateConfig;
-  private gadgets: GadgetOrClass[] = [];
-  private initialMessages: Array<{
+
+interface CoreState {
+  client?: LLMist;
+  model?: string;
+  systemPrompt?: string;
+  temperature?: number;
+  maxIterations?: number;
+  budget?: number;
+  logger?: Logger<ILogObj>;
+  hooks?: AgentHooks;
+  promptConfig?: PromptTemplateConfig;
+  initialMessages: Array<{
     role: "system" | "user" | "assistant";
     content: MessageContent;
-  }> = [];
-  private requestHumanInput?: (question: string) => Promise<string>;
-  private gadgetStartPrefix?: string;
-  private gadgetEndPrefix?: string;
-  private gadgetArgPrefix?: string;
-  private textOnlyHandler?: TextOnlyHandler;
-  private textWithGadgetsHandler?: {
+  }>;
+  requestHumanInput?: (question: string) => Promise<string>;
+  signal?: AbortSignal;
+  trailingMessage?: TrailingMessage;
+  reasoningConfig?: ReasoningConfig;
+  cachingConfig?: CachingConfig;
+}
+
+interface GadgetState {
+  gadgets: GadgetOrClass[];
+  gadgetStartPrefix?: string;
+  gadgetEndPrefix?: string;
+  gadgetArgPrefix?: string;
+  textOnlyHandler?: TextOnlyHandler;
+  textWithGadgetsHandler?: {
     gadgetName: string;
     parameterMapping: (text: string) => Record<string, unknown>;
     resultMapping?: (text: string) => string;
   };
-  private defaultGadgetTimeoutMs?: number;
-  private gadgetExecutionMode?: GadgetExecutionMode;
-  private maxGadgetsPerResponse?: number;
-  private gadgetOutputLimit?: boolean;
-  private gadgetOutputLimitPercent?: number;
-  private compactionConfig?: CompactionConfig;
-  private retryConfig?: RetryConfig;
-  private rateLimitConfig?: RateLimitConfig;
-  private signal?: AbortSignal;
-  private trailingMessage?: TrailingMessage;
-  private subagentConfig?: SubagentConfigMap;
+  defaultGadgetTimeoutMs?: number;
+  gadgetExecutionMode?: GadgetExecutionMode;
+  maxGadgetsPerResponse?: number;
+  gadgetOutputLimit?: boolean;
+  gadgetOutputLimitPercent?: number;
+}
+
+interface RetryState {
+  retryConfig?: RetryConfig;
+  // Shared retry config from parent for consistent backoff behavior
+  // When a gadget calls withParentContext(ctx), this config is shared
+  sharedRetryConfig?: ResolvedRetryConfig;
+}
+
+interface SubagentState {
+  subagentConfig?: SubagentConfigMap;
   // Tree context for subagent support - enables shared tree model
   // When a gadget calls withParentContext(ctx), it shares the parent's tree
-  private parentContext?: {
+  parentContext?: {
     depth: number;
     tree?: ExecutionTree;
     nodeId?: NodeId;
@@ -105,19 +118,36 @@ export class AgentBuilder {
   // Parent observer hooks for subagent visibility
   // When a gadget calls withParentContext(ctx), these observers are
   // also called for gadget events in the subagent
-  private parentObservers?: Observers;
+  parentObservers?: Observers;
   // Shared rate limit tracker from parent for coordinated throttling
   // When a gadget calls withParentContext(ctx), this tracker is shared
   // so all agents in the tree respect aggregate RPM/TPM limits
-  private sharedRateLimitTracker?: RateLimitTracker;
-  // Shared retry config from parent for consistent backoff behavior
-  // When a gadget calls withParentContext(ctx), this config is shared
-  private sharedRetryConfig?: ResolvedRetryConfig;
-  private reasoningConfig?: ReasoningConfig;
-  private cachingConfig?: CachingConfig;
+  sharedRateLimitTracker?: RateLimitTracker;
+  rateLimitConfig?: RateLimitConfig;
+}
+
+interface PolicyState {
+  compactionConfig?: CompactionConfig;
+}
+
+export class AgentBuilder {
+  private core: CoreState;
+  private gadgets: GadgetState;
+  private retry: RetryState;
+  private subagents: SubagentState;
+  private policies: PolicyState;
 
   constructor(client?: LLMist) {
-    this.client = client;
+    this.core = {
+      client,
+      initialMessages: [],
+    };
+    this.gadgets = {
+      gadgets: [],
+    };
+    this.retry = {};
+    this.subagents = {};
+    this.policies = {};
   }
 
   /**
@@ -135,7 +165,7 @@ export class AgentBuilder {
    * ```
    */
   withModel(model: string): this {
-    this.model = resolveModel(model);
+    this.core.model = resolveModel(model);
     return this;
   }
 
@@ -146,7 +176,7 @@ export class AgentBuilder {
    * @returns This builder for chaining
    */
   withSystem(prompt: string): this {
-    this.systemPrompt = prompt;
+    this.core.systemPrompt = prompt;
     return this;
   }
 
@@ -157,7 +187,7 @@ export class AgentBuilder {
    * @returns This builder for chaining
    */
   withTemperature(temperature: number): this {
-    this.temperature = temperature;
+    this.core.temperature = temperature;
     return this;
   }
 
@@ -168,7 +198,7 @@ export class AgentBuilder {
    * @returns This builder for chaining
    */
   withMaxIterations(max: number): this {
-    this.maxIterations = max;
+    this.core.maxIterations = max;
     return this;
   }
 
@@ -185,7 +215,7 @@ export class AgentBuilder {
    * ```
    */
   withBudget(amountUSD: number): this {
-    this.budget = amountUSD;
+    this.core.budget = amountUSD;
     return this;
   }
 
@@ -196,7 +226,7 @@ export class AgentBuilder {
    * @returns This builder for chaining
    */
   withLogger(logger: Logger<ILogObj>): this {
-    this.logger = logger;
+    this.core.logger = logger;
     return this;
   }
 
@@ -218,7 +248,7 @@ export class AgentBuilder {
    * ```
    */
   withHooks(hooks: AgentHooks): this {
-    this.hooks = hooks;
+    this.core.hooks = hooks;
     return this;
   }
 
@@ -237,7 +267,7 @@ export class AgentBuilder {
    * ```
    */
   withPromptTemplateConfig(config: PromptTemplateConfig): this {
-    this.promptConfig = config;
+    this.core.promptConfig = config;
     return this;
   }
 
@@ -256,7 +286,7 @@ export class AgentBuilder {
    * ```
    */
   withGadgets(...gadgets: GadgetOrClass[]): this {
-    this.gadgets.push(...gadgets);
+    this.gadgets.gadgets.push(...gadgets);
     return this;
   }
 
@@ -280,11 +310,11 @@ export class AgentBuilder {
   withHistory(messages: HistoryMessage[]): this {
     for (const msg of messages) {
       if ("user" in msg) {
-        this.initialMessages.push({ role: "user", content: msg.user });
+        this.core.initialMessages.push({ role: "user", content: msg.user });
       } else if ("assistant" in msg) {
-        this.initialMessages.push({ role: "assistant", content: msg.assistant });
+        this.core.initialMessages.push({ role: "assistant", content: msg.assistant });
       } else if ("system" in msg) {
-        this.initialMessages.push({ role: "system", content: msg.system });
+        this.core.initialMessages.push({ role: "system", content: msg.system });
       }
     }
     return this;
@@ -319,7 +349,7 @@ export class AgentBuilder {
    * ```
    */
   clearHistory(): this {
-    this.initialMessages = [];
+    this.core.initialMessages = [];
     return this;
   }
 
@@ -355,9 +385,9 @@ export class AgentBuilder {
     // Add each message from the previous agent's conversation
     for (const msg of history) {
       if (msg.role === "user") {
-        this.initialMessages.push({ role: "user", content: msg.content });
+        this.core.initialMessages.push({ role: "user", content: msg.content });
       } else if (msg.role === "assistant") {
-        this.initialMessages.push({ role: "assistant", content: msg.content });
+        this.core.initialMessages.push({ role: "assistant", content: msg.content });
       }
       // Skip system messages - they're regenerated from the builder's config
     }
@@ -379,7 +409,7 @@ export class AgentBuilder {
    * ```
    */
   onHumanInput(handler: (question: string) => Promise<string>): this {
-    this.requestHumanInput = handler;
+    this.core.requestHumanInput = handler;
     return this;
   }
 
@@ -395,7 +425,7 @@ export class AgentBuilder {
    * ```
    */
   withGadgetStartPrefix(prefix: string): this {
-    this.gadgetStartPrefix = prefix;
+    this.gadgets.gadgetStartPrefix = prefix;
     return this;
   }
 
@@ -411,7 +441,7 @@ export class AgentBuilder {
    * ```
    */
   withGadgetEndPrefix(suffix: string): this {
-    this.gadgetEndPrefix = suffix;
+    this.gadgets.gadgetEndPrefix = suffix;
     return this;
   }
 
@@ -427,7 +457,7 @@ export class AgentBuilder {
    * ```
    */
   withGadgetArgPrefix(prefix: string): this {
-    this.gadgetArgPrefix = prefix;
+    this.gadgets.gadgetArgPrefix = prefix;
     return this;
   }
 
@@ -461,7 +491,7 @@ export class AgentBuilder {
    * ```
    */
   withTextOnlyHandler(handler: TextOnlyHandler): this {
-    this.textOnlyHandler = handler;
+    this.gadgets.textOnlyHandler = handler;
     return this;
   }
 
@@ -490,7 +520,7 @@ export class AgentBuilder {
     parameterMapping: (text: string) => Record<string, unknown>;
     resultMapping?: (text: string) => string;
   }): this {
-    this.textWithGadgetsHandler = handler;
+    this.gadgets.textWithGadgetsHandler = handler;
     return this;
   }
 
@@ -510,7 +540,7 @@ export class AgentBuilder {
     if (timeoutMs < 0) {
       throw new Error("Timeout must be a non-negative number");
     }
-    this.defaultGadgetTimeoutMs = timeoutMs;
+    this.gadgets.defaultGadgetTimeoutMs = timeoutMs;
     return this;
   }
 
@@ -534,7 +564,7 @@ export class AgentBuilder {
    * ```
    */
   withGadgetExecutionMode(mode: GadgetExecutionMode): this {
-    this.gadgetExecutionMode = mode;
+    this.gadgets.gadgetExecutionMode = mode;
     return this;
   }
 
@@ -566,7 +596,7 @@ export class AgentBuilder {
     if (!Number.isInteger(max)) {
       throw new Error("maxGadgetsPerResponse must be an integer");
     }
-    this.maxGadgetsPerResponse = max;
+    this.gadgets.maxGadgetsPerResponse = max;
     return this;
   }
 
@@ -585,7 +615,7 @@ export class AgentBuilder {
    * ```
    */
   withGadgetOutputLimit(enabled: boolean): this {
-    this.gadgetOutputLimit = enabled;
+    this.gadgets.gadgetOutputLimit = enabled;
     return this;
   }
 
@@ -607,7 +637,7 @@ export class AgentBuilder {
     if (percent < 1 || percent > 100) {
       throw new Error("Output limit percent must be between 1 and 100");
     }
-    this.gadgetOutputLimitPercent = percent;
+    this.gadgets.gadgetOutputLimitPercent = percent;
     return this;
   }
 
@@ -643,7 +673,7 @@ export class AgentBuilder {
    * ```
    */
   withCompaction(config: CompactionConfig): this {
-    this.compactionConfig = { ...config, enabled: config.enabled ?? true };
+    this.policies.compactionConfig = { ...config, enabled: config.enabled ?? true };
     return this;
   }
 
@@ -660,7 +690,7 @@ export class AgentBuilder {
    * ```
    */
   withoutCompaction(): this {
-    this.compactionConfig = { enabled: false };
+    this.policies.compactionConfig = { enabled: false };
     return this;
   }
 
@@ -699,7 +729,7 @@ export class AgentBuilder {
    * ```
    */
   withRetry(config: RetryConfig): this {
-    this.retryConfig = { ...config, enabled: config.enabled ?? true };
+    this.retry.retryConfig = { ...config, enabled: config.enabled ?? true };
     return this;
   }
 
@@ -716,7 +746,7 @@ export class AgentBuilder {
    * ```
    */
   withoutRetry(): this {
-    this.retryConfig = { enabled: false };
+    this.retry.retryConfig = { enabled: false };
     return this;
   }
 
@@ -753,7 +783,7 @@ export class AgentBuilder {
    * ```
    */
   withRateLimits(config: RateLimitConfig): this {
-    this.rateLimitConfig = config;
+    this.subagents.rateLimitConfig = config;
     return this;
   }
 
@@ -783,7 +813,7 @@ export class AgentBuilder {
    * ```
    */
   withSignal(signal: AbortSignal): this {
-    this.signal = signal;
+    this.core.signal = signal;
     return this;
   }
 
@@ -821,11 +851,11 @@ export class AgentBuilder {
    */
   withReasoning(config?: ReasoningConfig | ReasoningEffort): this {
     if (typeof config === "string") {
-      this.reasoningConfig = { enabled: true, effort: config };
+      this.core.reasoningConfig = { enabled: true, effort: config };
     } else if (config === undefined) {
-      this.reasoningConfig = { enabled: true, effort: "medium" };
+      this.core.reasoningConfig = { enabled: true, effort: "medium" };
     } else {
-      this.reasoningConfig = config;
+      this.core.reasoningConfig = config;
     }
     return this;
   }
@@ -839,7 +869,7 @@ export class AgentBuilder {
    * @returns This builder for chaining
    */
   withoutReasoning(): this {
-    this.reasoningConfig = { enabled: false };
+    this.core.reasoningConfig = { enabled: false };
     return this;
   }
 
@@ -875,7 +905,7 @@ export class AgentBuilder {
    * ```
    */
   withCaching(config?: CachingConfig): this {
-    this.cachingConfig = config ?? { enabled: true };
+    this.core.cachingConfig = config ?? { enabled: true };
     return this;
   }
 
@@ -897,7 +927,7 @@ export class AgentBuilder {
    * ```
    */
   withoutCaching(): this {
-    this.cachingConfig = { enabled: false };
+    this.core.cachingConfig = { enabled: false };
     return this;
   }
 
@@ -919,7 +949,7 @@ export class AgentBuilder {
    * ```
    */
   withSubagentConfig(config: SubagentConfigMap): this {
-    this.subagentConfig = config;
+    this.subagents.subagentConfig = config;
     return this;
   }
 
@@ -975,7 +1005,7 @@ export class AgentBuilder {
     // The TUI and other consumers subscribe via tree.onAll() to see all events
     // including those from nested subagents (detected by event.depth > 0).
     if (ctx.tree) {
-      this.parentContext = {
+      this.subagents.parentContext = {
         tree: ctx.tree,
         nodeId: ctx.nodeId,
         depth,
@@ -983,32 +1013,32 @@ export class AgentBuilder {
     }
 
     // Auto-forward abort signal from parent for proper cancellation propagation
-    if (ctx.signal && !this.signal) {
-      this.signal = ctx.signal;
+    if (ctx.signal && !this.core.signal) {
+      this.core.signal = ctx.signal;
     }
 
     // Inherit logger from parent context for consistent logging across subagents
-    if (ctx.logger && !this.logger) {
-      this.logger = ctx.logger;
+    if (ctx.logger && !this.core.logger) {
+      this.core.logger = ctx.logger;
     }
 
     // Store parent's observer hooks for subagent visibility
     // When this subagent executes gadgets, both local hooks and parent hooks
     // will be called (via StreamProcessor), enabling the parent to monitor
     // gadget activity in subagents with proper event ordering.
-    if (ctx.parentObservers && !this.parentObservers) {
-      this.parentObservers = ctx.parentObservers;
+    if (ctx.parentObservers && !this.subagents.parentObservers) {
+      this.subagents.parentObservers = ctx.parentObservers;
     }
 
     // Share rate limit tracker for coordinated throttling across all subagents
     // This ensures the entire agent tree respects aggregate RPM/TPM limits
-    if (ctx.rateLimitTracker && !this.sharedRateLimitTracker) {
-      this.sharedRateLimitTracker = ctx.rateLimitTracker;
+    if (ctx.rateLimitTracker && !this.subagents.sharedRateLimitTracker) {
+      this.subagents.sharedRateLimitTracker = ctx.rateLimitTracker;
     }
 
     // Share retry config for consistent backoff behavior across all subagents
-    if (ctx.retryConfig && !this.sharedRetryConfig) {
-      this.sharedRetryConfig = ctx.retryConfig;
+    if (ctx.retryConfig && !this.retry.sharedRetryConfig) {
+      this.retry.sharedRetryConfig = ctx.retryConfig;
     }
 
     return this;
@@ -1036,7 +1066,7 @@ export class AgentBuilder {
    * ```
    */
   withTrailingMessage(message: TrailingMessage): this {
-    this.trailingMessage = message;
+    this.core.trailingMessage = message;
     return this;
   }
 
@@ -1075,19 +1105,19 @@ export class AgentBuilder {
     invocationId: string,
   ): this {
     const content = formatGadgetCall(gadgetName, invocationId, parameters, {
-      start: this.gadgetStartPrefix,
-      end: this.gadgetEndPrefix,
-      arg: this.gadgetArgPrefix,
+      start: this.gadgets.gadgetStartPrefix,
+      end: this.gadgets.gadgetEndPrefix,
+      arg: this.gadgets.gadgetArgPrefix,
     });
 
     // Assistant message with gadget call (including invocation ID)
-    this.initialMessages.push({
+    this.core.initialMessages.push({
       role: "assistant",
       content,
     });
 
     // User message with result (including invocation ID so LLM can reference it)
-    this.initialMessages.push({
+    this.core.initialMessages.push({
       role: "user",
       content: `Result (${invocationId}): ${result}`,
     });
@@ -1099,7 +1129,7 @@ export class AgentBuilder {
    * Compose the final hooks, including trailing message injection if configured.
    */
   private composeHooks(): AgentHooks | undefined {
-    return HookComposer.compose(this.hooks, this.trailingMessage);
+    return HookComposer.compose(this.core.hooks, this.core.trailingMessage);
   }
 
   /**
@@ -1129,61 +1159,61 @@ export class AgentBuilder {
    */
   private buildAgentOptions(userPrompt?: string | ContentPart[]): AgentOptions {
     // Lazy import to avoid circular dependency
-    if (!this.client) {
+    if (!this.core.client) {
       const { LLMist: LLMistClass } =
         require("../core/client.js") as typeof import("../core/client.js");
-      this.client = new LLMistClass();
+      this.core.client = new LLMistClass();
     }
 
-    const registry = GadgetRegistry.from(this.gadgets);
+    const registry = GadgetRegistry.from(this.gadgets.gadgets);
 
     return {
-      client: this.client,
-      model: this.model ?? "openai:gpt-5-nano",
-      systemPrompt: this.systemPrompt,
+      client: this.core.client,
+      model: this.core.model ?? "openai:gpt-5-nano",
+      systemPrompt: this.core.systemPrompt,
       userPrompt,
       registry,
-      maxIterations: this.maxIterations,
-      budget: this.budget,
-      temperature: this.temperature,
-      logger: this.logger,
+      maxIterations: this.core.maxIterations,
+      budget: this.core.budget,
+      temperature: this.core.temperature,
+      logger: this.core.logger,
       hooks: this.composeHooks(),
-      promptConfig: this.promptConfig,
-      initialMessages: this.initialMessages,
-      requestHumanInput: this.requestHumanInput,
+      promptConfig: this.core.promptConfig,
+      initialMessages: this.core.initialMessages,
+      requestHumanInput: this.core.requestHumanInput,
       // Prefix configuration sub-config
       prefixConfig: {
-        gadgetStartPrefix: this.gadgetStartPrefix,
-        gadgetEndPrefix: this.gadgetEndPrefix,
-        gadgetArgPrefix: this.gadgetArgPrefix,
+        gadgetStartPrefix: this.gadgets.gadgetStartPrefix,
+        gadgetEndPrefix: this.gadgets.gadgetEndPrefix,
+        gadgetArgPrefix: this.gadgets.gadgetArgPrefix,
       },
-      textOnlyHandler: this.textOnlyHandler,
-      textWithGadgetsHandler: this.textWithGadgetsHandler,
-      defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-      gadgetExecutionMode: this.gadgetExecutionMode,
-      maxGadgetsPerResponse: this.maxGadgetsPerResponse,
+      textOnlyHandler: this.gadgets.textOnlyHandler,
+      textWithGadgetsHandler: this.gadgets.textWithGadgetsHandler,
+      defaultGadgetTimeoutMs: this.gadgets.defaultGadgetTimeoutMs,
+      gadgetExecutionMode: this.gadgets.gadgetExecutionMode,
+      maxGadgetsPerResponse: this.gadgets.maxGadgetsPerResponse,
       // Output limit configuration sub-config
       outputLimitConfig: {
-        enabled: this.gadgetOutputLimit,
-        limitPercent: this.gadgetOutputLimitPercent,
+        enabled: this.gadgets.gadgetOutputLimit,
+        limitPercent: this.gadgets.gadgetOutputLimitPercent,
       },
-      compactionConfig: this.compactionConfig,
-      retryConfig: this.retryConfig,
-      rateLimitConfig: this.rateLimitConfig,
-      signal: this.signal,
-      reasoning: this.reasoningConfig,
-      caching: this.cachingConfig,
-      subagentConfig: this.subagentConfig,
+      compactionConfig: this.policies.compactionConfig,
+      retryConfig: this.retry.retryConfig,
+      rateLimitConfig: this.subagents.rateLimitConfig,
+      signal: this.core.signal,
+      reasoning: this.core.reasoningConfig,
+      caching: this.core.cachingConfig,
+      subagentConfig: this.subagents.subagentConfig,
       // Tree configuration sub-config (for shared tree model with subagents)
       treeConfig: {
-        tree: this.parentContext?.tree,
-        parentNodeId: this.parentContext?.nodeId,
-        baseDepth: this.parentContext ? (this.parentContext.depth ?? 0) + 1 : 0,
-        parentObservers: this.parentObservers,
+        tree: this.subagents.parentContext?.tree,
+        parentNodeId: this.subagents.parentContext?.nodeId,
+        baseDepth: this.subagents.parentContext ? (this.subagents.parentContext.depth ?? 0) + 1 : 0,
+        parentObservers: this.subagents.parentObservers,
       },
       // Shared rate limit tracker and retry config (for coordinated limits across subagents)
-      sharedRateLimitTracker: this.sharedRateLimitTracker,
-      sharedRetryConfig: this.sharedRetryConfig,
+      sharedRateLimitTracker: this.subagents.sharedRateLimitTracker,
+      sharedRetryConfig: this.retry.sharedRetryConfig,
     };
   }
 

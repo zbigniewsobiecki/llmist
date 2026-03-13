@@ -16,8 +16,8 @@ describe("AgentBuilder reasoning API", () => {
       builder.withReasoning();
 
       const config = (
-        builder as unknown as { reasoningConfig: { enabled: boolean; effort: string } }
-      ).reasoningConfig;
+        builder as unknown as { core: { reasoningConfig: { enabled: boolean; effort: string } } }
+      ).core.reasoningConfig;
 
       expect(config.enabled).toBe(true);
       expect(config.effort).toBe("medium");
@@ -28,8 +28,8 @@ describe("AgentBuilder reasoning API", () => {
       builder.withReasoning("high");
 
       const config = (
-        builder as unknown as { reasoningConfig: { enabled: boolean; effort: string } }
-      ).reasoningConfig;
+        builder as unknown as { core: { reasoningConfig: { enabled: boolean; effort: string } } }
+      ).core.reasoningConfig;
 
       expect(config.enabled).toBe(true);
       expect(config.effort).toBe("high");
@@ -43,8 +43,8 @@ describe("AgentBuilder reasoning API", () => {
         builder.withReasoning(effort);
 
         const config = (
-          builder as unknown as { reasoningConfig: { enabled: boolean; effort: string } }
-        ).reasoningConfig;
+          builder as unknown as { core: { reasoningConfig: { enabled: boolean; effort: string } } }
+        ).core.reasoningConfig;
 
         expect(config.enabled).toBe(true);
         expect(config.effort).toBe(effort);
@@ -57,9 +57,9 @@ describe("AgentBuilder reasoning API", () => {
 
       const config = (
         builder as unknown as {
-          reasoningConfig: { enabled: boolean; budgetTokens: number };
+          core: { reasoningConfig: { enabled: boolean; budgetTokens: number } };
         }
-      ).reasoningConfig;
+      ).core.reasoningConfig;
 
       expect(config.enabled).toBe(true);
       expect(config.budgetTokens).toBe(10000);
@@ -71,9 +71,9 @@ describe("AgentBuilder reasoning API", () => {
 
       const config = (
         builder as unknown as {
-          reasoningConfig: { enabled: boolean; effort: string; interleaved: boolean };
+          core: { reasoningConfig: { enabled: boolean; effort: string; interleaved: boolean } };
         }
-      ).reasoningConfig;
+      ).core.reasoningConfig;
 
       expect(config.enabled).toBe(true);
       expect(config.effort).toBe("high");
@@ -96,7 +96,7 @@ describe("AgentBuilder reasoning API", () => {
       builder.withReasoning("low");
       builder.withReasoning("maximum");
 
-      const config = (builder as unknown as { reasoningConfig: { effort: string } })
+      const config = (builder as unknown as { core: { reasoningConfig: any } }).core
         .reasoningConfig;
 
       expect(config.effort).toBe("maximum");
@@ -115,8 +115,8 @@ describe("AgentBuilder reasoning API", () => {
       const builder = new AgentBuilder();
       builder.withoutReasoning();
 
-      const config = (builder as unknown as { reasoningConfig: { enabled: boolean } })
-        .reasoningConfig;
+      const config = (builder as unknown as { core: { reasoningConfig: { enabled: boolean } } })
+        .core.reasoningConfig;
 
       expect(config.enabled).toBe(false);
     });
@@ -126,8 +126,8 @@ describe("AgentBuilder reasoning API", () => {
       builder.withReasoning("high");
       builder.withoutReasoning();
 
-      const config = (builder as unknown as { reasoningConfig: { enabled: boolean } })
-        .reasoningConfig;
+      const config = (builder as unknown as { core: { reasoningConfig: { enabled: boolean } } })
+        .core.reasoningConfig;
 
       expect(config.enabled).toBe(false);
     });

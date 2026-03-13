@@ -649,10 +649,12 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       builder.withSyntheticGadgetCall("TestGadget", { message: "hello" }, "Success", "gc_1");
 
-      // Access private initialMessages via type assertion
+      // Access private core.initialMessages via type assertion
       const messages = (
-        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
-      ).initialMessages;
+        builder as unknown as {
+          core: { initialMessages: Array<{ role: string; content: string }> };
+        }
+      ).core.initialMessages;
 
       expect(messages).toHaveLength(2);
 
@@ -677,8 +679,10 @@ describe("AgentBuilder", () => {
         .withSyntheticGadgetCall("Calculator", { a: 1, b: 2 }, "3", "gc_2");
 
       const messages = (
-        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
-      ).initialMessages;
+        builder as unknown as {
+          core: { initialMessages: Array<{ role: string; content: string }> };
+        }
+      ).core.initialMessages;
 
       expect(messages).toHaveLength(2);
 
@@ -708,8 +712,10 @@ describe("AgentBuilder", () => {
       );
 
       const messages = (
-        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
-      ).initialMessages;
+        builder as unknown as {
+          core: { initialMessages: Array<{ role: string; content: string }> };
+        }
+      ).core.initialMessages;
       const content = messages[0].content;
 
       // Verify nested paths use JSON Pointer format
@@ -726,8 +732,10 @@ describe("AgentBuilder", () => {
         .withSyntheticGadgetCall("Second", { y: 2 }, "two", "gc_b");
 
       const messages = (
-        builder as unknown as { initialMessages: Array<{ role: string; content: string }> }
-      ).initialMessages;
+        builder as unknown as {
+          core: { initialMessages: Array<{ role: string; content: string }> };
+        }
+      ).core.initialMessages;
 
       // Each call adds 2 messages (assistant + user)
       expect(messages).toHaveLength(4);
@@ -870,8 +878,8 @@ describe("AgentBuilder", () => {
       builder.withMaxGadgetsPerResponse(10);
 
       // Access private field via type assertion
-      const maxGadgets = (builder as unknown as { maxGadgetsPerResponse?: number })
-        .maxGadgetsPerResponse;
+      const maxGadgets = (builder as unknown as { gadgets: { maxGadgetsPerResponse?: number } })
+        .gadgets.maxGadgetsPerResponse;
 
       expect(maxGadgets).toBe(10);
     });
@@ -1108,9 +1116,9 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       builder.withRetry({ retries: 5 });
 
-      // Access private retryConfig via type assertion
-      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
-        .retryConfig;
+      // Access private retry.retryConfig via type assertion
+      const retryConfig = (builder as unknown as { retry: { retryConfig?: { enabled: boolean } } })
+        .retry.retryConfig;
 
       expect(retryConfig?.enabled).toBe(true);
     });
@@ -1119,8 +1127,8 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       builder.withRetry({ enabled: false, retries: 5 });
 
-      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
-        .retryConfig;
+      const retryConfig = (builder as unknown as { retry: { retryConfig?: { enabled: boolean } } })
+        .retry.retryConfig;
 
       expect(retryConfig?.enabled).toBe(false);
     });
@@ -1138,8 +1146,8 @@ describe("AgentBuilder", () => {
       const builder = new AgentBuilder();
       builder.withoutRetry();
 
-      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
-        .retryConfig;
+      const retryConfig = (builder as unknown as { retry: { retryConfig?: { enabled: boolean } } })
+        .retry.retryConfig;
 
       expect(retryConfig?.enabled).toBe(false);
     });
@@ -1156,8 +1164,8 @@ describe("AgentBuilder", () => {
       builder.withRetry({ retries: 5 });
       builder.withoutRetry();
 
-      const retryConfig = (builder as unknown as { retryConfig?: { enabled: boolean } })
-        .retryConfig;
+      const retryConfig = (builder as unknown as { retry: { retryConfig?: { enabled: boolean } } })
+        .retry.retryConfig;
 
       expect(retryConfig?.enabled).toBe(false);
     });
