@@ -143,20 +143,15 @@ describe("executeAgent TUI Mode Initialization and REPL", () => {
     const mockTUI = createMockTUIApp();
     vi.mocked(TUIApp.create).mockResolvedValue(mockTUI as any);
 
-    // Make it break on the first call to waitForPrompt
     mockTUI.waitForPrompt.mockImplementationOnce(async () => {
-      const error = new Error("Loop broken");
+      const error = new Error("Abort");
       (error as any).name = "AbortError";
       throw error;
     });
 
     const env = createMockEnv(mockClient, { isTTY: true });
 
-    try {
-      await executeAgent("tui prompt", defaultOptions, env);
-    } catch (e: any) {
-      if (!e.name?.includes("AbortError")) throw e;
-    }
+    await expect(executeAgent("tui prompt", defaultOptions, env)).rejects.toThrow();
 
     expect(TUIApp.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -172,22 +167,16 @@ describe("executeAgent TUI Mode Initialization and REPL", () => {
     const mockTUI = createMockTUIApp();
     vi.mocked(TUIApp.create).mockResolvedValue(mockTUI as any);
 
-    // Make it break on the first call to waitForPrompt
     mockTUI.waitForPrompt.mockImplementationOnce(async () => {
-      const error = new Error("Loop broken");
+      const error = new Error("Abort");
       (error as any).name = "AbortError";
       throw error;
     });
 
     const env = createMockEnv(mockClient, { isTTY: true });
 
-    try {
-      await executeAgent("tui prompt", defaultOptions, env, "agent");
-    } catch (e: any) {
-      if (!e.name?.includes("AbortError")) throw e;
-    }
+    await expect(executeAgent("tui prompt", defaultOptions, env, "agent")).rejects.toThrow();
 
-    // Profiles should include "agent" and the custom commands from config
     expect(mockTUI.setProfiles).toHaveBeenCalledWith(["agent", "coding", "writing"], "agent");
   });
 
@@ -196,26 +185,18 @@ describe("executeAgent TUI Mode Initialization and REPL", () => {
     const mockTUI = createMockTUIApp();
     vi.mocked(TUIApp.create).mockResolvedValue(mockTUI as any);
 
-    // First call returns prompt, second call throws to break loop
     mockTUI.waitForPrompt
       .mockImplementationOnce(async () => "first prompt")
       .mockImplementationOnce(async () => {
-        const error = new Error("Loop broken");
+        const error = new Error("Abort");
         (error as any).name = "AbortError";
         throw error;
       });
 
     const env = createMockEnv(mockClient, { isTTY: true });
 
-    // The first prompt will be "tui prompt" from the argument.
-    // The REPL loop then calls waitForPrompt() which we just mocked.
-    try {
-      await executeAgent("tui prompt", defaultOptions, env);
-    } catch (e: any) {
-      if (!e.name?.includes("AbortError")) throw e;
-    }
+    await expect(executeAgent("tui prompt", defaultOptions, env)).rejects.toThrow();
 
-    // waitForPrompt should have been called twice (once for next prompt, once to break)
     expect(mockTUI.waitForPrompt).toHaveBeenCalledTimes(2);
   });
 
@@ -224,28 +205,26 @@ describe("executeAgent TUI Mode Initialization and REPL", () => {
     const mockTUI = createMockTUIApp();
     vi.mocked(TUIApp.create).mockResolvedValue(mockTUI as any);
 
-    // Make it break on the first call to waitForPrompt
-    mockTUI.waitForPrompt.mockImplementationOnce(async () => {
-      const error = new Error("Loop broken");
+    mockTUI.waitForPrompt.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const error = new Error("Abort");
       (error as any).name = "AbortError";
       throw error;
     });
 
     const env = createMockEnv(mockClient, { isTTY: true });
 
-    // Capture the quit handler
     let quitHandler: (() => void) | undefined;
     mockTUI.onQuit.mockImplementation((handler: () => void) => {
       quitHandler = handler;
     });
 
-    // Start executeAgent, which should set up the quit handler
     const agentPromise = executeAgent("tui prompt", defaultOptions, env);
+    // Immediately catch to avoid unhandled rejection
+    agentPromise.catch(() => {});
 
-    // Give it a moment to initialize
-    await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 20));
 
-    // Simulate quit (which calls process.exit)
     if (quitHandler) {
       try {
         quitHandler();
@@ -257,7 +236,7 @@ describe("executeAgent TUI Mode Initialization and REPL", () => {
     expect(mockTUI.destroy).toHaveBeenCalled();
     expect(exitCode).toBe(130);
 
-    // Suppress unhandled rejection from agentPromise
+    // Ensure the promise is settled
     await agentPromise.catch(() => {});
   });
 });
