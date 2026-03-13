@@ -102,3 +102,5 @@ export {
   createTextStream,
   getStreamFinalChunk,
 } from "./stream-helpers.js";
+// TUI mock
+export { createMockTUIApp, type MockTUIApp } from "./tui-mock.js";

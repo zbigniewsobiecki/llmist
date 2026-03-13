@@ -1,15 +1,32 @@
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
+import { createMockTUIApp } from "@llmist/testing";
 import type { LLMist, LLMStream, StreamChunk } from "llmist";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { type CLIAgentOptions, executeAgent } from "./agent-command.js";
 import type { CLIEnvironment } from "./environment.js";
+import { TUIApp } from "./tui/index.js";
+
+vi.mock("./tui/index.js", () => ({
+  TUIApp: {
+    create: vi.fn(),
+  },
+  StatusBar: {
+    estimateTokens: vi.fn(() => 10),
+  },
+}));
 
 /**
  * Mock writable stream that captures all output.
  */
 class MockWritableStream extends Writable {
   public output = "";
+  public isTTY = false;
+
+  constructor(isTTY = false) {
+    super();
+    this.isTTY = isTTY;
+  }
 
   _write(chunk: Buffer | string, _encoding: string, callback: () => void): void {
     this.output += chunk.toString();
@@ -54,21 +71,18 @@ function createMockClient(
     stream: (streamOptions) => {
       async function* generator(): LLMStream {
         for (const chunk of chunks) {
-          // Check abort signal before yielding
           if (shouldCheckAbort && streamOptions.signal?.aborted) {
             return;
           }
 
           yield chunk;
 
-          // Allow microtasks to run (enables abort signal checking)
           if (delayBetweenChunks > 0) {
             await new Promise((r) => setTimeout(r, delayBetweenChunks));
           } else {
             await new Promise((r) => setTimeout(r, 0));
           }
 
-          // Check abort signal after delay
           if (shouldCheckAbort && streamOptions.signal?.aborted) {
             return;
           }
@@ -92,13 +106,14 @@ function createMockClient(
         outputCost: 0.0005,
       }),
     },
+    getTree: () => ({
+      subscribe: vi.fn(() => () => {}),
+    }),
   } as unknown as LLMist;
 }
 
 /**
  * Creates a mock CLIEnvironment for testing.
- * Note: Uses isTTY=false by default to test piped mode (non-TUI).
- * TUI mode is tested separately with the TUI components.
  */
 function createMockEnv(
   mockClient: LLMist,
@@ -114,8 +129,8 @@ function createMockEnv(
   const { isTTY = false, stdin = new MockStdin() } = options;
   stdin.isTTY = isTTY;
 
-  const stdout = new MockWritableStream();
-  const stderr = new MockWritableStream();
+  const stdout = new MockWritableStream(isTTY);
+  const stderr = new MockWritableStream(isTTY);
 
   return {
     argv: ["node", "llmist", "agent"],
@@ -125,7 +140,7 @@ function createMockEnv(
     createClient: () => mockClient,
     setExitCode: vi.fn(),
     createLogger: () => {
-      const mockLogger: Record<string, unknown> = {
+      const mockLogger: any = {
         silly: vi.fn(),
         trace: vi.fn(),
         debug: vi.fn(),
@@ -134,23 +149,19 @@ function createMockEnv(
         error: vi.fn(),
         fatal: vi.fn(),
       };
-      // getSubLogger returns the same mock logger
       mockLogger.getSubLogger = () => mockLogger;
-      return mockLogger as never;
+      return mockLogger;
     },
     isTTY,
     prompt: vi.fn(async () => "test input"),
   };
 }
 
-/**
- * Default options for agent command tests.
- */
 const defaultOptions: CLIAgentOptions = {
   model: "test:mock-model",
   maxIterations: 1,
-  builtins: false, // Disable built-in gadgets for simpler testing
-  quiet: true, // Suppress non-essential output
+  builtins: false,
+  quiet: true,
 };
 
 describe("executeAgent piped mode", () => {
@@ -297,5 +308,27 @@ describe("executeAgent with gadgets", () => {
     // Text output should appear in stdout
     expect(env.stdout.output).toContain("Processing your request...");
     expect(env.stdout.output).toContain("Done!");
+  });
+});
+
+describe("executeAgent TUI mode", () => {
+  test("initializes TUI when isTTY=true", async () => {
+    const chunks: StreamChunk[] = [{ text: "TUI response", finishReason: "stop" }];
+    const mockClient = createMockClient(chunks);
+    const mockTUI = createMockTUIApp();
+    vi.mocked(TUIApp.create).mockResolvedValue(mockTUI as any);
+
+    const env = createMockEnv(mockClient, { isTTY: true });
+
+    // Mock prompt resolver to avoid hanging
+    try {
+      await executeAgent("tui prompt", { ...defaultOptions, quiet: false }, env);
+    } catch (e: any) {
+      if (e.name !== "AbortError") throw e;
+    }
+
+    expect(TUIApp.create).toHaveBeenCalled();
+    expect(mockTUI.subscribeToTree).toHaveBeenCalled();
+    expect(mockTUI.handleEvent).toHaveBeenCalled();
   });
 });
