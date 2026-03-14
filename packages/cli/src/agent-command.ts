@@ -160,7 +160,7 @@ export async function executeAgent(
 
   // Set up gadget approval manager
   // Default: RunCommand, WriteFile, EditFile require approval unless overridden by config
-  const DEFAULT_APPROVAL_REQUIRED = ["RunCommand", "WriteFile", "EditFile"];
+  const DEFAULT_APPROVAL_REQUIRED = ["RunCommand", "WriteFile", "EditFile", "DeleteFile"];
   const userApprovals = options.gadgetApproval ?? {};
 
   // Apply defaults for dangerous gadgets if not explicitly configured
