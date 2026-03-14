@@ -203,7 +203,7 @@ export function tryResolveBuiltin(specifier: string): AbstractGadget | null {
     const gadget = getBuiltinGadget(name);
     if (!gadget) {
       throw new Error(
-        `Unknown builtin gadget: ${name}. Available builtins: ListDirectory, ReadFile, WriteFile, EditFile, RunCommand`,
+        `Unknown builtin gadget: ${name}. Available builtins: ListDirectory, ReadFile, WriteFile, EditFile, DeleteFile, RunCommand`,
       );
     }
     return gadget;

@@ -5,6 +5,7 @@
  */
 
 import type { AbstractGadget } from "llmist";
+import { deleteFile } from "./filesystem/delete-file.js";
 import { editFile } from "./filesystem/edit-file.js";
 import { listDirectory } from "./filesystem/list-directory.js";
 import { readFile } from "./filesystem/read-file.js";
@@ -23,6 +24,7 @@ export const builtinGadgetRegistry: Record<string, AbstractGadget> = {
   ReadFile: readFile,
   WriteFile: writeFile,
   EditFile: editFile,
+  DeleteFile: deleteFile,
   RunCommand: runCommand,
   TextToSpeech: textToSpeech,
 };
@@ -62,6 +64,7 @@ export {
   readFile,
   writeFile,
   editFile,
+  deleteFile,
   runCommand,
   textToSpeech,
   createTextToSpeech,
