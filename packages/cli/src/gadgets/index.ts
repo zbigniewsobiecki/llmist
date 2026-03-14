@@ -19,8 +19,9 @@ export { PathSandboxException, validatePathIsWithinCwd } from "../builtins/files
 // Filesystem & system gadgets (camelCase instances)
 // PascalCase aliases (matching gadget names for convenient imports)
 export {
+  deleteFile,
+  deleteFile as DeleteFile,
   editFile,
-  editFile as EditFile,
   listDirectory,
   listDirectory as ListDirectory,
   readFile,
