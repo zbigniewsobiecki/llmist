@@ -2,8 +2,9 @@ import type { BlockRenderer } from "./block-renderer.js";
 import type { TUIController } from "./controller.js";
 import type { KeyAction } from "./keymap.js";
 import type { ModalManager } from "./modal-manager.js";
+import { createRawViewerData, isRawViewerNode } from "./raw-viewer-data.js";
 import type { StatusBar } from "./status-bar.js";
-import type { GadgetNode, LLMCallNode, TUIBlockLayout, TUIScreenContext } from "./types.js";
+import type { TUIBlockLayout, TUIScreenContext } from "./types.js";
 
 /**
  * KeyActionHandler - Extracts keyboard action logic from TUIApp.
@@ -110,26 +111,12 @@ export class KeyActionHandler {
         void (async () => {
           const selected = this.blockRenderer.getSelectedBlock();
           if (!selected) return;
+          if (!isRawViewerNode(selected.node)) return;
 
-          if (selected.node.type === "llm_call") {
-            const node = selected.node as LLMCallNode;
-            await this.modalManager.showRawViewer(this.screenCtx.screen, {
-              mode: action.mode,
-              request: node.rawRequest,
-              response: node.rawResponse,
-              iteration: node.iteration,
-              model: node.model,
-            });
-          } else if (selected.node.type === "gadget") {
-            const node = selected.node as GadgetNode;
-            await this.modalManager.showRawViewer(this.screenCtx.screen, {
-              mode: action.mode,
-              gadgetName: node.name,
-              parameters: node.parameters,
-              result: node.result,
-              error: node.error,
-            });
-          }
+          await this.modalManager.showRawViewer(
+            this.screenCtx.screen,
+            createRawViewerData(selected.node, action.mode),
+          );
         })();
         break;
     }

@@ -6,24 +6,10 @@
  */
 
 import type { Screen } from "@unblessed/node";
-import type { LLMMessage } from "llmist";
 import { showApprovalDialog } from "./approval-dialog.js";
-import { type RawViewerMode, showRawViewer } from "./raw-viewer.js";
+import { showRawViewer } from "./raw-viewer.js";
+import type { RawViewerData } from "./raw-viewer-data.js";
 import type { ApprovalContext, ApprovalResponse } from "./types.js";
-
-export interface RawViewerData {
-  mode: RawViewerMode;
-  // For LLM calls
-  request?: LLMMessage[];
-  response?: string;
-  iteration?: number;
-  model?: string;
-  // For gadgets
-  gadgetName?: string;
-  parameters?: Record<string, unknown>;
-  result?: string;
-  error?: string;
-}
 
 export class ModalManager {
   private activeModal: { close: () => void } | null = null;
