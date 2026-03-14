@@ -745,11 +745,11 @@ describe("BlockRenderer", () => {
       const renderer = new BlockRenderer(container, () => {});
 
       // Add a user message (text block)
-      const textId = renderer.addUserMessage("User question");
+      renderer.addUserMessage("User question");
 
       // Add an LLM call with a TellUser gadget
-      const llmId = renderer.addLLMCall(1, "sonnet");
-      const tellUserId = renderer.addGadget("gc_tell", "TellUser", { message: "Answer" });
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_tell", "TellUser", { message: "Answer" });
 
       // In full mode: text, llm_call, gadget
       expect(renderer.getContentFilterMode()).toBe("full");
@@ -785,6 +785,21 @@ describe("BlockRenderer", () => {
       const gadget = renderer.findGadgetByInvocationId("gc_tell");
       expect(gadget).toBeDefined();
       expect(gadget?.name).toBe("TellUser");
+    });
+
+    test("Finish gadgets remain visible as plain text in focused mode", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_finish", "Finish", { message: "All done" });
+
+      renderer.setContentFilterMode("focused");
+
+      const boxes = container.children.filter((child) => child.type === "box");
+      expect(boxes).toHaveLength(1);
+      expect(boxes[0]?.getContent()).toContain("All done");
+      expect(boxes[0]?.getContent()).not.toContain("Finish");
     });
 
     test("non-TellUser gadgets are hidden in focused mode", () => {
@@ -934,9 +949,35 @@ describe("BlockRenderer", () => {
 
       // First box (user message) should be at a lower top than second box (TellUser)
       // This ensures the question appears BEFORE the answer
-      const firstTop = boxes[0]!.top as number;
-      const secondTop = boxes[1]!.top as number;
+      const firstTop = boxes[0]?.top as number;
+      const secondTop = boxes[1]?.top as number;
       expect(firstTop).toBeLessThan(secondTop);
+    });
+  });
+
+  describe("session clearing", () => {
+    test("clearPreviousSession removes only the prior session's blocks", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      renderer.addUserMessage("session 1");
+      renderer.addLLMCall(1, "sonnet");
+
+      renderer.startNewSession();
+      renderer.addUserMessage("session 2");
+      renderer.addLLMCall(2, "sonnet");
+
+      expect(container.children.filter((child) => child.type === "box")).toHaveLength(4);
+
+      renderer.clearPreviousSession();
+
+      const visibleContent = container.children
+        .filter((child) => child.type === "box")
+        .map((child) => child.getContent());
+
+      expect(visibleContent).toHaveLength(2);
+      expect(visibleContent.join("\n")).toContain("session 2");
+      expect(visibleContent.join("\n")).not.toContain("session 1");
     });
   });
 

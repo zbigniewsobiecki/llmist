@@ -9,6 +9,7 @@
  */
 
 import type { ScrollableBox } from "@unblessed/node";
+import { traverseNodeTree, traverseRootTrees } from "./tree-layout.js";
 import type { BlockNode, SelectableBlock } from "./types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -198,28 +199,14 @@ export class ScrollManager {
    * Calculate total height of all rendered blocks.
    */
   private getTotalContentHeight(): number {
-    let totalHeight = 0;
-    for (const rootId of this.accessors.getRootIds()) {
-      totalHeight = this.sumNodeTreeHeight(rootId, totalHeight);
-    }
-    return totalHeight;
-  }
-
-  private sumNodeTreeHeight(nodeId: string, currentHeight: number): number {
-    const node = this.accessors.getNode(nodeId);
-    if (!node) return currentHeight;
-
-    const block = this.accessors.getBlock(nodeId);
-    if (block) {
-      currentHeight += getBlockHeight(block);
-    }
-
-    if ("children" in node) {
-      for (const childId of (node as { children: string[] }).children) {
-        currentHeight = this.sumNodeTreeHeight(childId, currentHeight);
-      }
-    }
-    return currentHeight;
+    return traverseRootTrees(
+      this.accessors.getRootIds(),
+      (id) => this.accessors.getNode(id),
+      (nodeId, _node, currentHeight) => {
+        const block = this.accessors.getBlock(nodeId);
+        return currentHeight + (block ? getBlockHeight(block) : 0);
+      },
+    );
   }
 
   /**
@@ -240,19 +227,18 @@ export class ScrollManager {
    * Apply vertical offset to a node tree (for bottom alignment).
    */
   private applyOffsetToNodeTree(nodeId: string, offset: number): void {
-    const node = this.accessors.getNode(nodeId);
-    if (!node) return;
-
-    const block = this.accessors.getBlock(nodeId);
-    if (block) {
-      block.box.top = (block.box.top as number) + offset;
-    }
-
-    if ("children" in node) {
-      for (const childId of (node as { children: string[] }).children) {
-        this.applyOffsetToNodeTree(childId, offset);
-      }
-    }
+    traverseNodeTree(
+      nodeId,
+      (id) => this.accessors.getNode(id),
+      (currentNodeId, _node, top) => {
+        const block = this.accessors.getBlock(currentNodeId);
+        if (block) {
+          block.box.top = (block.box.top as number) + offset;
+        }
+        return top;
+      },
+      0,
+    );
   }
 }
 
