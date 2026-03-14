@@ -27,6 +27,7 @@
 import type { ExecutionTree, RateLimitStats, StreamEvent } from "llmist";
 import { BlockRenderer } from "./block-renderer.js";
 import { TUIController } from "./controller.js";
+import { EventRouter } from "./event-router.js";
 import { HintsBar } from "./hints-bar.js";
 import { InputHandler } from "./input-handler.js";
 import { KeyActionHandler } from "./key-action-handler.js";
@@ -34,7 +35,9 @@ import { type KeyAction, KeyboardManager } from "./keymap.js";
 import { createBlockLayout } from "./layout.js";
 import { ModalManager } from "./modal-manager.js";
 import { createScreen } from "./screen.js";
+import { SessionManager } from "./session-manager.js";
 import { StatusBar } from "./status-bar.js";
+import { TreeSubscriptionManager } from "./tree-subscription-manager.js";
 import type {
   ApprovalContext,
   ApprovalResponse,
@@ -63,9 +66,9 @@ export class TUIApp {
   // New extracted components
   private controller: TUIController;
   private modalManager: ModalManager;
-
-  /** Unsubscribe function for tree subscription */
-  private treeUnsubscribe: (() => void) | null = null;
+  private subscriptionManager: TreeSubscriptionManager;
+  private sessionManager: SessionManager;
+  private eventRouter: EventRouter;
 
   private constructor(
     screenCtx: TUIScreenContext,
@@ -75,6 +78,9 @@ export class TUIApp {
     controller: TUIController,
     modalManager: ModalManager,
     keyActionHandler: KeyActionHandler,
+    subscriptionManager: TreeSubscriptionManager,
+    sessionManager: SessionManager,
+    eventRouter: EventRouter,
   ) {
     this.screenCtx = screenCtx;
     this.statusBar = statusBar;
@@ -83,6 +89,9 @@ export class TUIApp {
     this.controller = controller;
     this.modalManager = modalManager;
     this.keyActionHandler = keyActionHandler;
+    this.subscriptionManager = subscriptionManager;
+    this.sessionManager = sessionManager;
+    this.eventRouter = eventRouter;
   }
 
   /**
@@ -180,6 +189,11 @@ export class TUIApp {
       },
     });
 
+    // Create session helpers
+    const subscriptionManager = new TreeSubscriptionManager(blockRenderer, statusBar);
+    const sessionManager = new SessionManager(blockRenderer, statusBar);
+    const eventRouter = new EventRouter(blockRenderer);
+
     const app = new TUIApp(
       screenCtx,
       statusBar,
@@ -188,6 +202,9 @@ export class TUIApp {
       controller,
       modalManager,
       keyActionHandler,
+      subscriptionManager,
+      sessionManager,
+      eventRouter,
     );
 
     // Set up keyboard handlers
@@ -275,15 +292,7 @@ export class TUIApp {
    * automatically by ExecutionTree subscription via subscribeToTree().
    */
   handleEvent(event: StreamEvent): void {
-    if (event.type === "text") {
-      // Text is append-only content not tracked by the tree
-      this.blockRenderer.addText(event.content);
-    } else if (event.type === "thinking") {
-      // Thinking is append-only content from reasoning models
-      this.blockRenderer.addThinking(event.content, event.thinkingType);
-    }
-    // All other events (gadget_call, gadget_result, etc.)
-    // are handled automatically by tree subscription in subscribeToTree()
+    this.eventRouter.handleEvent(event);
   }
 
   /**
@@ -378,29 +387,7 @@ export class TUIApp {
    * Subscribe to an ExecutionTree for automatic block updates.
    */
   subscribeToTree(tree: ExecutionTree): () => void {
-    // Unsubscribe from previous tree
-    if (this.treeUnsubscribe) {
-      this.treeUnsubscribe();
-    }
-
-    // Subscribe block renderer to tree (for block creation)
-    const unsubBlock = this.blockRenderer.subscribeToTree(tree);
-
-    // Subscribe status bar to tree (for activity tracking)
-    const unsubStatus = this.statusBar.subscribeToTree(tree);
-
-    // Combined unsubscribe
-    this.treeUnsubscribe = () => {
-      unsubBlock();
-      unsubStatus();
-    };
-
-    return () => {
-      if (this.treeUnsubscribe) {
-        this.treeUnsubscribe();
-        this.treeUnsubscribe = null;
-      }
-    };
+    return this.subscriptionManager.subscribe(tree);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -414,7 +401,7 @@ export class TUIApp {
    * Call this after each agent run completes (after unsubscribing from tree).
    */
   clearBlockRenderer(): void {
-    this.blockRenderer.clear();
+    this.sessionManager.clearAllBlocks();
   }
 
   /**
@@ -422,7 +409,7 @@ export class TUIApp {
    * Called between REPL turns to prevent stale state.
    */
   clearStatusBar(): void {
-    this.statusBar.clearActivity();
+    this.sessionManager.clearStatusBar();
   }
 
   /**
@@ -430,7 +417,7 @@ export class TUIApp {
    * Increments the session counter so new blocks get the new sessionId.
    */
   startNewSession(): void {
-    this.blockRenderer.startNewSession();
+    this.sessionManager.startNewSession();
   }
 
   /**
@@ -439,7 +426,7 @@ export class TUIApp {
    * The previous session's content was kept visible during this session for context.
    */
   clearPreviousSession(): void {
-    this.blockRenderer.clearPreviousSession();
+    this.sessionManager.clearPreviousSession();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -602,10 +589,7 @@ export class TUIApp {
    */
   destroy(): void {
     // Unsubscribe from tree events
-    if (this.treeUnsubscribe) {
-      this.treeUnsubscribe();
-      this.treeUnsubscribe = null;
-    }
+    this.subscriptionManager.unsubscribe();
 
     // Close any open modals
     this.modalManager.closeAll();
