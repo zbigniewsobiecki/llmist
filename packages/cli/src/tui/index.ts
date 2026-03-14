@@ -25,26 +25,20 @@
  */
 
 import type { ExecutionTree, RateLimitStats, StreamEvent } from "llmist";
-import { BlockRenderer } from "./block-renderer.js";
-import { TUIController } from "./controller.js";
-import { EventRouter } from "./event-router.js";
-import { HintsBar } from "./hints-bar.js";
-import { InputHandler } from "./input-handler.js";
-import { KeyActionHandler } from "./key-action-handler.js";
-import { KeyboardManager } from "./keymap.js";
-import { createBlockLayout } from "./layout.js";
-import { ModalManager } from "./modal-manager.js";
+import type { BlockRenderer } from "./block-renderer.js";
+import type { TUIController } from "./controller.js";
+import type { EventRouter } from "./event-router.js";
+import type { InputHandler } from "./input-handler.js";
+import type { ModalManager } from "./modal-manager.js";
 import { createRawViewerData, isRawViewerNode } from "./raw-viewer-data.js";
-import { createScreen } from "./screen.js";
-import { SessionManager } from "./session-manager.js";
-import { StatusBar } from "./status-bar.js";
-import { TreeSubscriptionManager } from "./tree-subscription-manager.js";
+import type { SessionManager } from "./session-manager.js";
+import type { StatusBar } from "./status-bar.js";
+import type { TreeSubscriptionManager } from "./tree-subscription-manager.js";
+import { createTUIAppDependencies } from "./tui-app-bootstrap.js";
 import type {
   ApprovalContext,
   ApprovalResponse,
-  ContentFilterMode,
   FocusMode,
-  TUIBlockLayout,
   TUIOptions,
   TUIScreenContext,
 } from "./types.js";
@@ -94,158 +88,18 @@ export class TUIApp {
    * Create a new TUI application instance.
    */
   static async create(options: TUIOptions): Promise<TUIApp> {
-    const screenCtx = createScreen({
-      stdin: options.stdin,
-      stdout: options.stdout,
-      title: "llmist",
-    });
-
-    const { screen } = screenCtx;
-
-    // Determine if hints bar should be shown (default: true)
-    const showHints = options.showHints ?? true;
-
-    // Create block-based layout with ScrollableBox
-    const layout = createBlockLayout(screen, showHints);
-
-    // Create hints bar if enabled
-    let hintsBar: HintsBar | null = null;
-    if (layout.hintsBar) {
-      hintsBar = new HintsBar(layout.hintsBar, () => screenCtx.requestRender());
-    }
-
-    // Create status bar with both debounced and immediate render callbacks
-    const statusBar = new StatusBar(
-      layout.statusBar,
-      options.model,
-      () => screenCtx.requestRender(),
-      () => screenCtx.renderNow(),
+    const dependencies = createTUIAppDependencies(options);
+    return new TUIApp(
+      dependencies.screenCtx,
+      dependencies.statusBar,
+      dependencies.inputHandler,
+      dependencies.blockRenderer,
+      dependencies.controller,
+      dependencies.modalManager,
+      dependencies.subscriptionManager,
+      dependencies.sessionManager,
+      dependencies.eventRouter,
     );
-
-    // Create input handler with both debounced and immediate render callbacks
-    const inputHandler = new InputHandler(
-      layout.inputBar,
-      layout.promptLabel,
-      layout.body as unknown as import("@unblessed/node").Box,
-      screen,
-      () => screenCtx.requestRender(),
-      () => screenCtx.renderNow(),
-      showHints,
-    );
-
-    // Create block renderer with both debounced and immediate render callbacks
-    const blockRenderer = new BlockRenderer(
-      layout.body,
-      () => screenCtx.requestRender(),
-      () => screenCtx.renderNow(),
-    );
-
-    // Wire up content change notifications to hints bar
-    if (hintsBar) {
-      blockRenderer.onHasContentChange((hasContent) => {
-        hintsBar.setHasContent(hasContent);
-      });
-    }
-
-    // Create controller with state change callbacks
-    const controller = new TUIController({
-      onFocusModeChange: (mode) => {
-        applyFocusMode(mode, layout, statusBar, inputHandler, screenCtx);
-        hintsBar?.setFocusMode(mode);
-      },
-      onContentFilterModeChange: (mode) => {
-        applyContentFilterMode(mode, blockRenderer, statusBar, screenCtx);
-        hintsBar?.setContentFilterMode(mode);
-      },
-    });
-
-    // Create modal manager
-    const modalManager = new ModalManager();
-
-    // Create key action handler
-    const keyActionHandler = new KeyActionHandler(
-      controller,
-      blockRenderer,
-      statusBar,
-      screenCtx,
-      modalManager,
-      layout,
-    );
-
-    // Create keyboard manager
-    const keyboardManager = new KeyboardManager({
-      screen,
-      getFocusMode: () => controller.getFocusMode(),
-      getContentFilterMode: () => controller.getContentFilterMode(),
-      isWaitingForREPLPrompt: () => inputHandler.isWaitingForREPLPrompt(),
-      hasPendingInput: () => inputHandler.hasPendingInput(),
-      isBlockExpanded: () => blockRenderer.getSelectedBlock()?.expanded ?? false,
-      onAction: (action) => {
-        keyActionHandler.handleKeyAction(action);
-      },
-    });
-
-    // Create session helpers
-    const subscriptionManager = new TreeSubscriptionManager(blockRenderer, statusBar);
-    const sessionManager = new SessionManager(blockRenderer, statusBar);
-    const eventRouter = new EventRouter(blockRenderer);
-
-    const app = new TUIApp(
-      screenCtx,
-      statusBar,
-      inputHandler,
-      blockRenderer,
-      controller,
-      modalManager,
-      subscriptionManager,
-      sessionManager,
-      eventRouter,
-    );
-
-    // Set up keyboard handlers
-    keyboardManager.setup();
-
-    // Wire up Ctrl keys from input handler to keyboard manager
-    inputHandler.onCtrlC(() => keyboardManager.handleForwardedKey("C-c"));
-    inputHandler.onCtrlB(() => keyboardManager.handleForwardedKey("C-b"));
-    inputHandler.onCtrlK(() => keyboardManager.handleForwardedKey("C-k"));
-    inputHandler.onCtrlI(() => keyboardManager.handleForwardedKey("C-i"));
-    inputHandler.onCtrlJ(() => keyboardManager.handleForwardedKey("C-j"));
-    inputHandler.onCtrlP(() => keyboardManager.handleForwardedKey("C-p"));
-
-    // Wire up arrow keys from input handler for line scrolling in focused mode
-    inputHandler.onArrowUp(() => {
-      keyActionHandler.handleKeyAction({ type: "scroll_line", direction: -1 });
-    });
-    inputHandler.onArrowDown(() => {
-      keyActionHandler.handleKeyAction({ type: "scroll_line", direction: 1 });
-    });
-
-    // Wire up focus mode callback to prevent Enter key conflict
-    // (Enter activates REPL prompt in input mode, but toggles blocks in browse mode)
-    inputHandler.setGetFocusMode(() => controller.getFocusMode());
-
-    // Wire up content filter mode callback for arrow key behavior
-    // (arrows scroll in focused mode, move cursor in full mode)
-    inputHandler.setGetContentFilterMode(() => controller.getContentFilterMode());
-
-    // Wire scroll event to detect user scrolling (for smart follow mode)
-    layout.body.on("scroll", () => {
-      blockRenderer.handleUserScroll();
-    });
-
-    // Wire resize event to recalculate bottom alignment
-    screen.on("resize", () => {
-      blockRenderer.handleResize();
-    });
-
-    // Initialize in browse mode (input bar hidden)
-    applyFocusMode(controller.getFocusMode(), layout, statusBar, inputHandler, screenCtx);
-
-    // Initial render
-    screenCtx.requestRender();
-
-    return app;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -602,55 +456,6 @@ export class TUIApp {
     // Destroy screen (restores terminal)
     this.screenCtx.destroy();
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper Functions
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Apply focus mode changes to UI components.
- * Input bar is always visible - only the prompt indicator and focus state change.
- */
-function applyFocusMode(
-  mode: FocusMode,
-  layout: TUIBlockLayout,
-  statusBar: StatusBar,
-  inputHandler: InputHandler,
-  screenCtx: TUIScreenContext,
-): void {
-  // Update status bar FIRST
-  statusBar.setFocusMode(mode);
-
-  // Layout stays constant - body always leaves room for input bar
-  // (100%-2 is set in createBlockLayout)
-
-  // Activate/deactivate input handler (changes prompt and focus, not visibility)
-  if (mode === "input") {
-    inputHandler.activate();
-  } else {
-    inputHandler.deactivate();
-    // Explicitly focus the body to release textbox focus
-    // This is critical - blessed textbox keeps capturing keys until focus moves elsewhere
-    layout.body.focus();
-  }
-
-  // Render the focus changes
-  screenCtx.renderNow();
-}
-
-/**
- * Apply content filter mode changes to UI components.
- */
-function applyContentFilterMode(
-  mode: ContentFilterMode,
-  blockRenderer: BlockRenderer,
-  statusBar: StatusBar,
-  screenCtx: TUIScreenContext,
-): void {
-  blockRenderer.setContentFilterMode(mode);
-  statusBar.setContentFilterMode(mode);
-  screenCtx.renderNow();
 }
 
 // Re-export utilities
