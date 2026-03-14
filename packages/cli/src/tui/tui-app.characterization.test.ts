@@ -1,14 +1,16 @@
+import type { ExecutionTree, RateLimitStats } from "llmist";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { BlockRenderer } from "./block-renderer.js";
 import { TUIController } from "./controller.js";
-import { HintsBar } from "./hints-bar.js";
 import { TUIApp } from "./index.js";
 import { InputHandler } from "./input-handler.js";
+import type { KeyAction } from "./keymap.js";
 import { KeyboardManager } from "./keymap.js";
 import { createBlockLayout } from "./layout.js";
 import { ModalManager } from "./modal-manager.js";
 import { createScreen } from "./screen.js";
 import { StatusBar } from "./status-bar.js";
+import { createTUIAppDependencies } from "./tui-app-bootstrap.js";
 
 // Mock internal components
 vi.mock("./screen.js", () => ({
@@ -134,7 +136,7 @@ vi.mock("./modal-manager.js", () => ({
   })),
 }));
 
-let capturedOnAction: (action: any) => void;
+let capturedOnAction: (action: KeyAction) => void;
 
 vi.mock("./keymap.js", () => ({
   KeyboardManager: vi.fn().mockImplementation((config) => {
@@ -154,9 +156,17 @@ vi.mock("./hints-bar.js", () => ({
   })),
 }));
 
+vi.mock("./tui-app-bootstrap.js", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("./tui-app-bootstrap.js")>();
+  return {
+    ...mod,
+    createTUIAppDependencies: vi.fn((options) => mod.createTUIAppDependencies(options)),
+  };
+});
+
 describe("TUIApp Characterization", () => {
   let tui: TUIApp;
-  let options: any;
+  let options: ConstructorParameters<typeof TUIApp.create>[0];
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -169,6 +179,16 @@ describe("TUIApp Characterization", () => {
   });
 
   describe("Initialization", () => {
+    test("delegates bootstrap responsibilities to the internal dependency factory", () => {
+      expect(createTUIAppDependencies).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: "test-model",
+          stdin: process.stdin,
+          stdout: process.stdout,
+        }),
+      );
+    });
+
     test("creates all internal components", () => {
       expect(createScreen).toHaveBeenCalled();
       expect(createBlockLayout).toHaveBeenCalled();
@@ -183,7 +203,7 @@ describe("TUIApp Characterization", () => {
 
   describe("Tree Subscription Lifecycle", () => {
     test("subscribeToTree connects renderer and status bar", () => {
-      const mockTree = { subscribe: vi.fn() } as any;
+      const mockTree = { subscribe: vi.fn() } as unknown as ExecutionTree;
       const unsubscribe = tui.subscribeToTree(mockTree);
 
       const blockRenderer = vi.mocked(BlockRenderer).mock.results[0].value;
@@ -195,7 +215,7 @@ describe("TUIApp Characterization", () => {
     });
 
     test("unsubscribe function cleans up both subscriptions", () => {
-      const mockTree = { subscribe: vi.fn() } as any;
+      const mockTree = { subscribe: vi.fn() } as unknown as ExecutionTree;
 
       const unsubBlock = vi.fn();
       const unsubStatus = vi.fn();
@@ -354,7 +374,7 @@ describe("TUIApp Characterization", () => {
 
     test("showThrottling and clearThrottling call status bar", () => {
       const statusBar = vi.mocked(StatusBar).mock.results[0].value;
-      tui.showThrottling(1000, { rpm: {} } as any);
+      tui.showThrottling(1000, { rpm: {} } as unknown as RateLimitStats["triggeredBy"]);
       expect(statusBar.showThrottling).toHaveBeenCalledWith(1000, { rpm: {} });
 
       tui.clearThrottling();
