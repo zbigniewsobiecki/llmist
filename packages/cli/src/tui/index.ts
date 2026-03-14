@@ -31,9 +31,10 @@ import { EventRouter } from "./event-router.js";
 import { HintsBar } from "./hints-bar.js";
 import { InputHandler } from "./input-handler.js";
 import { KeyActionHandler } from "./key-action-handler.js";
-import { type KeyAction, KeyboardManager } from "./keymap.js";
+import { KeyboardManager } from "./keymap.js";
 import { createBlockLayout } from "./layout.js";
 import { ModalManager } from "./modal-manager.js";
+import { createRawViewerData, isRawViewerNode } from "./raw-viewer-data.js";
 import { createScreen } from "./screen.js";
 import { SessionManager } from "./session-manager.js";
 import { StatusBar } from "./status-bar.js";
@@ -43,8 +44,6 @@ import type {
   ApprovalResponse,
   ContentFilterMode,
   FocusMode,
-  GadgetNode,
-  LLMCallNode,
   TUIBlockLayout,
   TUIOptions,
   TUIScreenContext,
@@ -61,7 +60,6 @@ export class TUIApp {
   private statusBar: StatusBar;
   private inputHandler: InputHandler;
   private blockRenderer: BlockRenderer;
-  private keyActionHandler: KeyActionHandler;
 
   // New extracted components
   private controller: TUIController;
@@ -77,7 +75,6 @@ export class TUIApp {
     blockRenderer: BlockRenderer,
     controller: TUIController,
     modalManager: ModalManager,
-    keyActionHandler: KeyActionHandler,
     subscriptionManager: TreeSubscriptionManager,
     sessionManager: SessionManager,
     eventRouter: EventRouter,
@@ -88,7 +85,6 @@ export class TUIApp {
     this.blockRenderer = blockRenderer;
     this.controller = controller;
     this.modalManager = modalManager;
-    this.keyActionHandler = keyActionHandler;
     this.subscriptionManager = subscriptionManager;
     this.sessionManager = sessionManager;
     this.eventRouter = eventRouter;
@@ -201,7 +197,6 @@ export class TUIApp {
       blockRenderer,
       controller,
       modalManager,
-      keyActionHandler,
       subscriptionManager,
       sessionManager,
       eventRouter,
@@ -321,7 +316,14 @@ export class TUIApp {
    */
   async showRawViewer(mode: "request" | "response"): Promise<void> {
     if (this.controller.getFocusMode() !== "browse") return;
-    this.keyActionHandler.handleKeyAction({ type: "raw_viewer", mode });
+
+    const selected = this.blockRenderer.getSelectedBlock();
+    if (!selected || !isRawViewerNode(selected.node)) return;
+
+    await this.modalManager.showRawViewer(
+      this.screenCtx.screen,
+      createRawViewerData(selected.node, mode),
+    );
   }
 
   /**

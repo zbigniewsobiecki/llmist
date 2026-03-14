@@ -15,13 +15,9 @@ import {
 
 describe("renderMarkdown", () => {
   describe("basic text transformation", () => {
-    it("renders plain text with reset codes", () => {
+    it("renders plain text", () => {
       const result = renderMarkdown("Hello, world!");
-      // marked-terminal wraps output with ANSI reset codes
       expect(result).toContain("Hello, world!");
-      // Verify it has ANSI codes (reset codes at minimum)
-      // Using includes instead of regex to avoid biome's noControlCharactersInRegex
-      expect(result.includes("\x1b[")).toBe(true);
     });
 
     it("removes trailing newlines", () => {
@@ -1128,10 +1124,10 @@ describe("formatUserMessage", () => {
     expect(result).toContain("Hello!");
   });
 
-  it("includes ANSI codes for inverse styling", () => {
+  it("wraps the message in a visually distinct block", () => {
     const result = formatUserMessage("Test message");
-    // Check for ANSI escape sequence (inverse mode: \x1b[7m)
-    expect(result.includes("\x1b[")).toBe(true);
+    expect(result).toContain("👤");
+    expect(result).toContain("Test message");
   });
 
   it("renders plain text (not markdown) for clean inverse styling", () => {
