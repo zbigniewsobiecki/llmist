@@ -1,11 +1,19 @@
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 import { createMockTUIApp } from "@llmist/testing";
-import type { LLMist, LLMStream, StreamChunk } from "llmist";
+import { AgentBuilder, type LLMist, type LLMStream, type StreamChunk } from "llmist";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { type CLIAgentOptions, executeAgent } from "./agent-command.js";
+import { executeAgent } from "./agent-command.js";
 import type { CLIEnvironment } from "./environment.js";
+import { readSystemPromptFile } from "./file-utils.js";
+import type { CLIAgentOptions } from "./option-helpers.js";
 import { TUIApp } from "./tui/index.js";
+
+vi.mock("./file-utils.js", () => ({
+  readSystemPromptFile: vi.fn(),
+  readImageFile: vi.fn(),
+  readAudioFile: vi.fn(),
+}));
 
 vi.mock("./tui/index.js", () => ({
   TUIApp: {
@@ -161,6 +169,7 @@ const defaultOptions: CLIAgentOptions = {
   model: "test:mock-model",
   maxIterations: 1,
   builtins: false,
+  builtinInteraction: false,
   quiet: true,
 };
 
@@ -330,5 +339,102 @@ describe("executeAgent TUI mode", () => {
     expect(TUIApp.create).toHaveBeenCalled();
     expect(mockTUI.subscribeToTree).toHaveBeenCalled();
     expect(mockTUI.handleEvent).toHaveBeenCalled();
+  });
+});
+
+describe("executeAgent configuration mapping", () => {
+  beforeEach(() => {
+    vi.spyOn(AgentBuilder.prototype, "withSystem").mockReturnThis();
+    vi.spyOn(AgentBuilder.prototype, "withReasoning").mockReturnThis();
+    vi.spyOn(AgentBuilder.prototype, "withoutReasoning").mockReturnThis();
+  });
+
+  test("--system-file content is correctly passed to AgentBuilder.withSystem()", async () => {
+    const systemContent = "You are a helpful assistant from a file.";
+    vi.mocked(readSystemPromptFile).mockResolvedValue(systemContent);
+
+    const options: CLIAgentOptions = {
+      ...defaultOptions,
+      systemFile: "system.txt",
+    };
+
+    const mockClient = createMockClient([{ text: "Response", finishReason: "stop" }]);
+    const env = createMockEnv(mockClient);
+
+    await executeAgent("test prompt", options, env);
+
+    expect(readSystemPromptFile).toHaveBeenCalledWith("system.txt");
+    expect(AgentBuilder.prototype.withSystem).toHaveBeenCalledWith(systemContent);
+  });
+
+  test("--reasoning effort is correctly passed to AgentBuilder.withReasoning()", async () => {
+    const options: CLIAgentOptions = {
+      ...defaultOptions,
+      reasoning: "high",
+    };
+
+    const mockClient = createMockClient([{ text: "Response", finishReason: "stop" }]);
+    const env = createMockEnv(mockClient);
+
+    await executeAgent("test prompt", options, env);
+
+    expect(AgentBuilder.prototype.withReasoning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        effort: "high",
+      }),
+    );
+  });
+
+  test("--reasoning-budget is correctly passed to AgentBuilder.withReasoning()", async () => {
+    const options: CLIAgentOptions = {
+      ...defaultOptions,
+      reasoningBudget: 1000,
+    };
+
+    const mockClient = createMockClient([{ text: "Response", finishReason: "stop" }]);
+    const env = createMockEnv(mockClient);
+
+    await executeAgent("test prompt", options, env);
+
+    expect(AgentBuilder.prototype.withReasoning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        budgetTokens: 1000,
+      }),
+    );
+  });
+
+  test("both --reasoning and --reasoning-budget are correctly passed together", async () => {
+    const options: CLIAgentOptions = {
+      ...defaultOptions,
+      reasoning: "low",
+      reasoningBudget: 500,
+    };
+
+    const mockClient = createMockClient([{ text: "Response", finishReason: "stop" }]);
+    const env = createMockEnv(mockClient);
+
+    await executeAgent("test prompt", options, env);
+
+    expect(AgentBuilder.prototype.withReasoning).toHaveBeenCalledWith({
+      enabled: true,
+      effort: "low",
+      budgetTokens: 500,
+    });
+  });
+
+  test("--no-reasoning correctly calls builder.withoutReasoning()", async () => {
+    const options: CLIAgentOptions = {
+      ...defaultOptions,
+      reasoning: false,
+    };
+
+    const mockClient = createMockClient([{ text: "Response", finishReason: "stop" }]);
+    const env = createMockEnv(mockClient);
+
+    await executeAgent("test prompt", options, env);
+
+    expect(AgentBuilder.prototype.withoutReasoning).toHaveBeenCalled();
   });
 });
