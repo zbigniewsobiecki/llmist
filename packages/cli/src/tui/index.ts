@@ -29,6 +29,7 @@ import { BlockRenderer } from "./block-renderer.js";
 import { TUIController } from "./controller.js";
 import { HintsBar } from "./hints-bar.js";
 import { InputHandler } from "./input-handler.js";
+import { KeyActionHandler } from "./key-action-handler.js";
 import { type KeyAction, KeyboardManager } from "./keymap.js";
 import { createBlockLayout } from "./layout.js";
 import { ModalManager } from "./modal-manager.js";
@@ -57,6 +58,7 @@ export class TUIApp {
   private statusBar: StatusBar;
   private inputHandler: InputHandler;
   private blockRenderer: BlockRenderer;
+  private keyActionHandler: KeyActionHandler;
 
   // New extracted components
   private controller: TUIController;
@@ -72,6 +74,7 @@ export class TUIApp {
     blockRenderer: BlockRenderer,
     controller: TUIController,
     modalManager: ModalManager,
+    keyActionHandler: KeyActionHandler,
   ) {
     this.screenCtx = screenCtx;
     this.statusBar = statusBar;
@@ -79,6 +82,7 @@ export class TUIApp {
     this.blockRenderer = blockRenderer;
     this.controller = controller;
     this.modalManager = modalManager;
+    this.keyActionHandler = keyActionHandler;
   }
 
   /**
@@ -153,6 +157,16 @@ export class TUIApp {
     // Create modal manager
     const modalManager = new ModalManager();
 
+    // Create key action handler
+    const keyActionHandler = new KeyActionHandler(
+      controller,
+      blockRenderer,
+      statusBar,
+      screenCtx,
+      modalManager,
+      layout,
+    );
+
     // Create keyboard manager
     const keyboardManager = new KeyboardManager({
       screen,
@@ -162,15 +176,7 @@ export class TUIApp {
       hasPendingInput: () => inputHandler.hasPendingInput(),
       isBlockExpanded: () => blockRenderer.getSelectedBlock()?.expanded ?? false,
       onAction: (action) => {
-        handleKeyAction(
-          action,
-          controller,
-          blockRenderer,
-          statusBar,
-          screenCtx,
-          modalManager,
-          layout,
-        );
+        keyActionHandler.handleKeyAction(action);
       },
     });
 
@@ -181,6 +187,7 @@ export class TUIApp {
       blockRenderer,
       controller,
       modalManager,
+      keyActionHandler,
     );
 
     // Set up keyboard handlers
@@ -196,26 +203,10 @@ export class TUIApp {
 
     // Wire up arrow keys from input handler for line scrolling in focused mode
     inputHandler.onArrowUp(() => {
-      handleKeyAction(
-        { type: "scroll_line", direction: -1 },
-        controller,
-        blockRenderer,
-        statusBar,
-        screenCtx,
-        modalManager,
-        layout,
-      );
+      keyActionHandler.handleKeyAction({ type: "scroll_line", direction: -1 });
     });
     inputHandler.onArrowDown(() => {
-      handleKeyAction(
-        { type: "scroll_line", direction: 1 },
-        controller,
-        blockRenderer,
-        statusBar,
-        screenCtx,
-        modalManager,
-        layout,
-      );
+      keyActionHandler.handleKeyAction({ type: "scroll_line", direction: 1 });
     });
 
     // Wire up focus mode callback to prevent Enter key conflict
@@ -321,29 +312,7 @@ export class TUIApp {
    */
   async showRawViewer(mode: "request" | "response"): Promise<void> {
     if (this.controller.getFocusMode() !== "browse") return;
-
-    const selected = this.blockRenderer.getSelectedBlock();
-    if (!selected) return;
-
-    if (selected.node.type === "llm_call") {
-      const node = selected.node as LLMCallNode;
-      await this.modalManager.showRawViewer(this.screenCtx.screen, {
-        mode,
-        request: node.rawRequest,
-        response: node.rawResponse,
-        iteration: node.iteration,
-        model: node.model,
-      });
-    } else if (selected.node.type === "gadget") {
-      const node = selected.node as GadgetNode;
-      await this.modalManager.showRawViewer(this.screenCtx.screen, {
-        mode,
-        gadgetName: node.name,
-        parameters: node.parameters,
-        result: node.result,
-        error: node.error,
-      });
-    }
+    this.keyActionHandler.handleKeyAction({ type: "raw_viewer", mode });
   }
 
   /**
@@ -696,128 +665,6 @@ function applyContentFilterMode(
   blockRenderer.setContentFilterMode(mode);
   statusBar.setContentFilterMode(mode);
   screenCtx.renderNow();
-}
-
-/**
- * Handle keyboard actions from KeyboardManager.
- */
-function handleKeyAction(
-  action: KeyAction,
-  controller: TUIController,
-  blockRenderer: BlockRenderer,
-  statusBar: StatusBar,
-  screenCtx: TUIScreenContext,
-  modalManager: ModalManager,
-  layout: TUIBlockLayout,
-): void {
-  switch (action.type) {
-    case "ctrl_c": {
-      const result = controller.handleCtrlC();
-      if (result === "show_hint") {
-        blockRenderer.addText("\n[Press Ctrl+C again to quit]\n");
-      } else if (result === "quit") {
-        // Controller's onQuit callback handles cleanup
-        // But we also need to exit
-        process.exit(130);
-      }
-      break;
-    }
-
-    case "cancel":
-      controller.triggerCancel();
-      controller.abort();
-      break;
-
-    case "toggle_focus_mode":
-      controller.toggleFocusMode();
-      break;
-
-    case "toggle_content_filter":
-      controller.toggleContentFilterMode();
-      break;
-
-    case "cycle_profile":
-      statusBar.cycleProfile();
-      break;
-
-    case "scroll_page": {
-      const body = layout.body;
-      if (!body.scroll) return;
-      const containerHeight = body.height as number;
-      const scrollAmount = Math.max(1, containerHeight - 2);
-      if (action.direction < 0) {
-        body.scroll(-scrollAmount);
-      } else {
-        body.scroll(scrollAmount);
-      }
-      blockRenderer.handleUserScroll();
-      screenCtx.renderNow();
-      break;
-    }
-
-    case "scroll_line": {
-      const body = layout.body;
-      if (!body.scroll) return;
-      body.scroll(action.direction);
-      blockRenderer.handleUserScroll();
-      screenCtx.renderNow();
-      break;
-    }
-
-    case "navigation":
-      switch (action.action) {
-        case "select_next":
-          blockRenderer.selectNext();
-          break;
-        case "select_previous":
-          blockRenderer.selectPrevious();
-          break;
-        case "select_first":
-          blockRenderer.selectFirst();
-          break;
-        case "select_last":
-          blockRenderer.selectLast();
-          blockRenderer.enableFollowMode();
-          break;
-        case "toggle_expand":
-          blockRenderer.toggleExpand();
-          break;
-        case "collapse":
-          blockRenderer.collapseOrDeselect();
-          break;
-      }
-      screenCtx.renderNow();
-      break;
-
-    case "raw_viewer":
-      // This is handled asynchronously, but we don't await here
-      // The modal manager handles the lifecycle
-      void (async () => {
-        const selected = blockRenderer.getSelectedBlock();
-        if (!selected) return;
-
-        if (selected.node.type === "llm_call") {
-          const node = selected.node as LLMCallNode;
-          await modalManager.showRawViewer(screenCtx.screen, {
-            mode: action.mode,
-            request: node.rawRequest,
-            response: node.rawResponse,
-            iteration: node.iteration,
-            model: node.model,
-          });
-        } else if (selected.node.type === "gadget") {
-          const node = selected.node as GadgetNode;
-          await modalManager.showRawViewer(screenCtx.screen, {
-            mode: action.mode,
-            gadgetName: node.name,
-            parameters: node.parameters,
-            result: node.result,
-            error: node.error,
-          });
-        }
-      })();
-      break;
-  }
 }
 
 // Re-export utilities
