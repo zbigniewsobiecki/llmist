@@ -181,15 +181,11 @@ export interface CompleteGadgetParams {
 
 // Forward declaration - actual types in execution-events.ts
 import type { ExecutionEvent, ExecutionEventType } from "./execution-events.js";
+import { ExecutionTreeAggregator } from "./execution-tree-aggregator.js";
+import { ExecutionTreeEventEmitter } from "./execution-tree-event-emitter.js";
 
 export type { ExecutionEvent, ExecutionEventType };
-
-// =============================================================================
-// Event Listener Types
-// =============================================================================
-
-/** Event listener function type */
-type EventListener = (event: ExecutionEvent) => void;
+export { ExecutionTreeAggregator, ExecutionTreeEventEmitter };
 
 // =============================================================================
 // ExecutionTree Class
@@ -229,14 +225,9 @@ type EventListener = (event: ExecutionEvent) => void;
 export class ExecutionTree {
   private nodes = new Map<NodeId, ExecutionNode>();
   private rootIds: NodeId[] = [];
-  private eventListeners = new Map<ExecutionEventType, Set<EventListener>>();
-  private eventIdCounter = 0;
   private invocationIdToNodeId = new Map<string, NodeId>();
-
-  // For async event streaming
-  private eventQueue: ExecutionEvent[] = [];
-  private eventWaiters: Array<(event: ExecutionEvent | null) => void> = [];
-  private isCompleted = false;
+  private emitter = new ExecutionTreeEventEmitter();
+  private aggregator!: ExecutionTreeAggregator;
 
   /**
    * Base depth for all nodes in this tree.
@@ -253,6 +244,10 @@ export class ExecutionTree {
   constructor(options?: { baseDepth?: number; parentNodeId?: NodeId | null }) {
     this.baseDepth = options?.baseDepth ?? 0;
     this.parentNodeId = options?.parentNodeId ?? null;
+    this.aggregator = new ExecutionTreeAggregator(
+      this.nodes as any,
+      (id, type) => this.getDescendants(id, type as "llm_call" | "gadget" | undefined) as any,
+    );
   }
 
   // ===========================================================================
@@ -273,59 +268,17 @@ export class ExecutionTree {
   }
 
   // ===========================================================================
-  // Event Emission
+  // Event Emission (delegated to ExecutionTreeEventEmitter)
   // ===========================================================================
 
   private emit(event: ExecutionEvent): void {
-    // Notify sync listeners
-    const listeners = this.eventListeners.get(event.type);
-    if (listeners) {
-      for (const listener of listeners) {
-        try {
-          listener(event);
-        } catch (error) {
-          console.error(`Error in event listener for ${event.type}:`, error);
-        }
-      }
-    }
-
-    // Also emit to "all" listeners
-    const allListeners = this.eventListeners.get("*");
-    if (allListeners) {
-      for (const listener of allListeners) {
-        try {
-          listener(event);
-        } catch (error) {
-          console.error("Error in wildcard event listener:", error);
-        }
-      }
-    }
-
-    // Push to async queue
-    if (this.eventWaiters.length > 0) {
-      const waiter = this.eventWaiters.shift()!;
-      waiter(event);
-    } else {
-      this.eventQueue.push(event);
-    }
+    this.emitter.emit(event);
   }
 
-  private createBaseEventProps(node: ExecutionNode): {
-    eventId: number;
-    timestamp: number;
-    nodeId: NodeId;
-    parentId: NodeId | null;
-    depth: number;
-    path: NodeId[];
-  } {
-    return {
-      eventId: ++this.eventIdCounter,
-      timestamp: Date.now(),
-      nodeId: node.id,
-      parentId: node.parentId,
-      depth: node.depth,
-      path: node.path,
-    };
+  private createBaseEventProps(
+    node: ExecutionNode,
+  ): ReturnType<ExecutionTreeEventEmitter["createBaseEventProps"]> {
+    return this.emitter.createBaseEventProps(node);
   }
 
   // ===========================================================================
@@ -765,147 +718,56 @@ export class ExecutionTree {
   }
 
   // ===========================================================================
-  // Aggregation Methods (for subagent support)
+  // Aggregation Methods (delegated to ExecutionTreeAggregator)
   // ===========================================================================
-
-  /**
-   * Extract the cost from a single execution node (0 if not set).
-   */
-  private getNodeCost(node: ExecutionNode): number {
-    if (node.type === "llm_call") {
-      return (node as LLMCallNode).cost ?? 0;
-    }
-    if (node.type === "gadget") {
-      return (node as GadgetNode).cost ?? 0;
-    }
-    return 0;
-  }
 
   /**
    * Get total cost for entire tree.
    */
   getTotalCost(): number {
-    let total = 0;
-    for (const node of this.nodes.values()) {
-      total += this.getNodeCost(node);
-    }
-    return total;
+    return this.aggregator.getTotalCost();
   }
 
   /**
    * Get total cost for a subtree (node and all descendants).
    */
   getSubtreeCost(nodeId: NodeId): number {
-    const node = this.nodes.get(nodeId);
-    if (!node) return 0;
-
-    let total = this.getNodeCost(node);
-    for (const descendant of this.getDescendants(nodeId)) {
-      total += this.getNodeCost(descendant);
-    }
-    return total;
+    return this.aggregator.getSubtreeCost(nodeId);
   }
 
   /**
    * Get token usage for entire tree.
    */
   getTotalTokens(): { input: number; output: number; cached: number } {
-    let input = 0;
-    let output = 0;
-    let cached = 0;
-
-    for (const node of this.nodes.values()) {
-      if (node.type === "llm_call") {
-        const llmNode = node as LLMCallNode;
-        if (llmNode.usage) {
-          input += llmNode.usage.inputTokens;
-          output += llmNode.usage.outputTokens;
-          cached += llmNode.usage.cachedInputTokens ?? 0;
-        }
-      }
-    }
-
-    return { input, output, cached };
+    return this.aggregator.getTotalTokens();
   }
 
   /**
    * Get token usage for a subtree.
    */
   getSubtreeTokens(nodeId: NodeId): { input: number; output: number; cached: number } {
-    const node = this.nodes.get(nodeId);
-    if (!node) return { input: 0, output: 0, cached: 0 };
-
-    let input = 0;
-    let output = 0;
-    let cached = 0;
-
-    const nodesToProcess = [node, ...this.getDescendants(nodeId)];
-
-    for (const n of nodesToProcess) {
-      if (n.type === "llm_call") {
-        const llmNode = n as LLMCallNode;
-        if (llmNode.usage) {
-          input += llmNode.usage.inputTokens;
-          output += llmNode.usage.outputTokens;
-          cached += llmNode.usage.cachedInputTokens ?? 0;
-        }
-      }
-    }
-
-    return { input, output, cached };
+    return this.aggregator.getSubtreeTokens(nodeId);
   }
 
   /**
    * Collect all media from a subtree.
    */
   getSubtreeMedia(nodeId: NodeId): GadgetMediaOutput[] {
-    const node = this.nodes.get(nodeId);
-    if (!node) return [];
-
-    const media: GadgetMediaOutput[] = [];
-    const nodesToProcess: ExecutionNode[] = node.type === "gadget" ? [node] : [];
-    nodesToProcess.push(...this.getDescendants(nodeId, "gadget"));
-
-    for (const n of nodesToProcess) {
-      if (n.type === "gadget") {
-        const gadgetNode = n as GadgetNode;
-        if (gadgetNode.media) {
-          media.push(...gadgetNode.media);
-        }
-      }
-    }
-
-    return media;
+    return this.aggregator.getSubtreeMedia(nodeId);
   }
 
   /**
    * Check if a subtree is complete (all nodes finished).
    */
   isSubtreeComplete(nodeId: NodeId): boolean {
-    const node = this.nodes.get(nodeId);
-    if (!node) return true;
-    if (!node.completedAt) return false;
-
-    for (const descendant of this.getDescendants(nodeId)) {
-      if (!descendant.completedAt) return false;
-    }
-
-    return true;
+    return this.aggregator.isSubtreeComplete(nodeId);
   }
 
   /**
    * Get node counts.
    */
   getNodeCount(): { llmCalls: number; gadgets: number } {
-    let llmCalls = 0;
-    let gadgets = 0;
-
-    for (const node of this.nodes.values()) {
-      if (node.type === "llm_call") llmCalls++;
-      else if (node.type === "gadget") gadgets++;
-    }
-
-    return { llmCalls, gadgets };
+    return this.aggregator.getNodeCount();
   }
 
   // ===========================================================================
@@ -929,56 +791,23 @@ export class ExecutionTree {
    * });
    * ```
    */
-  on(type: ExecutionEventType, listener: EventListener): () => void {
-    if (!this.eventListeners.has(type)) {
-      this.eventListeners.set(type, new Set());
-    }
-    const listeners = this.eventListeners.get(type)!;
-    listeners.add(listener);
-
-    return () => {
-      listeners.delete(listener);
-    };
+  on(type: ExecutionEventType, listener: (event: ExecutionEvent) => void): () => void {
+    return this.emitter.on(type, listener);
   }
 
   /**
    * Subscribe to all events.
    */
-  onAll(listener: EventListener): () => void {
-    return this.on("*", listener);
+  onAll(listener: (event: ExecutionEvent) => void): () => void {
+    return this.emitter.onAll(listener);
   }
 
   /**
    * Get async iterable of all events.
    * Events are yielded as they occur.
    */
-  async *events(): AsyncGenerator<ExecutionEvent> {
-    while (!this.isCompleted) {
-      // Drain queue first
-      while (this.eventQueue.length > 0) {
-        yield this.eventQueue.shift()!;
-      }
-
-      if (this.isCompleted) break;
-
-      // Wait for next event (null signals tree completion)
-      const event = await new Promise<ExecutionEvent | null>((resolve) => {
-        // Check queue again in case events arrived while setting up
-        if (this.eventQueue.length > 0) {
-          resolve(this.eventQueue.shift()!);
-        } else {
-          this.eventWaiters.push(resolve);
-        }
-      });
-
-      if (event === null) break;
-      yield event;
-    }
-
-    // Drain remaining events
-    while (this.eventQueue.length > 0) {
-      yield this.eventQueue.shift()!;
-    }
+  events(): AsyncGenerator<ExecutionEvent> {
+    return this.emitter.events();
   }
 
   /**
@@ -986,18 +815,13 @@ export class ExecutionTree {
    * Wakes up any consumers waiting in the events() async generator.
    */
   complete(): void {
-    this.isCompleted = true;
-    // Wake up all pending waiters with a null completion signal
-    for (const waiter of this.eventWaiters) {
-      waiter(null);
-    }
-    this.eventWaiters = [];
+    this.emitter.complete();
   }
 
   /**
    * Check if the tree is complete.
    */
   isComplete(): boolean {
-    return this.isCompleted;
+    return this.emitter.isComplete();
   }
 }

@@ -215,6 +215,7 @@ export {
   hasProviderPrefix,
   MODEL_ALIASES,
   resolveModel,
+  stripProviderPrefix,
 } from "./core/model-shortcuts.js";
 // Vision namespace for one-shot image analysis
 export type { VisionAnalyzeOptions, VisionAnalyzeResult } from "./core/namespaces/vision.js";

@@ -10,6 +10,7 @@
 
 import type { ProviderAdapter } from "../providers/provider.js";
 import type { CostEstimate, ModelLimits, ModelSpec } from "./model-catalog.js";
+import { stripProviderPrefix } from "./model-shortcuts.js";
 
 export class ModelRegistry {
   private modelSpecs: ModelSpec[] = [];
@@ -117,7 +118,7 @@ export class ModelRegistry {
   getModelSpec(modelId: string): ModelSpec | undefined {
     // Support provider-prefixed model IDs (e.g., "anthropic:claude-sonnet-4-5")
     // Strip the prefix to match against the registry's model IDs
-    const normalizedId = modelId.includes(":") ? modelId.split(":")[1] : modelId;
+    const normalizedId = stripProviderPrefix(modelId);
     return this.modelSpecs.find((model) => model.modelId === normalizedId);
   }
 
