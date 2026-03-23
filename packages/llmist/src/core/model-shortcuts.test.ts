@@ -6,6 +6,7 @@ import {
   hasProviderPrefix,
   MODEL_ALIASES,
   resolveModel,
+  stripProviderPrefix,
 } from "./model-shortcuts.js";
 
 describe("Model Shortcuts", () => {
@@ -288,6 +289,31 @@ describe("Model Shortcuts", () => {
 
     it("should handle multiple colons", () => {
       expect(getModelId("provider:model:version")).toBe("model:version");
+    });
+  });
+
+  describe("stripProviderPrefix", () => {
+    it("strips the provider prefix from a prefixed model string", () => {
+      expect(stripProviderPrefix("openai:gpt-4o")).toBe("gpt-4o");
+      expect(stripProviderPrefix("anthropic:claude-sonnet-4-5")).toBe("claude-sonnet-4-5");
+      expect(stripProviderPrefix("gemini:gemini-2.5-flash")).toBe("gemini-2.5-flash");
+    });
+
+    it("returns the string as-is when there is no provider prefix", () => {
+      expect(stripProviderPrefix("gpt-4o")).toBe("gpt-4o");
+      expect(stripProviderPrefix("claude-3-5-sonnet")).toBe("claude-3-5-sonnet");
+    });
+
+    it("handles OpenRouter models with a slash in the model ID", () => {
+      expect(stripProviderPrefix("openrouter:anthropic/claude-sonnet-4-5")).toBe(
+        "anthropic/claude-sonnet-4-5",
+      );
+    });
+
+    it("handles edge cases consistently with getModelId", () => {
+      expect(stripProviderPrefix("")).toBe("");
+      expect(stripProviderPrefix(":model")).toBe("model");
+      expect(stripProviderPrefix("model:")).toBe("");
     });
   });
 
