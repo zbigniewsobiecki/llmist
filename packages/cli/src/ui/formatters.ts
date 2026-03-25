@@ -40,6 +40,7 @@ export {
   stripProviderPrefix,
 } from "./metric-formatters.js";
 
+import { getCustomPreview } from "./gadget-previews.js";
 import { renderMarkdownWithSeparators } from "./markdown-renderer.js";
 // Import for internal use (formatters.ts needs these to format LLM/gadget lines)
 import { formatTokens } from "./metric-formatters.js";
@@ -731,37 +732,13 @@ export function formatGadgetSummary(result: GadgetResult): string {
   const prefixLength = 2 + result.gadgetName.length + 1 + outputStrRaw.length + timeStr.length + 2;
   const availablePreview = Math.max(20, previewWidth - prefixLength);
 
-  // Custom previews for specific gadgets
-  let customPreview: string | undefined;
-
-  // TodoUpsert: show status emoji + content instead of generic output
-  if (result.gadgetName === "TodoUpsert" && result.parameters?.content) {
-    const statusEmoji =
-      result.parameters.status === "done"
-        ? "✅"
-        : result.parameters.status === "in_progress"
-          ? "🔄"
-          : "⬜";
-    const content = String(result.parameters.content);
-    customPreview = `${statusEmoji} ${truncateOutputPreview(content, availablePreview - 3)}`; // -3 for emoji+space
-  }
-
-  // GoogleSearch: show query and result count
-  if (result.gadgetName === "GoogleSearch" && result.parameters?.query) {
-    const query = String(result.parameters.query);
-    // Parse result count from output - try multiple patterns
-    const countMatch =
-      result.result?.match(/\((\d+)\s+of\s+[\d,]+\s+results?\)/i) || // "(10 of 36400000 results)"
-      result.result?.match(/(\d+)\s+results?\s+found/i) || // "10 results found"
-      result.result?.match(/found\s+(\d+)\s+results?/i); // "found 10 results"
-    // Fall back to maxResults parameter if no count found in output
-    const count =
-      countMatch?.[1] ??
-      (result.parameters.maxResults ? String(result.parameters.maxResults) : null);
-    const countStr = count ? ` → ${count} results` : "";
-    const queryPreview = truncateOutputPreview(query, availablePreview - 5 - countStr.length); // 🔍 + space + quotes
-    customPreview = `🔍 "${queryPreview}"${countStr}`;
-  }
+  // Custom previews for specific gadgets (delegated to gadget-previews module)
+  const customPreview = getCustomPreview(
+    result.gadgetName,
+    result.parameters,
+    result.result,
+    availablePreview,
+  );
 
   // Build subagent metrics string if this gadget spawned a subagent
   // Format: "↑ input | ⟳ cached | ↓ output | $cost"
