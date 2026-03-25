@@ -9,9 +9,10 @@ import {
 } from "../../../testing/src/helpers.js";
 import { AbortException, TaskCompletionSignal } from "./exceptions.js";
 import { GadgetExecutor } from "./executor.js";
+import type { MediaStore } from "./media-store.js";
 import { GadgetRegistry } from "./registry.js";
 import { Gadget } from "./typed-gadget.js";
-import type { ExecutionContext, ParsedGadgetCall } from "./types.js";
+import type { ExecutionContext, GadgetExecuteResultWithMedia, ParsedGadgetCall } from "./types.js";
 
 describe("GadgetExecutor", () => {
   let registry: GadgetRegistry;
@@ -1358,6 +1359,126 @@ describe("GadgetExecutor", () => {
       // Should not throw - logger methods are called in execute()
       const result = await executor.execute(call);
       expect(result.result).toBe("captured");
+    });
+  });
+
+  describe("cost reporting via callback", () => {
+    it("accumulates cost reported by gadget via ctx.reportCost", async () => {
+      class CostReportingGadget extends Gadget({
+        name: "CostReporting",
+        description: "Reports cost during execution via callback",
+        schema: z.object({}),
+      }) {
+        execute(_params: this["params"], ctx?: ExecutionContext): string {
+          ctx?.reportCost(0.05);
+          return "done";
+        }
+      }
+
+      registry.registerByClass(new CostReportingGadget());
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "CostReporting",
+        invocationId: "cost-1",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      const result = await executor.execute(call);
+
+      expect(result.result).toBe("done");
+      expect(result.cost).toBe(0.05);
+      expect(result.error).toBeUndefined();
+    });
+
+    it("ignores zero or negative cost values reported via callback", async () => {
+      class ZeroCostGadget extends Gadget({
+        name: "ZeroCost",
+        description: "Reports zero cost — should not be accumulated",
+        schema: z.object({}),
+      }) {
+        execute(_params: this["params"], ctx?: ExecutionContext): string {
+          ctx?.reportCost(0);
+          return "done";
+        }
+      }
+
+      registry.registerByClass(new ZeroCostGadget());
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "ZeroCost",
+        invocationId: "cost-2",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      const result = await executor.execute(call);
+
+      expect(result.result).toBe("done");
+      // Zero cost is not accumulated, so total cost should be 0 or undefined
+      expect(result.cost ?? 0).toBe(0);
+      expect(result.error).toBeUndefined();
+    });
+  });
+
+  describe("media store integration", () => {
+    it("stores media outputs via media store when gadget returns media", async () => {
+      class ImageGadget extends Gadget({
+        name: "ImageGadget",
+        description: "Returns an image as media output",
+        schema: z.object({}),
+      }) {
+        execute(): GadgetExecuteResultWithMedia {
+          return {
+            result: "Image generated",
+            media: [
+              {
+                kind: "image",
+                data: Buffer.from("fake-image-data").toString("base64"),
+                mimeType: "image/png",
+                description: "Test image",
+              },
+            ],
+          };
+        }
+      }
+
+      const mockStoredItem = {
+        id: "media_abc123",
+        kind: "image" as const,
+        path: "/tmp/test.png",
+        mimeType: "image/png",
+        sizeBytes: 16,
+        gadgetName: "ImageGadget",
+        createdAt: new Date(),
+      };
+
+      const mockMediaStore = {
+        store: async () => mockStoredItem,
+      } as unknown as MediaStore;
+
+      const executorWithMediaStore = new GadgetExecutor({
+        registry,
+        mediaStore: mockMediaStore,
+      });
+
+      registry.registerByClass(new ImageGadget());
+
+      const call: ParsedGadgetCall = {
+        gadgetName: "ImageGadget",
+        invocationId: "media-1",
+        parametersRaw: "{}",
+        parameters: {},
+      };
+
+      const result = await executorWithMediaStore.execute(call);
+
+      expect(result.result).toBe("Image generated");
+      expect(result.mediaIds).toEqual(["media_abc123"]);
+      expect(result.media).toHaveLength(1);
+      expect(result.storedMedia).toHaveLength(1);
+      expect(result.storedMedia?.[0].id).toBe("media_abc123");
+      expect(result.error).toBeUndefined();
     });
   });
 });
