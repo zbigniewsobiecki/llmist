@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { validateGadgetSchema } from "./schema-validator.js";
@@ -264,6 +264,74 @@ describe("validateGadgetSchema", () => {
         expect(message).toContain("z.array(z.string())");
         expect(message).toContain("Example fixes:");
       }
+    });
+  });
+
+  describe("oneOf/allOf/definitions traversal", () => {
+    it("oneOf traversal: detects z.unknown() inside a discriminated union branch", () => {
+      const schema = z.object({
+        content: z.discriminatedUnion("type", [
+          z.object({ type: z.literal("text"), value: z.string() }),
+          z.object({ type: z.literal("data"), value: z.unknown() }),
+        ]),
+      });
+
+      expect(() => validateGadgetSchema(schema, "OneOfGadget")).toThrow(/uses z\.unknown\(\)/);
+      expect(() => validateGadgetSchema(schema, "OneOfGadget")).toThrow(/value/);
+    });
+
+    it("allOf traversal: detects z.unknown() inside an intersection", () => {
+      const schema = z.object({
+        content: z.intersection(z.object({ name: z.string() }), z.object({ value: z.unknown() })),
+      });
+
+      expect(() => validateGadgetSchema(schema, "AllOfGadget")).toThrow(/uses z\.unknown\(\)/);
+      expect(() => validateGadgetSchema(schema, "AllOfGadget")).toThrow(/value/);
+    });
+
+    describe("definitions block traversal", () => {
+      let DefinedSchema: z.ZodObject<{ name: z.ZodString; value: z.ZodUnknown }>;
+
+      beforeEach(() => {
+        DefinedSchema = z.object({ name: z.string(), value: z.unknown() });
+        z.globalRegistry.add(DefinedSchema, { id: "DefinedSchemaWithUnknown" });
+      });
+
+      afterEach(() => {
+        z.globalRegistry.remove(DefinedSchema);
+      });
+
+      it("detects z.unknown() inside a definitions block (registered schema)", () => {
+        // Using DefinedSchema twice forces Zod to hoist it into definitions/$defs
+        const schema = z.object({
+          a: DefinedSchema,
+          b: DefinedSchema,
+        });
+
+        expect(() => validateGadgetSchema(schema, "DefsGadget")).toThrow(/uses z\.unknown\(\)/);
+        expect(() => validateGadgetSchema(schema, "DefsGadget")).toThrow(/value/);
+      });
+    });
+  });
+
+  describe("hasNoType edge cases", () => {
+    it("non-object property schema: does not flag z.never() property (has non-type key 'not')", () => {
+      // z.never() produces { "not": {} } in JSON Schema — not a missing-type scenario
+      const schema = z.object({
+        val: z.never(),
+      });
+
+      expect(() => validateGadgetSchema(schema, "NeverGadget")).not.toThrow();
+    });
+
+    it("property with only metadata keys is flagged as missing type info", () => {
+      // z.unknown().describe() produces { "description": "..." } — only metadata key, no type field
+      const schema = z.object({
+        val: z.unknown().describe("Some description"),
+      });
+
+      expect(() => validateGadgetSchema(schema, "MetadataGadget")).toThrow(/uses z\.unknown\(\)/);
+      expect(() => validateGadgetSchema(schema, "MetadataGadget")).toThrow(/val/);
     });
   });
 });
