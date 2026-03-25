@@ -38,6 +38,7 @@ import fs from "node:fs";
 // see our mocked os.homedir().
 import {
   isExternalPackageSpecifier,
+  listExternalGadgets,
   loadExternalGadgets,
   parseGadgetSpecifier,
 } from "./external-gadgets.js";
@@ -788,6 +789,370 @@ describe("external-gadgets", () => {
       await expect(loadExternalGadgets("test-pkg", true /* forceInstall */)).rejects.toThrow(
         /Entry point not found/,
       );
+    });
+  });
+
+  // ========================================================================
+  // Preset selection
+  // ========================================================================
+
+  describe("preset selection", () => {
+    it("filters gadgets to the names listed in the preset", async () => {
+      const manifestContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          presets: { minimal: ["Navigate", "Search"] },
+        },
+      });
+      setupCachedNpmPackage(
+        [makeMockGadget("Navigate"), makeMockGadget("Search"), makeMockGadget("Download")],
+        manifestContent,
+      );
+
+      const result = await loadExternalGadgets("test-pkg:minimal");
+
+      expect(result).toHaveLength(2);
+      const names = result.map((g) => g.name);
+      expect(names).toContain("Navigate");
+      expect(names).toContain("Search");
+      expect(names).not.toContain("Download");
+    });
+
+    it("throws a descriptive error for an unknown preset", async () => {
+      const manifestContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          presets: { minimal: ["Navigate"] },
+        },
+      });
+      setupCachedNpmPackage([], manifestContent);
+
+      await expect(loadExternalGadgets("test-pkg:unknown")).rejects.toThrow(
+        "Unknown preset 'unknown' in package 'test-pkg'",
+      );
+    });
+
+    it("returns all gadgets when preset value is '*'", async () => {
+      const manifestContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          presets: { all: "*" },
+        },
+      });
+      setupCachedNpmPackage(
+        [makeMockGadget("Navigate"), makeMockGadget("Search")],
+        manifestContent,
+      );
+
+      const result = await loadExternalGadgets("test-pkg:all");
+
+      // Wildcard means no filtering — all gadgets from the module are returned
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  // ========================================================================
+  // Single gadget filter
+  // ========================================================================
+
+  describe("single gadget filter", () => {
+    it("returns only the requested gadget when filtered by name", async () => {
+      setupCachedNpmPackage([makeMockGadget("Navigate"), makeMockGadget("Search")]);
+
+      const result = await loadExternalGadgets("test-pkg/Navigate");
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe("Navigate");
+    });
+
+    it("throws when the requested gadget name does not exist in the package", async () => {
+      setupCachedNpmPackage([makeMockGadget("Navigate")]);
+
+      await expect(loadExternalGadgets("test-pkg/Missing")).rejects.toThrow(
+        "Gadget 'Missing' not found in package 'test-pkg'",
+      );
+    });
+  });
+
+  // ========================================================================
+  // Factory pattern
+  // ========================================================================
+
+  /**
+   * Sets up a cached npm package whose module exports contain the given functions.
+   * `extractGadgetsFromModule` is mocked to return `gadgets` for every call.
+   */
+  function setupCachedNpmPackageWithModuleExports(
+    moduleExports: Record<string, unknown>,
+    gadgets: ReturnType<typeof makeMockGadget>[] = [makeMockGadget()],
+    packageJsonContent: string = makePackageJson(),
+  ) {
+    vi.mocked(fs.existsSync).mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s.endsWith("dist/index.js")) return true;
+      if (s.endsWith("package.json")) return true;
+      if (s.includes("node_modules/test-pkg")) return true;
+      return false;
+    });
+    vi.mocked(fs.readFileSync).mockReturnValue(packageJsonContent as unknown as Buffer);
+    vi.mocked(isTypeScriptFile).mockReturnValue(true);
+    const importer = vi.fn().mockResolvedValue(moduleExports);
+    vi.mocked(createTypeScriptImporter).mockReturnValue(importer);
+    vi.mocked(extractGadgetsFromModule).mockReturnValue(gadgets as any);
+  }
+
+  describe("factory pattern", () => {
+    it("calls createGadgetsByPreset with the preset name when factory=true and preset specified", async () => {
+      const gadgets = [makeMockGadget("Navigate")];
+      const createGadgetsByPreset = vi.fn().mockResolvedValue([]);
+      const packageJsonContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          factory: true,
+          presets: { minimal: ["Navigate"] },
+        },
+      });
+      setupCachedNpmPackageWithModuleExports(
+        { createGadgetsByPreset },
+        gadgets,
+        packageJsonContent,
+      );
+
+      await loadExternalGadgets("test-pkg:minimal");
+
+      expect(createGadgetsByPreset).toHaveBeenCalledWith("minimal");
+    });
+
+    it("calls createGadgetsByName with the gadget names array when factory=true and names specified", async () => {
+      const gadgets = [makeMockGadget("Navigate")];
+      const createGadgetsByName = vi.fn().mockResolvedValue([]);
+      const packageJsonContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          factory: true,
+        },
+      });
+      setupCachedNpmPackageWithModuleExports({ createGadgetsByName }, gadgets, packageJsonContent);
+
+      await loadExternalGadgets("test-pkg/Navigate");
+
+      expect(createGadgetsByName).toHaveBeenCalledWith(["Navigate"]);
+    });
+
+    it("tries createGadgets fallback factory when no specific factory matches", async () => {
+      const gadgets = [makeMockGadget("Navigate")];
+      const createGadgets = vi.fn().mockResolvedValue([]);
+      const packageJsonContent = makePackageJson({
+        llmist: { gadgets: "./dist/index.js", factory: true },
+      });
+      setupCachedNpmPackageWithModuleExports({ createGadgets }, gadgets, packageJsonContent);
+
+      await loadExternalGadgets("test-pkg");
+
+      expect(createGadgets).toHaveBeenCalled();
+    });
+
+    it("tries 'default' factory as last-resort fallback", async () => {
+      const gadgets = [makeMockGadget("Navigate")];
+      const defaultFactory = vi.fn().mockResolvedValue([]);
+      const packageJsonContent = makePackageJson({
+        llmist: { gadgets: "./dist/index.js", factory: true },
+      });
+      setupCachedNpmPackageWithModuleExports(
+        { default: defaultFactory },
+        gadgets,
+        packageJsonContent,
+      );
+
+      await loadExternalGadgets("test-pkg");
+
+      expect(defaultFactory).toHaveBeenCalled();
+    });
+
+    it("tries fallback factories in order and stops at first one returning gadgets", async () => {
+      // createGadgets appears before "default" in the factory list, so it should be tried first.
+      const gadgets = [makeMockGadget("Navigate")];
+      const createGadgets = vi.fn().mockResolvedValue([]);
+      const defaultFactory = vi.fn().mockResolvedValue([]);
+      const packageJsonContent = makePackageJson({
+        llmist: { gadgets: "./dist/index.js", factory: true },
+      });
+      setupCachedNpmPackageWithModuleExports(
+        { createGadgets, default: defaultFactory },
+        gadgets,
+        packageJsonContent,
+      );
+
+      await loadExternalGadgets("test-pkg");
+
+      // createGadgets is tried first and returns gadgets → default should not be called
+      expect(createGadgets).toHaveBeenCalled();
+      expect(defaultFactory).not.toHaveBeenCalled();
+    });
+  });
+
+  // ========================================================================
+  // Subagent entry point
+  // ========================================================================
+
+  describe("subagent entry point", () => {
+    it("resolves entry point from manifest subagents map when gadget name matches a subagent", async () => {
+      const packageJsonContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          subagents: {
+            MyAgent: {
+              entryPoint: "./dist/agents/my-agent.js",
+              description: "My agent",
+            },
+          },
+        },
+      });
+
+      vi.mocked(fs.existsSync).mockImplementation((p: unknown) => {
+        const s = String(p);
+        if (s.includes("agents/my-agent.js")) return true;
+        if (s.endsWith("dist/index.js")) return true;
+        if (s.endsWith("package.json")) return true;
+        if (s.includes("node_modules/test-pkg")) return true;
+        return false;
+      });
+      vi.mocked(fs.readFileSync).mockReturnValue(packageJsonContent as unknown as Buffer);
+
+      vi.mocked(isTypeScriptFile).mockReturnValue(true);
+      const importer = vi.fn().mockResolvedValue({});
+      vi.mocked(createTypeScriptImporter).mockReturnValue(importer);
+      vi.mocked(extractGadgetsFromModule).mockReturnValue([makeMockGadget("MyAgent")] as any);
+
+      const result = await loadExternalGadgets("test-pkg/MyAgent");
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe("MyAgent");
+
+      // Verify the importer was called with a URL that includes the subagent entry point
+      const importerCalls = importer.mock.calls;
+      expect(importerCalls.length).toBeGreaterThan(0);
+      expect(String(importerCalls[0][0])).toContain("agents/my-agent.js");
+    });
+
+    it("does not invoke factory pattern when gadget is identified as a subagent", async () => {
+      const createGadgets = vi.fn().mockResolvedValue([]);
+      const packageJsonContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          factory: true,
+          subagents: {
+            MyAgent: {
+              entryPoint: "./dist/agents/my-agent.js",
+              description: "My agent",
+            },
+          },
+        },
+      });
+
+      vi.mocked(fs.existsSync).mockImplementation((p: unknown) => {
+        const s = String(p);
+        if (s.includes("agents/my-agent.js")) return true;
+        if (s.endsWith("dist/index.js")) return true;
+        if (s.endsWith("package.json")) return true;
+        if (s.includes("node_modules/test-pkg")) return true;
+        return false;
+      });
+      vi.mocked(fs.readFileSync).mockReturnValue(packageJsonContent as unknown as Buffer);
+
+      vi.mocked(isTypeScriptFile).mockReturnValue(true);
+      const importer = vi.fn().mockResolvedValue({ createGadgets });
+      vi.mocked(createTypeScriptImporter).mockReturnValue(importer);
+      vi.mocked(extractGadgetsFromModule).mockReturnValue([makeMockGadget("MyAgent")] as any);
+
+      await loadExternalGadgets("test-pkg/MyAgent");
+
+      // Factory should NOT have been called for subagents
+      expect(createGadgets).not.toHaveBeenCalled();
+    });
+  });
+
+  // ========================================================================
+  // listExternalGadgets
+  // ========================================================================
+
+  describe("listExternalGadgets", () => {
+    it("returns gadgets, subagents, and presets from the manifest", async () => {
+      const packageJsonContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          presets: { minimal: ["Navigate"], all: "*" },
+          subagents: {
+            MyAgent: { entryPoint: "./dist/agents/my-agent.js", description: "My agent" },
+          },
+        },
+      });
+      setupCachedNpmPackage(
+        [makeMockGadget("Navigate"), makeMockGadget("Search")],
+        packageJsonContent,
+      );
+
+      const result = await listExternalGadgets("test-pkg");
+
+      expect(result.packageName).toBe("test-pkg");
+      expect(result.gadgets).toHaveLength(2);
+      expect(result.gadgets.map((g) => g.name)).toContain("Navigate");
+      expect(result.gadgets.map((g) => g.name)).toContain("Search");
+      expect(result.subagents).toHaveLength(1);
+      expect(result.subagents[0].name).toBe("MyAgent");
+      expect(result.subagents[0].description).toBe("My agent");
+      expect(result.presets).toContain("minimal");
+      expect(result.presets).toContain("all");
+    });
+
+    it("gracefully ignores import errors and returns manifest data without gadgets", async () => {
+      const packageJsonContent = makePackageJson({
+        llmist: {
+          gadgets: "./dist/index.js",
+          presets: { minimal: ["Navigate"] },
+          subagents: {
+            MyAgent: { entryPoint: "./dist/agents/my-agent.js", description: "My agent" },
+          },
+        },
+      });
+
+      vi.mocked(fs.existsSync).mockImplementation((p: unknown) => {
+        const s = String(p);
+        if (s.endsWith("dist/index.js")) return true;
+        if (s.endsWith("package.json")) return true;
+        if (s.includes("node_modules/test-pkg")) return true;
+        return false;
+      });
+      vi.mocked(fs.readFileSync).mockReturnValue(packageJsonContent as unknown as Buffer);
+
+      // Make the importer throw so import errors are exercised
+      vi.mocked(isTypeScriptFile).mockReturnValue(true);
+      const importer = vi.fn().mockRejectedValue(new Error("Cannot parse module"));
+      vi.mocked(createTypeScriptImporter).mockReturnValue(importer);
+
+      const result = await listExternalGadgets("test-pkg");
+
+      // Gadget list is empty due to import error, but manifest data is still returned
+      expect(result.gadgets).toHaveLength(0);
+      expect(result.subagents).toHaveLength(1);
+      expect(result.presets).toContain("minimal");
+    });
+
+    it("throws on an invalid specifier", async () => {
+      await expect(listExternalGadgets("!!!invalid!!!")).rejects.toThrow(
+        "Invalid external package specifier: !!!invalid!!!",
+      );
+    });
+
+    it("returns empty arrays when manifest has no presets or subagents", async () => {
+      setupCachedNpmPackage([makeMockGadget("Navigate")]);
+
+      const result = await listExternalGadgets("test-pkg");
+
+      expect(result.packageName).toBe("test-pkg");
+      expect(result.gadgets).toHaveLength(1);
+      expect(result.subagents).toHaveLength(0);
+      expect(result.presets).toHaveLength(0);
     });
   });
 });
