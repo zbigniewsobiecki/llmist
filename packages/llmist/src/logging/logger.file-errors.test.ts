@@ -98,7 +98,8 @@ describe("file logging — init via createWriteStream", () => {
     process.env.LLMIST_LOG_FILE = TEST_LOG_FILE;
     createLogger({ name: "first" });
 
-    _resetFileLoggingState();
+    // Do NOT reset state here — logFileInitialized stays true so the second
+    // createLogger exercises the sharedLogFilePath !== envLogFile branch.
     process.env.LLMIST_LOG_FILE = "/tmp/llmist-other.log";
     createLogger({ name: "second" });
 
