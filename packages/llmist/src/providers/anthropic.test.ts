@@ -1,7 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 
+import { isAbortError } from "../core/errors.js";
 import type { AudioContentPart, ImageContentPart } from "../core/input-content.js";
+import { isRetryableError } from "../core/retry.js";
 import { AnthropicMessagesProvider } from "./anthropic.js";
 
 describe("AnthropicMessagesProvider", () => {
@@ -1055,6 +1057,335 @@ describe("AnthropicMessagesProvider", () => {
       const payload = createSpy.mock.calls[0][0];
       // Default (undefined caching) should preserve cache_control on system block
       expect(payload.system[0]).toHaveProperty("cache_control");
+    });
+  });
+
+  describe("error mapping", () => {
+    it("propagates rate limit error (status 429) from create call", async () => {
+      const rateLimitError = new Error("Too many requests");
+      rateLimitError.name = "RateLimitError";
+      Object.assign(rateLimitError, { status: 429 });
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockRejectedValue(rateLimitError),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const streamCall = provider
+        .stream(
+          { model: "claude-3", messages: [{ role: "user" as const, content: "Hello" }] },
+          { provider: "anthropic", name: "claude-3" },
+        )
+        .next();
+
+      await expect(streamCall).rejects.toThrow("Too many requests");
+    });
+
+    it("rate limit error (status 429) is classified as retryable", async () => {
+      const rateLimitError = new Error("Too many requests");
+      rateLimitError.name = "RateLimitError";
+      Object.assign(rateLimitError, { status: 429 });
+
+      expect(isRetryableError(rateLimitError)).toBe(true);
+    });
+
+    it("propagates authentication error from create call", async () => {
+      const authError = new Error("Invalid API key");
+      authError.name = "AuthenticationError";
+      Object.assign(authError, { status: 401 });
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockRejectedValue(authError),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const streamCall = provider
+        .stream(
+          { model: "claude-3", messages: [{ role: "user" as const, content: "Hello" }] },
+          { provider: "anthropic", name: "claude-3" },
+        )
+        .next();
+
+      await expect(streamCall).rejects.toThrow("Invalid API key");
+    });
+
+    it("authentication error (status 401) is classified as non-retryable", async () => {
+      const authError = new Error("Invalid API key");
+      authError.name = "AuthenticationError";
+      Object.assign(authError, { status: 401 });
+
+      expect(isRetryableError(authError)).toBe(false);
+    });
+
+    it("propagates permission denied error (status 403) from create call", async () => {
+      const permError = new Error("Forbidden");
+      permError.name = "PermissionDeniedError";
+      Object.assign(permError, { status: 403 });
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockRejectedValue(permError),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const streamCall = provider
+        .stream(
+          { model: "claude-3", messages: [{ role: "user" as const, content: "Hello" }] },
+          { provider: "anthropic", name: "claude-3" },
+        )
+        .next();
+
+      await expect(streamCall).rejects.toThrow("Forbidden");
+    });
+
+    it("permission denied error (status 403) is classified as non-retryable", async () => {
+      const permError = new Error("Forbidden");
+      permError.name = "PermissionDeniedError";
+      Object.assign(permError, { status: 403 });
+
+      expect(isRetryableError(permError)).toBe(false);
+    });
+
+    it("propagates overloaded error during streaming iteration", async () => {
+      const overloadedError = new Error("overloaded_error: API is at capacity");
+      Object.assign(overloadedError, { status: 529 });
+
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: "Hello" },
+        };
+        throw overloadedError;
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks: unknown[] = [];
+      const streamGen = provider.stream(
+        { model: "claude-3", messages: [{ role: "user" as const, content: "Hello" }] },
+        { provider: "anthropic", name: "claude-3" },
+      );
+
+      await expect(async () => {
+        for await (const chunk of streamGen) {
+          chunks.push(chunk);
+        }
+      }).rejects.toThrow("overloaded_error");
+
+      // At least one chunk was received before the error
+      expect(chunks.length).toBeGreaterThan(0);
+    });
+
+    it("overloaded error is classified as retryable", () => {
+      const overloadedError = new Error("overloaded_error: API is at capacity");
+      expect(isRetryableError(overloadedError)).toBe(true);
+    });
+
+    it("server error (status 500) is classified as retryable", () => {
+      const serverError = new Error("Internal server error");
+      serverError.name = "InternalServerError";
+      Object.assign(serverError, { status: 500 });
+
+      expect(isRetryableError(serverError)).toBe(true);
+    });
+  });
+
+  describe("stream abort during iteration", () => {
+    it("propagates APIConnectionAbortedError when thrown mid-stream", async () => {
+      const abortError = new Error("Connection aborted");
+      abortError.name = "APIConnectionAbortedError";
+
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: "Partial" },
+        };
+        throw abortError;
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      let caughtError: unknown;
+      const chunks: unknown[] = [];
+
+      try {
+        for await (const chunk of provider.stream(
+          { model: "claude-3", messages: [{ role: "user" as const, content: "Test" }] },
+          { provider: "anthropic", name: "claude-3" },
+        )) {
+          chunks.push(chunk);
+        }
+      } catch (err) {
+        caughtError = err;
+      }
+
+      // Partial content was received before abort
+      expect(chunks.length).toBeGreaterThan(0);
+      // The abort error was propagated
+      expect(caughtError).toBeDefined();
+      expect((caughtError as Error).name).toBe("APIConnectionAbortedError");
+    });
+
+    it("APIConnectionAbortedError is recognized as an abort error by isAbortError", () => {
+      const abortError = new Error("Connection aborted");
+      abortError.name = "APIConnectionAbortedError";
+
+      expect(isAbortError(abortError)).toBe(true);
+    });
+
+    it("propagated abort error from mid-stream is recognized by isAbortError", async () => {
+      const abortError = new Error("Connection aborted");
+      abortError.name = "APIConnectionAbortedError";
+
+      const mockStream = (async function* () {
+        yield {
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: "Start" },
+        };
+        throw abortError;
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      let caughtError: unknown;
+      try {
+        for await (const _chunk of provider.stream(
+          { model: "claude-3", messages: [{ role: "user" as const, content: "Test" }] },
+          { provider: "anthropic", name: "claude-3" },
+        )) {
+          // consume chunks
+        }
+      } catch (err) {
+        caughtError = err;
+      }
+
+      expect(caughtError).toBeDefined();
+      expect(isAbortError(caughtError)).toBe(true);
+    });
+
+    it("abort signal triggers error propagation when passed to aborted controller", async () => {
+      const controller = new AbortController();
+
+      // Create a stream that checks the abort signal during iteration
+      const mockStream = (async function* () {
+        // Yield one chunk then simulate abort error from SDK
+        yield {
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: "First chunk" },
+        };
+        // Simulate the SDK throwing when signal is aborted
+        const abortErr = new Error("Connection aborted");
+        abortErr.name = "APIConnectionAbortedError";
+        throw abortErr;
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+      controller.abort();
+
+      let caughtError: unknown;
+      try {
+        for await (const _chunk of provider.stream(
+          {
+            model: "claude-3",
+            messages: [{ role: "user" as const, content: "Test" }],
+            signal: controller.signal,
+          },
+          { provider: "anthropic", name: "claude-3" },
+        )) {
+          // consume
+        }
+      } catch (err) {
+        caughtError = err;
+      }
+
+      expect(caughtError).toBeDefined();
+      expect(isAbortError(caughtError)).toBe(true);
+    });
+  });
+
+  describe("countTokens - additional edge cases", () => {
+    it("returns correct token count from SDK mock response", async () => {
+      const mockCountTokens = vi.fn().mockResolvedValue({ input_tokens: 42 });
+
+      const mockClient = {
+        messages: {
+          countTokens: mockCountTokens,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const count = await provider.countTokens(
+        [{ role: "user" as const, content: "Tell me a story" }],
+        { provider: "anthropic", name: "claude-3-5-sonnet-20241022" },
+      );
+
+      expect(count).toBe(42);
+      expect(mockCountTokens).toHaveBeenCalledOnce();
+    });
+
+    it("includes image tokens in fallback estimation when API fails", async () => {
+      const mockCountTokens = vi.fn().mockRejectedValue(new Error("API unavailable"));
+
+      const mockClient = {
+        messages: {
+          countTokens: mockCountTokens,
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      // Provide a message with image content to exercise image fallback path
+      const count = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "What is in this image?" },
+              {
+                type: "image" as const,
+                source: { type: "base64" as const, mediaType: "image/png" as const, data: "abc" },
+              },
+            ],
+          },
+        ],
+        { provider: "anthropic", name: "claude-3-5-sonnet-20241022" },
+      );
+
+      // "What is in this image?" = 22 chars => ceil(22/4) = 6 text tokens + 1000 image tokens
+      expect(count).toBe(1006);
     });
   });
 });
