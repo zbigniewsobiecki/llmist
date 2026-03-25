@@ -354,6 +354,127 @@ describe("LLMist Client", () => {
     });
   });
 
+  describe("streamText()", () => {
+    let client: LLMist;
+    let mockAdapter: ProviderAdapter;
+
+    beforeEach(() => {
+      mockAdapter = createMockAdapter("test", false, [mockModelSpec]);
+      client = new LLMist({
+        adapters: [mockAdapter],
+        defaultProvider: "test",
+        autoDiscoverProviders: false,
+      });
+    });
+
+    it("should return an async iterable of text chunks", async () => {
+      const chunks: string[] = [];
+      for await (const chunk of client.streamText("Hello", { model: "test:test-model" })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]).toBe("Hello");
+    });
+
+    it("should use the provided model option", async () => {
+      const chunks: string[] = [];
+      for await (const chunk of client.streamText("Hello", { model: "test:test-model" })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(1);
+      expect(mockAdapter.stream).toHaveBeenCalled();
+    });
+
+    it("should use system prompt when provided", async () => {
+      const chunks: string[] = [];
+      for await (const chunk of client.streamText("Hello", {
+        model: "test:test-model",
+        systemPrompt: "You are helpful",
+      })) {
+        chunks.push(chunk);
+      }
+
+      // Verify adapter was called with messages that include a system message
+      expect(mockAdapter.stream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ role: "system", content: "You are helpful" }),
+          ]),
+        }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe("createAgent()", () => {
+    it("client.createAgent() instance method returns an AgentBuilder", () => {
+      const adapter = createMockAdapter("test", false, [mockModelSpec]);
+      const client = new LLMist({
+        adapters: [adapter],
+        defaultProvider: "test",
+        autoDiscoverProviders: false,
+      });
+
+      const builder = client.createAgent();
+
+      expect(builder).toBeDefined();
+      // AgentBuilder has a withModel method confirming it's a builder
+      expect(typeof builder.withModel).toBe("function");
+    });
+
+    it("client.createAgent() returns a builder pre-configured with this client", () => {
+      const adapter = createMockAdapter("test", false, [mockModelSpec]);
+      const client = new LLMist({
+        adapters: [adapter],
+        defaultProvider: "test",
+        autoDiscoverProviders: false,
+      });
+
+      const builder = client.createAgent();
+
+      // Builder should be chainable
+      expect(builder).toBeDefined();
+      expect(typeof builder.withSystem).toBe("function");
+      expect(typeof builder.ask).toBe("function");
+    });
+
+    it("LLMist.createAgent() static method returns an AgentBuilder without a client instance", () => {
+      const builder = LLMist.createAgent();
+
+      expect(builder).toBeDefined();
+      expect(typeof builder.withModel).toBe("function");
+    });
+
+    it("LLMist.createAgent() static method returns a builder with chainable API", () => {
+      const builder = LLMist.createAgent();
+
+      // The static builder should support the full chainable API
+      expect(typeof builder.withSystem).toBe("function");
+      expect(typeof builder.ask).toBe("function");
+    });
+
+    it("static createAgent() and instance createAgent() both return AgentBuilder instances", () => {
+      const adapter = createMockAdapter("test", false, [mockModelSpec]);
+      const client = new LLMist({
+        adapters: [adapter],
+        defaultProvider: "test",
+        autoDiscoverProviders: false,
+      });
+
+      const staticBuilder = LLMist.createAgent();
+      const instanceBuilder = client.createAgent();
+
+      // Both should be AgentBuilder instances with the same API surface
+      expect(typeof staticBuilder.withModel).toBe("function");
+      expect(typeof instanceBuilder.withModel).toBe("function");
+      expect(typeof staticBuilder.withSystem).toBe("function");
+      expect(typeof instanceBuilder.withSystem).toBe("function");
+    });
+  });
+
   describe("Integration", () => {
     it("should work with multiple providers", async () => {
       const spec1: ModelSpec = { ...mockModelSpec, modelId: "model-1", provider: "provider1" };
