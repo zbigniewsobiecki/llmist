@@ -161,6 +161,7 @@ export function getCustomCommandNames(config: CLIConfig): string[] {
     "subagents",
     "rate-limits",
     "retry",
+    "skills",
   ]);
   return Object.keys(config).filter((key) => !reserved.has(key));
 }
