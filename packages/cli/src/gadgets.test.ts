@@ -17,6 +17,7 @@ vi.mock("node:fs", async (importOriginal) => {
 // Mock builtins index so we can control what's "registered"
 vi.mock("./builtins/index.js", () => ({
   getBuiltinGadget: vi.fn(),
+  getBuiltinGadgetNames: vi.fn(() => ["MockGadgetA", "MockGadgetB"]),
   isBuiltinGadgetName: vi.fn(),
 }));
 

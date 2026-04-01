@@ -10,6 +10,7 @@ import { editFile } from "./filesystem/edit-file.js";
 import { listDirectory } from "./filesystem/list-directory.js";
 import { readFile } from "./filesystem/read-file.js";
 import { writeFile } from "./filesystem/write-file.js";
+import { readImage } from "./read-image.js";
 import { runCommand } from "./run-command.js";
 // Note: textToSpeech is a default instance with no config.
 // Use createTextToSpeech(config) for custom configuration from cli.toml.
@@ -22,6 +23,7 @@ import { createTextToSpeech, textToSpeech } from "./text-to-speech.js";
 export const builtinGadgetRegistry: Record<string, AbstractGadget> = {
   ListDirectory: listDirectory,
   ReadFile: readFile,
+  ReadImage: readImage,
   WriteFile: writeFile,
   EditFile: editFile,
   DeleteFile: deleteFile,
@@ -62,6 +64,7 @@ export function getBuiltinGadgetNames(): string[] {
 export {
   listDirectory,
   readFile,
+  readImage,
   writeFile,
   editFile,
   deleteFile,
