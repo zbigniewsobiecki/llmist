@@ -81,6 +81,27 @@ describe("filesystem utils", () => {
       expect(result).toBe("/home/user/project/new-file.txt");
     });
 
+    it("should accept non-existent paths when CWD itself is a symlink (macOS)", () => {
+      // Simulate macOS: CWD /var/folders/abc/project → /private/var/folders/abc/project
+      vi.spyOn(process, "cwd").mockReturnValue("/var/folders/abc/project");
+
+      const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
+      enoent.code = "ENOENT";
+      vi.mocked(fs.realpathSync).mockImplementation((p) => {
+        if (String(p) === "/var/folders/abc/project") {
+          return "/private/var/folders/abc/project";
+        }
+        // Target file doesn't exist yet
+        throw enoent;
+      });
+
+      // Without the fix, resolvedPath = /var/folders/abc/project/newfile.txt does NOT
+      // start with realCwd = /private/var/folders/abc/project/ → PathSandboxException.
+      // With the fix, finalPath = path.resolve(realCwd, inputPath) which does start with realCwd.
+      const result = validatePathIsWithinCwd("newfile.txt");
+      expect(result).toBe("/private/var/folders/abc/project/newfile.txt");
+    });
+
     it("should re-throw permission errors", () => {
       const error = new Error("EACCES") as NodeJS.ErrnoException;
       error.code = "EACCES";

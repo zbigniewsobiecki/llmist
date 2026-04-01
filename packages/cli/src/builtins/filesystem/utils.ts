@@ -40,10 +40,14 @@ export function validatePathIsWithinCwd(inputPath: string): string {
   try {
     finalPath = fs.realpathSync(resolvedPath);
   } catch (error) {
-    // If path doesn't exist, use the resolved path for validation
+    // If path doesn't exist, resolve against realCwd so the comparison is
+    // consistent on platforms where CWD itself contains symlinks (e.g. macOS
+    // /var → /private/var).  Using the raw `resolvedPath` (based on `cwd`)
+    // would produce a path that doesn't start with `realCwd`, falsely
+    // rejecting valid new-file paths.
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
-      finalPath = resolvedPath;
+      finalPath = path.resolve(realCwd, inputPath);
     } else {
       // Re-throw other errors (permission denied, etc.)
       throw error;
