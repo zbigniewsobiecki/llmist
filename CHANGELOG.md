@@ -1,3 +1,13 @@
+## [16.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.1.0...v16.2.0) (2026-04-01)
+
+### Features
+
+* **skills:** add Agent Skills open standard (SKILL.md) support across all packages ([#543](https://github.com/zbigniewsobiecki/llmist/issues/543)) ([72b498f](https://github.com/zbigniewsobiecki/llmist/commit/72b498f8501a37045eabf9c67c937cb2485476f2))
+
+### Bug Fixes
+
+* **cli:** align --no-rate-limit and --no-retry flags with Commander.js naming ([#541](https://github.com/zbigniewsobiecki/llmist/issues/541)) ([60d6d7c](https://github.com/zbigniewsobiecki/llmist/commit/60d6d7ccb09f42ba18aec4aae4aeb20775555d47))
+
 ## [16.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.4...v16.1.0) (2026-04-01)
 
 ### Features
