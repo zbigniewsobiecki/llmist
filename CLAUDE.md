@@ -91,6 +91,7 @@ packages/
 │       ├── agent/       # Agent, builder, stream processor, hooks, compaction
 │       ├── core/        # LLMist client, messages, execution tree, models
 │       ├── gadgets/     # Parser, executor, registry, helpers, exceptions
+│       ├── skills/      # Agent Skills standard (SKILL.md parser, registry, activation)
 │       ├── providers/   # Anthropic, OpenAI, Gemini adapters
 │       ├── utils/       # Formatting, timing, config resolution
 │       ├── logging/     # tslog-based logging
@@ -101,6 +102,7 @@ packages/
 │       ├── agent-command.ts    # Main agent command
 │       ├── complete-command.ts # Completion command
 │       ├── config.ts           # TOML config parsing
+│       ├── skills/             # Skill CLI commands, config, slash handler
 │       └── tui/                # Terminal UI
 ├── testing/             # Testing utilities
 │   └── src/
@@ -115,7 +117,7 @@ packages/
         ├── testing/     # Testing docs
         └── reference/   # API reference
 
-examples/                # Runnable examples (01-23)
+examples/                # Runnable examples (01-27)
 └── gadgets/             # Example gadgets (calculator, filesystem, etc.)
 ```
 
@@ -139,6 +141,32 @@ const myGadget = createGadget({
   execute: (params) => { ... },
 });
 ```
+
+### Skills
+Markdown-based instruction packages following the [Agent Skills open standard](https://agentskills.io). Skills extend agent capabilities through prompt injection and context management, not code execution. Three-tier progressive disclosure manages context budget:
+- **Tier 1** (~100 tokens) - Name + description, always loaded
+- **Tier 2** (<5K tokens) - Full SKILL.md body, loaded on activation
+- **Tier 3** (unlimited) - Scripts, references, assets, loaded on demand
+
+```typescript
+// Load skills from standard locations
+const registry = discoverSkills({ projectDir: process.cwd() });
+
+// Or create programmatically
+const skill = Skill.fromContent(`---
+name: code-review
+description: Review code for bugs and best practices
+---
+When reviewing code, check for...`, '/path/SKILL.md');
+
+// Add to agent
+const agent = new AgentBuilder()
+  .withModel('sonnet')
+  .withSkills(registry)
+  .ask('Review this PR');
+```
+
+Skills compose with gadgets via the auto-registered `UseSkill` meta-gadget. CLI supports `/skill-name` invocation and `llmist skill list/info` commands.
 
 ### Hooks System
 Three-tier architecture:
@@ -256,6 +284,8 @@ Triggered on push to main:
 | `packages/llmist/src/agent/builder.ts` | Fluent API builder (~1200 lines) |
 | `packages/llmist/src/gadgets/parser.ts` | Block format parser |
 | `packages/llmist/src/gadgets/executor.ts` | Gadget execution |
+| `packages/llmist/src/skills/skill.ts` | Skill class (Agent Skills standard) |
+| `packages/llmist/src/skills/registry.ts` | SkillRegistry |
 | `packages/llmist/src/core/client.ts` | LLMist client class |
 | `packages/cli/src/config.ts` | TOML config parsing (~37K) |
 | `turbo.json` | Turborepo task configuration |
@@ -263,10 +293,11 @@ Triggered on push to main:
 
 ## Examples
 
-23 runnable examples in `examples/`:
+27 runnable examples in `examples/`:
 ```bash
 npx tsx examples/01-basic-usage.ts
 npx tsx examples/12-error-handling.ts
+npx tsx examples/27-skills.ts
 ```
 
 Key examples:
@@ -276,6 +307,7 @@ Key examples:
 - `12-error-handling.ts` - Error handling and recovery
 - `19-multimodal-input.ts` - Vision/audio input
 - `20-external-gadgets.ts` - Loading gadgets from npm/git
+- `27-skills.ts` - Agent Skills (SKILL.md) integration
 
 ## Provider Setup
 

@@ -17,6 +17,7 @@ import {
   validateRetryConfig,
   validateSpeechConfig,
 } from "./config-validators.js";
+import { validateSkillsConfig } from "./skills/config-types.js";
 
 // ---------------------------------------------------------------------------
 // Re-export everything so consumers never need to change their imports
@@ -43,6 +44,7 @@ export type {
   SpeechConfig,
 } from "./config-types.js";
 export { ConfigError } from "./config-validators.js";
+export type { SkillOverrideConfig, SkillsConfig } from "./skills/config-types.js";
 export type { GlobalSubagentConfig } from "./subagent-config.js";
 export type { PromptsConfig } from "./templates.js";
 
@@ -90,6 +92,8 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result["rate-limits"] = validateRateLimitsConfig(value, key);
       } else if (key === "retry") {
         result.retry = validateRetryConfig(value, key);
+      } else if (key === "skills") {
+        result.skills = validateSkillsConfig(value, key);
       } else {
         // Custom command section
         result[key] = validateCustomConfig(value, key);

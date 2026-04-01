@@ -107,6 +107,28 @@ max-iterations = 15                      # Max agent loop iterations
 [subagents]
 # default-model = "inherit"              # Default model for all subagents
 
+#──────────────────────────────────────────────────────────────────────────────
+# SKILLS CONFIGURATION
+# Agent Skills (agentskills.io) provide domain expertise through
+# prompt injection, not code execution. Skills are loaded from:
+#   - ~/.llmist/skills/          (user-level)
+#   - .llmist/skills/            (project-level)
+#   - Configured sources below   (explicit)
+#
+# Each skill is a directory with a SKILL.md file.
+# In the CLI, use /skill-name to invoke a skill explicitly.
+# Run `llmist skill list` to see available skills.
+#──────────────────────────────────────────────────────────────────────────────
+# [skills]
+# sources = [
+#   "~/custom-skills",                      # Additional local directory
+#   "./project-specific-skills",            # Project-relative directory
+# ]
+#
+# [skills.overrides.gmail-read]
+# model = "flash"                           # Override model for this skill
+# enabled = true                            # Enable/disable specific skills
+
 [subagents.BrowseWeb]
 # model = "inherit"                      # Use parent agent's model
 # maxIterations = 15                     # Max browsing iterations

@@ -11,6 +11,8 @@ import { readAudioFile, readImageFile, readSystemPromptFile } from "./file-utils
 import { loadGadgets } from "./gadgets.js";
 import { addAgentOptions, type CLIAgentOptions } from "./option-helpers.js";
 import { resolveRateLimitConfig, resolveRetryConfig } from "./rate-limit-resolver.js";
+import { CLISkillManager } from "./skills/skill-manager.js";
+import { parseSlashCommand } from "./skills/slash-handler.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
 import { StatusBar, TUIApp } from "./tui/index.js";
 import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
@@ -99,6 +101,17 @@ export async function executeAgent(
       registry.registerByClass(gadget);
     }
   }
+
+  // Load skills from config sources and standard locations
+  let skillsConfig: import("./skills/config-types.js").SkillsConfig | undefined;
+  try {
+    const fullConfig = loadConfig();
+    skillsConfig = fullConfig.skills;
+  } catch {
+    // Config loading may fail - skills are optional
+  }
+  const skillManager = new CLISkillManager();
+  const skillRegistry = await skillManager.loadAll(skillsConfig);
 
   // Create TUI app if in TUI mode
   let tui: TUIApp | null = null;
@@ -441,6 +454,11 @@ export async function executeAgent(
     builder.withTemperature(options.temperature);
   }
 
+  // Register skills (if any were discovered)
+  if (skillRegistry.size > 0) {
+    builder.withSkills(skillRegistry);
+  }
+
   // Reasoning configuration
   // Precedence: --no-reasoning > --reasoning/--reasoning-budget > config > auto-detect
   if (options.reasoning === false) {
@@ -547,6 +565,33 @@ export async function executeAgent(
 
   // Helper to create and run an agent with a given prompt
   const runAgentWithPrompt = async (userPrompt: string) => {
+    // Clear per-iteration skill state to prevent accumulation across REPL sessions
+    builder.clearPreActivatedSkills();
+
+    // Handle /skill-name slash commands
+    if (skillRegistry.size > 0 && userPrompt.startsWith("/")) {
+      const slashResult = parseSlashCommand(userPrompt, skillRegistry);
+      if (slashResult.isSkillInvocation) {
+        if (slashResult.isListCommand) {
+          // Show available skills inline instead of running the agent
+          const skills = skillRegistry.getUserInvocable();
+          const lines = skills.map((s) => `  /${s.name} — ${s.description}`);
+          const msg =
+            skills.length > 0 ? `Available skills:\n${lines.join("\n")}` : "No skills available.";
+          if (tui) {
+            tui.showUserMessage(`/skills`);
+            tui.showUserMessage(msg);
+          } else {
+            env.stdout.write(`${msg}\n`);
+          }
+          return;
+        }
+        if (slashResult.skillName) {
+          builder.withSkill(slashResult.skillName, slashResult.arguments);
+        }
+      }
+    }
+
     // Reset abort controller for new iteration (TUI mode)
     if (tui) {
       tui.resetAbort();
