@@ -91,3 +91,9 @@ export interface SubagentState {
 export interface PolicyState {
   compactionConfig?: CompactionConfig;
 }
+
+export interface SkillState {
+  registry?: import("../skills/registry.js").SkillRegistry;
+  preActivated: Array<{ name: string; args?: string }>;
+  skillDirs: string[];
+}

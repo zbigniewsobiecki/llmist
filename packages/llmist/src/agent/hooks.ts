@@ -354,6 +354,9 @@ export interface Observers {
 
   /** Called when a retry attempt is made after a failed LLM call */
   onRetryAttempt?: (context: ObserveRetryAttemptContext) => void | Promise<void>;
+
+  /** Called when a skill is activated (via UseSkill gadget or pre-activation) */
+  onSkillActivated?: (context: ObserveSkillActivatedContext) => void | Promise<void>;
 }
 
 /**
@@ -424,6 +427,58 @@ export interface ObserveRetryAttemptContext {
   logger: Logger<ILogObj>;
   /** Present when event is from a subagent (undefined for top-level agent) */
   subagentContext?: SubagentContext;
+}
+
+// ============================================================================
+// SKILL HOOK CONTEXTS
+// ============================================================================
+
+/**
+ * Context provided when a skill is activated.
+ * Read-only observation point.
+ */
+export interface ObserveSkillActivatedContext {
+  /** Name of the activated skill */
+  skillName: string;
+  /** Arguments passed to the skill (if any) */
+  arguments?: string;
+  /** Current iteration when activation occurred */
+  iteration: number;
+  /** Logger instance */
+  logger: Logger<ILogObj>;
+}
+
+/**
+ * Context for skill activation controller.
+ */
+export interface SkillActivationControllerContext {
+  /** Name of the skill being activated */
+  skillName: string;
+  /** Arguments passed to the skill */
+  arguments?: string;
+  /** Current iteration */
+  iteration: number;
+  /** Logger instance */
+  logger: Logger<ILogObj>;
+}
+
+/**
+ * Action returned by beforeSkillActivation controller.
+ */
+export type BeforeSkillActivationAction =
+  | { action: "proceed" }
+  | { action: "skip"; reason?: string };
+
+/**
+ * Context for skill instruction interception.
+ */
+export interface SkillInstructionInterceptorContext {
+  /** Name of the skill being activated */
+  skillName: string;
+  /** Arguments passed to the skill */
+  arguments?: string;
+  /** Logger instance */
+  logger: Logger<ILogObj>;
 }
 
 // ============================================================================
@@ -533,6 +588,18 @@ export interface Interceptors {
    * @returns Transformed text (cannot be suppressed)
    */
   interceptGadgetResult?: (result: string, context: GadgetResultInterceptorContext) => string;
+
+  /**
+   * Intercept and transform skill instructions before they are returned to the LLM.
+   *
+   * @param instructions - The resolved skill instructions
+   * @param context - Context including skill name and arguments
+   * @returns Transformed instructions, or null to suppress the skill activation
+   */
+  interceptSkillInstructions?: (
+    instructions: string,
+    context: SkillInstructionInterceptorContext,
+  ) => string | null;
 }
 
 // ============================================================================
@@ -724,6 +791,14 @@ export interface Controllers {
    * Can override the default skip behavior to execute anyway or provide a fallback.
    */
   onDependencySkipped?: (context: DependencySkipControllerContext) => Promise<DependencySkipAction>;
+
+  /**
+   * Called before activating a skill.
+   * Can skip the activation (e.g., for permission checks or cost limits).
+   */
+  beforeSkillActivation?: (
+    context: SkillActivationControllerContext,
+  ) => Promise<BeforeSkillActivationAction>;
 }
 
 // ============================================================================

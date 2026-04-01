@@ -197,6 +197,8 @@ export interface CLIConfig {
   "rate-limits"?: RateLimitsConfig;
   /** Global retry configuration */
   retry?: RetryConfigCLI;
+  /** Skills configuration */
+  skills?: import("./skills/config-types.js").SkillsConfig;
   [customCommand: string]:
     | CustomCommandConfig
     | CompleteConfig
@@ -208,6 +210,7 @@ export interface CLIConfig {
     | GlobalSubagentConfig
     | RateLimitsConfig
     | RetryConfigCLI
+    | import("./skills/config-types.js").SkillsConfig
     | undefined;
 }
 

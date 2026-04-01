@@ -36,6 +36,7 @@ export type {
   AgentOptions,
   BeforeGadgetExecutionAction,
   BeforeLLMCallAction,
+  BeforeSkillActivationAction,
   // Interceptor contexts
   ChunkInterceptorContext,
   // Context compaction
@@ -70,12 +71,16 @@ export type {
   ObserveRateLimitThrottleContext,
   ObserveRetryAttemptContext,
   Observers,
+  // Skill hook contexts
+  ObserveSkillActivatedContext,
   // Gadget output limit configuration
   OutputLimitConfig,
   ParallelGadgetHintOptions,
   // Gadget prefix configuration
   PrefixConfig,
   ResolvedCompactionConfig,
+  SkillActivationControllerContext,
+  SkillInstructionInterceptorContext,
   // Gadget output limiting
   StoredOutput,
   StreamProcessingResult,
@@ -452,6 +457,34 @@ export type { ProviderAdapter } from "./providers/provider.js";
 // ============================================================================
 export type { ISessionManager } from "./session/index.js";
 export { BaseSessionManager, SimpleSessionManager } from "./session/index.js";
+// ============================================================================
+// Skills System (Agent Skills Open Standard)
+// ============================================================================
+export type {
+  ParsedSkill,
+  SkillActivation,
+  SkillActivationOptions,
+  SkillMetadata,
+  SkillResource,
+  SkillSource,
+} from "./skills/index.js";
+export {
+  createUseSkillGadget,
+  discoverSkills,
+  loadSkillsFromDirectory,
+  parseFrontmatter,
+  parseMetadata,
+  parseSkillContent,
+  parseSkillFile,
+  resolveInstructions,
+  Skill,
+  SkillRegistry,
+  scanResources,
+  substituteArguments,
+  substituteVariables,
+  USE_SKILL_GADGET_NAME,
+  validateMetadata,
+} from "./skills/index.js";
 // Utility functions for subagent gadgets
 export type { ResolveValueOptions } from "./utils/config-resolver.js";
 export {
