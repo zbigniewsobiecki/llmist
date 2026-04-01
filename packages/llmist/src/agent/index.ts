@@ -44,6 +44,7 @@ export type {
   AgentHooks,
   BeforeGadgetExecutionAction,
   BeforeLLMCallAction,
+  BeforeSkillActivationAction,
   // Interceptor contexts
   ChunkInterceptorContext,
   Controllers,
@@ -71,6 +72,10 @@ export type {
   ObserveRateLimitThrottleContext,
   ObserveRetryAttemptContext,
   Observers,
+  // Skill hook contexts
+  ObserveSkillActivatedContext,
+  SkillActivationControllerContext,
+  SkillInstructionInterceptorContext,
   // Subagent context for distinguishing subagent events in hooks
   SubagentContext,
 } from "./hooks.js";

@@ -61,6 +61,8 @@ npx tsx examples/01-basic-usage.ts
 | [22-format-timing.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/22-format-timing.ts) | Response formatting and timing utilities |
 | [23-session-manager.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/23-session-manager.ts) | Session management |
 | [25-reasoning-models.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/25-reasoning-models.ts) | Reasoning models with thinking/extended thinking |
+| [26-budget-limits.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/26-budget-limits.ts) | Budget and cost limiting configuration |
+| [27-skills.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/27-skills.ts) | Agent Skills (SKILL.md) integration and usage |
 
 ## Configuration
 
