@@ -109,7 +109,7 @@ export function resolveInstructions(
   // Step 2: Argument substitution
   resolved = substituteArguments(resolved, options?.arguments);
 
-  // Step 3: Shell preprocessing (opt-in, since it executes commands)
+  // Step 3: Shell preprocessing (opt-out by default; pass enableShellPreprocessing: false to disable)
   if (options?.enableShellPreprocessing !== false) {
     resolved = preprocessShellCommands(resolved, {
       cwd: options?.cwd,

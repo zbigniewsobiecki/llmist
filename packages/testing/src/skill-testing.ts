@@ -65,6 +65,7 @@ export async function testSkillActivation(
     ...options,
     // Disable shell preprocessing in tests by default for safety
     cwd: options?.cwd ?? "/test",
+    enableShellPreprocessing: options?.enableShellPreprocessing ?? false,
   });
 }
 

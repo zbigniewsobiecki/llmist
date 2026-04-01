@@ -2,6 +2,7 @@
  * Fluent builder for creating agents with delightful DX.
  */
 
+import { readFileSync } from "node:fs";
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
 import type { ContentPart, ImageMimeType } from "../core/input-content.js";
@@ -21,7 +22,7 @@ import type {
 import { resolveInstructions } from "../skills/activation.js";
 import { loadSkillsFromDirectory } from "../skills/loader.js";
 import { parseFrontmatter } from "../skills/parser.js";
-import type { SkillRegistry } from "../skills/registry.js";
+import { SkillRegistry } from "../skills/registry.js";
 import { createUseSkillGadget } from "../skills/use-skill-gadget.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
@@ -395,8 +396,7 @@ export class AgentBuilder {
     }
 
     if (this.skills.skillDirs.length > 0) {
-      const { SkillRegistry: SR } = require("../skills/registry.js");
-      const reg = new SR();
+      const reg = new SkillRegistry();
       for (const dir of this.skills.skillDirs) {
         const skills = loadSkillsFromDirectory(dir, { type: "directory", path: dir });
         reg.registerMany(skills);
@@ -414,12 +414,11 @@ export class AgentBuilder {
   private resolvePreActivatedInstructions(skillRegistry: SkillRegistry): string | undefined {
     if (this.skills.preActivated.length === 0) return undefined;
 
-    const fs = require("node:fs");
     const blocks: string[] = [];
     for (const { name, args } of this.skills.preActivated) {
       const skill = skillRegistry.get(name);
       if (!skill) continue;
-      const content = fs.readFileSync(skill.sourcePath, "utf-8");
+      const content = readFileSync(skill.sourcePath, "utf-8");
       const { body } = parseFrontmatter(content);
       const resolved = resolveInstructions(body, {
         arguments: args,
