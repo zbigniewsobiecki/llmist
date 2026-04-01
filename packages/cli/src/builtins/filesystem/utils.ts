@@ -26,6 +26,15 @@ export function validatePathIsWithinCwd(inputPath: string): string {
   const cwd = process.cwd();
   const resolvedPath = path.resolve(cwd, inputPath);
 
+  // Resolve CWD through realpathSync to handle platform symlinks
+  // (e.g. macOS: /var → /private/var) so the comparison is consistent
+  let realCwd: string;
+  try {
+    realCwd = fs.realpathSync(cwd);
+  } catch {
+    realCwd = cwd;
+  }
+
   // Try to get the real path to handle symlinks securely
   let finalPath: string;
   try {
@@ -43,8 +52,8 @@ export function validatePathIsWithinCwd(inputPath: string): string {
 
   // Ensure the path is within CWD or is CWD itself
   // Use path.sep to prevent matching partial directory names
-  const cwdWithSep = cwd + path.sep;
-  if (!finalPath.startsWith(cwdWithSep) && finalPath !== cwd) {
+  const cwdWithSep = realCwd + path.sep;
+  if (!finalPath.startsWith(cwdWithSep) && finalPath !== realCwd) {
     throw new PathSandboxException(inputPath, "Path is outside the current working directory");
   }
 
