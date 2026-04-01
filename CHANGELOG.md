@@ -1,3 +1,21 @@
+## [16.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.4...v16.1.0) (2026-04-01)
+
+### Features
+
+* **agent:** extract gadget formatting logic to builder-utils ([#499](https://github.com/zbigniewsobiecki/llmist/issues/499)) ([6caa341](https://github.com/zbigniewsobiecki/llmist/commit/6caa3418a996c27dc89d1408f3612b32a11bb08d))
+* **cli:** add ReadImage built-in gadget for mid-conversation image analysis ([#539](https://github.com/zbigniewsobiecki/llmist/issues/539)) ([51ba5ee](https://github.com/zbigniewsobiecki/llmist/commit/51ba5ee61000ae773631b3549b057474156128a3))
+* **cli:** add shared metric-parts module with composable metric rendering primitives ([#523](https://github.com/zbigniewsobiecki/llmist/issues/523)) ([26a4175](https://github.com/zbigniewsobiecki/llmist/commit/26a4175a187f8c63e28b580f8f0f3ab23e1fa008))
+* **cli:** add TUIApp mock and TUI testing infrastructure ([#503](https://github.com/zbigniewsobiecki/llmist/issues/503)) ([462ba22](https://github.com/zbigniewsobiecki/llmist/commit/462ba22115baa740cabf1f20519f40ad4896aaab))
+* **cli:** extract gadget preview formatters into dedicated module ([#526](https://github.com/zbigniewsobiecki/llmist/issues/526)) ([37c7217](https://github.com/zbigniewsobiecki/llmist/commit/37c7217af90dbfb6cc72e5d7be43eefad6cb7c7a))
+* **cli:** extract session lifecycle and event routing from TUIApp ([8a817f7](https://github.com/zbigniewsobiecki/llmist/commit/8a817f7090e528ecadce5bb4c4b3d9e407b05a10))
+* **cli:** implement approval for dangerous gadgets in TUI and piped mode ([4a40992](https://github.com/zbigniewsobiecki/llmist/commit/4a40992844d7f2ab67a53e7039b8e351ffc52001))
+* **cli:** verify TUI initialization and REPL loop with tests ([#504](https://github.com/zbigniewsobiecki/llmist/issues/504)) ([0ed89ab](https://github.com/zbigniewsobiecki/llmist/commit/0ed89abaa35cca38c3bd8fd8f6aec797aa5ebe9a))
+
+### Bug Fixes
+
+* **agent:** use field-by-field resolution for outputLimitConfig ([b00f68a](https://github.com/zbigniewsobiecki/llmist/commit/b00f68a8c340db3dbe87c36cfe9cfae7f1492bf6))
+* **cli:** address feedback on dangerous gadgets approval logic ([5f9a4ce](https://github.com/zbigniewsobiecki/llmist/commit/5f9a4cef58071e8cc62b6afa5b5aa5a6ca667095))
+
 ## [16.0.4](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.3...v16.0.4) (2026-03-08)
 
 ### Bug Fixes
