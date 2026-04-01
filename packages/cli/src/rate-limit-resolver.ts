@@ -62,8 +62,8 @@ export function resolveRateLimitConfig(
   profileConfig?: RateLimitsConfig,
   model?: string,
 ): RateLimitConfig | undefined {
-  // Explicit disable via CLI flag
-  if (options.noRateLimit === true) {
+  // Explicit disable via --no-rate-limit flag or TOML enabled: false
+  if (options.rateLimit === false) {
     return { enabled: false, safetyMargin: 0.8 };
   }
 
@@ -240,7 +240,7 @@ export function resolveRetryConfig(
   if (options.retryMaxTimeout !== undefined) {
     resolved.maxTimeout = options.retryMaxTimeout;
   }
-  if (options.noRetry === true) {
+  if (options.retry === false) {
     resolved.enabled = false;
   }
 

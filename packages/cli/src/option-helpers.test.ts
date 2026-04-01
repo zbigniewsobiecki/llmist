@@ -98,20 +98,20 @@ describe("configToCompleteOptions", () => {
       expect(result.rateLimitSafetyMargin).toBe(0.1);
     });
 
-    it("sets noRateLimit=true when enabled=false", () => {
+    it("sets rateLimit=false when enabled=false", () => {
       const config: CustomCommandConfig = {
         "rate-limits": { enabled: false },
       };
       const result = configToCompleteOptions(config);
-      expect(result.noRateLimit).toBe(true);
+      expect(result.rateLimit).toBe(false);
     });
 
-    it("does not set noRateLimit when enabled=true", () => {
+    it("does not set rateLimit when enabled=true", () => {
       const config: CustomCommandConfig = {
         "rate-limits": { enabled: true },
       };
       const result = configToCompleteOptions(config);
-      expect(result.noRateLimit).toBeUndefined();
+      expect(result.rateLimit).toBeUndefined();
     });
 
     it("maps all rate-limit fields together", () => {
@@ -150,16 +150,16 @@ describe("configToCompleteOptions", () => {
       expect(result.retryMaxTimeout).toBe(30000);
     });
 
-    it("sets noRetry=true when enabled=false", () => {
+    it("sets retry=false when enabled=false", () => {
       const config: CustomCommandConfig = { retry: { enabled: false } };
       const result = configToCompleteOptions(config);
-      expect(result.noRetry).toBe(true);
+      expect(result.retry).toBe(false);
     });
 
-    it("does not set noRetry when enabled=true", () => {
+    it("does not set retry when enabled=true", () => {
       const config: CustomCommandConfig = { retry: { enabled: true } };
       const result = configToCompleteOptions(config);
-      expect(result.noRetry).toBeUndefined();
+      expect(result.retry).toBeUndefined();
     });
 
     it("maps all retry fields together", () => {
@@ -241,7 +241,7 @@ describe("configToCompleteOptions", () => {
       expect(result.rateLimitTpm).toBeUndefined();
       expect(result.rateLimitDaily).toBeUndefined();
       expect(result.rateLimitSafetyMargin).toBeUndefined();
-      expect(result.noRateLimit).toBeUndefined();
+      expect(result.rateLimit).toBeUndefined();
     });
 
     it("does not include retry fields when retry section is absent", () => {
@@ -250,7 +250,7 @@ describe("configToCompleteOptions", () => {
       expect(result.maxRetries).toBeUndefined();
       expect(result.retryMinTimeout).toBeUndefined();
       expect(result.retryMaxTimeout).toBeUndefined();
-      expect(result.noRetry).toBeUndefined();
+      expect(result.retry).toBeUndefined();
     });
   });
 });
@@ -407,20 +407,20 @@ describe("configToAgentOptions", () => {
       expect(result.rateLimitSafetyMargin).toBe(0.2);
     });
 
-    it("sets noRateLimit=true when enabled=false", () => {
+    it("sets rateLimit=false when enabled=false", () => {
       const config: CustomCommandConfig = {
         "rate-limits": { enabled: false },
       };
       const result = configToAgentOptions(config);
-      expect(result.noRateLimit).toBe(true);
+      expect(result.rateLimit).toBe(false);
     });
 
-    it("does not set noRateLimit when enabled=true", () => {
+    it("does not set rateLimit when enabled=true", () => {
       const config: CustomCommandConfig = {
         "rate-limits": { enabled: true },
       };
       const result = configToAgentOptions(config);
-      expect(result.noRateLimit).toBeUndefined();
+      expect(result.rateLimit).toBeUndefined();
     });
   });
 
@@ -443,16 +443,16 @@ describe("configToAgentOptions", () => {
       expect(result.retryMaxTimeout).toBe(60000);
     });
 
-    it("sets noRetry=true when enabled=false", () => {
+    it("sets retry=false when enabled=false", () => {
       const config: CustomCommandConfig = { retry: { enabled: false } };
       const result = configToAgentOptions(config);
-      expect(result.noRetry).toBe(true);
+      expect(result.retry).toBe(false);
     });
 
-    it("does not set noRetry when enabled=true", () => {
+    it("does not set retry when enabled=true", () => {
       const config: CustomCommandConfig = { retry: { enabled: true } };
       const result = configToAgentOptions(config);
-      expect(result.noRetry).toBeUndefined();
+      expect(result.retry).toBeUndefined();
     });
 
     it("maps all retry fields together", () => {
@@ -532,7 +532,7 @@ describe("configToAgentOptions", () => {
       expect(result.rateLimitTpm).toBeUndefined();
       expect(result.rateLimitDaily).toBeUndefined();
       expect(result.rateLimitSafetyMargin).toBeUndefined();
-      expect(result.noRateLimit).toBeUndefined();
+      expect(result.rateLimit).toBeUndefined();
     });
 
     it("does not include retry fields when retry section is absent", () => {
@@ -541,7 +541,7 @@ describe("configToAgentOptions", () => {
       expect(result.maxRetries).toBeUndefined();
       expect(result.retryMinTimeout).toBeUndefined();
       expect(result.retryMaxTimeout).toBeUndefined();
-      expect(result.noRetry).toBeUndefined();
+      expect(result.retry).toBeUndefined();
     });
 
     it("returns empty object when config has no relevant keys", () => {

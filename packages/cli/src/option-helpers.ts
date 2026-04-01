@@ -32,12 +32,14 @@ export interface CLICompleteOptions {
   rateLimitTpm?: number;
   rateLimitDaily?: number;
   rateLimitSafetyMargin?: number;
-  noRateLimit?: boolean;
+  /** Set to false by --no-rate-limit flag or TOML `enabled = false`. Undefined = use defaults. */
+  rateLimit?: boolean;
   // Retry options
   maxRetries?: number;
   retryMinTimeout?: number;
   retryMaxTimeout?: number;
-  noRetry?: boolean;
+  /** Set to false by --no-retry flag or TOML `enabled = false`. Undefined = use defaults. */
+  retry?: boolean;
   // Reasoning options
   /** Reasoning effort (string) or enabled (true) or disabled (false from --no-reasoning) */
   reasoning?: string | boolean;
@@ -87,12 +89,14 @@ export interface CLIAgentOptions {
   rateLimitTpm?: number;
   rateLimitDaily?: number;
   rateLimitSafetyMargin?: number;
-  noRateLimit?: boolean;
+  /** Set to false by --no-rate-limit flag or TOML `enabled = false`. Undefined = use defaults. */
+  rateLimit?: boolean;
   // Retry options
   maxRetries?: number;
   retryMinTimeout?: number;
   retryMaxTimeout?: number;
-  noRetry?: boolean;
+  /** Set to false by --no-retry flag or TOML `enabled = false`. Undefined = use defaults. */
+  retry?: boolean;
   // Reasoning options
   /** Reasoning effort (string) or enabled (true) or disabled (false from --no-reasoning) */
   reasoning?: string | boolean;
@@ -330,7 +334,7 @@ export function configToCompleteOptions(config: CustomCommandConfig): Partial<CL
     if (rl["tokens-per-minute"] !== undefined) result.rateLimitTpm = rl["tokens-per-minute"];
     if (rl["tokens-per-day"] !== undefined) result.rateLimitDaily = rl["tokens-per-day"];
     if (rl["safety-margin"] !== undefined) result.rateLimitSafetyMargin = rl["safety-margin"];
-    if (rl.enabled === false) result.noRateLimit = true;
+    if (rl.enabled === false) result.rateLimit = false;
   }
   // Retry config
   if (config.retry) {
@@ -338,7 +342,7 @@ export function configToCompleteOptions(config: CustomCommandConfig): Partial<CL
     if (r.retries !== undefined) result.maxRetries = r.retries;
     if (r["min-timeout"] !== undefined) result.retryMinTimeout = r["min-timeout"];
     if (r["max-timeout"] !== undefined) result.retryMaxTimeout = r["max-timeout"];
-    if (r.enabled === false) result.noRetry = true;
+    if (r.enabled === false) result.retry = false;
   }
   // Reasoning config (passed through as-is for precedence resolution in command handler)
   if (config.reasoning) {
@@ -379,7 +383,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
     if (rl["tokens-per-minute"] !== undefined) result.rateLimitTpm = rl["tokens-per-minute"];
     if (rl["tokens-per-day"] !== undefined) result.rateLimitDaily = rl["tokens-per-day"];
     if (rl["safety-margin"] !== undefined) result.rateLimitSafetyMargin = rl["safety-margin"];
-    if (rl.enabled === false) result.noRateLimit = true;
+    if (rl.enabled === false) result.rateLimit = false;
   }
   // Retry config
   if (config.retry) {
@@ -387,7 +391,7 @@ export function configToAgentOptions(config: CustomCommandConfig): Partial<CLIAg
     if (r.retries !== undefined) result.maxRetries = r.retries;
     if (r["min-timeout"] !== undefined) result.retryMinTimeout = r["min-timeout"];
     if (r["max-timeout"] !== undefined) result.retryMaxTimeout = r["max-timeout"];
-    if (r.enabled === false) result.noRetry = true;
+    if (r.enabled === false) result.retry = false;
   }
   // Reasoning config (passed through as-is for precedence resolution in command handler)
   if (config.reasoning) {

@@ -53,14 +53,18 @@ describe("filesystem utils", () => {
     });
 
     it("should reject paths outside CWD", () => {
-      vi.mocked(fs.realpathSync).mockImplementation(() => "/home/user/other");
+      vi.mocked(fs.realpathSync).mockImplementation((p) =>
+        String(p) === "/home/user/project" ? "/home/user/project" : "/home/user/other",
+      );
 
       expect(() => validatePathIsWithinCwd("../other")).toThrow(PathSandboxException);
       expect(() => validatePathIsWithinCwd("../other")).toThrow("Path is outside");
     });
 
     it("should reject directory traversal attempts", () => {
-      vi.mocked(fs.realpathSync).mockImplementation(() => "/home/user");
+      vi.mocked(fs.realpathSync).mockImplementation((p) =>
+        String(p) === "/home/user/project" ? "/home/user/project" : "/home/user",
+      );
 
       expect(() => validatePathIsWithinCwd("../")).toThrow(PathSandboxException);
     });
@@ -89,7 +93,9 @@ describe("filesystem utils", () => {
 
     it("should handle symlinks that point outside CWD", () => {
       // Symlink resolves to path outside CWD
-      vi.mocked(fs.realpathSync).mockImplementation(() => "/etc/passwd");
+      vi.mocked(fs.realpathSync).mockImplementation((p) =>
+        String(p) === "/home/user/project" ? "/home/user/project" : "/etc/passwd",
+      );
 
       expect(() => validatePathIsWithinCwd("dangerous-link")).toThrow(PathSandboxException);
     });
@@ -136,7 +142,9 @@ describe("ReadFile gadget", () => {
   });
 
   it("should throw for paths outside CWD", () => {
-    vi.mocked(fs.realpathSync).mockImplementation(() => "/etc/passwd");
+    vi.mocked(fs.realpathSync).mockImplementation((p) =>
+      String(p) === "/home/user/project" ? "/home/user/project" : "/etc/passwd",
+    );
 
     expect(() => readFile.execute({ filePath: "../../../etc/passwd" })).toThrow(
       PathSandboxException,
@@ -211,7 +219,9 @@ describe("WriteFile gadget", () => {
   });
 
   it("should throw for paths outside CWD", () => {
-    vi.mocked(fs.realpathSync).mockImplementation(() => "/tmp/malicious");
+    vi.mocked(fs.realpathSync).mockImplementation((p) =>
+      String(p) === "/home/user/project" ? "/home/user/project" : "/tmp/malicious",
+    );
 
     expect(() =>
       writeFile.execute({
@@ -348,7 +358,9 @@ describe("ListDirectory gadget", () => {
   });
 
   it("should throw for paths outside CWD", () => {
-    vi.mocked(fs.realpathSync).mockImplementation(() => "/etc");
+    vi.mocked(fs.realpathSync).mockImplementation((p) =>
+      String(p) === "/home/user/project" ? "/home/user/project" : "/etc",
+    );
 
     expect(() => listDirectory.execute({ directoryPath: "../../../etc", maxDepth: 1 })).toThrow(
       PathSandboxException,
@@ -507,7 +519,9 @@ describe("DeleteFile gadget", () => {
   });
 
   it("should throw for paths outside CWD", () => {
-    vi.mocked(fs.realpathSync).mockImplementation(() => "/etc/passwd");
+    vi.mocked(fs.realpathSync).mockImplementation((p) =>
+      String(p) === "/home/user/project" ? "/home/user/project" : "/etc/passwd",
+    );
 
     expect(() => deleteFile.execute({ filePath: "../../../etc/passwd", recursive: false })).toThrow(
       PathSandboxException,
