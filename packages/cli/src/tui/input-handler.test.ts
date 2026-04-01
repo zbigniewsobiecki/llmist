@@ -117,6 +117,32 @@ describe("InputHandler", () => {
     });
   });
 
+  describe("Ctrl+Y callback", () => {
+    test("onCtrlY sets the callback", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const ctrlYCallback = vi.fn(() => {});
+      handler.onCtrlY(ctrlYCallback);
+
+      // The callback is stored internally (not called until C-y is pressed)
+      expect(ctrlYCallback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("setGetMouseEnabled callback", () => {
+    test("setGetMouseEnabled stores callback", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const mouseCallback = vi.fn(() => false);
+      handler.setGetMouseEnabled(mouseCallback);
+
+      // The callback is stored (not called until needed)
+      expect(mouseCallback).not.toHaveBeenCalled();
+    });
+  });
+
   describe("focus mode API", () => {
     test("activate shows input bar with active prompt", () => {
       const renderCallback = vi.fn(() => {});

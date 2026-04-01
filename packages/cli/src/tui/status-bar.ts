@@ -54,6 +54,9 @@ export class StatusBar {
   /** Current content filter mode */
   private contentFilterMode: ContentFilterMode = "full";
 
+  /** Whether terminal mouse capture is currently enabled */
+  private mouseEnabled = false;
+
   /** Available agent profiles (from config) */
   private profiles: string[] = [];
 
@@ -468,6 +471,15 @@ export class StatusBar {
   }
 
   /**
+   * Set whether terminal mouse capture is enabled.
+   * When enabled, displays a [MOUSE] indicator in the status bar.
+   */
+  setMouseEnabled(enabled: boolean): void {
+    this.mouseEnabled = enabled;
+    this.render(true); // immediate render for mode changes
+  }
+
+  /**
    * Set a callback to get selection debug info from BlockRenderer.
    */
   setSelectionDebugCallback(
@@ -566,6 +578,12 @@ export class StatusBar {
     // Also skip in focused content mode - hints bar shows exit hint there
     if (this.focusMode === "browse" && this.contentFilterMode !== "focused") {
       parts.push(`${BG_BLUE}${WHITE} BROWSE ${RESET}`);
+    }
+
+    // Mouse mode indicator - shown when mouse capture is active (non-default state)
+    // Helps users remember they are in mouse mode and native text selection is disabled
+    if (this.mouseEnabled) {
+      parts.push(`${BG_BLUE}${WHITE} MOUSE ${RESET}`);
     }
 
     // Profile indicator (if profiles are set)

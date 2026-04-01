@@ -24,6 +24,8 @@ export class HintsBar {
   private focusMode: FocusMode = "browse";
   private contentFilterMode: ContentFilterMode = "full";
   private hasContent = false;
+  /** Whether terminal mouse capture is currently enabled */
+  private mouseEnabled = false;
 
   constructor(hintsBox: Box, renderCallback: () => void) {
     this.hintsBox = hintsBox;
@@ -65,6 +67,18 @@ export class HintsBar {
   }
 
   /**
+   * Update mouse capture enabled state and re-render hints.
+   * When disabled (default): shows "^Y mouse" hint to enable mouse scrolling.
+   * When enabled: shows "^Y select" hint to switch back to text selection.
+   */
+  setMouseEnabled(enabled: boolean): void {
+    if (this.mouseEnabled !== enabled) {
+      this.mouseEnabled = enabled;
+      this.render();
+    }
+  }
+
+  /**
    * Get current focus mode.
    */
   getFocusMode(): FocusMode {
@@ -101,6 +115,11 @@ export class HintsBar {
       hints.push("^B input");
       hints.push("^K focused");
     }
+
+    // Mouse toggle hint - shown in all modes to make the feature discoverable.
+    // Default state (disabled) shows how to enable mouse scrolling.
+    // Enabled state shows how to switch back to text selection mode.
+    hints.push(this.mouseEnabled ? "^Y select" : "^Y mouse");
 
     this.hintsBox.setContent(`${GRAY}${hints.join("  ")}${RESET}`);
     this.renderCallback();

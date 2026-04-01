@@ -27,6 +27,7 @@ export type KeyAction =
   | { type: "cancel" }
   | { type: "toggle_focus_mode" }
   | { type: "toggle_content_filter" }
+  | { type: "toggle_mouse" }
   | { type: "cycle_profile" }
   | { type: "scroll_page"; direction: -1 | 1 }
   | { type: "scroll_line"; direction: -1 | 1 }
@@ -94,6 +95,13 @@ export class KeyboardManager {
       onAction({ type: "cycle_profile" });
     });
 
+    // Ctrl+Y to toggle mouse capture (works in both modes)
+    // Disabled by default so native text selection works out of the box.
+    // Enable to use mouse scrolling/clicking.
+    screen.key(["C-y"], () => {
+      onAction({ type: "toggle_mouse" });
+    });
+
     // PageUp/PageDown for scrolling (works in both modes)
     // Also Ctrl+I/Ctrl+J for MacBook keyboards without dedicated Page keys
     screen.key(["pageup", "C-i"], () => {
@@ -159,7 +167,7 @@ export class KeyboardManager {
    * Handle a key forwarded from InputHandler.
    * Used for keys that need to work even when the input field is focused.
    */
-  handleForwardedKey(key: "C-c" | "C-b" | "C-k" | "C-i" | "C-j" | "C-p"): void {
+  handleForwardedKey(key: "C-c" | "C-b" | "C-k" | "C-i" | "C-j" | "C-p" | "C-y"): void {
     const { onAction } = this.config;
 
     switch (key) {
@@ -180,6 +188,9 @@ export class KeyboardManager {
         break;
       case "C-p":
         onAction({ type: "cycle_profile" });
+        break;
+      case "C-y":
+        onAction({ type: "toggle_mouse" });
         break;
     }
   }

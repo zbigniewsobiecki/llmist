@@ -205,6 +205,48 @@ describe("TUIController", () => {
     });
   });
 
+  describe("mouse toggle", () => {
+    test("isMouseEnabled defaults to false", () => {
+      const controller = new TUIController();
+      expect(controller.isMouseEnabled()).toBe(false);
+    });
+
+    test("toggleMouse flips state from false to true", () => {
+      const controller = new TUIController();
+      const result = controller.toggleMouse();
+      expect(result).toBe(true);
+      expect(controller.isMouseEnabled()).toBe(true);
+    });
+
+    test("toggleMouse flips state from true to false", () => {
+      const controller = new TUIController();
+      controller.toggleMouse(); // true
+      const result = controller.toggleMouse(); // false
+      expect(result).toBe(false);
+      expect(controller.isMouseEnabled()).toBe(false);
+    });
+
+    test("toggleMouse fires onMouseToggle callback with new state (true)", () => {
+      const callback = vi.fn(() => {});
+      const controller = new TUIController({ onMouseToggle: callback });
+
+      controller.toggleMouse();
+
+      expect(callback).toHaveBeenCalledWith(true);
+    });
+
+    test("toggleMouse fires onMouseToggle callback with new state (false)", () => {
+      const callback = vi.fn(() => {});
+      const controller = new TUIController({ onMouseToggle: callback });
+
+      controller.toggleMouse(); // true
+      callback.mockClear();
+
+      controller.toggleMouse(); // false
+      expect(callback).toHaveBeenCalledWith(false);
+    });
+  });
+
   describe("callback registration", () => {
     test("onQuit returns this for chaining", () => {
       const controller = new TUIController();

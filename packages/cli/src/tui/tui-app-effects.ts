@@ -1,4 +1,5 @@
 import type { BlockRenderer } from "./block-renderer.js";
+import type { HintsBar } from "./hints-bar.js";
 import type { InputHandler } from "./input-handler.js";
 import type { StatusBar } from "./status-bar.js";
 import type { ContentFilterMode, FocusMode, TUIBlockLayout, TUIScreenContext } from "./types.js";
@@ -47,5 +48,42 @@ export function applyContentFilterMode(
 ): void {
   blockRenderer.setContentFilterMode(mode);
   statusBar.setContentFilterMode(mode);
+  screenCtx.renderNow();
+}
+
+/**
+ * Apply mouse capture mode to the screen and relevant widgets.
+ *
+ * Responsibility:
+ * - enable/disable terminal mouse reporting at the program level
+ * - sync the mouse property on the body and inputBar widgets
+ * - update the status bar and hints bar so users can see the current mode
+ * - force an immediate render so indicators update without delay
+ *
+ * When disabled (default): native text selection works in the terminal emulator.
+ * When enabled: mouse scrolling and clicking work in the TUI.
+ */
+export function applyMouseMode(
+  enabled: boolean,
+  layout: TUIBlockLayout,
+  statusBar: StatusBar,
+  hintsBar: HintsBar | null,
+  screenCtx: TUIScreenContext,
+): void {
+  if (enabled) {
+    screenCtx.screen.program.enableMouse();
+  } else {
+    screenCtx.screen.program.disableMouse();
+  }
+
+  // Sync widget-level mouse property so blessed handles events correctly
+  // biome-ignore lint/suspicious/noExplicitAny: blessed widget properties are not fully typed
+  (layout.body as any).mouse = enabled;
+  // biome-ignore lint/suspicious/noExplicitAny: blessed widget properties are not fully typed
+  (layout.inputBar as any).mouse = enabled;
+
+  statusBar.setMouseEnabled(enabled);
+  hintsBar?.setMouseEnabled(enabled);
+
   screenCtx.renderNow();
 }
