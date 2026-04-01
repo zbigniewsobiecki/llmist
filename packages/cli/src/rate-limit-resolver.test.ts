@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Command } from "commander";
+import { describe, expect, it } from "vitest";
 import type { CLIAgentOptions, RateLimitsConfig, RetryConfigCLI } from "./config.js";
+import { OPTION_FLAGS } from "./constants.js";
 import { resolveRateLimitConfig, resolveRetryConfig } from "./rate-limit-resolver.js";
 
 describe("resolveRateLimitConfig", () => {
@@ -180,7 +182,7 @@ describe("resolveRateLimitConfig", () => {
   describe("Disable Flags", () => {
     it("should return { enabled: false } when --no-rate-limit is set", () => {
       const options = {
-        noRateLimit: true,
+        rateLimit: false,
       } as CLIAgentOptions;
       const globalConfig: RateLimitsConfig = {
         "requests-per-minute": 100,
@@ -221,7 +223,7 @@ describe("resolveRateLimitConfig", () => {
 
     it("should prioritize --no-rate-limit over enabled: true in config", () => {
       const options = {
-        noRateLimit: true,
+        rateLimit: false,
       } as CLIAgentOptions;
       const globalConfig: RateLimitsConfig = {
         enabled: true,
@@ -382,7 +384,7 @@ describe("resolveRetryConfig", () => {
   describe("Disable Flags", () => {
     it("should return { enabled: false } when --no-retry is set", () => {
       const options = {
-        noRetry: true,
+        retry: false,
       } as CLIAgentOptions;
       const globalConfig: RetryConfigCLI = {
         retries: 5,
@@ -445,7 +447,7 @@ describe("resolveRetryConfig", () => {
 
     it("should prioritize --no-retry over enabled: true in config", () => {
       const options = {
-        noRetry: true,
+        retry: false,
       } as CLIAgentOptions;
       const globalConfig: RetryConfigCLI = {
         enabled: true,
@@ -527,5 +529,55 @@ describe("resolveRetryConfig", () => {
         maxRetryAfterMs: 120000,
       });
     });
+  });
+});
+
+/**
+ * Integration tests that verify Commander.js actually produces the property names
+ * our resolver code expects. This catches the class of bug where Commander's --no-*
+ * flag naming convention (e.g. --no-rate-limit → options.rateLimit = false) doesn't
+ * match the property name the resolver checks.
+ */
+describe("Commander --no-* flag integration", () => {
+  it("--no-rate-limit sets rateLimit=false (not noRateLimit=true)", () => {
+    const cmd = new Command();
+    cmd.option(OPTION_FLAGS.noRateLimit, "Disable rate limiting");
+    cmd.parse(["node", "test", "--no-rate-limit"]);
+    const opts = cmd.opts();
+
+    expect(opts.rateLimit).toBe(false);
+    expect(opts).not.toHaveProperty("noRateLimit");
+
+    // Verify the resolver accepts what Commander produces
+    const result = resolveRateLimitConfig(opts as CLIAgentOptions);
+    expect(result).toEqual({ enabled: false, safetyMargin: 0.8 });
+  });
+
+  it("--no-retry sets retry=false (not noRetry=true)", () => {
+    const cmd = new Command();
+    cmd.option(OPTION_FLAGS.noRetry, "Disable retry");
+    cmd.parse(["node", "test", "--no-retry"]);
+    const opts = cmd.opts();
+
+    expect(opts.retry).toBe(false);
+    expect(opts).not.toHaveProperty("noRetry");
+
+    // Verify the resolver accepts what Commander produces
+    const result = resolveRetryConfig(opts as CLIAgentOptions);
+    expect(result.enabled).toBe(false);
+  });
+
+  it("omitting --no-rate-limit leaves rate limiting unaffected", () => {
+    const cmd = new Command();
+    cmd.option(OPTION_FLAGS.noRateLimit, "Disable rate limiting");
+    cmd.parse(["node", "test"]);
+    const opts = cmd.opts();
+
+    // Commander sets default to true for --no-* flags (implied --rate-limit)
+    expect(opts.rateLimit).toBe(true);
+
+    // Resolver should NOT treat rateLimit=true as disabled
+    const result = resolveRateLimitConfig(opts as CLIAgentOptions);
+    expect(result).not.toEqual(expect.objectContaining({ enabled: false }));
   });
 });
