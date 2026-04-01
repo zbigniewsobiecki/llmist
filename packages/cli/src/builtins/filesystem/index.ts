@@ -3,6 +3,7 @@
  * All operations are sandboxed to the current working directory.
  */
 
+export { deleteFile } from "./delete-file.js";
 export { editFile } from "./edit-file.js";
 // Export editfile matching utilities for advanced usage
 export * from "./editfile/index.js";

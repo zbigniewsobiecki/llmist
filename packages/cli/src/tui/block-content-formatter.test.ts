@@ -5,6 +5,7 @@ import {
   formatGadgetAsText,
   getSystemMessageColor,
   getSystemMessageIcon,
+  isNodeVisibleInFilterMode,
   shouldRenderAsText,
 } from "./block-content-formatter.js";
 import type {
@@ -192,6 +193,23 @@ describe("shouldRenderAsText", () => {
   it("returns false for non-gadget nodes in focused mode", () => {
     const llm = makeLLMCallNode();
     expect(shouldRenderAsText(llm, "focused")).toBe(false);
+  });
+});
+
+describe("isNodeVisibleInFilterMode", () => {
+  it("keeps text nodes visible in focused mode", () => {
+    expect(isNodeVisibleInFilterMode(makeTextNode(), "focused")).toBe(true);
+  });
+
+  it("keeps TellUser, AskUser, and Finish visible in focused mode", () => {
+    for (const name of ["TellUser", "AskUser", "Finish"]) {
+      expect(isNodeVisibleInFilterMode(makeGadgetNode({ name }), "focused")).toBe(true);
+    }
+  });
+
+  it("hides llm and non user-facing gadget nodes in focused mode", () => {
+    expect(isNodeVisibleInFilterMode(makeLLMCallNode(), "focused")).toBe(false);
+    expect(isNodeVisibleInFilterMode(makeGadgetNode({ name: "ReadFile" }), "focused")).toBe(false);
   });
 });
 

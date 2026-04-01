@@ -50,7 +50,10 @@ export class MockManager {
    * Reset the global instance (useful for testing).
    */
   static reset(): void {
-    MockManager.instance = null;
+    if (MockManager.instance) {
+      MockManager.instance.clear();
+      MockManager.instance = null;
+    }
   }
 
   /**
@@ -218,4 +221,12 @@ export class MockManager {
  */
 export function getMockManager(options?: MockOptions): MockManager {
   return MockManager.getInstance(options);
+}
+
+/**
+ * Reset the global MockManager instance.
+ * Useful for clearing all mocks and state between tests.
+ */
+export function resetMocks(): void {
+  MockManager.reset();
 }

@@ -543,10 +543,6 @@ export function validateAgentFields(
       section,
     );
   }
-  // Legacy singular form (deprecated)
-  if ("gadget" in rawObj) {
-    result.gadget = validateStringArray(rawObj.gadget, "gadget", section);
-  }
   if ("builtins" in rawObj) {
     result.builtins = validateBoolean(rawObj.builtins, "builtins", section);
   }

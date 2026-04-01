@@ -4,7 +4,7 @@ export { z } from "zod";
 // Agent class (for type references)
 export { Agent } from "./agent/agent.js";
 // Syntactic sugar: Agent builder and event handlers
-export type { HistoryMessage, TrailingMessage, TrailingMessageContext } from "./agent/builder.js";
+export type { HistoryMessage } from "./agent/builder.js";
 export { AgentBuilder } from "./agent/builder.js";
 export type { EventHandlers } from "./agent/event-handlers.js";
 export { collectEvents, collectText, runWithHandlers } from "./agent/event-handlers.js";
@@ -20,6 +20,7 @@ export {
   formatLlmRequest,
   resetFileLoggingState,
 } from "./agent/file-logging.js";
+export type { TrailingMessage, TrailingMessageContext } from "./agent/hook-composer.js";
 // Syntactic sugar: Hook presets
 export type { LoggingOptions } from "./agent/hook-presets.js";
 export { HookPresets } from "./agent/hook-presets.js";
@@ -69,7 +70,11 @@ export type {
   ObserveRateLimitThrottleContext,
   ObserveRetryAttemptContext,
   Observers,
+  // Gadget output limit configuration
+  OutputLimitConfig,
   ParallelGadgetHintOptions,
+  // Gadget prefix configuration
+  PrefixConfig,
   ResolvedCompactionConfig,
   // Gadget output limiting
   StoredOutput,
@@ -77,6 +82,8 @@ export type {
   StreamProcessorOptions,
   // Subagent context for hook observers
   SubagentContext,
+  // Execution tree configuration
+  TreeConfig,
 } from "./agent/index.js";
 export {
   // Compaction exports
@@ -208,6 +215,7 @@ export {
   hasProviderPrefix,
   MODEL_ALIASES,
   resolveModel,
+  stripProviderPrefix,
 } from "./core/model-shortcuts.js";
 // Vision namespace for one-shot image analysis
 export type { VisionAnalyzeOptions, VisionAnalyzeResult } from "./core/namespaces/vision.js";
@@ -277,7 +285,7 @@ export {
   TaskCompletionSignal,
   TimeoutException,
 } from "./gadgets/exceptions.js";
-export { GadgetExecutor } from "./gadgets/executor.js";
+export { GadgetExecutor, type GadgetExecutorOptions } from "./gadgets/executor.js";
 export { AbstractGadget } from "./gadgets/gadget.js";
 // Response and media output helpers for gadgets
 export {

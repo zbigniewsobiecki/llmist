@@ -225,7 +225,7 @@ export class MockProviderAdapter implements ProviderAdapter {
     const audio = mockResponse.audio!;
 
     // Convert base64 to ArrayBuffer
-    const binaryString = atob(audio.data);
+    const binaryString = Buffer.from(audio.data, "base64").toString("binary");
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);

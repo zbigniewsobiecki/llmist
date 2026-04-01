@@ -623,8 +623,7 @@ describe("Observers (Read-Only Hooks)", () => {
 
     it("shows final result after interceptor modification", async () => {
       // NOTE: With the tree-hook-bridge architecture, observers receive the final (post-interceptor)
-      // result from the tree event. The originalResult field is no longer populated since the
-      // tree only stores the final result.
+      // result from the tree event (stored in finalResult).
       registry.registerByClass(new TestGadget());
       const onGadgetExecutionComplete = vi.fn<(context: ObserveGadgetCompleteContext) => void>();
 

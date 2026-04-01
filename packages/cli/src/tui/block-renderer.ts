@@ -11,25 +11,23 @@
  */
 
 import { Box, type ScrollableBox } from "@unblessed/node";
-import type { ExecutionEvent, ExecutionTree } from "llmist";
+import type { ExecutionTree } from "llmist";
 import {
-  formatGadgetCollapsed,
-  formatGadgetExpanded,
-  formatLLMCallCollapsed,
-  formatLLMCallExpanded,
-  getContinuationIndent,
-  getIndent,
-} from "../ui/block-formatters.js";
-import { formatUserMessage, renderMarkdown } from "../ui/formatters.js";
+  formatBlockContent,
+  formatGadgetAsText,
+  isNodeVisibleInFilterMode,
+  shouldRenderAsText,
+} from "./block-content-formatter.js";
 import { type CompleteGadgetOptions, NodeStore } from "./node-store.js";
 import { getBlockHeight, ScrollManager } from "./scroll-manager.js";
+import { TreeBridge } from "./tree-bridge.js";
+import { traverseNodeTree } from "./tree-layout.js";
 import type {
   BlockNode,
   ContentFilterMode,
   GadgetNode,
   LLMCallNode,
   SelectableBlock,
-  SystemMessageNode,
 } from "./types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,6 +53,9 @@ export class BlockRenderer {
 
   /** Scroll manager — manages scroll position, follow mode, and bottom alignment */
   private scrollManager: ScrollManager;
+
+  /** Tree bridge — manages ExecutionTree subscriptions and tree→block mapping */
+  private treeBridge: TreeBridge;
 
   /** Rendered blocks with UI state */
   private blocks = new Map<string, SelectableBlock>();
@@ -99,6 +100,25 @@ export class BlockRenderer {
       getNode: (id: string) => this.nodeStore.getNode(id),
       getBlock: (id: string) => this.blocks.get(id),
       getSelectedBlock: () => this.getSelectedBlock(),
+    });
+
+    this.treeBridge = new TreeBridge({
+      onResetThinking: () => this.nodeStore.resetCurrentThinking(),
+      onSetCurrentLLMCall: (llmCallId) => this.setCurrentLLMCall(llmCallId),
+      onClearIdempotencyMaps: () => this.nodeStore.clearIdempotencyMaps(),
+      onAddLLMCall: (iteration, model, parentGadgetId, isNested) =>
+        this.addLLMCall(iteration, model, parentGadgetId, isNested),
+      onCompleteLLMCall: (id, details, rawResponse) =>
+        this.completeLLMCall(id, details, rawResponse),
+      onSetLLMCallRequest: (id, messages) => this.setLLMCallRequest(id, messages),
+      onSetLLMCallResponse: (id, rawResponse) => this.setLLMCallResponse(id, rawResponse),
+      onCompleteThinking: () => this.completeThinking(),
+      onAddThinking: (content, thinkingType) => this.addThinking(content, thinkingType),
+      onAddGadget: (invocationId, name, parameters) =>
+        this.addGadget(invocationId, name, parameters),
+      onCompleteGadget: (invocationId, options) => this.completeGadget(invocationId, options),
+      onSkipGadget: (invocationId, reason) => this.skipGadget(invocationId, reason),
+      onGetCurrentLLMCallId: () => this.getCurrentLLMCallId(),
     });
   }
 
@@ -155,6 +175,13 @@ export class BlockRenderer {
    */
   completeGadget(invocationId: string, options: CompleteGadgetOptions = {}): void {
     this.nodeStore.completeGadget(invocationId, options);
+  }
+
+  /**
+   * Mark a gadget as skipped with a rendered reason.
+   */
+  skipGadget(invocationId: string, reason: string): void {
+    this.nodeStore.completeGadget(invocationId, { error: reason });
   }
 
   /**
@@ -234,9 +261,8 @@ export class BlockRenderer {
   /**
    * Get the current LLM call ID.
    *
-   * In tree mode, this is only used for attaching raw request/response data
-   * to the block for the raw viewer feature. Parent-child relationships are
-   * determined by event.parentId in handleTreeEvent(), not by this method.
+   * In tree mode, TreeBridge uses this to restore the current parent context
+   * while translating gadget events into renderer updates.
    */
   getCurrentLLMCallId(): string | null {
     return this.nodeStore.currentLLMCallId;
@@ -247,7 +273,7 @@ export class BlockRenderer {
    * When active, external code should skip block creation (tree handles it).
    */
   isTreeSubscribed(): boolean {
-    return this.treeUnsubscribe !== null;
+    return this.treeBridge.isSubscribed();
   }
 
   /**
@@ -457,34 +483,7 @@ export class BlockRenderer {
    * Called when nodes are added/removed.
    */
   private rebuildBlocks(): void {
-    // Clear existing blocks
-    for (const child of [...this.container.children]) {
-      child.detach();
-    }
-    // Clear any direct content on the container (e.g., from appendQuestionToBody)
-    // This prevents stale content from persisting across mode switches
-    this.container.setContent("");
-    this.blocks.clear();
-    this.selectableIds = [];
-
-    // Track vertical position (starts at 0, will be offset for bottom-alignment)
-    let top = 0;
-
-    // Traverse tree in order
-    for (const rootId of this.nodeStore.rootIds) {
-      top = this.renderNodeTree(rootId, top);
-    }
-
-    // Restore selection if possible
-    if (this.selectedIndex >= this.selectableIds.length) {
-      this.selectedIndex = this.selectableIds.length - 1;
-    }
-
-    // Apply bottom alignment and auto-scroll (chat-like behavior)
-    this.applyBottomAlignmentAndScroll();
-
-    this.renderCallback();
-    this.notifyHasContentChange();
+    this.rebuildBlocksCore(false);
   }
 
   /**
@@ -499,53 +498,27 @@ export class BlockRenderer {
    * (no headers, just content) for a clean chat-like experience.
    */
   private renderNodeTree(nodeId: string, top: number): number {
-    const node = this.getNode(nodeId);
-    if (!node) return top;
+    return traverseNodeTree(
+      nodeId,
+      (id) => this.getNode(id),
+      (currentNodeId, node, currentTop) => {
+        if (!this.isNodeVisible(node)) {
+          return currentTop;
+        }
 
-    // Check if this node should be visible in current filter mode
-    const visible = this.isNodeVisible(node);
+        const block = shouldRenderAsText(node, this.contentFilterMode)
+          ? this.createTextLikeBlock(node as GadgetNode, currentTop)
+          : this.createBlock(node, currentTop);
+        this.blocks.set(currentNodeId, block);
 
-    if (visible) {
-      // In focused mode, TellUser renders as plain text (chat-like)
-      const renderAsText = this.shouldRenderAsText(node);
+        if (block.selectable) {
+          this.selectableIds.push(currentNodeId);
+        }
 
-      // Create block for this node
-      const block = renderAsText
-        ? this.createTextLikeBlock(node as GadgetNode, top)
-        : this.createBlock(node, top);
-      this.blocks.set(nodeId, block);
-
-      // Track selectable blocks (only if visible and not rendered as text)
-      if (block.selectable) {
-        this.selectableIds.push(nodeId);
-      }
-
-      // Calculate height of this block
-      const height = getBlockHeight(block);
-      top += height;
-    }
-
-    // Always traverse children even if parent is hidden
-    // This ensures nested TellUser/AskUser gadgets are found
-    if ("children" in node && node.children.length > 0) {
-      for (const childId of node.children) {
-        top = this.renderNodeTree(childId, top);
-      }
-    }
-
-    return top;
-  }
-
-  /**
-   * Check if a gadget should render as plain text in focused mode.
-   * TellUser, AskUser, and Finish render as text for a chat-like experience.
-   */
-  private shouldRenderAsText(node: BlockNode): boolean {
-    if (this.contentFilterMode !== "focused") return false;
-    if (node.type !== "gadget") return false;
-
-    const name = (node as GadgetNode).name;
-    return name === "TellUser" || name === "AskUser" || name === "Finish";
+        return currentTop + getBlockHeight(block);
+      },
+      top,
+    );
   }
 
   /**
@@ -553,27 +526,7 @@ export class BlockRenderer {
    * Renders just the content without the gadget header.
    */
   private createTextLikeBlock(node: GadgetNode, top: number): SelectableBlock {
-    // Extract message/question from gadget parameters
-    let content = "";
-
-    if (node.name === "TellUser") {
-      const message = node.parameters?.message;
-      if (typeof message === "string") {
-        content = `\n${renderMarkdown(message)}\n`;
-      }
-    } else if (node.name === "AskUser") {
-      const question = node.parameters?.question;
-      if (typeof question === "string") {
-        // Render question with a prompt indicator
-        content = `\n? ${question}\n`;
-      }
-    } else if (node.name === "Finish") {
-      const message = node.parameters?.message;
-      if (typeof message === "string" && message.trim()) {
-        // Render finish message with a completion indicator
-        content = `\n\x1b[32m✓\x1b[0m ${renderMarkdown(message)}\n`;
-      }
-    }
+    const content = formatGadgetAsText(node);
 
     // Create Box widget (non-selectable, like text blocks)
     const box = new Box({
@@ -607,7 +560,7 @@ export class BlockRenderer {
     const expanded = this.expandedStates.get(node.id) ?? false;
 
     // Format content
-    const content = this.formatBlockContent(node, isSelected, expanded);
+    const content = formatBlockContent(node, isSelected, expanded);
 
     // Create Box widget
     const box = new Box({
@@ -629,161 +582,6 @@ export class BlockRenderer {
   }
 
   /**
-   * Format block content based on type and state.
-   */
-  private formatBlockContent(node: BlockNode, selected: boolean, expanded: boolean): string {
-    const indent = getIndent(node.depth);
-
-    switch (node.type) {
-      case "llm_call": {
-        const collapsed = formatLLMCallCollapsed(node, selected);
-        if (!expanded) {
-          return indent + collapsed;
-        }
-        const expandedLines = formatLLMCallExpanded(node);
-        const contIndent = getContinuationIndent(node.depth);
-        return [indent + collapsed, ...expandedLines.map((line) => contIndent + line)].join("\n");
-      }
-
-      case "gadget": {
-        const collapsed = formatGadgetCollapsed(node, selected);
-        if (!expanded) {
-          return indent + collapsed;
-        }
-        const expandedLines = formatGadgetExpanded(node);
-        const contIndent = getContinuationIndent(node.depth);
-        return [indent + collapsed, ...expandedLines.map((line) => contIndent + line)].join("\n");
-      }
-
-      case "text": {
-        // User messages (id starts with "user_") are formatted specially
-        // to show the user icon and avoid double markdown processing
-        if (node.id.startsWith("user_")) {
-          return formatUserMessage(node.content);
-        }
-        // Regular text content - abbreviate when collapsed, full when expanded
-        const fullContent = renderMarkdown(node.content);
-        if (expanded) {
-          return `\n${fullContent}\n`;
-        }
-        return this.abbreviateToLines(fullContent, 2, selected);
-      }
-
-      case "thinking": {
-        const DIM = "\x1b[2m";
-        const RED_DIM = "\x1b[2;31m";
-        const RESET = "\x1b[0m";
-        const contIndent = getContinuationIndent(node.depth);
-
-        if (node.thinkingType === "redacted") {
-          // Redacted thinking - show locked indicator
-          const header = `${indent}${RED_DIM}🔒 [Redacted thinking block]${RESET}`;
-          return header;
-        }
-
-        if (!expanded) {
-          // Collapsed: show icon + abbreviated first line
-          const firstLine = node.content.split("\n")[0]?.slice(0, 60) ?? "";
-          const suffix = node.isComplete ? "" : "...";
-          return `${indent}${DIM}💭 Thinking${suffix} ${firstLine}${RESET}`;
-        }
-
-        // Expanded: show full thinking content in dim styling
-        const tokenInfo = node.isComplete
-          ? ` (${Math.ceil(node.content.length / 4)} tokens est.)`
-          : "";
-        const header = `${indent}${DIM}▼ 💭 Thinking${tokenInfo}${RESET}`;
-        const contentLines = node.content
-          .split("\n")
-          .map((line) => `${contIndent}${DIM}${line}${RESET}`);
-        return [header, ...contentLines].join("\n");
-      }
-
-      case "system_message": {
-        const icon = this.getSystemMessageIcon(node.category);
-        const color = this.getSystemMessageColor(node.category);
-        const RESET = "\x1b[0m";
-        return `${indent}${color}${icon} ${node.message}${RESET}`;
-      }
-    }
-  }
-
-  /**
-   * Get icon for system message category.
-   */
-  private getSystemMessageIcon(category: SystemMessageNode["category"]): string {
-    switch (category) {
-      case "throttle":
-        return "⏸";
-      case "retry":
-        return "🔄";
-      case "info":
-        return "ℹ️";
-      case "warning":
-        return "⚠️";
-      case "error":
-        return "❌";
-    }
-  }
-
-  /**
-   * Get ANSI color code for system message category.
-   */
-  private getSystemMessageColor(category: SystemMessageNode["category"]): string {
-    const YELLOW = "\x1b[33m";
-    const BLUE = "\x1b[34m";
-    const GRAY = "\x1b[90m";
-    const RED = "\x1b[31m";
-
-    switch (category) {
-      case "throttle":
-        return YELLOW;
-      case "retry":
-        return BLUE;
-      case "info":
-        return GRAY;
-      case "warning":
-        return YELLOW;
-      case "error":
-        return RED;
-    }
-  }
-
-  /**
-   * Abbreviate text content to a maximum number of lines.
-   * Shows truncation indicator if content exceeds limit.
-   *
-   * @param text - The text to abbreviate
-   * @param maxLines - Maximum number of lines to show
-   * @param selected - Whether this block is selected (for indicator styling)
-   * @returns Abbreviated text with truncation indicator if needed
-   */
-  private abbreviateToLines(text: string, maxLines: number, selected: boolean): string {
-    // Split text into lines, filtering out empty lines at start
-    const lines = text.split("\n");
-
-    // Find first non-empty line
-    let startIndex = 0;
-    while (startIndex < lines.length && lines[startIndex].trim() === "") {
-      startIndex++;
-    }
-
-    // Get content lines (skip leading empty lines)
-    const contentLines = lines.slice(startIndex);
-
-    if (contentLines.length <= maxLines) {
-      // Content fits, return with leading newline for visual separation
-      return `\n${contentLines.join("\n")}`;
-    }
-
-    // Need to truncate - take first maxLines and add indicator
-    const truncatedLines = contentLines.slice(0, maxLines);
-    const indicator = selected ? "▶ ..." : "  ...";
-
-    return `\n${truncatedLines.join("\n")}\n${indicator}`;
-  }
-
-  /**
    * Update a single block (after state change).
    */
   private updateBlock(nodeId: string): void {
@@ -792,7 +590,7 @@ export class BlockRenderer {
     if (!block || !node) return;
 
     const isSelected = this.selectableIds[this.selectedIndex] === nodeId;
-    const content = this.formatBlockContent(node, isSelected, block.expanded);
+    const content = formatBlockContent(node, isSelected, block.expanded);
 
     const oldHeight = getBlockHeight(block);
     block.box.setContent(content);
@@ -816,7 +614,7 @@ export class BlockRenderer {
       const block = this.blocks.get(id);
       if (block) {
         const isSelected = this.selectableIds[this.selectedIndex] === id;
-        const content = this.formatBlockContent(block.node, isSelected, block.expanded);
+        const content = formatBlockContent(block.node, isSelected, block.expanded);
         block.box.setContent(content);
       }
     }
@@ -835,25 +633,20 @@ export class BlockRenderer {
   }
 
   private repositionNodeTree(nodeId: string, top: number): number {
-    const node = this.getNode(nodeId);
-    if (!node) return top;
+    return traverseNodeTree(
+      nodeId,
+      (id) => this.getNode(id),
+      (currentNodeId, _node, currentTop) => {
+        const block = this.blocks.get(currentNodeId);
+        if (!block) {
+          return currentTop;
+        }
 
-    // Only reposition if node has a block (visible nodes)
-    const block = this.blocks.get(nodeId);
-    if (block) {
-      block.box.top = top;
-      const height = getBlockHeight(block);
-      top += height;
-    }
-
-    // Always traverse children even if parent is hidden
-    if ("children" in node) {
-      for (const childId of node.children) {
-        top = this.repositionNodeTree(childId, top);
-      }
-    }
-
-    return top;
+        block.box.top = currentTop;
+        return currentTop + getBlockHeight(block);
+      },
+      top,
+    );
   }
 
   /**
@@ -934,23 +727,34 @@ export class BlockRenderer {
    * Used for mode switches where we need to ensure the screen is fully cleared.
    */
   private rebuildBlocksImmediate(): void {
+    this.rebuildBlocksCore(true);
+  }
+
+  /**
+   * Shared implementation for rebuildBlocks and rebuildBlocksImmediate.
+   *
+   * @param immediate - When true, forces a synchronous render pass before
+   *   and after building blocks to clear visual artifacts (used on mode switch).
+   *   When false, defers a single render to the end via renderCallback.
+   */
+  private rebuildBlocksCore(immediate: boolean): void {
     // Clear existing blocks
     for (const child of [...this.container.children]) {
       child.detach();
     }
-    // Clear any direct content on the container
+    // Clear any direct content on the container (e.g., from appendQuestionToBody)
+    // This prevents stale content from persisting across mode switches
     this.container.setContent("");
     this.blocks.clear();
     this.selectableIds = [];
 
-    // Force immediate render to clear old visual artifacts BEFORE creating new blocks
-    // This is critical for mode switches to prevent content overlay
-    this.renderNowCallback();
+    if (immediate) {
+      // Force immediate render to clear old visual artifacts BEFORE creating new blocks
+      // This is critical for mode switches to prevent content overlay
+      this.renderNowCallback();
+    }
 
-    // Track vertical position (starts at 0, will be offset for bottom-alignment)
     let top = 0;
-
-    // Traverse tree in order
     for (const rootId of this.nodeStore.rootIds) {
       top = this.renderNodeTree(rootId, top);
     }
@@ -963,8 +767,12 @@ export class BlockRenderer {
     // Apply bottom alignment and auto-scroll (chat-like behavior)
     this.applyBottomAlignmentAndScroll();
 
-    // Render again with new content
-    this.renderNowCallback();
+    if (immediate) {
+      // Render again with new content
+      this.renderNowCallback();
+    } else {
+      this.renderCallback();
+    }
     this.notifyHasContentChange();
   }
 
@@ -978,47 +786,16 @@ export class BlockRenderer {
   /**
    * Check if a node should be visible in the current content filter mode.
    *
-   * In focused mode:
-   * - Text nodes are always visible
-   * - LLM call blocks are hidden
-   * - Gadget blocks are hidden EXCEPT TellUser and AskUser
-   *   (Finish is hidden - status bar indicates completion)
+   * In focused mode, only text and user-facing gadgets remain visible.
+   * TellUser, AskUser, and Finish render as plain text for a chat-like view.
    */
   private isNodeVisible(node: BlockNode): boolean {
-    if (this.contentFilterMode === "full") {
-      return true;
-    }
-
-    // Focused mode filtering
-    switch (node.type) {
-      case "text":
-        // Text is always visible
-        return true;
-      case "llm_call":
-        // LLM calls are hidden in focused mode
-        return false;
-      case "thinking":
-        // Thinking is hidden in focused mode
-        return false;
-      case "gadget": {
-        // Keep user-facing gadgets visible in focused mode
-        const name = (node as GadgetNode).name;
-        return name === "TellUser" || name === "AskUser" || name === "Finish";
-      }
-      default:
-        return false;
-    }
+    return isNodeVisibleInFilterMode(node, this.contentFilterMode);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
   // ExecutionTree Integration
   // ───────────────────────────────────────────────────────────────────────────
-
-  /** Unsubscribe function for tree events */
-  private treeUnsubscribe: (() => void) | null = null;
-
-  /** Map tree node IDs to block node IDs */
-  private treeNodeToBlockId = new Map<string, string>();
 
   /**
    * Subscribe to an ExecutionTree for automatic block updates.
@@ -1043,152 +820,7 @@ export class BlockRenderer {
    * ```
    */
   subscribeToTree(tree: ExecutionTree): () => void {
-    // Unsubscribe from previous tree if any
-    if (this.treeUnsubscribe) {
-      this.treeUnsubscribe();
-    }
-
-    // Clear all mappings for a fresh start with the new tree
-    this.treeNodeToBlockId.clear();
-    this.nodeStore.clearIdempotencyMaps();
-
-    // Subscribe to all events
-    this.treeUnsubscribe = tree.onAll((event: ExecutionEvent) => {
-      this.handleTreeEvent(event, tree);
-    });
-
-    return () => {
-      if (this.treeUnsubscribe) {
-        this.treeUnsubscribe();
-        this.treeUnsubscribe = null;
-      }
-    };
-  }
-
-  /**
-   * Handle an ExecutionTree event.
-   */
-  private handleTreeEvent(event: ExecutionEvent, tree: ExecutionTree): void {
-    switch (event.type) {
-      case "llm_call_start": {
-        // Reset thinking tracker for new LLM call
-        this.nodeStore.resetCurrentThinking();
-
-        // Find parent block ID if this is a nested LLM call
-        let parentBlockId: string | undefined;
-        if (event.parentId) {
-          parentBlockId = this.treeNodeToBlockId.get(event.parentId);
-        }
-
-        // Create the LLM call block
-        // Note: event.iteration is 0-indexed, but display uses 1-indexed
-        // Pass isNested=true when depth > 0 to differentiate nested calls
-        // from root calls that happen to have the same iteration number
-        const blockId = this.addLLMCall(
-          event.iteration + 1,
-          event.model,
-          parentBlockId,
-          event.depth > 0,
-        );
-        this.treeNodeToBlockId.set(event.nodeId, blockId);
-
-        // Attach raw request data from tree (needed for nested LLM calls)
-        const startNode = tree.getNode(event.nodeId);
-        if (startNode?.type === "llm_call" && startNode.request) {
-          this.setLLMCallRequest(blockId, startNode.request);
-        }
-        break;
-      }
-
-      case "llm_call_complete": {
-        // Complete any active thinking block before completing the LLM call
-        this.completeThinking();
-
-        const blockId = this.treeNodeToBlockId.get(event.nodeId);
-        if (blockId) {
-          this.completeLLMCall(blockId, {
-            inputTokens: event.usage?.inputTokens,
-            cachedInputTokens: event.usage?.cachedInputTokens,
-            outputTokens: event.usage?.outputTokens,
-            reasoningTokens: event.usage?.reasoningTokens,
-            cost: event.cost,
-            finishReason: event.finishReason ?? undefined,
-          });
-
-          // Attach raw response data from tree (needed for nested LLM calls)
-          const completeNode = tree.getNode(event.nodeId);
-          if (completeNode?.type === "llm_call" && completeNode.response) {
-            this.setLLMCallResponse(blockId, completeNode.response);
-          }
-        }
-        break;
-      }
-
-      case "thinking": {
-        this.addThinking(event.content, event.thinkingType);
-        break;
-      }
-
-      case "gadget_call": {
-        // Find parent LLM call block
-        let parentBlockId: string | undefined;
-        if (event.parentId) {
-          parentBlockId = this.treeNodeToBlockId.get(event.parentId);
-        }
-
-        // Temporarily set current LLM call for proper parenting
-        const previousLLMCallId = this.getCurrentLLMCallId();
-        if (parentBlockId) {
-          this.setCurrentLLMCall(parentBlockId);
-        }
-
-        const blockId = this.addGadget(event.invocationId, event.name, event.parameters);
-        this.treeNodeToBlockId.set(event.nodeId, blockId);
-
-        // Restore previous context
-        this.setCurrentLLMCall(previousLLMCallId);
-        break;
-      }
-
-      case "gadget_complete": {
-        // Convert storedMedia to mediaOutputs format for the TUI
-        const mediaOutputs = event.storedMedia?.map((m) => ({
-          kind: m.kind,
-          path: m.path,
-          mimeType: m.mimeType,
-          description: m.description,
-        }));
-        this.completeGadget(event.invocationId, {
-          result: event.result,
-          executionTimeMs: event.executionTimeMs,
-          cost: event.cost,
-          mediaOutputs,
-        });
-        break;
-      }
-
-      case "gadget_error": {
-        this.completeGadget(event.invocationId, {
-          error: event.error,
-          executionTimeMs: event.executionTimeMs,
-        });
-        break;
-      }
-
-      case "gadget_skipped": {
-        // Find the gadget and mark it as skipped
-        const node = this.findGadgetByInvocationId(event.invocationId);
-        if (node) {
-          node.isComplete = true;
-          node.error = `Skipped: ${event.failedDependencyError}`;
-          this.updateBlock(node.id);
-        }
-        break;
-      }
-
-      // text events are handled separately (not part of tree structure)
-      // llm_call_stream and llm_call_error are informational
-    }
+    return this.treeBridge.subscribeToTree(tree);
   }
 
   /**
@@ -1196,6 +828,6 @@ export class BlockRenderer {
    * Useful for external code that needs to correlate tree nodes with blocks.
    */
   getBlockIdForTreeNode(treeNodeId: string): string | undefined {
-    return this.treeNodeToBlockId.get(treeNodeId);
+    return this.treeBridge.getBlockIdForTreeNode(treeNodeId);
   }
 }

@@ -40,9 +40,17 @@ export {
   stripProviderPrefix,
 } from "./metric-formatters.js";
 
+import { getCustomPreview } from "./gadget-previews.js";
 import { renderMarkdownWithSeparators } from "./markdown-renderer.js";
 // Import for internal use (formatters.ts needs these to format LLM/gadget lines)
-import { formatCost, formatTokens } from "./metric-formatters.js";
+import { formatTokens } from "./metric-formatters.js";
+import {
+  buildTokenMetrics,
+  costPart,
+  finishReasonPart,
+  joinParts,
+  timePart,
+} from "./metric-parts.js";
 
 /**
  * Display information for formatting an LLM call progress line.
@@ -154,44 +162,36 @@ export function formatLLMCallLine(info: LLMCallDisplayInfo): string {
     }
   }
 
-  // ↑ input tokens
-  if (info.inputTokens && info.inputTokens > 0) {
-    const prefix = info.estimated?.input ? "~" : "";
-    parts.push(chalk.dim("↑") + chalk.yellow(` ${prefix}${formatTokens(info.inputTokens)}`));
-  }
+  // Token metrics (input, cached, output) via shared metric-parts
+  parts.push(
+    ...buildTokenMetrics({
+      input: info.inputTokens,
+      cached: info.cachedInputTokens,
+      estimated: info.estimated,
+    }),
+  );
 
-  // ⟳ cached tokens
-  if (info.cachedInputTokens && info.cachedInputTokens > 0) {
-    parts.push(chalk.dim("⟳") + chalk.blue(` ${formatTokens(info.cachedInputTokens)}`));
-  }
-
-  // ↓ output tokens
+  // ↓ output tokens — always shown when streaming to display live count (even at 0)
   if ((info.outputTokens !== undefined && info.outputTokens > 0) || info.isStreaming) {
     const prefix = info.estimated?.output ? "~" : "";
     parts.push(chalk.dim("↓") + chalk.green(` ${prefix}${formatTokens(info.outputTokens ?? 0)}`));
   }
 
   // Time
-  parts.push(chalk.dim(`${info.elapsedSeconds.toFixed(1)}s`));
+  parts.push(timePart(info.elapsedSeconds));
 
   // Cost
   if (info.cost !== undefined && info.cost > 0) {
-    parts.push(chalk.cyan(`$${formatCost(info.cost)}`));
+    parts.push(costPart(info.cost));
   }
 
   // Finish reason at the END when completed (not streaming)
-  // Always show the actual finish reason (STOP, end_turn, etc.)
   if (!info.isStreaming && info.finishReason !== undefined) {
     const reason = info.finishReason || "stop";
-    // Uppercase for visibility, green for normal completion, yellow for others
-    if (reason === "stop" || reason === "end_turn") {
-      parts.push(chalk.green(reason.toUpperCase()));
-    } else {
-      parts.push(chalk.yellow(reason.toUpperCase()));
-    }
+    parts.push(finishReasonPart(reason));
   }
 
-  const line = parts.join(chalk.dim(" | "));
+  const line = joinParts(parts);
 
   // Prepend spinner when streaming, ✓ when completed
   if (info.isStreaming && info.spinner) {
@@ -288,26 +288,24 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
   if (metadata.usage) {
     const { inputTokens, outputTokens, cachedInputTokens, cacheCreationInputTokens } =
       metadata.usage;
-    parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(inputTokens)}`));
-    // Show cached tokens if present (indicates prompt caching hit - 0.1x cost)
-    if (cachedInputTokens && cachedInputTokens > 0) {
-      parts.push(chalk.dim("⟳") + chalk.blue(` ${formatTokens(cachedInputTokens)}`));
-    }
-    // Show cache creation tokens if present (Anthropic cache writes - 1.25x cost)
-    if (cacheCreationInputTokens && cacheCreationInputTokens > 0) {
-      parts.push(chalk.dim("✎") + chalk.magenta(` ${formatTokens(cacheCreationInputTokens)}`));
-    }
-    parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(outputTokens)}`));
+    parts.push(
+      ...buildTokenMetrics({
+        input: inputTokens,
+        cached: cachedInputTokens,
+        cacheCreation: cacheCreationInputTokens,
+        output: outputTokens,
+      }),
+    );
   }
 
   // Elapsed time - performance metric
   if (metadata.elapsedSeconds !== undefined && metadata.elapsedSeconds > 0) {
-    parts.push(chalk.dim(`${metadata.elapsedSeconds}s`));
+    parts.push(timePart(metadata.elapsedSeconds));
   }
 
   // Cost - financial tracking (showcases ModelRegistry integration)
   if (metadata.cost !== undefined && metadata.cost > 0) {
-    parts.push(chalk.cyan(`$${formatCost(metadata.cost)}`));
+    parts.push(costPart(metadata.cost));
   }
 
   // Finish reason - completion status (shown last for context)
@@ -321,7 +319,7 @@ export function renderSummary(metadata: SummaryMetadata): string | null {
   }
 
   // Join with " | " separator for visual clarity
-  return parts.join(chalk.dim(" | "));
+  return joinParts(parts);
 }
 
 /**
@@ -582,20 +580,20 @@ export function formatGadgetLine(info: GadgetDisplayInfo, maxWidth?: number): st
     const parts: string[] = [];
 
     // Add subagent metrics if present (for gadgets that run LLM calls internally)
-    if (info.subagentInputTokens && info.subagentInputTokens > 0) {
-      parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(info.subagentInputTokens)}`));
-    }
-    if (info.subagentOutputTokens && info.subagentOutputTokens > 0) {
-      parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(info.subagentOutputTokens)}`));
-    }
+    parts.push(
+      ...buildTokenMetrics({
+        input: info.subagentInputTokens,
+        output: info.subagentOutputTokens,
+      }),
+    );
     if (info.subagentCost && info.subagentCost > 0) {
-      parts.push(chalk.cyan(`$${formatCost(info.subagentCost)}`));
+      parts.push(costPart(info.subagentCost));
     }
 
     // Always show elapsed time
-    parts.push(chalk.dim(`${info.elapsedSeconds.toFixed(1)}s`));
+    parts.push(timePart(info.elapsedSeconds));
 
-    const metricsStr = parts.length > 0 ? ` ${parts.join(chalk.dim(" | "))}` : "";
+    const metricsStr = parts.length > 0 ? ` ${joinParts(parts)}` : "";
     return `${chalk.blue("⏵")} ${gadgetLabel}${metricsStr}`;
   }
 
@@ -734,67 +732,33 @@ export function formatGadgetSummary(result: GadgetResult): string {
   const prefixLength = 2 + result.gadgetName.length + 1 + outputStrRaw.length + timeStr.length + 2;
   const availablePreview = Math.max(20, previewWidth - prefixLength);
 
-  // Custom previews for specific gadgets
-  let customPreview: string | undefined;
-
-  // TodoUpsert: show status emoji + content instead of generic output
-  if (result.gadgetName === "TodoUpsert" && result.parameters?.content) {
-    const statusEmoji =
-      result.parameters.status === "done"
-        ? "✅"
-        : result.parameters.status === "in_progress"
-          ? "🔄"
-          : "⬜";
-    const content = String(result.parameters.content);
-    customPreview = `${statusEmoji} ${truncateOutputPreview(content, availablePreview - 3)}`; // -3 for emoji+space
-  }
-
-  // GoogleSearch: show query and result count
-  if (result.gadgetName === "GoogleSearch" && result.parameters?.query) {
-    const query = String(result.parameters.query);
-    // Parse result count from output - try multiple patterns
-    const countMatch =
-      result.result?.match(/\((\d+)\s+of\s+[\d,]+\s+results?\)/i) || // "(10 of 36400000 results)"
-      result.result?.match(/(\d+)\s+results?\s+found/i) || // "10 results found"
-      result.result?.match(/found\s+(\d+)\s+results?/i); // "found 10 results"
-    // Fall back to maxResults parameter if no count found in output
-    const count =
-      countMatch?.[1] ??
-      (result.parameters.maxResults ? String(result.parameters.maxResults) : null);
-    const countStr = count ? ` → ${count} results` : "";
-    const queryPreview = truncateOutputPreview(query, availablePreview - 5 - countStr.length); // 🔍 + space + quotes
-    customPreview = `🔍 "${queryPreview}"${countStr}`;
-  }
+  // Custom previews for specific gadgets (delegated to gadget-previews module)
+  const customPreview = getCustomPreview(
+    result.gadgetName,
+    result.parameters,
+    result.result,
+    availablePreview,
+  );
 
   // Build subagent metrics string if this gadget spawned a subagent
   // Format: "↑ input | ⟳ cached | ↓ output | $cost"
   let subagentMetricsStr = "";
   if (result.subagentMetrics && result.subagentMetrics.callCount > 0) {
-    const parts: string[] = [];
     const m = result.subagentMetrics;
+    const subParts: string[] = [
+      ...buildTokenMetrics({
+        input: m.inputTokens,
+        cached: m.cachedInputTokens,
+        output: m.outputTokens,
+      }),
+    ];
 
-    // ↑ input tokens
-    if (m.inputTokens > 0) {
-      parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(m.inputTokens)}`));
-    }
-
-    // ⟳ cached tokens
-    if (m.cachedInputTokens > 0) {
-      parts.push(chalk.dim("⟳") + chalk.blue(` ${formatTokens(m.cachedInputTokens)}`));
-    }
-
-    // ↓ output tokens
-    if (m.outputTokens > 0) {
-      parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(m.outputTokens)}`));
-    }
-
-    // $cost
     if (m.cost > 0) {
-      parts.push(chalk.cyan(`$${formatCost(m.cost)}`));
+      subParts.push(costPart(m.cost));
     }
 
-    if (parts.length > 0) {
-      subagentMetricsStr = parts.join(chalk.dim(" | ")) + chalk.dim(" | ");
+    if (subParts.length > 0) {
+      subagentMetricsStr = joinParts(subParts) + chalk.dim(" | ");
     }
   }
 

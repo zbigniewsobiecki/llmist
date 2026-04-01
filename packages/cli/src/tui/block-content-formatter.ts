@@ -20,7 +20,13 @@ import {
   getIndent,
 } from "../ui/block-formatters.js";
 import { formatUserMessage, renderMarkdown } from "../ui/formatters.js";
-import type { BlockNode, GadgetNode, SystemMessageNode, ThinkingNode } from "./types.js";
+import type {
+  BlockNode,
+  ContentFilterMode,
+  GadgetNode,
+  SystemMessageNode,
+  ThinkingNode,
+} from "./types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Block Content Formatting
@@ -200,10 +206,34 @@ export function abbreviateToLines(text: string, maxLines: number, selected: bool
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Check if a node is visible in the current content filter mode.
+ *
+ * In focused mode, we keep only user-facing content visible:
+ * plain text plus TellUser/AskUser/Finish gadget output.
+ */
+export function isNodeVisibleInFilterMode(
+  node: BlockNode,
+  contentFilterMode: ContentFilterMode,
+): boolean {
+  if (contentFilterMode === "full") {
+    return true;
+  }
+
+  switch (node.type) {
+    case "text":
+      return true;
+    case "gadget":
+      return shouldRenderAsText(node, contentFilterMode);
+    default:
+      return false;
+  }
+}
+
+/**
  * Check if a gadget should render as plain text in focused mode.
  * TellUser, AskUser, and Finish render as text for a chat-like experience.
  */
-export function shouldRenderAsText(node: BlockNode, contentFilterMode: string): boolean {
+export function shouldRenderAsText(node: BlockNode, contentFilterMode: ContentFilterMode): boolean {
   if (contentFilterMode !== "focused") return false;
   if (node.type !== "gadget") return false;
 

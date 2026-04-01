@@ -110,13 +110,6 @@ export const finish = createGadget({
 });
 
 /**
- * All built-in gadgets as an array for easy registration.
- * @deprecated Use getBuiltinGadgets() for config-driven gadgets.
- * This export exists for backward compatibility with code that doesn't need speech config.
- */
-export const builtinGadgets = [askUser, tellUser, finish, createTextToSpeech()];
-
-/**
  * Factory function to create built-in gadgets with config-driven defaults.
  *
  * This allows gadgets like TextToSpeech to inherit settings from ~/.llmist/cli.toml.

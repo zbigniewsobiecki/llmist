@@ -7,27 +7,19 @@
 
 import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../core/client.js";
-import {
-  CHARS_PER_TOKEN,
-  DEFAULT_GADGET_OUTPUT_LIMIT,
-  DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT,
-  FALLBACK_CONTEXT_WINDOW,
-} from "../core/constants.js";
 import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
 import type { ContentPart } from "../core/input-content.js";
 import type { MessageContent } from "../core/messages.js";
-import { extractMessageText, LLMMessageBuilder } from "../core/messages.js";
-import type { ModelSpec } from "../core/model-catalog.js";
+import { LLMMessageBuilder } from "../core/messages.js";
 import { resolveModel } from "../core/model-shortcuts.js";
 import type { CachingConfig, LLMGenerationOptions, ReasoningConfig } from "../core/options.js";
 import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { RateLimitConfig } from "../core/rate-limit.js";
 import { RateLimitTracker, resolveRateLimitConfig } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
-import { extractRetryAfterMs, isRetryableError, resolveRetryConfig } from "../core/retry.js";
+import { resolveRetryConfig } from "../core/retry.js";
 import { BudgetPricingUnavailableError } from "../gadgets/exceptions.js";
 import { MediaStore } from "../gadgets/media-store.js";
-import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
   AgentContextConfig,
@@ -42,35 +34,70 @@ import { type AGENT_INTERNAL_KEY, isValidAgentKey } from "./agent-internal-key.j
 import type { CompactionConfig, CompactionEvent, CompactionStats } from "./compaction/config.js";
 import { CompactionManager } from "./compaction/manager.js";
 import { ConversationManager } from "./conversation-manager.js";
+import { ConversationUpdater } from "./conversation-updater.js";
 import { type EventHandlers, runWithHandlers } from "./event-handlers.js";
-import { GadgetOutputStore } from "./gadget-output-store.js";
-import {
-  validateAfterLLMCallAction,
-  validateAfterLLMErrorAction,
-  validateBeforeLLMCallAction,
-} from "./hook-validators.js";
 import type {
-  AfterLLMCallAction,
-  AfterLLMCallControllerContext,
-  AfterLLMErrorAction,
   AgentHooks,
-  BeforeLLMCallAction,
-  GadgetResultInterceptorContext,
-  LLMCallControllerContext,
-  LLMErrorControllerContext,
   ObserveAbortContext,
-  ObserveLLMCallContext,
-  ObserveLLMCallReadyContext,
-  ObserveLLMCompleteContext,
-  ObserveLLMErrorContext,
   ObserveRateLimitThrottleContext,
-  ObserveRetryAttemptContext,
   Observers,
 } from "./hooks.js";
 import type { IConversationManager } from "./interfaces.js";
+import { LLMCallLifecycle } from "./llm-call-lifecycle.js";
+import type { OutputLimitConfig } from "./output-limit-manager.js";
+import { OutputLimitManager } from "./output-limit-manager.js";
+import { RetryOrchestrator } from "./retry-orchestrator.js";
 import { safeObserve } from "./safe-observe.js";
-import { StreamProcessor } from "./stream-processor.js";
+import type { StreamProcessor } from "./stream-processor.js";
+import { StreamProcessorFactory } from "./stream-processor-factory.js";
 import { bridgeTreeToHooks, getSubagentContextForNode } from "./tree-hook-bridge.js";
+
+/**
+ * Configuration for the execution tree context (shared tree model with subagents).
+ */
+export interface TreeConfig {
+  /**
+   * Shared execution tree for tracking all LLM calls and gadget executions.
+   * If provided (by a parent subagent), nodes are added to this tree.
+   * If not provided, the Agent creates its own tree.
+   */
+  tree?: ExecutionTree;
+
+  /**
+   * Parent node ID in the tree (when this agent is a subagent).
+   * Used to set parentId on all nodes created by this agent.
+   */
+  parentNodeId?: NodeId;
+
+  /**
+   * Base depth for nodes created by this agent.
+   * Root agents use 0; subagents use (parentDepth + 1).
+   */
+  baseDepth?: number;
+
+  /**
+   * Parent agent's observer hooks for subagent visibility.
+   *
+   * When a subagent is created with withParentContext(ctx), these observers
+   * are also called for gadget events (in addition to the subagent's own hooks),
+   * enabling the parent to observe subagent gadget activity.
+   */
+  parentObservers?: Observers;
+}
+
+/**
+ * Configuration for custom gadget block format prefixes.
+ */
+export interface PrefixConfig {
+  /** Custom gadget start prefix */
+  gadgetStartPrefix?: string;
+
+  /** Custom gadget end prefix */
+  gadgetEndPrefix?: string;
+
+  /** Custom gadget argument prefix for block format parameters */
+  gadgetArgPrefix?: string;
+}
 
 /**
  * Configuration options for the Agent.
@@ -109,14 +136,10 @@ export interface AgentOptions {
   /** Callback for requesting human input during execution */
   requestHumanInput?: (question: string) => Promise<string>;
 
-  /** Custom gadget start prefix */
-  gadgetStartPrefix?: string;
-
-  /** Custom gadget end prefix */
-  gadgetEndPrefix?: string;
-
-  /** Custom gadget argument prefix for block format parameters */
-  gadgetArgPrefix?: string;
+  /**
+   * Gadget prefix configuration (start/end/arg prefixes for block format).
+   */
+  prefixConfig?: PrefixConfig;
 
   /** Initial messages. User messages support multimodal content. */
   initialMessages?: Array<{ role: "system" | "user" | "assistant"; content: MessageContent }>;
@@ -146,11 +169,10 @@ export interface AgentOptions {
   /** Custom prompt configuration for gadget system prompts */
   promptConfig?: PromptTemplateConfig;
 
-  /** Enable gadget output limiting (default: true) */
-  gadgetOutputLimit?: boolean;
-
-  /** Max gadget output as % of model context window (default: 15) */
-  gadgetOutputLimitPercent?: number;
+  /**
+   * Gadget output limit configuration.
+   */
+  outputLimitConfig?: OutputLimitConfig;
 
   /** Context compaction configuration (enabled by default) */
   compactionConfig?: CompactionConfig;
@@ -181,32 +203,9 @@ export interface AgentOptions {
   // ==========================================================================
 
   /**
-   * Shared execution tree for tracking all LLM calls and gadget executions.
-   * If provided (by a parent subagent), nodes are added to this tree.
-   * If not provided, the Agent creates its own tree.
+   * Execution tree configuration (shared tree model with subagents).
    */
-  parentTree?: ExecutionTree;
-
-  /**
-   * Parent node ID in the tree (when this agent is a subagent).
-   * Used to set parentId on all nodes created by this agent.
-   */
-  parentNodeId?: NodeId;
-
-  /**
-   * Base depth for nodes created by this agent.
-   * Root agents use 0; subagents use (parentDepth + 1).
-   */
-  baseDepth?: number;
-
-  /**
-   * Parent agent's observer hooks for subagent visibility.
-   *
-   * When a subagent is created with withParentContext(ctx), these observers
-   * are also called for gadget events (in addition to the subagent's own hooks),
-   * enabling the parent to observe subagent gadget activity.
-   */
-  parentObservers?: Observers;
+  treeConfig?: TreeConfig;
 
   /**
    * Shared rate limit tracker from parent agent.
@@ -250,25 +249,13 @@ export class Agent {
   private readonly hooks: AgentHooks;
   private readonly conversation: ConversationManager;
   private readonly registry: GadgetRegistry;
-  private readonly gadgetStartPrefix?: string;
-  private readonly gadgetEndPrefix?: string;
-  private readonly gadgetArgPrefix?: string;
-  private readonly requestHumanInput?: (question: string) => Promise<string>;
-  private readonly textOnlyHandler: TextOnlyHandler;
-  private readonly textWithGadgetsHandler?: {
-    gadgetName: string;
-    parameterMapping: (text: string) => Record<string, unknown>;
-    resultMapping?: (text: string) => string;
-  };
-  private readonly defaultGadgetTimeoutMs?: number;
-  private readonly gadgetExecutionMode: GadgetExecutionMode;
+  private readonly prefixConfig?: PrefixConfig;
+  private readonly conversationUpdater: ConversationUpdater;
   private readonly defaultMaxTokens?: number;
   private hasUserPrompt: boolean;
 
   // Gadget output limiting
-  private readonly outputStore: GadgetOutputStore;
-  private readonly outputLimitEnabled: boolean;
-  private readonly outputLimitCharLimit: number;
+  private readonly outputLimitManager: OutputLimitManager;
 
   // Context compaction
   private readonly compactionManager?: CompactionManager;
@@ -281,21 +268,11 @@ export class Agent {
   private readonly reasoning?: ReasoningConfig;
   private readonly caching?: CachingConfig;
 
-  // Retry configuration
+  // Retry configuration (shared reference also passed to StreamProcessorFactory)
   private readonly retryConfig: ResolvedRetryConfig;
 
   // Rate limit tracker for proactive throttling
   private readonly rateLimitTracker?: RateLimitTracker;
-
-  // Subagent configuration
-  private readonly agentContextConfig: AgentContextConfig;
-  private readonly subagentConfig?: SubagentConfigMap;
-
-  // Gadget limiting
-  private readonly maxGadgetsPerResponse: number;
-
-  // Counter for generating synthetic invocation IDs for wrapped text content
-  private syntheticInvocationCounter = 0;
 
   // Cross-iteration dependency tracking - allows gadgets to depend on results from prior iterations
   private readonly completedInvocationIds: Set<string> = new Set();
@@ -307,10 +284,12 @@ export class Agent {
   // Execution Tree - first-class model for nested subagent support
   private readonly tree: ExecutionTree;
   private readonly parentNodeId: NodeId | null;
-  private readonly baseDepth: number;
 
-  // Parent observer hooks for subagent visibility
-  private readonly parentObservers?: Observers;
+  // StreamProcessor factory - encapsulates all pass-through StreamProcessor config
+  private readonly streamProcessorFactory: StreamProcessorFactory;
+
+  // LLM call lifecycle helper (encapsulates prepareLLMCall, completeLLMCall, notifyLLMError)
+  private readonly llmCallLifecycle: LLMCallLifecycle;
 
   /**
    * Creates a new Agent instance.
@@ -330,40 +309,33 @@ export class Agent {
     this.temperature = options.temperature;
     this.logger = options.logger ?? createLogger({ name: "llmist:agent" });
     this.registry = options.registry;
-    this.gadgetStartPrefix = options.gadgetStartPrefix;
-    this.gadgetEndPrefix = options.gadgetEndPrefix;
-    this.gadgetArgPrefix = options.gadgetArgPrefix;
-    this.requestHumanInput = options.requestHumanInput;
-    this.textOnlyHandler = options.textOnlyHandler ?? "terminate";
-    this.textWithGadgetsHandler = options.textWithGadgetsHandler;
-    this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
-    this.gadgetExecutionMode = options.gadgetExecutionMode ?? "parallel";
+
+    // Store prefix config as a single object (used by conversation and factory)
+    this.prefixConfig = options.prefixConfig;
+
     this.defaultMaxTokens = this.resolveMaxTokensFromCatalog(options.model);
 
+    // Read output limit config
+    const outputLimitConfig: OutputLimitConfig = {
+      enabled: options.outputLimitConfig?.enabled,
+      limitPercent: options.outputLimitConfig?.limitPercent,
+    };
+
     // Initialize gadget output limiting
-    this.outputLimitEnabled = options.gadgetOutputLimit ?? DEFAULT_GADGET_OUTPUT_LIMIT;
-    this.outputStore = new GadgetOutputStore();
+    this.outputLimitManager = new OutputLimitManager(
+      this.client,
+      this.model,
+      outputLimitConfig,
+      this.registry,
+      this.logger,
+    );
 
     // Initialize media storage for gadgets returning images, audio, etc.
     this.mediaStore = new MediaStore();
 
-    // Calculate character limit from model context window
-    const limitPercent = options.gadgetOutputLimitPercent ?? DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT;
-    const limits = this.client.modelRegistry.getModelLimits(this.model);
-    const contextWindow = limits?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
-    this.outputLimitCharLimit = Math.floor(contextWindow * (limitPercent / 100) * CHARS_PER_TOKEN);
-
-    // Auto-register GadgetOutputViewer when limiting is enabled
-    // Pass the same character limit so viewer output is also bounded
-    if (this.outputLimitEnabled) {
-      this.registry.register(
-        "GadgetOutputViewer",
-        createGadgetOutputViewer(this.outputStore, this.outputLimitCharLimit),
-      );
-    }
-
     // Chain output limiter interceptor with user hooks
-    this.hooks = this.chainOutputLimiterWithUserHooks(options.hooks);
+    // NOTE: this.hooks must be set BEFORE creating StreamProcessorFactory
+    this.hooks = this.outputLimitManager.getHooks(options.hooks);
 
     // Build conversation
     const baseBuilder = new LLMMessageBuilder(options.promptConfig);
@@ -372,9 +344,9 @@ export class Agent {
     }
 
     baseBuilder.addGadgets(this.registry.getAll(), {
-      startPrefix: options.gadgetStartPrefix,
-      endPrefix: options.gadgetEndPrefix,
-      argPrefix: options.gadgetArgPrefix,
+      startPrefix: this.prefixConfig?.gadgetStartPrefix,
+      endPrefix: this.prefixConfig?.gadgetEndPrefix,
+      argPrefix: this.prefixConfig?.gadgetArgPrefix,
     });
     const baseMessages = baseBuilder.build();
 
@@ -384,14 +356,22 @@ export class Agent {
     }));
 
     this.conversation = new ConversationManager(baseMessages, initialMessages, {
-      startPrefix: options.gadgetStartPrefix,
-      endPrefix: options.gadgetEndPrefix,
-      argPrefix: options.gadgetArgPrefix,
+      startPrefix: this.prefixConfig?.gadgetStartPrefix,
+      endPrefix: this.prefixConfig?.gadgetEndPrefix,
+      argPrefix: this.prefixConfig?.gadgetArgPrefix,
     });
     this.hasUserPrompt = !!options.userPrompt;
     if (options.userPrompt) {
       this.conversation.addUserMessage(options.userPrompt);
     }
+
+    // Initialize conversation updater (owns text-only and text-with-gadgets handling)
+    this.conversationUpdater = new ConversationUpdater(
+      this.conversation,
+      options.textOnlyHandler ?? "terminate",
+      options.textWithGadgetsHandler,
+      this.logger,
+    );
 
     // Initialize context compaction (enabled by default)
     const compactionEnabled = options.compactionConfig?.enabled ?? true;
@@ -427,22 +407,53 @@ export class Agent {
       }
     }
 
-    // Build agent context config for subagents to inherit
-    this.agentContextConfig = {
-      model: this.model,
+    // Initialize Execution Tree from treeConfig (or create a new one for root agents)
+    const treeConfig = options.treeConfig;
+    this.tree = treeConfig?.tree ?? new ExecutionTree();
+    this.parentNodeId = treeConfig?.parentNodeId ?? null;
+
+    // Initialize StreamProcessor factory — encapsulates all pass-through StreamProcessor config
+    this.streamProcessorFactory = new StreamProcessorFactory({
+      registry: this.registry,
+      prefixConfig: this.prefixConfig,
+      hooks: this.hooks,
+      logger: this.logger,
+      requestHumanInput: options.requestHumanInput,
+      defaultGadgetTimeoutMs: options.defaultGadgetTimeoutMs,
+      gadgetExecutionMode: options.gadgetExecutionMode ?? "parallel",
+      client: this.client,
+      mediaStore: this.mediaStore,
+      agentContextConfig: {
+        model: this.model,
+        temperature: this.temperature,
+      },
+      subagentConfig: options.subagentConfig,
+      tree: this.tree,
+      baseDepth: treeConfig?.baseDepth ?? 0,
+      parentObservers: treeConfig?.parentObservers,
+      rateLimitTracker: this.rateLimitTracker,
+      retryConfig: this.retryConfig,
+      maxGadgetsPerResponse: options.maxGadgetsPerResponse ?? 0,
+    });
+
+    // Initialize LLM call lifecycle helper
+    this.llmCallLifecycle = new LLMCallLifecycle({
+      client: this.client,
+      conversation: this.conversation,
+      tree: this.tree,
+      hooks: this.hooks,
+      logger: this.logger,
+      rateLimitTracker: this.rateLimitTracker,
+      signal: this.signal,
       temperature: this.temperature,
-    };
-    this.subagentConfig = options.subagentConfig;
-
-    // Initialize gadget limiting (0 = unlimited)
-    this.maxGadgetsPerResponse = options.maxGadgetsPerResponse ?? 0;
-
-    // Initialize Execution Tree
-    // If a parent tree is provided (subagent case), share it; otherwise create a new tree
-    this.tree = options.parentTree ?? new ExecutionTree();
-    this.parentNodeId = options.parentNodeId ?? null;
-    this.baseDepth = options.baseDepth ?? 0;
-    this.parentObservers = options.parentObservers;
+      reasoning: this.reasoning,
+      caching: this.caching,
+      model: this.model,
+      defaultMaxTokens: this.defaultMaxTokens,
+      maxIterations: this.maxIterations,
+      budget: this.budget,
+      parentNodeId: this.parentNodeId,
+    });
 
     // Validate budget against model pricing
     if (this.budget !== undefined) {
@@ -704,7 +715,7 @@ export class Agent {
           }
 
           // Prepare LLM call (creates tree node and calls onLLMCallStart/Ready hooks)
-          const prepared = await this.prepareLLMCall(currentIteration);
+          const prepared = await this.llmCallLifecycle.prepareLLMCall(currentIteration);
           llmOptions = prepared.options;
           currentLLMNodeId = prepared.llmNodeId;
 
@@ -726,186 +737,29 @@ export class Agent {
           });
 
           // Stream creation and iteration with retry for errors during streaming.
-          // pRetry in createStreamWithRetry() only catches errors during the initial stream() call,
-          // but 429/5xx errors can also occur DURING iteration over the stream.
-          // This outer retry loop catches those iteration errors and retries the entire LLM call.
-          const maxStreamAttempts = this.retryConfig.enabled ? this.retryConfig.retries + 1 : 1;
-          let streamAttempt = 0;
-          let streamMetadata: StreamCompletionEvent | null = null;
-          let gadgetCallCount = 0;
-          const textOutputs: string[] = [];
-          const gadgetResults: StreamEvent[] = [];
+          // All retry orchestration is encapsulated in executeWithRetry(), which also
+          // tracks textOutputs, gadgetResults, and gadgetCallCount — resetting them
+          // between retry attempts so only data from the final successful attempt is returned.
 
-          while (streamAttempt < maxStreamAttempts) {
-            streamAttempt++;
-
-            try {
-              // Create LLM stream with rate limiting (retry is handled by this outer loop)
-              const stream = await this.createStream(
-                llmOptions,
-                currentIteration,
-                currentLLMNodeId,
-              );
-
-              // Process stream - ALL complexity delegated to StreamProcessor
-              const processor = new StreamProcessor({
-                iteration: currentIteration,
-                registry: this.registry,
-                gadgetStartPrefix: this.gadgetStartPrefix,
-                gadgetEndPrefix: this.gadgetEndPrefix,
-                gadgetArgPrefix: this.gadgetArgPrefix,
-                hooks: this.hooks,
-                logger: this.logger.getSubLogger({ name: "stream-processor" }),
-                requestHumanInput: this.requestHumanInput,
-                defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
-                gadgetExecutionMode: this.gadgetExecutionMode,
-                client: this.client,
-                mediaStore: this.mediaStore,
-                agentConfig: this.agentContextConfig,
-                subagentConfig: this.subagentConfig,
-                // Tree context for execution tracking
-                tree: this.tree,
-                parentNodeId: currentLLMNodeId, // Gadgets are children of this LLM call
-                baseDepth: this.baseDepth,
-                // Cross-iteration dependency tracking
-                priorCompletedInvocations: this.completedInvocationIds,
-                priorFailedInvocations: this.failedInvocationIds,
-                // Parent observer hooks for subagent visibility
-                parentObservers: this.parentObservers,
-                // Shared rate limit tracker and retry config for subagents
-                rateLimitTracker: this.rateLimitTracker,
-                retryConfig: this.retryConfig,
-                // Gadget limiting
-                maxGadgetsPerResponse: this.maxGadgetsPerResponse,
-              });
-
-              // Consume the stream processor generator, yielding events in real-time
-              // The final event is a StreamCompletionEvent containing metadata
-              for await (const event of processor.process(stream)) {
-                if (event.type === "stream_complete") {
-                  // Completion event - extract metadata, don't yield to consumer
-                  streamMetadata = event;
-                  continue;
-                }
-
-                // Track outputs for later conversation history updates
-                if (event.type === "text") {
-                  textOutputs.push(event.content);
-                } else if (event.type === "gadget_result") {
-                  gadgetCallCount++;
-                  gadgetResults.push(event);
-                } else if (event.type === "llm_response_end") {
-                  // Signal that LLM finished generating (before gadgets complete)
-                  // This allows consumers to track "LLM thinking time" separately
-                  this.tree.endLLMResponse(currentLLMNodeId!, {
-                    finishReason: event.finishReason,
-                    usage: event.usage,
-                  });
-                }
-
-                // Yield event to consumer in real-time
-                // (includes subagent events from completedResultsQueue for real-time streaming)
-                yield event;
-              }
-
-              // Collect completed/failed invocation IDs for cross-iteration dependency tracking
-              for (const id of processor.getCompletedInvocationIds()) {
-                this.completedInvocationIds.add(id);
-              }
-              for (const id of processor.getFailedInvocationIds()) {
-                this.failedInvocationIds.add(id);
-              }
-
-              // Stream completed successfully - break retry loop
-              break;
-            } catch (streamError) {
-              // Check if this is a retryable error and we have attempts remaining
-              const error = streamError as Error;
-              const canRetry = this.retryConfig.enabled && streamAttempt < maxStreamAttempts;
-              const shouldRetryError = this.retryConfig.shouldRetry
-                ? this.retryConfig.shouldRetry(error)
-                : isRetryableError(error);
-
-              if (canRetry && shouldRetryError) {
-                // Extract Retry-After hint if present
-                const retryAfterMs = this.retryConfig.respectRetryAfter
-                  ? extractRetryAfterMs(error)
-                  : null;
-
-                // Calculate delay: use Retry-After if available, otherwise exponential backoff
-                const baseDelay =
-                  this.retryConfig.minTimeout * this.retryConfig.factor ** (streamAttempt - 1);
-                const cappedBaseDelay = Math.min(baseDelay, this.retryConfig.maxTimeout);
-                const delay =
-                  retryAfterMs !== null
-                    ? Math.min(retryAfterMs, this.retryConfig.maxRetryAfterMs)
-                    : cappedBaseDelay;
-
-                // Add jitter if randomize is enabled
-                const finalDelay = this.retryConfig.randomize
-                  ? delay * (0.5 + Math.random())
-                  : delay;
-
-                this.logger.warn(
-                  `Stream iteration failed (attempt ${streamAttempt}/${maxStreamAttempts}), retrying...`,
-                  {
-                    error: error.message,
-                    retriesLeft: maxStreamAttempts - streamAttempt,
-                    delayMs: Math.round(finalDelay),
-                    retryAfterMs,
-                  },
-                );
-
-                // Call retry callback
-                this.retryConfig.onRetry?.(error, streamAttempt);
-
-                // Emit observer hook for retry attempt
-                await safeObserve(async () => {
-                  if (this.hooks.observers?.onRetryAttempt) {
-                    // currentLLMNodeId is guaranteed to be defined at this point (set in prepareLLMCall)
-                    const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
-                    const hookContext: ObserveRetryAttemptContext = {
-                      iteration: currentIteration,
-                      attemptNumber: streamAttempt,
-                      retriesLeft: maxStreamAttempts - streamAttempt,
-                      error,
-                      retryAfterMs: retryAfterMs ?? undefined,
-                      logger: this.logger,
-                      subagentContext,
-                    };
-                    await this.hooks.observers.onRetryAttempt(hookContext);
-                  }
-                }, this.logger);
-
-                // Wait before retrying
-                await this.sleep(finalDelay);
-
-                // Reset state for retry attempt (clear any partial results from failed attempt)
-                streamMetadata = null;
-                gadgetCallCount = 0;
-                textOutputs.length = 0;
-                gadgetResults.length = 0;
-
-                continue;
-              }
-
-              // Not retryable or retries exhausted
-              if (streamAttempt > 1) {
-                // We had at least one retry - call exhausted callback
-                this.logger.error(`Stream iteration failed after ${streamAttempt} attempts`, {
-                  error: error.message,
-                  iteration: currentIteration,
-                });
-                this.retryConfig.onRetriesExhausted?.(error, streamAttempt);
-              }
-              throw error;
-            }
+          // Iterate the retry generator manually to capture its return value (stream metadata
+          // and accumulated tracking state). for-await-of discards the generator's final
+          // done-value, so we use .next() directly.
+          const retryGen = this.executeWithRetry(llmOptions, currentIteration, currentLLMNodeId);
+          let next = await retryGen.next();
+          while (!next.done) {
+            // Yield event to consumer in real-time
+            yield next.value;
+            next = await retryGen.next();
           }
+          // When done === true, the value is the generator's return value
+          const retryResult = next.value;
 
           // Ensure we received the completion metadata
-          if (!streamMetadata) {
+          if (!retryResult) {
             throw new Error("Stream processing completed without metadata event");
           }
+
+          const { streamMetadata, textOutputs, gadgetResults, gadgetCallCount } = retryResult;
 
           // Use streamMetadata as the result for remaining logic
           const result = streamMetadata;
@@ -919,40 +773,18 @@ export class Agent {
             rawResponse: result.rawResponse,
           });
 
-          // Observer: LLM call complete
-          await safeObserve(async () => {
-            if (this.hooks.observers?.onLLMCallComplete) {
-              // At this point, currentLLMNodeId and llmOptions are guaranteed to be defined
-              const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
-              const context: ObserveLLMCompleteContext = {
-                iteration: currentIteration,
-                options: llmOptions!,
-                finishReason: result.finishReason,
-                usage: result.usage,
-                rawResponse: result.rawResponse,
-                finalMessage: result.finalMessage,
-                thinkingContent: result.thinkingContent,
-                logger: this.logger,
-                subagentContext,
-              };
-              await this.hooks.observers.onLLMCallComplete(context);
-            }
-          }, this.logger);
-
-          // Complete LLM call in execution tree (with cost calculation)
-          this.completeLLMCallInTree(currentLLMNodeId!, result);
-
-          // Process afterLLMCall controller (may modify finalMessage or append messages)
-          const finalMessage = await this.processAfterLLMCallController(
+          // Complete LLM call: fire onLLMCallComplete observer, update tree with cost,
+          // process afterLLMCall controller (may modify finalMessage or append messages)
+          const finalMessage = await this.llmCallLifecycle.completeLLMCall(
+            currentLLMNodeId!,
+            result,
             currentIteration,
             llmOptions!,
-            result,
             gadgetCallCount,
           );
 
           // Update conversation with results (gadgets or text-only)
-          const shouldBreakFromTextOnly = await this.updateConversationWithResults(
-            result.didExecuteGadgets,
+          const shouldBreakFromTextOnly = this.conversationUpdater.updateWithResults(
             textOutputs,
             gadgetResults,
             finalMessage,
@@ -980,36 +812,17 @@ export class Agent {
             }
           }
         } catch (error) {
-          // Handle LLM error
-          const errorHandled = await this.handleLLMError(error as Error, currentIteration);
+          // Delegate error handling and observer notification to lifecycle helper
+          const action = await this.llmCallLifecycle.notifyLLMError(
+            currentIteration,
+            currentLLMNodeId,
+            error as Error,
+          );
 
-          // Observer: LLM error
-          await safeObserve(async () => {
-            if (this.hooks.observers?.onLLMCallError) {
-              // Use llmOptions if available, fallback to constructing options
-              const options = llmOptions ?? {
-                model: this.model,
-                messages: this.conversation.getMessages(),
-                temperature: this.temperature,
-                maxTokens: this.defaultMaxTokens,
-              };
-              // Get SubagentContext if we have a node ID
-              const subagentContext = currentLLMNodeId
-                ? getSubagentContextForNode(this.tree, currentLLMNodeId)
-                : undefined;
-              const context: ObserveLLMErrorContext = {
-                iteration: currentIteration,
-                options,
-                error: error as Error,
-                recovered: errorHandled,
-                logger: this.logger,
-                subagentContext,
-              };
-              await this.hooks.observers.onLLMCallError(context);
-            }
-          }, this.logger);
-
-          if (!errorHandled) {
+          if (action.action === "recover") {
+            this.logger.info("Controller recovered from LLM error");
+            this.conversation.addAssistantMessage(action.fallbackResponse);
+          } else {
             throw error;
           }
         }
@@ -1040,39 +853,82 @@ export class Agent {
       if (currentLLMNodeId) {
         const node = this.tree.getNode(currentLLMNodeId);
         if (node && node.type === "llm_call" && !node.completedAt) {
-          // Call observer hook for the interrupted request
-          await safeObserve(async () => {
-            if (this.hooks.observers?.onLLMCallComplete) {
-              const subagentContext = getSubagentContextForNode(this.tree, currentLLMNodeId!);
-              const context: ObserveLLMCompleteContext = {
-                iteration: currentIteration,
-                options: llmOptions ?? {
-                  model: this.model,
-                  messages: this.conversation.getMessages(),
-                  temperature: this.temperature,
-                  maxTokens: this.defaultMaxTokens,
-                },
-                finishReason: "interrupted",
-                usage: undefined,
-                rawResponse: "", // No response available for interrupted request
-                finalMessage: "", // No final message for interrupted request
-                logger: this.logger,
-                subagentContext,
-              };
-              await this.hooks.observers.onLLMCallComplete(context);
-            }
-          }, this.logger);
-
-          // Complete the LLM call in the execution tree
-          this.tree.completeLLMCall(currentLLMNodeId, {
-            finishReason: "interrupted",
-          });
+          // Delegate to lifecycle helper: fires onLLMCallComplete observer and updates tree
+          await this.llmCallLifecycle.completeLLMCall(
+            currentLLMNodeId,
+            {
+              type: "stream_complete",
+              finishReason: "interrupted",
+              usage: undefined,
+              rawResponse: "", // No response available for interrupted request
+              finalMessage: "", // No final message for interrupted request
+              didExecuteGadgets: false,
+              shouldBreakLoop: false,
+            },
+            currentIteration,
+            llmOptions ?? {
+              model: this.model,
+              messages: this.conversation.getMessages(),
+              temperature: this.temperature,
+              maxTokens: this.defaultMaxTokens,
+            },
+            0, // gadgetCallCount: no gadgets for interrupted call
+          );
         }
       }
 
       // Always clean up the bridge subscription
       unsubscribeBridge();
     }
+  }
+
+  /**
+   * Execute a single LLM call attempt with full retry orchestration.
+   *
+   * Delegates all retry logic to RetryOrchestrator, then propagates the accumulated
+   * invocation IDs back to the agent's cross-iteration tracking sets.
+   *
+   * Yields stream events in real-time and returns the final stream completion metadata
+   * along with accumulated tracking state from the final successful attempt only.
+   */
+  private async *executeWithRetry(
+    llmOptions: LLMGenerationOptions,
+    currentIteration: number,
+    currentLLMNodeId: string,
+  ): AsyncGenerator<
+    StreamEvent,
+    {
+      streamMetadata: StreamCompletionEvent;
+      textOutputs: string[];
+      gadgetResults: StreamEvent[];
+      gadgetCallCount: number;
+    } | null
+  > {
+    const orchestrator = new RetryOrchestrator({
+      retryConfig: this.retryConfig,
+      logger: this.logger,
+      hooks: this.hooks,
+      tree: this.tree,
+      sleep: (ms) => this.sleep(ms),
+    });
+
+    const result = yield* orchestrator.orchestrate(
+      llmOptions,
+      currentIteration,
+      currentLLMNodeId,
+      (opts, iter, nodeId) => this.createStream(opts, iter, nodeId),
+      (iter, nodeId) => this.createStreamProcessor(iter, nodeId),
+    );
+
+    // Propagate accumulated invocation IDs to agent's cross-iteration tracking
+    for (const id of orchestrator.getCompletedInvocationIds()) {
+      this.completedInvocationIds.add(id);
+    }
+    for (const id of orchestrator.getFailedInvocationIds()) {
+      this.failedInvocationIds.add(id);
+    }
+
+    return result;
   }
 
   /**
@@ -1119,71 +975,23 @@ export class Agent {
   }
 
   /**
+   * Factory method for constructing a StreamProcessor for a given iteration.
+   *
+   * Delegates to StreamProcessorFactory, which encapsulates all static
+   * StreamProcessor configuration. Cross-iteration mutable state is passed here.
+   */
+  private createStreamProcessor(iteration: number, llmNodeId: string): StreamProcessor {
+    return this.streamProcessorFactory.create(iteration, llmNodeId, {
+      priorCompletedInvocations: this.completedInvocationIds,
+      priorFailedInvocations: this.failedInvocationIds,
+    });
+  }
+
+  /**
    * Simple sleep utility for rate limit delays.
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Handle LLM error through controller.
-   */
-  private async handleLLMError(error: Error, iteration: number): Promise<boolean> {
-    this.logger.error("LLM call failed", { error: error.message });
-
-    if (this.hooks.controllers?.afterLLMError) {
-      const context: LLMErrorControllerContext = {
-        iteration,
-        options: {
-          model: this.model,
-          messages: this.conversation.getMessages(),
-          temperature: this.temperature,
-          maxTokens: this.defaultMaxTokens,
-        },
-        error,
-        logger: this.logger,
-      };
-      const action: AfterLLMErrorAction = await this.hooks.controllers.afterLLMError(context);
-
-      // Validate the action
-      validateAfterLLMErrorAction(action);
-
-      if (action.action === "recover") {
-        this.logger.info("Controller recovered from LLM error");
-        this.conversation.addAssistantMessage(action.fallbackResponse);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Handle text-only response (no gadgets called).
-   */
-  private async handleTextOnlyResponse(_text: string): Promise<boolean> {
-    const handler = this.textOnlyHandler;
-
-    if (typeof handler === "string") {
-      switch (handler) {
-        case "terminate":
-          this.logger.info("No gadgets called, ending loop");
-          return true;
-        case "acknowledge":
-          this.logger.info("No gadgets called, continuing loop");
-          return false;
-        case "wait_for_input":
-          this.logger.info("No gadgets called, waiting for input");
-          return true;
-        default:
-          this.logger.warn(`Unknown text-only strategy: ${handler}, defaulting to terminate`);
-          return true;
-      }
-    }
-
-    // For gadget and custom handlers, they would need to be implemented
-    // This is simplified for now
-    return true;
   }
 
   /**
@@ -1206,60 +1014,6 @@ export class Agent {
     }
 
     return this.client.modelRegistry.getModelLimits(unprefixedModelId)?.maxOutputTokens;
-  }
-
-  /**
-   * Chain the output limiter interceptor with user-provided hooks.
-   * The limiter runs first, then chains to any user interceptor.
-   */
-  private chainOutputLimiterWithUserHooks(userHooks?: AgentHooks): AgentHooks {
-    if (!this.outputLimitEnabled) {
-      return userHooks ?? {};
-    }
-
-    const limiterInterceptor = (result: string, ctx: GadgetResultInterceptorContext): string => {
-      // Skip limiting for GadgetOutputViewer itself to avoid recursion
-      if (ctx.gadgetName === "GadgetOutputViewer") {
-        return result;
-      }
-
-      if (result.length > this.outputLimitCharLimit) {
-        const id = this.outputStore.store(ctx.gadgetName, result);
-        const lines = result.split("\n").length;
-        const bytes = new TextEncoder().encode(result).length;
-
-        this.logger.info("Gadget output exceeded limit, stored for browsing", {
-          gadgetName: ctx.gadgetName,
-          outputId: id,
-          bytes,
-          lines,
-          charLimit: this.outputLimitCharLimit,
-        });
-
-        return (
-          `[Gadget "${ctx.gadgetName}" returned too much data: ` +
-          `${bytes.toLocaleString()} bytes, ${lines.toLocaleString()} lines. ` +
-          `Use GadgetOutputViewer with id "${id}" to read it]`
-        );
-      }
-
-      return result;
-    };
-
-    // Chain with any user-provided interceptor (limiter runs first)
-    const userInterceptor = userHooks?.interceptors?.interceptGadgetResult;
-    const chainedInterceptor = userInterceptor
-      ? (result: string, ctx: GadgetResultInterceptorContext) =>
-          userInterceptor(limiterInterceptor(result, ctx), ctx)
-      : limiterInterceptor;
-
-    return {
-      ...userHooks,
-      interceptors: {
-        ...userHooks?.interceptors,
-        interceptGadgetResult: chainedInterceptor,
-      },
-    };
   }
 
   // ==========================================================================
@@ -1326,273 +1080,6 @@ export class Agent {
     }, this.logger);
 
     return { type: "compaction", event: compactionEvent } as StreamEvent;
-  }
-
-  /**
-   * Resolve reasoning configuration with auto-enable logic.
-   *
-   * Priority: explicit config > auto-enable for reasoning models > undefined
-   * When a model has `features.reasoning: true` and no explicit config is set,
-   * reasoning is automatically enabled at "medium" effort.
-   */
-  private resolveReasoningConfig(spec: ModelSpec | undefined): ReasoningConfig | undefined {
-    // Explicit config always wins
-    if (this.reasoning !== undefined) return this.reasoning;
-    // Auto-enable for reasoning-capable models
-    if (spec?.features?.reasoning) {
-      return { enabled: true, effort: "medium" };
-    }
-    return undefined;
-  }
-
-  /**
-   * Resolve caching configuration.
-   *
-   * Priority: explicit config > default enabled (preserves Anthropic's existing behavior)
-   * Default is `{ enabled: true }` which means:
-   * - Anthropic: `cache_control` markers are added (existing behavior preserved)
-   * - Gemini: Cache manager is consulted but skips if no explicit config was set
-   * - OpenAI: No-op (server-side automatic)
-   */
-  private resolveCachingConfig(): CachingConfig | undefined {
-    // Explicit config always wins
-    if (this.caching !== undefined) return this.caching;
-    // Default: enabled (preserves Anthropic's existing always-on caching behavior)
-    return { enabled: true };
-  }
-
-  /**
-   * Prepare LLM call options, create tree node, and process beforeLLMCall controller.
-   * @returns options, node ID, and optional skipWithSynthetic response if controller wants to skip
-   */
-  private async prepareLLMCall(
-    iteration: number,
-  ): Promise<{ options: LLMGenerationOptions; llmNodeId: string; skipWithSynthetic?: string }> {
-    // Resolve reasoning config: explicit config > auto-enable for reasoning models > none
-    const spec = this.client.modelRegistry?.getModelSpec?.(this.model);
-    const reasoning = this.resolveReasoningConfig(spec);
-
-    // Resolve caching config: explicit config > default enabled
-    const caching = this.resolveCachingConfig();
-
-    let llmOptions: LLMGenerationOptions = {
-      model: this.model,
-      messages: this.conversation.getMessages(),
-      temperature: this.temperature,
-      maxTokens: this.defaultMaxTokens,
-      signal: this.signal,
-      reasoning,
-      caching,
-    };
-
-    // Create LLM call node in execution tree BEFORE hooks
-    // This allows hooks to receive SubagentContext
-    const llmNode = this.tree.addLLMCall({
-      iteration,
-      model: llmOptions.model,
-      parentId: this.parentNodeId,
-      request: llmOptions.messages,
-    });
-
-    // Observer: LLM call start
-    await safeObserve(async () => {
-      if (this.hooks.observers?.onLLMCallStart) {
-        const subagentContext = getSubagentContextForNode(this.tree, llmNode.id);
-        const context: ObserveLLMCallContext = {
-          iteration,
-          options: llmOptions,
-          logger: this.logger,
-          subagentContext,
-        };
-        await this.hooks.observers.onLLMCallStart(context);
-      }
-    }, this.logger);
-
-    // Controller: Before LLM call
-    if (this.hooks.controllers?.beforeLLMCall) {
-      const context: LLMCallControllerContext = {
-        iteration,
-        maxIterations: this.maxIterations,
-        budget: this.budget,
-        totalCost: this.tree.getTotalCost(),
-        options: llmOptions,
-        logger: this.logger,
-      };
-      const action: BeforeLLMCallAction = await this.hooks.controllers.beforeLLMCall(context);
-
-      // Validate the action
-      validateBeforeLLMCallAction(action);
-
-      if (action.action === "skip") {
-        this.logger.info("Controller skipped LLM call, using synthetic response");
-        return {
-          options: llmOptions,
-          llmNodeId: llmNode.id,
-          skipWithSynthetic: action.syntheticResponse,
-        };
-      } else if (action.action === "proceed" && action.modifiedOptions) {
-        llmOptions = { ...llmOptions, ...action.modifiedOptions };
-      }
-    }
-
-    // Observer: LLM call ready (after controller modifications)
-    await safeObserve(async () => {
-      if (this.hooks.observers?.onLLMCallReady) {
-        const subagentContext = getSubagentContextForNode(this.tree, llmNode.id);
-        const context: ObserveLLMCallReadyContext = {
-          iteration,
-          maxIterations: this.maxIterations,
-          budget: this.budget,
-          totalCost: this.tree.getTotalCost(),
-          options: llmOptions,
-          logger: this.logger,
-          subagentContext,
-        };
-        await this.hooks.observers.onLLMCallReady(context);
-      }
-    }, this.logger);
-
-    return { options: llmOptions, llmNodeId: llmNode.id };
-  }
-
-  /**
-   * Calculate cost and complete LLM call in execution tree.
-   * Also records usage to rate limit tracker for proactive throttling.
-   */
-  private completeLLMCallInTree(nodeId: NodeId, result: StreamCompletionEvent): void {
-    const inputTokens = result.usage?.inputTokens ?? 0;
-    const outputTokens = result.usage?.outputTokens ?? 0;
-
-    // Record usage to rate limit tracker for proactive throttling
-    if (this.rateLimitTracker) {
-      this.rateLimitTracker.recordUsage(inputTokens, outputTokens);
-    }
-
-    // Calculate cost using ModelRegistry (if available)
-    const llmCost = this.client.modelRegistry?.estimateCost?.(
-      this.model,
-      inputTokens,
-      outputTokens,
-      result.usage?.cachedInputTokens ?? 0,
-      result.usage?.cacheCreationInputTokens ?? 0,
-      result.usage?.reasoningTokens ?? 0,
-    )?.totalCost;
-
-    // Complete LLM call in execution tree (including cost for automatic aggregation)
-    this.tree.completeLLMCall(nodeId, {
-      response: result.rawResponse,
-      usage: result.usage,
-      finishReason: result.finishReason,
-      cost: llmCost,
-      thinkingContent: result.thinkingContent,
-    });
-  }
-
-  /**
-   * Process afterLLMCall controller and return modified final message.
-   */
-  private async processAfterLLMCallController(
-    iteration: number,
-    llmOptions: LLMGenerationOptions,
-    result: StreamCompletionEvent,
-    gadgetCallCount: number,
-  ): Promise<string> {
-    let finalMessage = result.finalMessage;
-
-    if (!this.hooks.controllers?.afterLLMCall) {
-      return finalMessage;
-    }
-
-    const context: AfterLLMCallControllerContext = {
-      iteration,
-      maxIterations: this.maxIterations,
-      budget: this.budget,
-      totalCost: this.tree.getTotalCost(),
-      options: llmOptions,
-      finishReason: result.finishReason,
-      usage: result.usage,
-      finalMessage: result.finalMessage,
-      gadgetCallCount,
-      logger: this.logger,
-    };
-    const action: AfterLLMCallAction = await this.hooks.controllers.afterLLMCall(context);
-
-    // Validate the action
-    validateAfterLLMCallAction(action);
-
-    if (action.action === "modify_and_continue" || action.action === "append_and_modify") {
-      finalMessage = action.modifiedMessage;
-    }
-
-    if (action.action === "append_messages" || action.action === "append_and_modify") {
-      for (const msg of action.messages) {
-        if (msg.role === "user") {
-          this.conversation.addUserMessage(msg.content);
-        } else if (msg.role === "assistant") {
-          this.conversation.addAssistantMessage(extractMessageText(msg.content));
-        } else if (msg.role === "system") {
-          this.conversation.addUserMessage(`[System] ${extractMessageText(msg.content)}`);
-        }
-      }
-    }
-
-    return finalMessage;
-  }
-
-  /**
-   * Update conversation history with gadget results or text-only response.
-   * @returns true if loop should break (text-only handler requested termination)
-   */
-  private async updateConversationWithResults(
-    didExecuteGadgets: boolean,
-    textOutputs: string[],
-    gadgetResults: StreamEvent[],
-    finalMessage: string,
-  ): Promise<boolean> {
-    if (didExecuteGadgets) {
-      // If configured, wrap accompanying text as a synthetic gadget call
-      if (this.textWithGadgetsHandler) {
-        const textContent = textOutputs.join("");
-
-        if (textContent.trim()) {
-          const { gadgetName, parameterMapping, resultMapping } = this.textWithGadgetsHandler;
-          const syntheticId = `gc_text_${++this.syntheticInvocationCounter}`;
-          this.conversation.addGadgetCallResult(
-            gadgetName,
-            parameterMapping(textContent),
-            resultMapping ? resultMapping(textContent) : textContent,
-            syntheticId,
-          );
-        }
-      }
-
-      // Add all gadget results to conversation
-      for (const output of gadgetResults) {
-        if (output.type === "gadget_result") {
-          const gadgetResult = output.result;
-          this.conversation.addGadgetCallResult(
-            gadgetResult.gadgetName,
-            gadgetResult.parameters,
-            gadgetResult.error ?? gadgetResult.result ?? "",
-            gadgetResult.invocationId,
-            gadgetResult.media,
-            gadgetResult.mediaIds,
-            gadgetResult.storedMedia,
-          );
-        }
-      }
-
-      return false; // Don't break loop
-    }
-
-    // No gadgets executed - add text as assistant message
-    // (Use textWithGadgetsHandler if gadget wrapping is needed)
-    if (finalMessage.trim()) {
-      this.conversation.addAssistantMessage(finalMessage);
-    }
-
-    // Handle text-only responses
-    return await this.handleTextOnlyResponse(finalMessage);
   }
 
   /**

@@ -11,6 +11,13 @@ import chalk from "chalk";
 import type { GadgetNode, LLMCallNode } from "../tui/types.js";
 import { formatExecutionTime } from "./format-time.js";
 import { formatCost, formatTokens, renderMarkdown } from "./formatters.js";
+import {
+  buildTokenMetrics,
+  costPart,
+  finishReasonPart,
+  joinParts,
+  timePart,
+} from "./metric-parts.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Box Drawing Characters
@@ -65,48 +72,33 @@ export function formatLLMCallCollapsed(node: LLMCallNode, selected: boolean): st
   if (node.details) {
     const d = node.details;
 
-    // ↑ input tokens
-    if (d.inputTokens && d.inputTokens > 0) {
-      parts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(d.inputTokens)}`));
-    }
-
-    // ⟳ cached tokens
-    if (d.cachedInputTokens && d.cachedInputTokens > 0) {
-      parts.push(chalk.dim("⟳") + chalk.blue(` ${formatTokens(d.cachedInputTokens)}`));
-    }
-
-    // ↓ output tokens
-    if (d.outputTokens && d.outputTokens > 0) {
-      parts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(d.outputTokens)}`));
-    }
-
-    // 💭 reasoning tokens
-    if (d.reasoningTokens && d.reasoningTokens > 0) {
-      parts.push(chalk.dim("💭") + chalk.magenta(` ${formatTokens(d.reasoningTokens)}`));
-    }
+    // Token metrics (input, cached, output, reasoning) via shared metric-parts
+    parts.push(
+      ...buildTokenMetrics({
+        input: d.inputTokens,
+        cached: d.cachedInputTokens,
+        output: d.outputTokens,
+        reasoning: d.reasoningTokens,
+      }),
+    );
 
     // Time
     if (d.elapsedSeconds !== undefined) {
-      parts.push(chalk.dim(`${d.elapsedSeconds.toFixed(1)}s`));
+      parts.push(timePart(d.elapsedSeconds));
     }
 
     // Cost
     if (d.cost !== undefined && d.cost > 0) {
-      parts.push(chalk.cyan(`$${formatCost(d.cost)}`));
+      parts.push(costPart(d.cost));
     }
 
     // Finish reason
     if (node.isComplete && d.finishReason) {
-      const reason = d.finishReason.toUpperCase();
-      if (reason === "STOP" || reason === "END_TURN") {
-        parts.push(chalk.green(reason));
-      } else {
-        parts.push(chalk.yellow(reason));
-      }
+      parts.push(finishReasonPart(d.finishReason));
     }
   }
 
-  const line = parts.join(chalk.dim(" | "));
+  const line = joinParts(parts);
   const prefix = indicatorColor(indicator);
 
   // Highlight selected line
@@ -212,7 +204,7 @@ export function formatLLMCallExpanded(node: LLMCallNode): string[] {
 /**
  * Formats a collapsed gadget line.
  *
- * Format: `✓ Navigate(url=https://...) 1.2s | ↑ 5k ⤿ 2k ↓ 1k | $0.01`
+ * Format: `✓ Navigate(url=https://...) 1.2s | ↑ 5k ⟳ 2k ↓ 1k | $0.01`
  */
 export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): string {
   let indicator: string;
@@ -280,13 +272,12 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
   // Subagent token stats (if any LLM calls were made)
   if (node.subagentStats && node.subagentStats.llmCallCount > 0) {
     const { inputTokens, cachedTokens, outputTokens } = node.subagentStats;
-    const tokenParts: string[] = [];
-    tokenParts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(inputTokens)}`));
-    if (cachedTokens > 0) {
-      tokenParts.push(chalk.dim("⤿") + chalk.blue(` ${formatTokens(cachedTokens)}`));
-    }
-    tokenParts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(outputTokens)}`));
-    metrics.push(tokenParts.join(" "));
+    const tokenMetrics = buildTokenMetrics({
+      input: inputTokens,
+      cached: cachedTokens,
+      output: outputTokens,
+    });
+    metrics.push(tokenMetrics.join(" "));
   } else if (node.resultTokens && node.resultTokens > 0) {
     // Simple gadget - just show output tokens
     metrics.push(chalk.dim("↓") + chalk.green(` ${formatTokens(node.resultTokens)}`));
@@ -294,7 +285,7 @@ export function formatGadgetCollapsed(node: GadgetNode, selected: boolean): stri
 
   // Cost
   if (node.cost && node.cost > 0) {
-    metrics.push(chalk.cyan(`$${formatCost(node.cost)}`));
+    metrics.push(costPart(node.cost));
   }
 
   // Join metrics with separator
@@ -494,13 +485,11 @@ export function formatGadgetExpanded(node: GadgetNode): string[] {
     // Subagent stats (aggregated from child LLM calls)
     if (node.subagentStats && node.subagentStats.llmCallCount > 0) {
       const s = node.subagentStats;
-      const tokenParts: string[] = [];
-      tokenParts.push(chalk.dim("↑") + chalk.yellow(` ${formatTokens(s.inputTokens)}`));
-      if (s.cachedTokens > 0) {
-        tokenParts.push(chalk.dim("⤿") + chalk.blue(` ${formatTokens(s.cachedTokens)}`));
-      }
-      tokenParts.push(chalk.dim("↓") + chalk.green(` ${formatTokens(s.outputTokens)}`));
-      const tokenStr = tokenParts.join(" ");
+      const tokenStr = buildTokenMetrics({
+        input: s.inputTokens,
+        cached: s.cachedTokens,
+        output: s.outputTokens,
+      }).join(" ");
       lines.push(`${indent}${chalk.dim(BOX.vertical)} LLM calls: ${s.llmCallCount} (${tokenStr})`);
     }
 

@@ -12,10 +12,12 @@ vi.mock("node:fs", () => ({
     statSync: vi.fn(),
     existsSync: vi.fn(),
     mkdirSync: vi.fn(),
+    rmSync: vi.fn(),
     realpathSync: vi.fn(),
   },
 }));
 
+import { deleteFile } from "./delete-file.js";
 import { listDirectory } from "./list-directory.js";
 import { readFile } from "./read-file.js";
 // Import after mocking
@@ -450,5 +452,71 @@ describe("ListDirectory gadget", () => {
     expect(listDirectory.description).toContain("List files and directories");
     expect(listDirectory.examples).toBeDefined();
     expect(listDirectory.examples!.length).toBeGreaterThan(0);
+  });
+});
+
+describe("DeleteFile gadget", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(process, "cwd").mockReturnValue("/home/user/project");
+    vi.mocked(fs.realpathSync).mockImplementation((p) => String(p));
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => false } as fs.Stats);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should delete a file successfully", () => {
+    const result = deleteFile.execute({ filePath: "test.txt", recursive: false });
+
+    expect(result).toBe("path=test.txt\n\nDeleted file successfully");
+    expect(fs.rmSync).toHaveBeenCalledWith("/home/user/project/test.txt", {
+      recursive: false,
+      force: true,
+    });
+  });
+
+  it("should delete a directory recursively", () => {
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as fs.Stats);
+
+    const result = deleteFile.execute({ filePath: "tmp-dir", recursive: true });
+
+    expect(result).toBe("path=tmp-dir\n\nDeleted directory successfully");
+    expect(fs.rmSync).toHaveBeenCalledWith("/home/user/project/tmp-dir", {
+      recursive: true,
+      force: true,
+    });
+  });
+
+  it("should fail to delete a directory without recursive=true", () => {
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as fs.Stats);
+
+    const result = deleteFile.execute({ filePath: "tmp-dir", recursive: false });
+
+    expect(result).toContain("Error: tmp-dir is a directory. Set recursive=true to delete it.");
+  });
+
+  it("should handle non-existent paths", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const result = deleteFile.execute({ filePath: "missing.txt", recursive: false });
+
+    expect(result).toContain("Error: Path does not exist: missing.txt");
+  });
+
+  it("should throw for paths outside CWD", () => {
+    vi.mocked(fs.realpathSync).mockImplementation(() => "/etc/passwd");
+
+    expect(() => deleteFile.execute({ filePath: "../../../etc/passwd", recursive: false })).toThrow(
+      PathSandboxException,
+    );
+  });
+
+  it("should have correct gadget metadata", () => {
+    expect(deleteFile.name).toBe("DeleteFile");
+    expect(deleteFile.description).toContain("Delete a file or directory");
+    expect(deleteFile.examples).toBeDefined();
   });
 });

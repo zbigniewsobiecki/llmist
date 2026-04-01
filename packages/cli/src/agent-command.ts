@@ -160,7 +160,7 @@ export async function executeAgent(
 
   // Set up gadget approval manager
   // Default: RunCommand, WriteFile, EditFile require approval unless overridden by config
-  const DEFAULT_APPROVAL_REQUIRED = ["RunCommand", "WriteFile", "EditFile"];
+  const DEFAULT_APPROVAL_REQUIRED = ["RunCommand", "WriteFile", "EditFile", "DeleteFile"];
   const userApprovals = options.gadgetApproval ?? {};
 
   // Apply defaults for dangerous gadgets if not explicitly configured
@@ -358,8 +358,14 @@ export async function executeAgent(
             parameters: ctx.parameters,
           });
 
+          // Persist "always" and "deny" responses for future calls in this session
+          if (response === "always") {
+            gadgetApprovals[ctx.gadgetName] = "allowed";
+          } else if (response === "deny") {
+            gadgetApprovals[ctx.gadgetName] = "denied";
+          }
+
           if (response === "yes" || response === "always") {
-            // TODO: Handle "always" by updating gadgetApprovals
             return { action: "proceed" };
           }
           return {
@@ -368,10 +374,11 @@ export async function executeAgent(
           };
         }
 
-        // Piped mode: can't prompt for approval, deny
+        // Piped mode with terminal available but TUI disabled (e.g., stdout redirected)
+        // Suggest adjusting config or enabling full interactive mode
         return {
           action: "skip",
-          syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Run in a terminal to approve.`,
+          syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Enable TUI mode or adjust 'gadget-approval' in your config to allow this gadget.`,
         };
       },
     },

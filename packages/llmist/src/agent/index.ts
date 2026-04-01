@@ -3,7 +3,7 @@
  * This module provides a cleaner alternative to the monolithic AgentLoop.
  */
 
-export type { AgentOptions } from "./agent.js";
+export type { AgentOptions, PrefixConfig, TreeConfig } from "./agent.js";
 // Context compaction
 export {
   type CompactionConfig,
@@ -75,6 +75,8 @@ export type {
   SubagentContext,
 } from "./hooks.js";
 export type { IConversationManager } from "./interfaces.js";
+// Gadget output limit configuration (OutputLimitConfig is defined in output-limit-manager)
+export type { OutputLimitConfig } from "./output-limit-manager.js";
 // Shared observer error-handling utility
 export { safeObserve } from "./safe-observe.js";
 // StreamProcessor for advanced use cases

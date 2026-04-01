@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import type { Jiti } from "jiti";
 import { createJiti } from "jiti";
 import { AbstractGadget } from "llmist";
-import { getBuiltinGadget, isBuiltinGadgetName } from "./builtins/index.js";
+import { getBuiltinGadget, getBuiltinGadgetNames, isBuiltinGadgetName } from "./builtins/index.js";
 import { isExternalPackageSpecifier, loadExternalGadgets } from "./external-gadgets.js";
 import { expandTildePath } from "./paths.js";
 
@@ -203,7 +203,7 @@ export function tryResolveBuiltin(specifier: string): AbstractGadget | null {
     const gadget = getBuiltinGadget(name);
     if (!gadget) {
       throw new Error(
-        `Unknown builtin gadget: ${name}. Available builtins: ListDirectory, ReadFile, WriteFile, EditFile, RunCommand`,
+        `Unknown builtin gadget: ${name}. Available builtins: ${getBuiltinGadgetNames().join(", ")}`,
       );
     }
     return gadget;

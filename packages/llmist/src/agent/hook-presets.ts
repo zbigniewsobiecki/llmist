@@ -53,6 +53,7 @@
  */
 
 import type { ModelRegistry } from "../core/model-registry.js";
+import { stripProviderPrefix } from "../core/model-shortcuts.js";
 import { createFileLoggingHooks, type FileLoggingOptions } from "./file-logging.js";
 import type { AgentHooks } from "./hooks.js";
 
@@ -313,20 +314,14 @@ export class HookPresets {
           }
         },
         onGadgetExecutionStart: async (ctx) => {
-          const key = `gadget-${ctx.gadgetName}-${Date.now()}`;
-          timings.set(key, Date.now());
-          // Store key for lookup in complete handler
-          (ctx as any)._timingKey = key;
+          timings.set(ctx.invocationId, Date.now());
         },
         onGadgetExecutionComplete: async (ctx) => {
-          const key = (ctx as any)._timingKey;
-          if (key) {
-            const start = timings.get(key);
-            if (start) {
-              const duration = Date.now() - start;
-              console.log(`⏱️  Gadget ${ctx.gadgetName} took ${duration}ms`);
-              timings.delete(key);
-            }
+          const start = timings.get(ctx.invocationId);
+          if (start) {
+            const duration = Date.now() - start;
+            console.log(`⏱️  Gadget ${ctx.gadgetName} took ${duration}ms`);
+            timings.delete(ctx.invocationId);
           }
         },
       },
@@ -562,9 +557,7 @@ export class HookPresets {
               try {
                 // Extract model name from provider:model format
                 // Example: "openai:gpt-4o" -> "gpt-4o"
-                const modelName = ctx.options.model.includes(":")
-                  ? ctx.options.model.split(":")[1]
-                  : ctx.options.model;
+                const modelName = stripProviderPrefix(ctx.options.model);
 
                 // Use core's estimateCost() for accurate pricing
                 const costEstimate = modelRegistry.estimateCost(

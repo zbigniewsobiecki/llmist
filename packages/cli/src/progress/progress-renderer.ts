@@ -1,6 +1,8 @@
 import chalk from "chalk";
 import { FALLBACK_CHARS_PER_TOKEN } from "llmist";
-import { formatCost, formatGadgetLine, formatLLMCallLine, formatTokens } from "../ui/formatters.js";
+import { formatGadgetLine, formatLLMCallLine } from "../ui/formatters.js";
+import { formatTokens } from "../ui/metric-formatters.js";
+import { costPart, joinParts, tokenPart } from "../ui/metric-parts.js";
 import type { CallStatsTracker } from "./call-stats-tracker.js";
 import type { GadgetTracker } from "./gadget-tracker.js";
 import type { NestedOperationTracker } from "./nested-operation-tracker.js";
@@ -405,9 +407,7 @@ export class ProgressRenderer {
       parts.push(chalk.dim("iter:") + chalk.blue(` ${this.callStatsTracker.iterations}`));
     }
     if (this.callStatsTracker.totalCost > 0) {
-      parts.push(
-        chalk.dim("cost:") + chalk.cyan(` $${formatCost(this.callStatsTracker.totalCost)}`),
-      );
+      parts.push(`${chalk.dim("cost:")} ${costPart(this.callStatsTracker.totalCost)}`);
     }
     parts.push(chalk.dim(`${elapsed}s`));
 
@@ -428,18 +428,24 @@ export class ProgressRenderer {
       : this.callStatsTracker.callOutputTokens;
 
     if (this.callStatsTracker.callInputTokens > 0) {
-      const prefix = this.callStatsTracker.callInputTokensEstimated ? "~" : "";
-      parts.push(`↑ ${prefix}${formatTokens(this.callStatsTracker.callInputTokens)}`);
+      parts.push(
+        tokenPart("input", this.callStatsTracker.callInputTokens, {
+          estimated: this.callStatsTracker.callInputTokensEstimated,
+        }),
+      );
     }
 
     if (outTokens > 0) {
-      const prefix = this.callStatsTracker.callOutputTokensEstimated ? "~" : "";
-      parts.push(`↓ ${prefix}${formatTokens(outTokens)}`);
+      parts.push(
+        tokenPart("output", outTokens, {
+          estimated: this.callStatsTracker.callOutputTokensEstimated,
+        }),
+      );
     }
 
     parts.push(`${elapsed}s`);
 
-    return parts.join(" | ");
+    return joinParts(parts);
   }
 
   /**
@@ -461,15 +467,14 @@ export class ProgressRenderer {
       const outEstimated = this.callStatsTracker.callOutputTokensEstimated;
 
       if (this.callStatsTracker.callInputTokens > 0) {
-        const prefix = this.callStatsTracker.callInputTokensEstimated ? "~" : "";
         parts.push(
-          chalk.dim("↑") +
-            chalk.yellow(` ${prefix}${formatTokens(this.callStatsTracker.callInputTokens)}`),
+          tokenPart("input", this.callStatsTracker.callInputTokens, {
+            estimated: this.callStatsTracker.callInputTokensEstimated,
+          }),
         );
       }
       if (outTokens > 0) {
-        const prefix = outEstimated ? "~" : "";
-        parts.push(chalk.dim("↓") + chalk.green(` ${prefix}${formatTokens(outTokens)}`));
+        parts.push(tokenPart("output", outTokens, { estimated: outEstimated }));
       }
       parts.push(chalk.dim(`${elapsed}s`));
     } else {
@@ -483,7 +488,7 @@ export class ProgressRenderer {
         parts.push(chalk.blue(`i${this.callStatsTracker.iterations}`));
       }
       if (this.callStatsTracker.totalCost > 0) {
-        parts.push(chalk.cyan(`$${formatCost(this.callStatsTracker.totalCost)}`));
+        parts.push(costPart(this.callStatsTracker.totalCost));
       }
       parts.push(chalk.dim(`${elapsed}s`));
     }

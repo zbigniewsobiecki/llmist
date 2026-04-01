@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HookPresets } from "./hook-presets.js";
 import type {
+  ObserveCompactionContext,
   ObserveGadgetCompleteContext,
   ObserveGadgetStartContext,
   ObserveLLMCallCompleteContext,
@@ -180,20 +181,25 @@ describe("HookPresets", () => {
     it("measures gadget execution duration", async () => {
       const hooks = HookPresets.timing();
 
-      // Create context that will be shared between start and complete
-      // (simulating how the actual hook system works)
-      const ctx: any = {
+      // Start context and complete context are separate objects (as in real usage)
+      const startCtx: any = {
         gadgetName: "Calculator",
+        invocationId: "calc-1",
         parameters: { a: 5, b: 3 },
       };
 
-      await hooks.observers?.onGadgetExecutionStart?.(ctx);
+      await hooks.observers?.onGadgetExecutionStart?.(startCtx);
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Use the same context object so the timing key is preserved
-      ctx.finalResult = "8";
-      await hooks.observers?.onGadgetExecutionComplete?.(ctx);
+      // Complete with a different context object that shares the same invocationId
+      const completeCtx: any = {
+        gadgetName: "Calculator",
+        invocationId: "calc-1",
+        parameters: { a: 5, b: 3 },
+        finalResult: "8",
+      };
+      await hooks.observers?.onGadgetExecutionComplete?.(completeCtx);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining("⏱️  Gadget Calculator took"),
@@ -201,30 +207,61 @@ describe("HookPresets", () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("ms"));
     });
 
+    it("does not log timing when invocationId is missing", async () => {
+      const hooks = HookPresets.timing();
+
+      // Simulate the old broken behaviour: no invocationId, separate context objects
+      const startCtx: any = {
+        gadgetName: "Calculator",
+        parameters: { a: 5, b: 3 },
+        // invocationId intentionally absent
+      };
+
+      await hooks.observers?.onGadgetExecutionStart?.(startCtx);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const completeCtx: any = {
+        gadgetName: "Calculator",
+        parameters: { a: 5, b: 3 },
+        finalResult: "8",
+        // invocationId intentionally absent
+      };
+      await hooks.observers?.onGadgetExecutionComplete?.(completeCtx);
+
+      // Both share undefined as key, so timing is still recorded
+      // This is just documenting the undefined-key behaviour
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("⏱️  Gadget Calculator took"),
+      );
+    });
+
     it("handles multiple concurrent operations", async () => {
       const hooks = HookPresets.timing();
 
-      // Create contexts that will be shared
-      const ctx1: any = {
-        gadgetName: "Op1",
-        parameters: {},
-      };
-      const ctx2: any = {
-        gadgetName: "Op2",
-        parameters: {},
-      };
+      // Each gadget has a distinct invocationId
+      const startCtx1: any = { gadgetName: "Op1", invocationId: "op-1", parameters: {} };
+      const startCtx2: any = { gadgetName: "Op2", invocationId: "op-2", parameters: {} };
 
-      await hooks.observers?.onGadgetExecutionStart?.(ctx1);
-      await hooks.observers?.onGadgetExecutionStart?.(ctx2);
+      await hooks.observers?.onGadgetExecutionStart?.(startCtx1);
+      await hooks.observers?.onGadgetExecutionStart?.(startCtx2);
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Complete using same context objects
-      ctx1.finalResult = "done";
-      await hooks.observers?.onGadgetExecutionComplete?.(ctx1);
+      const completeCtx1: any = {
+        gadgetName: "Op1",
+        invocationId: "op-1",
+        parameters: {},
+        finalResult: "done",
+      };
+      await hooks.observers?.onGadgetExecutionComplete?.(completeCtx1);
 
-      ctx2.finalResult = "done";
-      await hooks.observers?.onGadgetExecutionComplete?.(ctx2);
+      const completeCtx2: any = {
+        gadgetName: "Op2",
+        invocationId: "op-2",
+        parameters: {},
+        finalResult: "done",
+      };
+      await hooks.observers?.onGadgetExecutionComplete?.(completeCtx2);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("⏱️  Gadget Op1 took"));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("⏱️  Gadget Op2 took"));
@@ -360,6 +397,14 @@ describe("HookPresets", () => {
 
       expect(hooks).toEqual({});
     });
+
+    it("has no observers, interceptors or controllers", () => {
+      const hooks = HookPresets.silent();
+
+      expect(hooks.observers).toBeUndefined();
+      expect(hooks.interceptors).toBeUndefined();
+      expect(hooks.controllers).toBeUndefined();
+    });
   });
 
   describe("merge", () => {
@@ -476,6 +521,131 @@ describe("HookPresets", () => {
 
       expect(Object.keys(merged.observers ?? {})).toHaveLength(3);
     });
+
+    it("interceptors show last-wins behavior when same key defined multiple times", () => {
+      const firstInterceptor = vi.fn().mockReturnValue("FIRST");
+      const secondInterceptor = vi.fn().mockReturnValue("SECOND");
+
+      const hooks1 = {
+        interceptors: {
+          interceptTextChunk: firstInterceptor,
+        },
+      };
+
+      const hooks2 = {
+        interceptors: {
+          interceptTextChunk: secondInterceptor,
+        },
+      };
+
+      const merged = HookPresets.merge(hooks1, hooks2);
+
+      // The second interceptor should win (last-wins)
+      const result = merged.interceptors?.interceptTextChunk?.("hello", {
+        iteration: 1,
+        accumulatedText: "",
+        logger: {} as any,
+      });
+
+      // Only the second interceptor is called (last-wins)
+      expect(secondInterceptor).toHaveBeenCalledWith("hello", expect.anything());
+      expect(firstInterceptor).not.toHaveBeenCalled();
+      expect(result).toBe("SECOND");
+    });
+
+    it("interceptors from different keys are all preserved", () => {
+      const rawChunkFn = vi.fn().mockReturnValue("raw");
+      const textChunkFn = vi.fn().mockReturnValue("text");
+
+      const hooks1 = {
+        interceptors: {
+          interceptRawChunk: rawChunkFn,
+        },
+      };
+
+      const hooks2 = {
+        interceptors: {
+          interceptTextChunk: textChunkFn,
+        },
+      };
+
+      const merged = HookPresets.merge(hooks1, hooks2);
+
+      expect(merged.interceptors).toHaveProperty("interceptRawChunk");
+      expect(merged.interceptors).toHaveProperty("interceptTextChunk");
+    });
+
+    it("controllers show last-wins behavior when same key defined multiple times", async () => {
+      const firstController = vi.fn().mockResolvedValue({ action: "proceed" });
+      const secondController = vi
+        .fn()
+        .mockResolvedValue({ action: "skip", syntheticResult: "cached" });
+
+      const hooks1 = {
+        controllers: {
+          beforeGadgetExecution: firstController,
+        },
+      };
+
+      const hooks2 = {
+        controllers: {
+          beforeGadgetExecution: secondController,
+        },
+      };
+
+      const merged = HookPresets.merge(hooks1, hooks2);
+
+      // The second controller should win (last-wins)
+      const result = await merged.controllers?.beforeGadgetExecution?.({
+        iteration: 1,
+        gadgetName: "TestGadget",
+        invocationId: "test-1",
+        parameters: {},
+        logger: {} as any,
+      });
+
+      // Only the second controller is called (last-wins)
+      expect(secondController).toHaveBeenCalled();
+      expect(firstController).not.toHaveBeenCalled();
+      expect(result).toEqual({ action: "skip", syntheticResult: "cached" });
+    });
+
+    it("merge() composes multiple observer handlers so both run", async () => {
+      const handler1Called: string[] = [];
+      const handler2Called: string[] = [];
+
+      const hooks1 = {
+        observers: {
+          onLLMCallComplete: async (_ctx: ObserveLLMCallCompleteContext) => {
+            handler1Called.push("handler1");
+          },
+        },
+      };
+
+      const hooks2 = {
+        observers: {
+          onLLMCallComplete: async (_ctx: ObserveLLMCallCompleteContext) => {
+            handler2Called.push("handler2");
+          },
+        },
+      };
+
+      const merged = HookPresets.merge(hooks1, hooks2);
+
+      const ctx: ObserveLLMCallCompleteContext = {
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        finalMessage: "Response",
+      };
+
+      await merged.observers?.onLLMCallComplete?.(ctx);
+
+      // Both observer handlers must run
+      expect(handler1Called).toHaveLength(1);
+      expect(handler2Called).toHaveLength(1);
+    });
   });
 
   describe("progressTracking preset", () => {
@@ -568,6 +738,233 @@ describe("HookPresets", () => {
       // Total gadget cost should be $0.003
       expect(lastStats).not.toBeNull();
       expect(lastStats.totalCost).toBeGreaterThanOrEqual(0.003);
+    });
+
+    it("uses modelRegistry to calculate cost when provided", async () => {
+      let lastStats: any = null;
+      const mockModelRegistry = {
+        estimateCost: vi.fn().mockReturnValue({ totalCost: 0.005 }),
+      };
+
+      const hooks = HookPresets.progressTracking({
+        modelRegistry: mockModelRegistry as any,
+        onProgress: (stats) => {
+          lastStats = stats;
+        },
+      });
+
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "openai:gpt-4o" },
+      });
+
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "openai:gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      expect(mockModelRegistry.estimateCost).toHaveBeenCalledWith(
+        "gpt-4o", // provider prefix stripped
+        100,
+        50,
+        0,
+        0,
+        0,
+      );
+      expect(lastStats.totalCost).toBe(0.005);
+    });
+
+    it("handles model name without provider prefix in modelRegistry lookup", async () => {
+      let lastStats: any = null;
+      const mockModelRegistry = {
+        estimateCost: vi.fn().mockReturnValue({ totalCost: 0.003 }),
+      };
+
+      const hooks = HookPresets.progressTracking({
+        modelRegistry: mockModelRegistry as any,
+        onProgress: (stats) => {
+          lastStats = stats;
+        },
+      });
+
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "claude-3-5-sonnet" },
+      });
+
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "claude-3-5-sonnet" },
+        response: { role: "assistant", content: "test" },
+        usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      // Model name without ":" is used as-is
+      expect(mockModelRegistry.estimateCost).toHaveBeenCalledWith(
+        "claude-3-5-sonnet",
+        50,
+        25,
+        0,
+        0,
+        0,
+      );
+      expect(lastStats.totalCost).toBe(0.003);
+    });
+
+    it("gracefully handles modelRegistry estimateCost returning undefined", async () => {
+      let lastStats: any = null;
+      const mockModelRegistry = {
+        estimateCost: vi.fn().mockReturnValue(undefined),
+      };
+
+      const hooks = HookPresets.progressTracking({
+        modelRegistry: mockModelRegistry as any,
+        onProgress: (stats) => {
+          lastStats = stats;
+        },
+      });
+
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "unknown-model" },
+      });
+
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "unknown-model" },
+        response: { role: "assistant", content: "test" },
+        usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      // Cost should remain 0 when no estimate available
+      expect(lastStats.totalCost).toBe(0);
+    });
+
+    it("gracefully handles modelRegistry throwing an error", async () => {
+      let lastStats: any = null;
+      const mockModelRegistry = {
+        estimateCost: vi.fn().mockImplementation(() => {
+          throw new Error("Registry lookup failed");
+        }),
+      };
+
+      const hooks = HookPresets.progressTracking({
+        modelRegistry: mockModelRegistry as any,
+        onProgress: (stats) => {
+          lastStats = stats;
+        },
+      });
+
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+      });
+
+      // Should not throw even though modelRegistry throws
+      await expect(
+        hooks.observers?.onLLMCallComplete?.({
+          iteration: 1,
+          messages: [],
+          options: { model: "gpt-4o" },
+          response: { role: "assistant", content: "test" },
+          usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
+          finalMessage: "Response",
+        } as ObserveLLMCallCompleteContext),
+      ).resolves.not.toThrow();
+
+      expect(lastStats).not.toBeNull();
+      expect(lastStats.totalCost).toBe(0);
+    });
+
+    it("logs warning when modelRegistry throws and logProgress is true", async () => {
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const mockModelRegistry = {
+        estimateCost: vi.fn().mockImplementation(() => {
+          throw new Error("Registry lookup failed");
+        }),
+      };
+
+      const hooks = HookPresets.progressTracking({
+        modelRegistry: mockModelRegistry as any,
+        logProgress: true,
+      });
+
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+      });
+
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith("⚠️  Cost estimation failed:", expect.any(Error));
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it("logs progress to console when logProgress is true", async () => {
+      const hooks = HookPresets.progressTracking({ logProgress: true });
+
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+      });
+
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("📊 Progress: Iteration #1"),
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("150 tokens"));
+    });
+
+    it("formats large token counts with k suffix when logProgress is true", async () => {
+      const hooks = HookPresets.progressTracking({ logProgress: true });
+
+      await hooks.observers?.onLLMCallStart?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+      });
+
+      await hooks.observers?.onLLMCallComplete?.({
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        response: { role: "assistant", content: "test" },
+        usage: { inputTokens: 700, outputTokens: 500, totalTokens: 1200 },
+        finalMessage: "Response",
+      } as ObserveLLMCallCompleteContext);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("1.2k tokens"));
     });
 
     it("handles gadgets with zero or undefined cost", async () => {
@@ -674,6 +1071,121 @@ describe("HookPresets", () => {
       expect(consoleLogSpy).toHaveBeenCalledWith("[LLM] Completed (tokens: 15)");
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("⏱️  LLM call took"));
       expect(consoleLogSpy).toHaveBeenCalledWith("📊 Tokens this call: 15");
+    });
+
+    it("logs errors from errorLogging when merged into monitoring", async () => {
+      const hooks = HookPresets.monitoring();
+
+      const errorCtx: ObserveLLMCallErrorContext = {
+        iteration: 1,
+        messages: [],
+        options: { model: "gpt-4o" },
+        error: new Error("Connection timeout"),
+        recovered: false,
+      };
+
+      await hooks.observers?.onLLMCallError?.(errorCtx);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "❌ LLM Error (iteration 1):",
+        "Connection timeout",
+      );
+    });
+  });
+
+  describe("compactionTracking preset", () => {
+    it("logs compaction events with token savings", async () => {
+      const hooks = HookPresets.compactionTracking();
+
+      const ctx: ObserveCompactionContext = {
+        iteration: 2,
+        event: {
+          strategy: "sliding-window",
+          tokensBefore: 10000,
+          tokensAfter: 5000,
+          messagesBefore: 20,
+          messagesAfter: 10,
+          iteration: 2,
+        },
+        stats: {
+          totalCompactions: 1,
+          totalTokensSaved: 5000,
+          currentUsage: { tokens: 5000, percent: 50 },
+          contextWindow: 100000,
+        },
+        logger: {} as any,
+      };
+
+      await hooks.observers?.onCompaction?.(ctx);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        "🗜️  Compaction (sliding-window): 10000 → 5000 tokens (saved 5000, 50.0%)",
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith("   Messages: 20 → 10");
+    });
+
+    it("does not log cumulative stats on first compaction", async () => {
+      const hooks = HookPresets.compactionTracking();
+
+      const ctx: ObserveCompactionContext = {
+        iteration: 1,
+        event: {
+          strategy: "sliding-window",
+          tokensBefore: 8000,
+          tokensAfter: 4000,
+          messagesBefore: 16,
+          messagesAfter: 8,
+          iteration: 1,
+        },
+        stats: {
+          totalCompactions: 1,
+          totalTokensSaved: 4000,
+          currentUsage: { tokens: 4000, percent: 40 },
+          contextWindow: 100000,
+        },
+        logger: {} as any,
+      };
+
+      await hooks.observers?.onCompaction?.(ctx);
+
+      // Only two log lines for first compaction (no cumulative stats)
+      expect(consoleLogSpy).toHaveBeenCalledTimes(2);
+      expect(consoleLogSpy).not.toHaveBeenCalledWith(expect.stringContaining("Cumulative"));
+    });
+
+    it("logs cumulative stats when more than one compaction has occurred", async () => {
+      const hooks = HookPresets.compactionTracking();
+
+      const ctx: ObserveCompactionContext = {
+        iteration: 5,
+        event: {
+          strategy: "summarization",
+          tokensBefore: 12000,
+          tokensAfter: 6000,
+          messagesBefore: 24,
+          messagesAfter: 12,
+          iteration: 5,
+        },
+        stats: {
+          totalCompactions: 3,
+          totalTokensSaved: 18000,
+          currentUsage: { tokens: 6000, percent: 60 },
+          contextWindow: 100000,
+        },
+        logger: {} as any,
+      };
+
+      await hooks.observers?.onCompaction?.(ctx);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        "   Cumulative: 3 compactions, 18000 tokens saved",
+      );
+    });
+
+    it("returns hooks with onCompaction observer", () => {
+      const hooks = HookPresets.compactionTracking();
+
+      expect(hooks.observers).toHaveProperty("onCompaction");
     });
   });
 

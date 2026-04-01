@@ -1,7 +1,9 @@
 import type OpenAI from "openai";
 import { describe, expect, it, vi } from "vitest";
-
+import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
 import { OpenAIChatProvider } from "./openai.js";
+import { openaiImageModels } from "./openai-image-models.js";
+import { openaiSpeechModels } from "./openai-speech-models.js";
 
 describe("OpenAIChatProvider", () => {
   describe("supports", () => {
@@ -680,6 +682,652 @@ describe("OpenAIChatProvider", () => {
     });
   });
 
+  describe("image generation", () => {
+    describe("getImageModelSpecs", () => {
+      it("returns the full list of openai image model specs", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const specs = provider.getImageModelSpecs();
+
+        expect(specs).toBe(openaiImageModels);
+        expect(specs.length).toBeGreaterThan(0);
+        // Should include DALL-E 2, DALL-E 3, and GPT Image models
+        const modelIds = specs.map((s) => s.modelId);
+        expect(modelIds).toContain("dall-e-2");
+        expect(modelIds).toContain("dall-e-3");
+        expect(modelIds).toContain("gpt-image-1");
+      });
+    });
+
+    describe("supportsImageGeneration", () => {
+      it("returns true for DALL-E 3", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("dall-e-3")).toBe(true);
+      });
+
+      it("returns true for DALL-E 2", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("dall-e-2")).toBe(true);
+      });
+
+      it("returns true for GPT Image models", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("gpt-image-1")).toBe(true);
+        expect(provider.supportsImageGeneration("gpt-image-1.5")).toBe(true);
+        expect(provider.supportsImageGeneration("gpt-image-1-mini")).toBe(true);
+      });
+
+      it("returns false for non-image models", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsImageGeneration("gpt-4")).toBe(false);
+        expect(provider.supportsImageGeneration("gpt-4o")).toBe(false);
+        expect(provider.supportsImageGeneration("dall-e-unknown")).toBe(false);
+      });
+    });
+
+    describe("generateImage", () => {
+      it("generates image with DALL-E 3 including quality and response_format", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/dalle3-image.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "A futuristic city skyline",
+          size: "1024x1024",
+          quality: "hd",
+          responseFormat: "url",
+        });
+
+        expect(generateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "dall-e-3",
+            prompt: "A futuristic city skyline",
+            size: "1024x1024",
+            quality: "hd",
+            response_format: "url",
+          }),
+        );
+        // DALL-E 3 should NOT be flagged as isDallE2 or isGptImage
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).toHaveProperty("quality");
+        expect(callArgs).toHaveProperty("response_format");
+        expect(result.images).toHaveLength(1);
+        expect(result.images[0].url).toBe("https://example.com/dalle3-image.png");
+        expect(result.model).toBe("dall-e-3");
+      });
+
+      it("generates image with DALL-E 3 using default quality when not specified", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/dalle3-standard.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "A peaceful mountain landscape",
+        });
+
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        // quality defaults to "standard" from spec
+        expect(callArgs).toHaveProperty("quality", "standard");
+        // response_format defaults to "url" when not specified
+        expect(callArgs).toHaveProperty("response_format", "url");
+      });
+
+      it("generates image with DALL-E 2 without quality parameter", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/dalle2-image.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-2",
+          prompt: "A cartoon cat",
+          size: "512x512",
+          n: 2,
+        });
+
+        expect(generateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "dall-e-2",
+            prompt: "A cartoon cat",
+            size: "512x512",
+            n: 2,
+          }),
+        );
+
+        // DALL-E 2 must NOT include the quality parameter
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).not.toHaveProperty("quality");
+        // DALL-E 2 must NOT include response_format
+        expect(callArgs).not.toHaveProperty("response_format");
+
+        expect(result.images).toHaveLength(1);
+        expect(result.model).toBe("dall-e-2");
+        expect(result.usage.size).toBe("512x512");
+      });
+
+      it("generates image with GPT Image model without quality or response_format", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/gpt-image.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "gpt-image-1",
+          prompt: "A photorealistic apple",
+          size: "1024x1024",
+          quality: "high",
+        });
+
+        expect(generateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "gpt-image-1",
+            prompt: "A photorealistic apple",
+            size: "1024x1024",
+          }),
+        );
+
+        // GPT Image models must NOT include quality (uses different API param) or response_format
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).not.toHaveProperty("quality");
+        expect(callArgs).not.toHaveProperty("response_format");
+
+        expect(result.images).toHaveLength(1);
+        expect(result.model).toBe("gpt-image-1");
+      });
+
+      it("generates image with gpt-image-1.5 model (also a GPT Image model)", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/gpt-image-1-5.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateImage({
+          model: "gpt-image-1.5",
+          prompt: "A vibrant sunset",
+        });
+
+        // gpt-image-1.5 starts with "gpt-image" so isGptImage is true
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).not.toHaveProperty("quality");
+        expect(callArgs).not.toHaveProperty("response_format");
+      });
+
+      it("returns correct usage metadata in result", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [
+            { url: "https://example.com/img1.png", b64_json: null },
+            { url: "https://example.com/img2.png", b64_json: null },
+          ],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-2",
+          prompt: "Two cute dogs",
+          size: "256x256",
+          n: 2,
+        });
+
+        expect(result.usage).toEqual({
+          imagesGenerated: 2,
+          size: "256x256",
+          quality: "standard",
+        });
+      });
+
+      it("handles response with revised_prompt", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [
+            {
+              url: "https://example.com/revised.png",
+              b64_json: null,
+              revised_prompt: "A vivid, photorealistic futuristic city skyline at dusk",
+            },
+          ],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "Futuristic city at dusk",
+        });
+
+        expect(result.images[0].revisedPrompt).toBe(
+          "A vivid, photorealistic futuristic city skyline at dusk",
+        );
+        expect(result.images[0].url).toBe("https://example.com/revised.png");
+      });
+
+      it("handles empty data array from API response", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "Nothing",
+        });
+
+        expect(result.images).toHaveLength(0);
+        expect(result.usage.imagesGenerated).toBe(0);
+      });
+
+      it("uses default size and n=1 when not specified", async () => {
+        const generateSpy = vi.fn().mockResolvedValue({
+          data: [{ url: "https://example.com/default.png", b64_json: null }],
+        });
+
+        const mockClient = {
+          images: {
+            generate: generateSpy,
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateImage({
+          model: "dall-e-3",
+          prompt: "A simple test",
+        });
+
+        const callArgs = generateSpy.mock.calls[0][0] as Record<string, unknown>;
+        expect(callArgs).toHaveProperty("n", 1);
+        // Should use spec's defaultSize "1024x1024"
+        expect(callArgs).toHaveProperty("size", "1024x1024");
+      });
+    });
+  });
+
+  describe("speech generation", () => {
+    describe("getSpeechModelSpecs", () => {
+      it("returns the full list of openai speech model specs", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const specs = provider.getSpeechModelSpecs();
+
+        expect(specs).toBe(openaiSpeechModels);
+        expect(specs.length).toBeGreaterThan(0);
+        // Should include tts-1, tts-1-hd models
+        const modelIds = specs.map((s) => s.modelId);
+        expect(modelIds).toContain("tts-1");
+        expect(modelIds).toContain("tts-1-hd");
+      });
+
+      it("returns specs with correct structure", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const specs = provider.getSpeechModelSpecs();
+        const tts1Spec = specs.find((s) => s.modelId === "tts-1");
+
+        expect(tts1Spec).toBeDefined();
+        expect(tts1Spec?.provider).toBe("openai");
+        expect(tts1Spec?.defaultVoice).toBe("alloy");
+        expect(tts1Spec?.defaultFormat).toBe("mp3");
+        expect(tts1Spec?.voices).toContain("alloy");
+        expect(tts1Spec?.voices).toContain("nova");
+      });
+    });
+
+    describe("supportsSpeechGeneration", () => {
+      it("returns true for tts-1", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsSpeechGeneration("tts-1")).toBe(true);
+      });
+
+      it("returns true for tts-1-hd", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsSpeechGeneration("tts-1-hd")).toBe(true);
+      });
+
+      it("returns false for non-speech models", () => {
+        const mockClient = {} as OpenAI;
+        const provider = new OpenAIChatProvider(mockClient);
+
+        expect(provider.supportsSpeechGeneration("gpt-4")).toBe(false);
+        expect(provider.supportsSpeechGeneration("dall-e-3")).toBe(false);
+        expect(provider.supportsSpeechGeneration("tts-unknown")).toBe(false);
+      });
+    });
+
+    describe("generateSpeech", () => {
+      it("calls client.audio.speech.create and returns ArrayBuffer", async () => {
+        const mockArrayBuffer = new ArrayBuffer(1024);
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => mockArrayBuffer,
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input: "Hello, world!",
+          voice: "alloy",
+          responseFormat: "mp3",
+          speed: 1.0,
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledTimes(1);
+        expect(result.audio).toBe(mockArrayBuffer);
+        expect(result.model).toBe("tts-1");
+        expect(result.format).toBe("mp3");
+      });
+
+      it("resolves default voice to alloy when not specified", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            voice: "alloy",
+          }),
+        );
+      });
+
+      it("resolves default format to mp3 when not specified", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            response_format: "mp3",
+          }),
+        );
+
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+        expect(result.format).toBe("mp3");
+      });
+
+      it("resolves default speed to 1.0 when not specified", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: "Test input",
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            speed: 1.0,
+          }),
+        );
+      });
+
+      it("uses custom voice, format, and speed when provided", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        await provider.generateSpeech({
+          model: "tts-1-hd",
+          input: "Custom params test",
+          voice: "nova",
+          responseFormat: "opus",
+          speed: 1.5,
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: "tts-1-hd",
+            input: "Custom params test",
+            voice: "nova",
+            response_format: "opus",
+            speed: 1.5,
+          }),
+        );
+      });
+
+      it("includes cost calculation in the result", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const input = "Hello, this is a test for cost calculation.";
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input,
+        });
+
+        // tts-1 pricing: $0.000015 per character
+        const expectedCost = input.length * 0.000015;
+        expect(result.cost).toBeDefined();
+        expect(result.cost).toBeCloseTo(expectedCost, 10);
+      });
+
+      it("includes cost calculation for tts-1-hd (higher rate)", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const input = "HD quality test";
+        const result = await provider.generateSpeech({
+          model: "tts-1-hd",
+          input,
+        });
+
+        // tts-1-hd pricing: $0.00003 per character (2x tts-1)
+        const expectedCost = input.length * 0.00003;
+        expect(result.cost).toBeDefined();
+        expect(result.cost).toBeCloseTo(expectedCost, 10);
+      });
+
+      it("returns correct usage with character count", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const input = "Count my characters";
+        const result = await provider.generateSpeech({
+          model: "tts-1",
+          input,
+        });
+
+        expect(result.usage).toEqual({
+          characterCount: input.length,
+        });
+      });
+
+      it("passes the input text to the API", async () => {
+        const speechCreateSpy = vi.fn().mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+
+        const mockClient = {
+          audio: {
+            speech: {
+              create: speechCreateSpy,
+            },
+          },
+        } as unknown as OpenAI;
+
+        const provider = new OpenAIChatProvider(mockClient);
+
+        const inputText = "The quick brown fox jumps over the lazy dog";
+        await provider.generateSpeech({
+          model: "tts-1",
+          input: inputText,
+        });
+
+        expect(speechCreateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            input: inputText,
+            model: "tts-1",
+          }),
+        );
+      });
+    });
+  });
+
   describe("normalizeProviderStream with usage", () => {
     it("should extract usage with cached tokens", async () => {
       const mockStream = (async function* () {
@@ -811,6 +1459,297 @@ describe("OpenAIChatProvider", () => {
       // Should only get the chunk with actual content
       expect(chunks).toHaveLength(1);
       expect(chunks[0].text).toBe("Hello");
+    });
+  });
+
+  describe("reasoning config mapping", () => {
+    it("passes reasoning params to API when options.reasoning is provided", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      await provider
+        .stream(
+          {
+            model: "o1",
+            messages: [{ role: "user" as const, content: "Complex reasoning task" }],
+            reasoning: { enabled: true, effort: "high" },
+          },
+          { provider: "openai", name: "o1" },
+        )
+        .next();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning: { effort: "high" },
+        }),
+        undefined,
+      );
+    });
+
+    it("omits reasoning param when options.reasoning is not set", async () => {
+      const createSpy = vi.fn().mockResolvedValue((async function* () {})());
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: createSpy,
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new OpenAIChatProvider(mockClient);
+
+      await provider
+        .stream(
+          {
+            model: "gpt-4o",
+            messages: [{ role: "user" as const, content: "Simple task" }],
+          },
+          { provider: "openai", name: "gpt-4o" },
+        )
+        .next();
+
+      const payload = createSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty("reasoning");
+    });
+  });
+
+  describe("countTokens with multimodal content", () => {
+    it("counts tokens for messages with text and image parts", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const count = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "What is in this image?" },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/image.png" },
+              },
+            ],
+          },
+        ],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      // Should include text tokens + image estimate (765 tokens)
+      expect(count).toBeGreaterThan(765);
+    });
+
+    it("adds 765 tokens per image (default/low detail mode)", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const textOnlyCount = await provider.countTokens(
+        [{ role: "user" as const, content: "Hello" }],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      const withImageCount = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Hello" },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/image.png" },
+              },
+            ],
+          },
+        ],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      // Image adds 765 tokens
+      expect(withImageCount - textOnlyCount).toBe(765);
+    });
+
+    it("adds 765 tokens per image for each image in multimodal content", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const singleImageCount = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Compare these" },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/img1.png" },
+              },
+            ],
+          },
+        ],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      const twoImageCount = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Compare these" },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/img1.png" },
+              },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/img2.png" },
+              },
+            ],
+          },
+        ],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      // Second image adds another 765 tokens
+      expect(twoImageCount - singleImageCount).toBe(765);
+    });
+
+    it("counts tokens across multiple messages with images", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const count = await provider.countTokens(
+        [
+          { role: "system" as const, content: "You are a vision assistant." },
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Describe this image" },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/image.png" },
+              },
+            ],
+          },
+        ],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      // Should have substantial token count including 765 image tokens
+      expect(count).toBeGreaterThan(765);
+    });
+
+    it("counts image tokens from base64 images", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const textOnlyCount = await provider.countTokens(
+        [{ role: "user" as const, content: "Hello" }],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      const withBase64ImageCount = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "Hello" },
+              {
+                type: "image" as const,
+                source: {
+                  type: "base64" as const,
+                  mediaType: "image/png",
+                  data: "iVBORw0KGgoAAAANSUhEUg==",
+                },
+              },
+            ],
+          },
+        ],
+        { provider: "openai", name: "gpt-4o" },
+      );
+
+      // Base64 images also get 765 token estimate
+      expect(withBase64ImageCount - textOnlyCount).toBe(765);
+    });
+  });
+
+  describe("countTokens constants and scaling validation", () => {
+    it("token count scales with text length", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenAIChatProvider(mockClient);
+
+      // FALLBACK_CHARS_PER_TOKEN is 4; use a long text to ensure scaling is visible
+      const shortText = "Hi";
+      const longText = "A".repeat(FALLBACK_CHARS_PER_TOKEN * 10); // 40 chars = ~10 tokens
+
+      const shortCount = await provider.countTokens(
+        [{ role: "user" as const, content: shortText }],
+        { provider: "openai", name: "gpt-4" },
+      );
+      const longCount = await provider.countTokens([{ role: "user" as const, content: longText }], {
+        provider: "openai",
+        name: "gpt-4",
+      });
+
+      // Long message should have significantly more tokens than short one
+      expect(longCount).toBeGreaterThan(shortCount);
+    });
+
+    it("FALLBACK_CHARS_PER_TOKEN constant equals 4", async () => {
+      // Verify the constant used in fallback estimation has the expected value
+      expect(FALLBACK_CHARS_PER_TOKEN).toBe(4);
+    });
+
+    it("image token estimation adds 765 tokens on the tiktoken path", async () => {
+      // Both the tiktoken path and the fallback path add 765 tokens per image;
+      // this test exercises the tiktoken path (gpt-4 is a supported model)
+      const mockClient = {} as OpenAI;
+      const provider = new OpenAIChatProvider(mockClient);
+
+      const textOnlyCount = await provider.countTokens(
+        [{ role: "user" as const, content: "A".repeat(400) }],
+        { provider: "openai", name: "gpt-4" },
+      );
+
+      const withImageCount = await provider.countTokens(
+        [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "A".repeat(400) },
+              {
+                type: "image" as const,
+                source: { type: "url" as const, url: "https://example.com/img.png" },
+              },
+            ],
+          },
+        ],
+        { provider: "openai", name: "gpt-4" },
+      );
+
+      expect(withImageCount - textOnlyCount).toBe(765);
+    });
+
+    it("tiktoken token count is greater than the FALLBACK_CHARS_PER_TOKEN estimate for typical text", async () => {
+      const mockClient = {} as OpenAI;
+      const chars = "Hello world this is a test message";
+      const expectedFallbackTokens = Math.ceil(chars.length / FALLBACK_CHARS_PER_TOKEN);
+
+      // tiktoken produces a more accurate count; with per-message overhead it exceeds the raw char/4 estimate
+      const provider = new OpenAIChatProvider(mockClient);
+      const count = await provider.countTokens([{ role: "user" as const, content: chars }], {
+        provider: "openai",
+        name: "gpt-4",
+      });
+
+      expect(count).toBeGreaterThan(expectedFallbackTokens);
     });
   });
 });

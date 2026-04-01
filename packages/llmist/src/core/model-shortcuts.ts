@@ -256,3 +256,26 @@ export function getModelId(model: string): string {
   }
   return model.slice(separatorIndex + 1);
 }
+
+/**
+ * Strip the provider prefix from a model string.
+ *
+ * Identical to {@link getModelId}: removes the `provider:` portion and returns
+ * just the model ID. If there is no prefix, the original string is returned.
+ *
+ * Use this when you need the bare model ID (e.g. for a cost-registry lookup)
+ * and the input may or may not carry a provider prefix.
+ *
+ * @param modelId - Full model string, optionally with provider prefix
+ * @returns Model ID without provider prefix
+ *
+ * @example
+ * ```typescript
+ * stripProviderPrefix('openai:gpt-4o')          // → 'gpt-4o'
+ * stripProviderPrefix('anthropic:claude-sonnet') // → 'claude-sonnet'
+ * stripProviderPrefix('gpt-4o')                 // → 'gpt-4o'  (no prefix — returned as-is)
+ * ```
+ */
+export function stripProviderPrefix(modelId: string): string {
+  return getModelId(modelId);
+}
