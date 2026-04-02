@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createLoadSkillGadget, LOAD_SKILL_GADGET_NAME } from "./load-skill-gadget.js";
 import { SkillRegistry } from "./registry.js";
 import { Skill } from "./skill.js";
-import { createUseSkillGadget, USE_SKILL_GADGET_NAME } from "./use-skill-gadget.js";
 
 function makeSkill(name: string, description: string, instructions: string): Skill {
   return Skill.fromContent(
@@ -10,12 +10,12 @@ function makeSkill(name: string, description: string, instructions: string): Ski
   );
 }
 
-describe("createUseSkillGadget", () => {
-  it("creates a gadget with UseSkill name", () => {
+describe("createLoadSkillGadget", () => {
+  it("creates a gadget with LoadSkill name", () => {
     const registry = SkillRegistry.from([makeSkill("test-skill", "A test skill", "Do the thing.")]);
 
-    const gadget = createUseSkillGadget(registry);
-    expect(gadget.name).toBe(USE_SKILL_GADGET_NAME);
+    const gadget = createLoadSkillGadget(registry);
+    expect(gadget.name).toBe(LOAD_SKILL_GADGET_NAME);
   });
 
   it("includes skill summaries in description", () => {
@@ -24,7 +24,7 @@ describe("createUseSkillGadget", () => {
       makeSkill("deploy", "Deploy to production", "Instructions."),
     ]);
 
-    const gadget = createUseSkillGadget(registry);
+    const gadget = createLoadSkillGadget(registry);
     expect(gadget.description).toContain("gmail-read");
     expect(gadget.description).toContain("deploy");
   });
@@ -34,7 +34,7 @@ describe("createUseSkillGadget", () => {
       makeSkill("greet", "Greet the user", "Say hello warmly and ask how they are."),
     ]);
 
-    const gadget = createUseSkillGadget(registry);
+    const gadget = createLoadSkillGadget(registry);
     const result = await gadget.execute({ skill: "greet" });
     expect(result).toContain("Say hello warmly");
   });
@@ -44,7 +44,7 @@ describe("createUseSkillGadget", () => {
       makeSkill("search", "Search for files", "Search for: $ARGUMENTS"),
     ]);
 
-    const gadget = createUseSkillGadget(registry);
+    const gadget = createLoadSkillGadget(registry);
     const result = await gadget.execute({ skill: "search", arguments: "*.ts" });
     expect(result).toContain("*.ts");
   });
@@ -52,7 +52,7 @@ describe("createUseSkillGadget", () => {
   it("returns error message for unknown skill", async () => {
     const registry = SkillRegistry.from([makeSkill("real", "A real skill", "Body.")]);
 
-    const gadget = createUseSkillGadget(registry);
+    const gadget = createLoadSkillGadget(registry);
     const result = await gadget.execute({ skill: "fake" });
     expect(String(result)).toContain("Unknown skill");
   });
@@ -65,7 +65,7 @@ describe("createUseSkillGadget", () => {
     const visible = makeSkill("visible", "Visible skill", "Body.");
 
     const registry = SkillRegistry.from([hidden, visible]);
-    const gadget = createUseSkillGadget(registry);
+    const gadget = createLoadSkillGadget(registry);
 
     // Description should only mention the visible skill
     expect(gadget.description).toContain("visible");
@@ -92,8 +92,8 @@ Deploy version $ARGUMENTS to production.
     expect(registry.size).toBe(1);
     expect(registry.getModelInvocable()).toHaveLength(1);
 
-    const gadget = createUseSkillGadget(registry);
-    expect(gadget.name).toBe("UseSkill");
+    const gadget = createLoadSkillGadget(registry);
+    expect(gadget.name).toBe("LoadSkill");
 
     const result = await gadget.execute({ skill: "deploy", arguments: "v2.1.0" });
     const text = String(result);

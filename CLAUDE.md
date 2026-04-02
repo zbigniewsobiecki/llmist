@@ -166,7 +166,7 @@ const agent = new AgentBuilder()
   .ask('Review this PR');
 ```
 
-Skills compose with gadgets via the auto-registered `UseSkill` meta-gadget. CLI supports `/skill-name` invocation and `llmist skill list/info` commands.
+Skills compose with gadgets via the auto-registered `LoadSkill` meta-gadget. CLI supports `/skill-name` invocation and `llmist skill list/info` commands.
 
 ### Hooks System
 Three-tier architecture:

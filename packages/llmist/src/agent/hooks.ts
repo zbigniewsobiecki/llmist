@@ -355,7 +355,7 @@ export interface Observers {
   /** Called when a retry attempt is made after a failed LLM call */
   onRetryAttempt?: (context: ObserveRetryAttemptContext) => void | Promise<void>;
 
-  /** Called when a skill is activated (via UseSkill gadget or pre-activation) */
+  /** Called when a skill is activated (via LoadSkill gadget or pre-activation) */
   onSkillActivated?: (context: ObserveSkillActivatedContext) => void | Promise<void>;
 }
 

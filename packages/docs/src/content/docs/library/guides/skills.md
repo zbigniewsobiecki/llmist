@@ -180,7 +180,7 @@ const builder = new AgentBuilder()
   .ask('Help me with this task');
 ```
 
-When skills are registered, a `UseSkill` meta-gadget is automatically added. The LLM can invoke it like any gadget to activate a skill mid-conversation.
+When skills are registered, a `LoadSkill` meta-gadget is automatically added. The LLM can invoke it like any gadget to activate a skill mid-conversation.
 
 ## How It Works
 
@@ -197,8 +197,8 @@ When skills are registered, a `UseSkill` meta-gadget is automatically added. The
 └─────────────────────────────────────────────────┘
 ```
 
-1. Skill metadata (Tier 1) is included in the UseSkill gadget description
-2. LLM decides to invoke UseSkill based on the task
+1. Skill metadata (Tier 1) is included in the LoadSkill gadget description
+2. LLM decides to invoke LoadSkill based on the task
 3. Skill instructions (Tier 2) are loaded and returned as the gadget result
 4. LLM follows the instructions in the next iteration
 
