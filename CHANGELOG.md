@@ -1,3 +1,9 @@
+## [16.2.3](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.2...v16.2.3) (2026-04-02)
+
+### Bug Fixes
+
+* **agent:** recover from context overflow 400 errors via forced compaction ([#549](https://github.com/zbigniewsobiecki/llmist/issues/549)) ([69dfbc7](https://github.com/zbigniewsobiecki/llmist/commit/69dfbc7ef83b3a436d7d5c90bb86569afa121c94))
+
 ## [16.2.2](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.1...v16.2.2) (2026-04-02)
 
 ### Bug Fixes
