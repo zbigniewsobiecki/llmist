@@ -15,9 +15,10 @@ export {
   substituteArguments,
   substituteVariables,
 } from "./activation.js";
+// LoadSkill meta-gadget
+export { createLoadSkillGadget, LOAD_SKILL_GADGET_NAME } from "./load-skill-gadget.js";
 // Filesystem loader
 export { discoverSkills, loadSkillsFromDirectory } from "./loader.js";
-
 // SKILL.md parser
 export {
   parseFrontmatter,
@@ -40,6 +41,3 @@ export type {
   SkillResource,
   SkillSource,
 } from "./types.js";
-
-// UseSkill meta-gadget
-export { createUseSkillGadget, USE_SKILL_GADGET_NAME } from "./use-skill-gadget.js";

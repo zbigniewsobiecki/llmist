@@ -470,8 +470,9 @@ export type {
   SkillSource,
 } from "./skills/index.js";
 export {
-  createUseSkillGadget,
+  createLoadSkillGadget,
   discoverSkills,
+  LOAD_SKILL_GADGET_NAME,
   loadSkillsFromDirectory,
   parseFrontmatter,
   parseMetadata,
@@ -483,7 +484,6 @@ export {
   scanResources,
   substituteArguments,
   substituteVariables,
-  USE_SKILL_GADGET_NAME,
   validateMetadata,
 } from "./skills/index.js";
 // Utility functions for subagent gadgets

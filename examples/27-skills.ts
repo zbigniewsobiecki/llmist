@@ -8,7 +8,7 @@
  * Run: npx tsx examples/27-skills.ts
  */
 
-import { AgentBuilder, createUseSkillGadget, discoverSkills, Skill, SkillRegistry } from "llmist";
+import { AgentBuilder, createLoadSkillGadget, discoverSkills, Skill, SkillRegistry } from "llmist";
 
 // ─── 1. Creating skills programmatically ─────────────────────────────────────
 
@@ -80,16 +80,16 @@ const activation = await codeReviewSkill.activate({
 console.log(`Activated: ${activation.skillName}`);
 console.log(`Instructions preview: ${activation.resolvedInstructions.slice(0, 200)}...`);
 
-// ─── 4. UseSkill Meta-Gadget ─────────────────────────────────────────────────
+// ─── 4. LoadSkill Meta-Gadget ─────────────────────────────────────────────────
 
-console.log("\n=== UseSkill Meta-Gadget ===\n");
+console.log("\n=== LoadSkill Meta-Gadget ===\n");
 
-const useSkillGadget = createUseSkillGadget(registry);
-console.log(`Gadget name: ${useSkillGadget.name}`);
-console.log(`Description includes skills: ${useSkillGadget.description.includes("code-review")}`);
+const loadSkillGadget = createLoadSkillGadget(registry);
+console.log(`Gadget name: ${loadSkillGadget.name}`);
+console.log(`Description includes skills: ${loadSkillGadget.description.includes("code-review")}`);
 
 // Execute the gadget (simulating what the LLM would do)
-const result = await useSkillGadget.execute({
+const result = await loadSkillGadget.execute({
   skill: "code-review",
   arguments: "const x = eval(userInput);",
 });

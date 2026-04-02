@@ -19,10 +19,10 @@ import type {
   TextOnlyHandler,
 } from "../gadgets/types.js";
 import { resolveInstructions } from "../skills/activation.js";
+import { createLoadSkillGadget } from "../skills/load-skill-gadget.js";
 import { loadSkillsFromDirectory } from "../skills/loader.js";
 import { parseFrontmatter } from "../skills/parser.js";
 import type { SkillRegistry } from "../skills/registry.js";
-import { createUseSkillGadget } from "../skills/use-skill-gadget.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type {
@@ -446,7 +446,7 @@ export class AgentBuilder {
 
     if (skillRegistry && skillRegistry.size > 0) {
       if (skillRegistry.getModelInvocable().length > 0) {
-        registry.registerByClass(createUseSkillGadget(skillRegistry));
+        registry.registerByClass(createLoadSkillGadget(skillRegistry));
       }
 
       const preActivatedBlock = this.resolvePreActivatedInstructions(skillRegistry);
