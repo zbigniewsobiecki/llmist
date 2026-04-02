@@ -51,6 +51,22 @@ Compaction runs automatically before each LLM call:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Context Overflow Recovery
+
+Even with proactive compaction, context overflow can still occur — for example, when large gadget results (like base64-encoded file attachments) cause the request to exceed provider-specific size limits that are lower than the model's token context window.
+
+When a 400 error that looks like context overflow is detected, the agent automatically:
+
+1. **Detects** the error using `isLikelyContextOverflow()` heuristics
+2. **Forces compaction** regardless of the normal threshold
+3. **Retries** the LLM call with the reduced context
+
+This recovery is attempted **at most once per agent run** to prevent infinite loops. If compaction doesn't resolve the issue, the original error is propagated normally.
+
+:::note
+Overflow recovery requires compaction to be enabled (the default). If you've disabled compaction with `.withoutCompaction()`, the agent will not attempt recovery.
+:::
+
 ## Configuration Options
 
 | Option | Type | Default | Description |

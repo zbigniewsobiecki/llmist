@@ -17,12 +17,11 @@ import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { RateLimitConfig } from "../core/rate-limit.js";
 import { RateLimitTracker, resolveRateLimitConfig } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
-import { resolveRetryConfig } from "../core/retry.js";
+import { isLikelyContextOverflow, resolveRetryConfig } from "../core/retry.js";
 import { BudgetPricingUnavailableError } from "../gadgets/exceptions.js";
 import { MediaStore } from "../gadgets/media-store.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
-  AgentContextConfig,
   GadgetExecutionMode,
   StreamCompletionEvent,
   StreamEvent,
@@ -51,6 +50,14 @@ import { safeObserve } from "./safe-observe.js";
 import type { StreamProcessor } from "./stream-processor.js";
 import { StreamProcessorFactory } from "./stream-processor-factory.js";
 import { bridgeTreeToHooks, getSubagentContextForNode } from "./tree-hook-bridge.js";
+
+/**
+ * Minimum number of history messages required before attempting context overflow
+ * recovery via compaction. This ensures there's meaningful content to compact
+ * (at least 2 conversation turns: user+assistant pairs). If history is smaller,
+ * compaction can't reduce context enough to help and the error should propagate.
+ */
+const OVERFLOW_RECOVERY_MIN_HISTORY = 4;
 
 /**
  * Configuration for the execution tree context (shared tree model with subagents).
@@ -688,6 +695,10 @@ export class Agent {
     let currentLLMNodeId: string | undefined;
     let llmOptions: LLMGenerationOptions | undefined;
 
+    // Track whether we've already attempted context overflow recovery (max 1 per agent run).
+    // This prevents infinite compaction→retry→fail loops.
+    let hasAttemptedOverflowRecovery = false;
+
     try {
       while (currentIteration < this.maxIterations) {
         // Check abort signal at start of each iteration
@@ -812,6 +823,48 @@ export class Agent {
             }
           }
         } catch (error) {
+          // Attempt context overflow recovery: if the error looks like context overflow
+          // and we haven't already tried recovery, force compaction and retry the iteration.
+          // Minimum history of 4 messages (2 conversation turns) ensures there's meaningful
+          // content to compact — otherwise compaction can't reduce the context enough to help.
+          const historyLength = this.conversation.getHistoryMessages().length;
+          if (
+            this.compactionManager &&
+            !hasAttemptedOverflowRecovery &&
+            isLikelyContextOverflow(error as Error) &&
+            historyLength >= OVERFLOW_RECOVERY_MIN_HISTORY
+          ) {
+            hasAttemptedOverflowRecovery = true;
+            this.logger.warn("Possible context overflow detected, attempting compaction recovery", {
+              error: (error as Error).message,
+              iteration: currentIteration,
+              historyMessages: historyLength,
+            });
+
+            try {
+              const compactionEvent = await this.compactionManager.compact(
+                this.conversation,
+                currentIteration,
+              );
+
+              if (compactionEvent) {
+                const event = await this.emitCompactionEvent(compactionEvent, currentIteration);
+                yield event;
+                // Re-iterate with compacted context (continue skips currentIteration++,
+                // so we retry the same iteration number with a smaller context)
+                continue;
+              }
+              this.logger.warn("Compaction returned no result, cannot recover from overflow");
+            } catch (compactionError) {
+              this.logger.warn(
+                "Compaction failed during overflow recovery, propagating original error",
+                {
+                  compactionError: (compactionError as Error).message,
+                },
+              );
+            }
+          }
+
           // Delegate error handling and observer notification to lifecycle helper
           const action = await this.llmCallLifecycle.notifyLLMError(
             currentIteration,
@@ -1060,13 +1113,24 @@ export class Agent {
 
     if (!compactionEvent) return null;
 
+    return this.emitCompactionEvent(compactionEvent, iteration);
+  }
+
+  /**
+   * Log compaction, notify observers, and return a StreamEvent.
+   * Shared by proactive compaction (checkAndPerformCompaction) and
+   * reactive overflow recovery (catch block).
+   */
+  private async emitCompactionEvent(
+    compactionEvent: CompactionEvent,
+    iteration: number,
+  ): Promise<StreamEvent> {
     this.logger.info("Context compacted", {
       strategy: compactionEvent.strategy,
       tokensBefore: compactionEvent.tokensBefore,
       tokensAfter: compactionEvent.tokensAfter,
     });
 
-    // Observer: Compaction occurred
     await safeObserve(async () => {
       if (this.hooks.observers?.onCompaction) {
         await this.hooks.observers.onCompaction({

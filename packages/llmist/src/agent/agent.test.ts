@@ -447,7 +447,7 @@ describe("Agent Architecture", () => {
         const mockClientInjection = {
           stream: vi.fn().mockImplementation(async function* () {
             iterationCount++;
-            yield { text: "Response " + iterationCount };
+            yield { text: `Response ${iterationCount}` };
           }),
           modelRegistry: {
             getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
@@ -637,6 +637,271 @@ describe("Agent Architecture", () => {
           expect(node.completedAt).not.toBeNull();
         }
       }
+    });
+  });
+
+  describe("Context overflow recovery", () => {
+    /** Helper to create a 400 error with status code. */
+    function make400Error(msg = "400 Provider returned error"): Error {
+      const error = new Error(msg);
+      Object.assign(error, { status: 400 });
+      return error;
+    }
+
+    it("should recover from 400 error by forcing compaction and retrying", async () => {
+      let streamCallCount = 0;
+      const mockClientOverflow = {
+        stream: vi.fn().mockImplementation(async function* () {
+          streamCallCount++;
+          if (streamCallCount === 4) {
+            throw make400Error();
+          }
+          yield { text: `Response ${streamCallCount}` };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({
+            contextWindow: 100_000,
+            maxOutputTokens: 4096,
+          }),
+        },
+        countTokens: vi.fn().mockReturnValue(50_000),
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientOverflow)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(5) // 5 iterations to keep the test deterministic
+        .withTextOnlyHandler("acknowledge")
+        .withCompaction({ strategy: "sliding-window" })
+        .ask("Test prompt");
+
+      const events: { type: string }[] = [];
+      for await (const event of agent.run()) {
+        events.push(event);
+      }
+
+      // Iterations: 0 ok, 1 ok, 2 ok, 3 fail→compact→retry ok, 4 ok = 6 stream calls
+      expect(streamCallCount).toBe(6);
+
+      // Exactly 1 compaction event from overflow recovery
+      const compactionEvents = events.filter((e) => e.type === "compaction");
+      expect(compactionEvents.length).toBe(1);
+    });
+
+    it("should not attempt overflow recovery when compaction is disabled", async () => {
+      let streamCallCount = 0;
+      const mockClientNoCompaction = {
+        stream: vi.fn().mockImplementation(async function* () {
+          streamCallCount++;
+          if (streamCallCount === 4) {
+            throw make400Error();
+          }
+          yield { text: `Response ${streamCallCount}` };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({ maxOutputTokens: 4096 }),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientNoCompaction)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(10)
+        .withTextOnlyHandler("acknowledge")
+        .withoutCompaction()
+        .ask("Test prompt");
+
+      await expect(async () => {
+        for await (const _event of agent.run()) {
+          // consume
+        }
+      }).rejects.toThrow("400 Provider returned error");
+
+      expect(streamCallCount).toBe(4);
+    });
+
+    it("should not attempt overflow recovery twice", async () => {
+      let streamCallCount = 0;
+      const mockClientDoubleOverflow = {
+        stream: vi.fn().mockImplementation(async function* () {
+          streamCallCount++;
+          if (streamCallCount === 4 || streamCallCount === 5) {
+            throw make400Error();
+          }
+          yield { text: `Response ${streamCallCount}` };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({
+            contextWindow: 100_000,
+            maxOutputTokens: 4096,
+          }),
+        },
+        countTokens: vi.fn().mockReturnValue(50_000),
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientDoubleOverflow)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(10)
+        .withTextOnlyHandler("acknowledge")
+        .withCompaction({ strategy: "sliding-window" })
+        .ask("Test prompt");
+
+      await expect(async () => {
+        for await (const _event of agent.run()) {
+          // consume
+        }
+      }).rejects.toThrow("400 Provider returned error");
+
+      // 3 ok + 1 fail (recovery) + 1 fail (no second recovery) = 5
+      expect(streamCallCount).toBe(5);
+    });
+
+    it("should not attempt overflow recovery for non-400 errors", async () => {
+      let streamCallCount = 0;
+      const mockClientNon400 = {
+        stream: vi.fn().mockImplementation(async function* () {
+          streamCallCount++;
+          if (streamCallCount === 4) {
+            const error = new Error("401 Unauthorized");
+            Object.assign(error, { status: 401 });
+            throw error;
+          }
+          yield { text: `Response ${streamCallCount}` };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({
+            contextWindow: 100_000,
+            maxOutputTokens: 4096,
+          }),
+        },
+        countTokens: vi.fn().mockReturnValue(50_000),
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientNon400)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(10)
+        .withTextOnlyHandler("acknowledge")
+        .withCompaction({ strategy: "sliding-window" })
+        .ask("Test prompt");
+
+      await expect(async () => {
+        for await (const _event of agent.run()) {
+          // consume
+        }
+      }).rejects.toThrow("401 Unauthorized");
+
+      expect(streamCallCount).toBe(4);
+    });
+
+    it("should not attempt overflow recovery when history is too small", async () => {
+      const mockClientSmallHistory = {
+        stream: vi.fn().mockImplementation(async () => {
+          throw make400Error();
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({
+            contextWindow: 100_000,
+            maxOutputTokens: 4096,
+          }),
+        },
+        countTokens: vi.fn().mockReturnValue(50_000),
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientSmallHistory)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(5)
+        .withCompaction({ strategy: "sliding-window" })
+        .ask("Test prompt");
+
+      await expect(async () => {
+        for await (const _event of agent.run()) {
+          // consume
+        }
+      }).rejects.toThrow("400 Provider returned error");
+    });
+
+    it("should propagate original error when compact() returns null", async () => {
+      let streamCallCount = 0;
+      // Client without countTokens means compaction can't determine token counts
+      const mockClientNoTokens = {
+        stream: vi.fn().mockImplementation(async function* () {
+          streamCallCount++;
+          if (streamCallCount === 4) {
+            throw make400Error();
+          }
+          yield { text: `Response ${streamCallCount}` };
+        }),
+        modelRegistry: {
+          // Return null for model limits → compact() returns null
+          getModelLimits: vi.fn().mockReturnValue(null),
+        },
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientNoTokens)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(10)
+        .withTextOnlyHandler("acknowledge")
+        .withCompaction({ strategy: "sliding-window" })
+        .ask("Test prompt");
+
+      await expect(async () => {
+        for await (const _event of agent.run()) {
+          // consume
+        }
+      }).rejects.toThrow("400 Provider returned error");
+
+      // No retry — compaction returned null, original error propagated
+      expect(streamCallCount).toBe(4);
+    });
+
+    it("should propagate original error when compact() itself throws", async () => {
+      let streamCallCount = 0;
+      let tokenCallCount = 0;
+      const mockClientBrokenTokens = {
+        stream: vi.fn().mockImplementation(async function* () {
+          streamCallCount++;
+          if (streamCallCount === 4) {
+            throw make400Error();
+          }
+          yield { text: `Response ${streamCallCount}` };
+        }),
+        modelRegistry: {
+          getModelLimits: vi.fn().mockReturnValue({
+            contextWindow: 100_000,
+            maxOutputTokens: 4096,
+          }),
+        },
+        // countTokens works normally for proactive compaction checks (iterations 0-3),
+        // then throws when compact() is called during overflow recovery
+        countTokens: vi.fn().mockImplementation(async () => {
+          tokenCallCount++;
+          if (tokenCallCount >= 5) {
+            throw new Error("Token counting unavailable");
+          }
+          return 50_000;
+        }),
+      } as unknown as LLMist;
+
+      const agent = new AgentBuilder(mockClientBrokenTokens)
+        .withModel("test:model")
+        .withGadgets()
+        .withMaxIterations(10)
+        .withTextOnlyHandler("acknowledge")
+        .withCompaction({ strategy: "sliding-window" })
+        .ask("Test prompt");
+
+      // Should throw the ORIGINAL 400 error, not the compaction error
+      await expect(async () => {
+        for await (const _event of agent.run()) {
+          // consume
+        }
+      }).rejects.toThrow("400 Provider returned error");
+
+      expect(streamCallCount).toBe(4);
     });
   });
 });
