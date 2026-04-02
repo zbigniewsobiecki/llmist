@@ -1,3 +1,9 @@
+## [16.2.2](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.1...v16.2.2) (2026-04-02)
+
+### Bug Fixes
+
+* **cli:** add message parameter to Finish gadget for focused mode display ([#547](https://github.com/zbigniewsobiecki/llmist/issues/547)) ([23be25d](https://github.com/zbigniewsobiecki/llmist/commit/23be25d2d07c628bd6f58dfd21f42c4e4834a3cf))
+
 ## [16.2.1](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.0...v16.2.1) (2026-04-02)
 
 ### Bug Fixes
