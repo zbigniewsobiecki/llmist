@@ -89,6 +89,13 @@ export interface GadgetDispatcherOptions {
    * real-time streaming of completed parallel gadget results.
    */
   drainQueue: () => StreamEvent[];
+
+  /**
+   * Maximum time (ms) to wait for in-flight gadgets to complete.
+   * If exceeded, remaining gadgets are force-cleared and the poll loop exits.
+   * Default: 300_000 (5 minutes).
+   */
+  inFlightTimeoutMs?: number;
 }
 
 /**
@@ -109,6 +116,7 @@ export class GadgetDispatcher {
   private readonly logger: Logger<ILogObj>;
   private readonly pushToQueue: (event: StreamEvent) => void;
   private readonly drainQueue: () => StreamEvent[];
+  private readonly inFlightTimeoutMs: number;
 
   constructor(options: GadgetDispatcherOptions) {
     this.iteration = options.iteration;
@@ -124,6 +132,7 @@ export class GadgetDispatcher {
     this.logger = options.logger ?? createLogger({ name: "llmist:gadget-dispatcher" });
     this.pushToQueue = options.pushToQueue;
     this.drainQueue = options.drainQueue;
+    this.inFlightTimeoutMs = options.inFlightTimeoutMs ?? 300_000;
   }
 
   // ==========================================================================
@@ -163,26 +172,44 @@ export class GadgetDispatcher {
       });
     }
 
-    // Check for dependencies
+    // Check for dependencies — use effectiveCall for dispatch (call retains original for tree/events)
+    let effectiveCall = call;
     if (call.dependencies.length > 0) {
-      // Check for self-referential dependency (circular to self)
-      if (call.dependencies.includes(call.invocationId)) {
-        this.logger.warn("Gadget has self-referential dependency (depends on itself)", {
+      // Partition into self-referential and valid deps in a single pass
+      const selfRefs: string[] = [];
+      const validDeps: string[] = [];
+      for (const dep of call.dependencies) {
+        (dep === call.invocationId ? selfRefs : validDeps).push(dep);
+      }
+
+      if (selfRefs.length > 0) {
+        this.logger.warn("Filtering self-referential dependencies", {
           gadgetName: call.gadgetName,
           invocationId: call.invocationId,
+          removedSelfRefs: selfRefs,
+          remainingDeps: validDeps,
         });
-        const errorMessage = `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`;
-        for await (const evt of this.emitGadgetSkipEvents(call, call.invocationId, errorMessage)) {
-          yield evt;
+        effectiveCall = { ...call, dependencies: validDeps };
+
+        // If ALL dependencies were self-referential, skip the gadget entirely
+        if (validDeps.length === 0) {
+          const errorMessage = `Gadget "${call.invocationId}" cannot depend on itself (self-referential dependency)`;
+          for await (const evt of this.emitGadgetSkipEvents(
+            effectiveCall,
+            call.invocationId,
+            errorMessage,
+          )) {
+            yield evt;
+          }
+          return;
         }
-        return;
       }
 
       // Check if any dependency has failed (including from prior iterations)
-      const failedDep = this.dependencyResolver.getFailedDependency(call);
+      const failedDep = this.dependencyResolver.getFailedDependency(effectiveCall);
       if (failedDep) {
         // Dependency failed - handle skip
-        const skipEvents = await this.handleFailedDependency(call, failedDep);
+        const skipEvents = await this.handleFailedDependency(effectiveCall, failedDep);
         for (const evt of skipEvents) {
           yield evt;
         }
@@ -190,22 +217,22 @@ export class GadgetDispatcher {
       }
 
       // Check if all dependencies are satisfied (including from prior iterations)
-      if (!this.dependencyResolver.isAllSatisfied(call)) {
-        const unsatisfied = call.dependencies.filter(
+      if (!this.dependencyResolver.isAllSatisfied(effectiveCall)) {
+        const unsatisfied = effectiveCall.dependencies.filter(
           (dep) => !this.dependencyResolver.isCompleted(dep),
         );
         // Queue for later execution - gadget_call already yielded above
         this.logger.debug("Queueing gadget for later - waiting on dependencies", {
-          gadgetName: call.gadgetName,
-          invocationId: call.invocationId,
+          gadgetName: effectiveCall.gadgetName,
+          invocationId: effectiveCall.invocationId,
           waitingOn: unsatisfied,
         });
-        this.dependencyResolver.addPending(call);
+        this.dependencyResolver.addPending(effectiveCall);
         return; // Execution deferred, gadget_call already yielded
       }
 
       // All dependencies satisfied - check limit then execute
-      for await (const evt of this._checkLimitThenExecute(call)) {
+      for await (const evt of this._checkLimitThenExecute(effectiveCall)) {
         yield evt;
       }
 
@@ -394,6 +421,7 @@ export class GadgetDispatcher {
 
     // Poll interval for draining queue (100ms provides responsive updates)
     const POLL_INTERVAL_MS = 100;
+    const startTime = Date.now();
 
     // Poll loop: yield queued events while waiting for gadgets to complete
     // Continue while there are in-flight executions OR queued gadgets waiting
@@ -401,6 +429,35 @@ export class GadgetDispatcher {
       this.concurrencyManager.inFlightCount > 0 ||
       this.concurrencyManager.hasQueuedGadgets()
     ) {
+      // Check global timeout to prevent indefinite hangs
+      if (Date.now() - startTime >= this.inFlightTimeoutMs) {
+        const timedOutEntries = this.concurrencyManager.getInFlightEntries();
+        this.logger.error("In-flight gadget timeout exceeded, force-clearing remaining gadgets", {
+          timeoutMs: this.inFlightTimeoutMs,
+          remainingInFlight: timedOutEntries.length,
+          remainingQueued: this.concurrencyManager.getQueuedGadgetCount(),
+          timedOutInvocations: timedOutEntries.map((e) => e.invocationId),
+        });
+
+        // Emit gadget_skipped events for each timed-out gadget so consumers
+        // see proper terminal events and the execution tree has no dangling nodes
+        const timeoutError = `Gadget execution timed out after ${this.inFlightTimeoutMs}ms`;
+        for (const { invocationId, gadgetName } of timedOutEntries) {
+          this.dependencyResolver.markFailed(invocationId);
+          yield {
+            type: "gadget_skipped",
+            gadgetName,
+            invocationId,
+            parameters: {},
+            failedDependency: invocationId,
+            failedDependencyError: timeoutError,
+          } as StreamEvent;
+        }
+
+        this.concurrencyManager.clearInFlight();
+        break;
+      }
+
       // Create a combined promise that resolves when current gadgets complete
       const allDone = this.concurrencyManager.getAllDonePromise();
 
