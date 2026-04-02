@@ -83,6 +83,9 @@ export interface StreamProcessorOptions {
   /** Default gadget timeout */
   defaultGadgetTimeoutMs?: number;
 
+  /** Maximum time (ms) to wait for in-flight gadgets to complete. Default: 300s. */
+  inFlightTimeoutMs?: number;
+
   /** Gadget execution mode ('parallel' | 'sequential') */
   gadgetExecutionMode?: GadgetExecutionMode;
 
@@ -306,6 +309,7 @@ export class StreamProcessor {
         this.completedResultsQueue = [];
         return evts;
       },
+      inFlightTimeoutMs: options.inFlightTimeoutMs,
     });
   }
 

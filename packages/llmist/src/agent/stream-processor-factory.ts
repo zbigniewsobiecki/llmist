@@ -64,6 +64,9 @@ export interface StreamProcessorFactoryOptions {
   /** Default gadget timeout in milliseconds */
   defaultGadgetTimeoutMs?: number;
 
+  /** Maximum time (ms) to wait for in-flight gadgets to complete. Default: 300s. */
+  inFlightTimeoutMs?: number;
+
   /** Gadget execution mode: 'parallel' (default) or 'sequential' */
   gadgetExecutionMode: GadgetExecutionMode;
 
@@ -140,6 +143,7 @@ export class StreamProcessorFactory {
   private readonly logger: Logger<ILogObj>;
   private readonly requestHumanInput?: (question: string) => Promise<string>;
   private readonly defaultGadgetTimeoutMs?: number;
+  private readonly inFlightTimeoutMs?: number;
   private readonly gadgetExecutionMode: GadgetExecutionMode;
   private readonly client: LLMist;
   private readonly mediaStore: MediaStore;
@@ -159,6 +163,7 @@ export class StreamProcessorFactory {
     this.logger = options.logger;
     this.requestHumanInput = options.requestHumanInput;
     this.defaultGadgetTimeoutMs = options.defaultGadgetTimeoutMs;
+    this.inFlightTimeoutMs = options.inFlightTimeoutMs;
     this.gadgetExecutionMode = options.gadgetExecutionMode;
     this.client = options.client;
     this.mediaStore = options.mediaStore;
@@ -195,6 +200,7 @@ export class StreamProcessorFactory {
       logger: this.logger.getSubLogger({ name: "stream-processor" }),
       requestHumanInput: this.requestHumanInput,
       defaultGadgetTimeoutMs: this.defaultGadgetTimeoutMs,
+      inFlightTimeoutMs: this.inFlightTimeoutMs,
       gadgetExecutionMode: this.gadgetExecutionMode,
       client: this.client,
       mediaStore: this.mediaStore,
