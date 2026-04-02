@@ -471,6 +471,8 @@ export type {
 } from "./skills/index.js";
 export {
   createLoadSkillGadget,
+  // Deprecated: use createLoadSkillGadget instead. Will be removed in the next major version.
+  createUseSkillGadget,
   discoverSkills,
   LOAD_SKILL_GADGET_NAME,
   loadSkillsFromDirectory,
@@ -484,6 +486,8 @@ export {
   scanResources,
   substituteArguments,
   substituteVariables,
+  // Deprecated: use LOAD_SKILL_GADGET_NAME instead. Will be removed in the next major version.
+  USE_SKILL_GADGET_NAME,
   validateMetadata,
 } from "./skills/index.js";
 // Utility functions for subagent gadgets

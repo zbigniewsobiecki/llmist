@@ -15,8 +15,13 @@ export {
   substituteArguments,
   substituteVariables,
 } from "./activation.js";
-// LoadSkill meta-gadget
-export { createLoadSkillGadget, LOAD_SKILL_GADGET_NAME } from "./load-skill-gadget.js";
+// LoadSkill meta-gadget (+ deprecated UseSkill aliases for backward compatibility)
+export {
+  createLoadSkillGadget,
+  createLoadSkillGadget as createUseSkillGadget,
+  LOAD_SKILL_GADGET_NAME,
+  LOAD_SKILL_GADGET_NAME as USE_SKILL_GADGET_NAME,
+} from "./load-skill-gadget.js";
 // Filesystem loader
 export { discoverSkills, loadSkillsFromDirectory } from "./loader.js";
 // SKILL.md parser
