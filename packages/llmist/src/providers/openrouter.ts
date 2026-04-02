@@ -239,11 +239,30 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
       );
     }
 
+    // 400: Bad request (may indicate context overflow, model rejection, or invalid params).
+    // Must be checked BEFORE 401 — the 401 handler's broad "invalid" check would
+    // otherwise intercept 400 errors like "400 invalid request payload".
+    if (message.includes("400") || message.includes("bad request")) {
+      const enhanced = new Error(
+        `OpenRouter: Provider returned error (400). This may indicate the request exceeded ` +
+          `the model's limits, or a model-specific rejection.\n` +
+          `Original error: ${error.message}`,
+      );
+      // Preserve status code for downstream detection (e.g., isLikelyContextOverflow)
+      const originalStatus = (error as unknown as { status?: number }).status;
+      Object.assign(enhanced, {
+        status: typeof originalStatus === "number" ? originalStatus : 400,
+      });
+      return enhanced;
+    }
+
     // 401: Authentication failed
     if (
       message.includes("401") ||
       message.includes("unauthorized") ||
-      message.includes("invalid")
+      message.includes("invalid api key") ||
+      message.includes("invalid key") ||
+      message.includes("invalid_api_key")
     ) {
       return new Error(
         `OpenRouter: Authentication failed. Check that OPENROUTER_API_KEY is set correctly.\n` +

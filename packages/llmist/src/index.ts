@@ -276,6 +276,7 @@ export {
   DEFAULT_RETRY_CONFIG,
   extractRetryAfterMs,
   formatLLMError,
+  isLikelyContextOverflow,
   isRetryableError,
   parseRetryAfterHeader,
   resolveRetryConfig,
