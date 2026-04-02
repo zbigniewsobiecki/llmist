@@ -113,6 +113,42 @@ describe("finish gadget", () => {
     }
     expect(caught?.name).toBe("TaskCompletionSignal");
   });
+
+  it("schema accepts an optional message parameter", () => {
+    const result = finish.parameterSchema.safeParse({ message: "All tasks completed" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ message: "All tasks completed" });
+    }
+  });
+
+  it("schema allows calling without a message", () => {
+    const result = finish.parameterSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("throws TaskCompletionSignal with the provided message", () => {
+    const message = "All tasks completed successfully";
+    let caught: TaskCompletionSignal | null = null;
+    try {
+      finish.execute({ message });
+    } catch (e) {
+      caught = e as TaskCompletionSignal;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught?.message).toBe(message);
+  });
+
+  it("throws TaskCompletionSignal with default message when no message provided", () => {
+    let caught: TaskCompletionSignal | null = null;
+    try {
+      finish.execute({});
+    } catch (e) {
+      caught = e as TaskCompletionSignal;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught?.message).toBe("Task completed");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
