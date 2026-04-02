@@ -1,3 +1,9 @@
+## [16.2.1](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.0...v16.2.1) (2026-04-02)
+
+### Bug Fixes
+
+* **agent:** prevent session freeze from malformed gadget dependency headers ([#545](https://github.com/zbigniewsobiecki/llmist/issues/545)) ([4a73f98](https://github.com/zbigniewsobiecki/llmist/commit/4a73f9812d58034c1158dee91913b5e2c34e8ed8))
+
 ## [16.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.1.0...v16.2.0) (2026-04-01)
 
 ### Features
