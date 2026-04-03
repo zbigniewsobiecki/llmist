@@ -1,3 +1,9 @@
+## [17.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.0.0...v17.1.0) (2026-04-03)
+
+### Features
+
+* **providers:** add Gemini 3.1 preview family to OpenRouter models ([#559](https://github.com/zbigniewsobiecki/llmist/issues/559)) ([3656821](https://github.com/zbigniewsobiecki/llmist/commit/365682150c9889f0abf7fe3a8fa2ffb678463d96))
+
 ## [17.0.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.5...v17.0.0) (2026-04-03)
 
 ### ⚠ BREAKING CHANGES
