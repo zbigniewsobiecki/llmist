@@ -1,3 +1,9 @@
+## [17.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.1.0...v17.2.0) (2026-04-03)
+
+### Features
+
+* **providers:** add prompt caching support for OpenRouter ([#561](https://github.com/zbigniewsobiecki/llmist/issues/561)) ([c16655f](https://github.com/zbigniewsobiecki/llmist/commit/c16655f6a1336ae4696464ad9c84e1403b6bd224))
+
 ## [17.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.0.0...v17.1.0) (2026-04-03)
 
 ### Features
