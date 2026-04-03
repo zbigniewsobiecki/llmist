@@ -81,6 +81,24 @@ export const runCommand = createGadget({
       output: "status=0\n\nApproving pull request #123",
       comment: "Multiline body: --body flag and content must be SEPARATE array elements",
     },
+    {
+      params: {
+        argv: [
+          "curl",
+          "-X",
+          "POST",
+          "--header",
+          "Content-Type: application/json",
+          "--data",
+          '{"key": "value", "count": 42}',
+          "https://api.example.com/items",
+        ],
+        timeout: 30000,
+      },
+      output: 'status=0\n\n{"id": "abc123", "created": true}',
+      comment:
+        "JSON flag values: --data and its JSON body are SEPARATE array elements, not one combined string",
+    },
   ],
   execute: async ({ argv, cwd, timeout }) => {
     const workingDir = cwd ?? process.cwd();
