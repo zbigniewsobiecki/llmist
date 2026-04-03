@@ -1,3 +1,21 @@
+## [17.0.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.5...v17.0.0) (2026-04-03)
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** RunCommand schema changed from { argv: string[] } to
+{ command: string }. Callers constructing params programmatically must
+update from { argv: ["ls", "-la"] } to { command: "ls -la" }.
+
+Co-authored-by: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+### Bug Fixes
+
+* **cli:** add JSON flag-value example to RunCommand gadget ([#556](https://github.com/zbigniewsobiecki/llmist/issues/556)) ([7da0161](https://github.com/zbigniewsobiecki/llmist/commit/7da01618e5a5a9cb325e17d8c47eb71bd760ea48))
+
+### Code Refactoring
+
+* **cli:** replace RunCommand argv array with shell command string ([#557](https://github.com/zbigniewsobiecki/llmist/issues/557)) ([2122252](https://github.com/zbigniewsobiecki/llmist/commit/212225247f4fb4fcde2bcc8686f3b177c55ab456))
+
 ## [16.2.5](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.4...v16.2.5) (2026-04-03)
 
 ### Bug Fixes
