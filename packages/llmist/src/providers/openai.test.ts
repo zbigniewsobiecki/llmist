@@ -1702,9 +1702,10 @@ describe("OpenAIChatProvider", () => {
       expect(longCount).toBeGreaterThan(shortCount);
     });
 
-    it("FALLBACK_CHARS_PER_TOKEN constant equals 4", async () => {
-      // Verify the constant used in fallback estimation has the expected value
-      expect(FALLBACK_CHARS_PER_TOKEN).toBe(4);
+    it("FALLBACK_CHARS_PER_TOKEN constant equals 2", async () => {
+      // Conservative fallback: 2 chars/token errs on overestimating tokens,
+      // which is safer for compaction triggers and output limiting
+      expect(FALLBACK_CHARS_PER_TOKEN).toBe(2);
     });
 
     it("image token estimation adds 765 tokens on the tiktoken path", async () => {
@@ -1737,19 +1738,20 @@ describe("OpenAIChatProvider", () => {
       expect(withImageCount - textOnlyCount).toBe(765);
     });
 
-    it("tiktoken token count is greater than the FALLBACK_CHARS_PER_TOKEN estimate for typical text", async () => {
+    it("fallback estimate is more conservative than tiktoken for typical text", async () => {
       const mockClient = {} as OpenAI;
       const chars = "Hello world this is a test message";
-      const expectedFallbackTokens = Math.ceil(chars.length / FALLBACK_CHARS_PER_TOKEN);
+      const fallbackEstimate = Math.ceil(chars.length / FALLBACK_CHARS_PER_TOKEN);
 
-      // tiktoken produces a more accurate count; with per-message overhead it exceeds the raw char/4 estimate
+      // With FALLBACK_CHARS_PER_TOKEN=2, the fallback overestimates token count.
+      // This is intentional: safer for compaction and output limiting.
       const provider = new OpenAIChatProvider(mockClient);
-      const count = await provider.countTokens([{ role: "user" as const, content: chars }], {
-        provider: "openai",
-        name: "gpt-4",
-      });
+      const tiktokenCount = await provider.countTokens(
+        [{ role: "user" as const, content: chars }],
+        { provider: "openai", name: "gpt-4" },
+      );
 
-      expect(count).toBeGreaterThan(expectedFallbackTokens);
+      expect(fallbackEstimate).toBeGreaterThanOrEqual(tiktokenCount);
     });
   });
 });

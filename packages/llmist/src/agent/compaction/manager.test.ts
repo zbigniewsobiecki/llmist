@@ -1,3 +1,4 @@
+import type { ILogObj, Logger } from "tslog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockClient, MockManager, mockLLM } from "../../../../testing/src/index.js";
 import type { LLMist } from "../../core/client.js";
@@ -309,6 +310,146 @@ describe("CompactionManager", () => {
       const manager = new CompactionManager(client, "mock:test", { enabled: false });
 
       expect(manager.isEnabled()).toBe(false);
+    });
+  });
+
+  describe("diagnostic logging", () => {
+    function createMockLogger(): Logger<ILogObj> {
+      return {
+        warn: vi.fn(() => {}),
+        debug: vi.fn(() => {}),
+        info: vi.fn(() => {}),
+        error: vi.fn(() => {}),
+        trace: vi.fn(() => {}),
+        fatal: vi.fn(() => {}),
+        silly: vi.fn(() => {}),
+      } as unknown as Logger<ILogObj>;
+    }
+
+    it("should log warning when model not found in registry", async () => {
+      const client = createMockClient();
+      client.modelRegistry.getModelLimits = () => undefined;
+      const logger = createMockLogger();
+
+      const manager = new CompactionManager(client, "mock:unknown-model", {}, logger);
+      const conversation = createMockConversation();
+
+      await manager.checkAndCompact(conversation, 1);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("model not found"),
+        expect.objectContaining({ model: "mock:unknown-model" }),
+      );
+    });
+
+    it("should warn only once when model not found across multiple iterations", async () => {
+      const client = createMockClient();
+      client.modelRegistry.getModelLimits = () => undefined;
+      const logger = createMockLogger();
+
+      const manager = new CompactionManager(client, "mock:unknown-model", {}, logger);
+      const conversation = createMockConversation();
+
+      await manager.checkAndCompact(conversation, 1);
+      await manager.checkAndCompact(conversation, 2);
+      await manager.checkAndCompact(conversation, 3);
+
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("should log warning when countTokens not available", async () => {
+      const client = createMockClient();
+      client.modelRegistry.getModelLimits = () => ({
+        contextWindow: 2000,
+        maxOutputTokens: 1000,
+      });
+      (client as Record<string, unknown>).countTokens = undefined;
+      const logger = createMockLogger();
+
+      const manager = new CompactionManager(client, "mock:test", {}, logger);
+      const conversation = createMockConversation();
+
+      await manager.checkAndCompact(conversation, 1);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("token counting"),
+        expect.objectContaining({ model: "mock:test" }),
+      );
+    });
+
+    it("should warn only once when countTokens not available across multiple iterations", async () => {
+      const client = createMockClient();
+      client.modelRegistry.getModelLimits = () => ({
+        contextWindow: 2000,
+        maxOutputTokens: 1000,
+      });
+      (client as Record<string, unknown>).countTokens = undefined;
+      const logger = createMockLogger();
+
+      const manager = new CompactionManager(client, "mock:test", {}, logger);
+      const conversation = createMockConversation();
+
+      await manager.checkAndCompact(conversation, 1);
+      await manager.checkAndCompact(conversation, 2);
+
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("reactive compaction from API usage", () => {
+    it("should store last reported input tokens via updateUsage()", () => {
+      const client = createClientWithLimits();
+      const manager = new CompactionManager(client, "mock:test");
+
+      manager.updateUsage(500);
+      expect(manager.getStats().currentUsage.tokens).toBe(500);
+    });
+
+    it("shouldCompactFromUsage() should return false when below threshold", () => {
+      const client = createClientWithLimits(); // contextWindow=2000
+      const manager = new CompactionManager(client, "mock:test", {
+        triggerThresholdPercent: 80,
+      });
+
+      manager.updateUsage(1000); // 50% of 2000
+      expect(manager.shouldCompactFromUsage()).toBe(false);
+    });
+
+    it("shouldCompactFromUsage() should return true when above threshold", () => {
+      const client = createClientWithLimits(); // contextWindow=2000
+      const manager = new CompactionManager(client, "mock:test", {
+        triggerThresholdPercent: 80,
+      });
+
+      manager.updateUsage(1700); // 85% of 2000
+      expect(manager.shouldCompactFromUsage()).toBe(true);
+    });
+
+    it("shouldCompactFromUsage() should return false when model not found", () => {
+      const client = createMockClient();
+      client.modelRegistry.getModelLimits = () => undefined;
+      const manager = new CompactionManager(client, "mock:unknown");
+
+      manager.updateUsage(9999);
+      expect(manager.shouldCompactFromUsage()).toBe(false);
+    });
+
+    it("shouldCompactFromUsage() should return false when disabled", () => {
+      const client = createClientWithLimits();
+      const manager = new CompactionManager(client, "mock:test", { enabled: false });
+
+      manager.updateUsage(9999);
+      expect(manager.shouldCompactFromUsage()).toBe(false);
+    });
+
+    it("updateUsage() should update getStats().currentUsage.percent", () => {
+      const client = createClientWithLimits(); // contextWindow=2000
+      const manager = new CompactionManager(client, "mock:test");
+
+      manager.updateUsage(800); // 40% of 2000
+      // shouldCompactFromUsage() resolves modelLimits lazily
+      manager.shouldCompactFromUsage();
+      expect(manager.getStats().currentUsage.percent).toBe(40);
     });
   });
 

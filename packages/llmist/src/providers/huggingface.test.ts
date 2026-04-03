@@ -247,7 +247,7 @@ describe("HuggingFaceProvider", () => {
         name: "test-model",
       });
 
-      // (5 + 9) / 4 = 3.5 → 4 tokens (rounded up)
+      // tiktoken o200k_base: "Hello" = 1, "Hi there!" = 3
       expect(count).toBe(4);
     });
 
@@ -270,7 +270,7 @@ describe("HuggingFaceProvider", () => {
         name: "test-model",
       });
 
-      // (13 + 9) / 4 = 5.5 → 6 tokens
+      // tiktoken o200k_base: "What is this?" = 4, "More text" = 2
       expect(count).toBe(6);
     });
 
@@ -278,19 +278,13 @@ describe("HuggingFaceProvider", () => {
       const mockClient = {} as OpenAI;
       const provider = new HuggingFaceProvider(mockClient);
 
-      // Mock console.warn to suppress output
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-      // Pass invalid data that would cause an error
+      // Pass invalid data — null guard returns 0 immediately
       const count = await provider.countTokens(null as any, {
         provider: "huggingface",
         name: "test-model",
       });
 
       expect(count).toBe(0);
-      expect(warnSpy).toHaveBeenCalled();
-
-      warnSpy.mockRestore();
     });
   });
 
