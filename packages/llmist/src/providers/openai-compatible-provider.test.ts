@@ -614,6 +614,42 @@ describe("OpenAICompatibleProvider", () => {
       });
     });
 
+    it("should extract cached_tokens from prompt_tokens_details", async () => {
+      const provider = new TestOpenAICompatibleProvider(mockClient, {});
+      const mockChunks: ChatCompletionChunk[] = [
+        {
+          id: "c1",
+          object: "chat.completion.chunk",
+          created: 1,
+          model: "test-model",
+          choices: [{ index: 0, delta: { content: "Hello" }, finish_reason: null }],
+        },
+        {
+          id: "c2",
+          object: "chat.completion.chunk",
+          created: 1,
+          model: "test-model",
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            prompt_tokens_details: { cached_tokens: 25 } as any,
+          },
+        },
+      ];
+
+      const chunks = await collectChunks(provider, mockChunks);
+      const lastChunk = chunks[chunks.length - 1];
+      expect(lastChunk.usage).toEqual({
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cachedInputTokens: 25,
+      });
+    });
+
     it("should include reasoningTokens when completion_tokens_details is present", async () => {
       const provider = new TestOpenAICompatibleProvider(mockClient, {});
       const mockChunks: ChatCompletionChunk[] = [
