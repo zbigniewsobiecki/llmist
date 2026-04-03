@@ -328,8 +328,9 @@ export abstract class OpenAICompatibleProvider<
       const finishReason = chunk.choices.find((choice) => choice.finish_reason)?.finish_reason;
 
       // Extract token usage if available (typically in the final chunk)
-      // Also extract reasoning tokens from completion_tokens_details if present
+      // Includes cached input tokens and reasoning tokens from nested details
       type CompatUsageDetails = {
+        prompt_tokens_details?: { cached_tokens?: number };
         completion_tokens_details?: { reasoning_tokens?: number };
       };
       const usageDetails = chunk.usage as (typeof chunk.usage & CompatUsageDetails) | undefined;
@@ -338,7 +339,7 @@ export abstract class OpenAICompatibleProvider<
             inputTokens: chunk.usage.prompt_tokens,
             outputTokens: chunk.usage.completion_tokens,
             totalTokens: chunk.usage.total_tokens,
-            cachedInputTokens: 0,
+            cachedInputTokens: usageDetails?.prompt_tokens_details?.cached_tokens ?? 0,
             reasoningTokens: usageDetails?.completion_tokens_details?.reasoning_tokens,
           }
         : undefined;
