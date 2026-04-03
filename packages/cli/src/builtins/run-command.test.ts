@@ -105,4 +105,15 @@ describe("RunCommand gadget", () => {
       expect(runCommand.examples.length).toBeGreaterThan(0);
     });
   });
+
+  describe("instruction rendering", () => {
+    test("renders --data flag and JSON value as separate consecutive argv elements", () => {
+      const instruction = runCommand.getInstruction();
+
+      // --data and its JSON value must be adjacent but separate argv entries
+      const match = instruction.match(/!!!ARG:argv\/(\d+)\n--data\n!!!ARG:argv\/(\d+)\n\{"key"/);
+      expect(match).not.toBeNull();
+      expect(Number(match![2])).toBe(Number(match![1]) + 1);
+    });
+  });
 });
