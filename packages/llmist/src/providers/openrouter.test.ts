@@ -105,7 +105,14 @@ describe("OpenRouterProvider", () => {
       });
       expect(request.messages).toHaveLength(1);
       expect(request.messages[0].role).toBe("user");
-      expect(request.messages[0].content).toBe("Hello, how are you?");
+      // Last user message gets cache_control by default
+      expect(request.messages[0].content).toEqual([
+        {
+          type: "text",
+          text: "Hello, how are you?",
+          cache_control: { type: "ephemeral" },
+        },
+      ]);
     });
 
     it("should pass model name in provider/model format", () => {
@@ -240,6 +247,228 @@ describe("OpenRouterProvider", () => {
     });
   });
 
+  describe("caching", () => {
+    it("should add cache_control to last system and last user message by default", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const messages: LLMMessage[] = [
+        { role: "system", content: "You are an expert accountant." },
+        { role: "user", content: "Process these invoices." },
+        { role: "assistant", content: "Sure, I'll start processing." },
+        { role: "user", content: "Here is the next batch." },
+      ];
+
+      const request = (provider as any).buildApiRequest(
+        { messages },
+        { provider: "openrouter", name: "google/gemini-3-flash-preview" },
+        undefined,
+        messages,
+      );
+
+      // Last system message should have cache_control
+      const systemMsg = request.messages.find((m: any) => m.role === "system");
+      expect(systemMsg.content).toEqual([
+        {
+          type: "text",
+          text: "You are an expert accountant.",
+          cache_control: { type: "ephemeral" },
+        },
+      ]);
+
+      // Last user message (index 3) should have cache_control
+      const userMessages = request.messages.filter((m: any) => m.role === "user");
+      const lastUser = userMessages[userMessages.length - 1];
+      expect(lastUser.content).toEqual([
+        {
+          type: "text",
+          text: "Here is the next batch.",
+          cache_control: { type: "ephemeral" },
+        },
+      ]);
+
+      // First user message should NOT have cache_control
+      const firstUser = userMessages[0];
+      expect(firstUser.content).toBe("Process these invoices.");
+    });
+
+    it("should NOT add cache_control when caching is explicitly disabled", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const messages: LLMMessage[] = [
+        { role: "system", content: "You are helpful." },
+        { role: "user", content: "First question" },
+        { role: "assistant", content: "Response" },
+        { role: "user", content: "Follow up" },
+      ];
+
+      const request = (provider as any).buildApiRequest(
+        { messages, caching: { enabled: false } },
+        { provider: "openrouter", name: "google/gemini-3-flash-preview" },
+        undefined,
+        messages,
+      );
+
+      // Verify no cache_control appears anywhere in the request
+      for (const msg of request.messages) {
+        const content = msg.content;
+        if (typeof content === "string") {
+          // String content cannot have cache_control — that's the point
+          continue;
+        }
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            expect(block).not.toHaveProperty("cache_control");
+          }
+        }
+      }
+    });
+
+    it("should add cache_control when caching is explicitly enabled", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const messages: LLMMessage[] = [
+        { role: "system", content: "You are helpful." },
+        { role: "user", content: "Hello" },
+      ];
+
+      const request = (provider as any).buildApiRequest(
+        { messages, caching: { enabled: true } },
+        { provider: "openrouter", name: "google/gemini-3-flash-preview" },
+        undefined,
+        messages,
+      );
+
+      // Same behavior as default — both system and user get cache_control
+      const systemMsg = request.messages.find((m: any) => m.role === "system");
+      expect(systemMsg.content).toEqual([
+        { type: "text", text: "You are helpful.", cache_control: { type: "ephemeral" } },
+      ]);
+
+      const userMsg = request.messages.find((m: any) => m.role === "user");
+      expect(userMsg.content).toEqual([
+        { type: "text", text: "Hello", cache_control: { type: "ephemeral" } },
+      ]);
+    });
+
+    it("should handle multiple system messages with cache_control on only the last", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const messages: LLMMessage[] = [
+        { role: "system", content: "System instruction 1." },
+        { role: "system", content: "System instruction 2." },
+        { role: "user", content: "Go." },
+      ];
+
+      const request = (provider as any).buildApiRequest(
+        { messages },
+        { provider: "openrouter", name: "anthropic/claude-sonnet-4-5" },
+        undefined,
+        messages,
+      );
+
+      const systemMessages = request.messages.filter((m: any) => m.role === "system");
+
+      // First system message: no cache_control
+      expect(systemMessages[0].content).toBe("System instruction 1.");
+
+      // Last system message: has cache_control
+      expect(systemMessages[1].content).toEqual([
+        {
+          type: "text",
+          text: "System instruction 2.",
+          cache_control: { type: "ephemeral" },
+        },
+      ]);
+    });
+
+    it("should handle array content by adding cache_control to last block", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const messages: LLMMessage[] = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Look at this:" },
+            { type: "text", text: "Some data here." },
+          ],
+        },
+      ];
+
+      const request = (provider as any).buildApiRequest(
+        { messages },
+        { provider: "openrouter", name: "google/gemini-3-flash-preview" },
+        undefined,
+        messages,
+      );
+
+      const userMsg = request.messages.find((m: any) => m.role === "user");
+      // Should be an array with cache_control on the last part only
+      expect(userMsg.content).toEqual([
+        { type: "text", text: "Look at this:" },
+        { type: "text", text: "Some data here.", cache_control: { type: "ephemeral" } },
+      ]);
+    });
+
+    it("should add cache_control to last block of image+text user message", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const messages: LLMMessage[] = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analyze this invoice:" },
+            {
+              type: "image",
+              source: { type: "base64", mediaType: "image/png", data: "iVBOR..." },
+            },
+          ],
+        },
+      ];
+
+      const request = (provider as any).buildApiRequest(
+        { messages },
+        { provider: "openrouter", name: "google/gemini-3-flash-preview" },
+        undefined,
+        messages,
+      );
+
+      const userMsg = request.messages.find((m: any) => m.role === "user");
+      // cache_control should be on the last block (the image)
+      expect(userMsg.content).toHaveLength(2);
+      expect(userMsg.content[0]).not.toHaveProperty("cache_control");
+      expect(userMsg.content[1]).toHaveProperty("cache_control", { type: "ephemeral" });
+      // Image block should still have its original properties
+      expect(userMsg.content[1].type).toBe("image_url");
+    });
+
+    it("should not mutate the original content array", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const contentArray = [
+        { type: "text" as const, text: "Part 1" },
+        { type: "text" as const, text: "Part 2" },
+      ];
+      const messages: LLMMessage[] = [{ role: "user", content: [...contentArray] }];
+
+      (provider as any).buildApiRequest(
+        { messages },
+        { provider: "openrouter", name: "google/gemini-3-flash-preview" },
+        undefined,
+        messages,
+      );
+
+      // Original array elements should not have cache_control
+      expect(contentArray[1]).not.toHaveProperty("cache_control");
+    });
+  });
+
   describe("getCustomHeaders", () => {
     it("should return empty object when no config", () => {
       const mockClient = {} as OpenAI;
@@ -333,6 +562,53 @@ describe("OpenRouterProvider", () => {
         outputTokens: 5,
         totalTokens: 15,
         cachedInputTokens: 0,
+      });
+    });
+
+    it("should extract cached_tokens from prompt_tokens_details", async () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const mockChunks: ChatCompletionChunk[] = [
+        {
+          id: "1",
+          object: "chat.completion.chunk",
+          created: Date.now(),
+          model: "google/gemini-3-flash-preview",
+          choices: [{ index: 0, delta: { content: "Hi" }, finish_reason: null }],
+        },
+        {
+          id: "2",
+          object: "chat.completion.chunk",
+          created: Date.now(),
+          model: "google/gemini-3-flash-preview",
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          usage: {
+            prompt_tokens: 200,
+            completion_tokens: 30,
+            total_tokens: 230,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            prompt_tokens_details: { cached_tokens: 150 } as any,
+          },
+        },
+      ];
+
+      async function* mockStream() {
+        for (const chunk of mockChunks) {
+          yield chunk;
+        }
+      }
+
+      const chunks = [];
+      for await (const chunk of (provider as any).normalizeProviderStream(mockStream())) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks[1].usage).toEqual({
+        inputTokens: 200,
+        outputTokens: 30,
+        totalTokens: 230,
+        cachedInputTokens: 150,
       });
     });
   });

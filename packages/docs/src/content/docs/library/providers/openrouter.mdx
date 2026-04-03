@@ -217,9 +217,34 @@ const client = new LLMist({
   </TabItem>
 </Tabs>
 
+## Prompt Caching
+
+llmist automatically enables prompt caching for OpenRouter requests. This works with both Anthropic Claude and Google Gemini models routed through OpenRouter, saving up to 75% on cached input tokens.
+
+### How It Works
+
+llmist adds `cache_control` breakpoints to the last system message and last user message in each request. OpenRouter uses sticky routing to maximize cache hits by sending subsequent requests to the same provider endpoint.
+
+For models with implicit caching (Gemini 2.5+, OpenAI, DeepSeek), caching happens server-side automatically — no breakpoints needed. llmist extracts and reports cached token counts from the API response in both cases.
+
+### Disable Caching
+
+If needed, disable caching explicitly:
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('openrouter:anthropic/claude-sonnet-4-5')
+  .withoutCaching()
+  .askAndCollect('One-off question');
+```
+
+<Aside type="tip">
+  For long-running agent loops, caching can dramatically reduce costs. In a 94-iteration session processing 73 documents, enabling caching on Gemini Flash can reduce cumulative input tokens by 5-10x.
+</Aside>
+
 ## Cost Tracking
 
-OpenRouter passes through usage information:
+OpenRouter passes through usage information, including cached token counts:
 
 ```typescript
 for await (const event of agent.run()) {
