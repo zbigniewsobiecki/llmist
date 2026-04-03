@@ -387,6 +387,7 @@ export class Agent {
         this.client,
         this.model,
         options.compactionConfig,
+        this.logger,
       );
     }
 
@@ -808,6 +809,27 @@ export class Agent {
           if (result.shouldBreakLoop) {
             this.logger.info("Loop terminated by gadget or processor");
             break;
+          }
+
+          // Reactive compaction: use API-reported input tokens (ground truth) to check
+          // if we've crossed the compaction threshold. This catches cases where the
+          // proactive char-based estimate (at iteration start) underestimates token usage.
+          // Placed after break checks so we don't compact on the final iteration.
+          if (this.compactionManager && result.usage?.inputTokens) {
+            this.compactionManager.updateUsage(result.usage.inputTokens);
+            if (this.compactionManager.shouldCompactFromUsage()) {
+              this.logger.info("Reactive compaction triggered from API-reported usage", {
+                inputTokens: result.usage.inputTokens,
+                iteration: currentIteration,
+              });
+              const reactiveCompaction = await this.compactionManager.compact(
+                this.conversation,
+                currentIteration,
+              );
+              if (reactiveCompaction) {
+                yield await this.emitCompactionEvent(reactiveCompaction, currentIteration);
+              }
+            }
           }
 
           // Check if budget limit has been reached

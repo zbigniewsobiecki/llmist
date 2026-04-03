@@ -267,7 +267,7 @@ describe("LLMist Client", () => {
       expect(adapter.countTokens).toHaveBeenCalledTimes(1);
     });
 
-    it("should fallback to character estimation when provider lacks token counting", async () => {
+    it("should fallback to tiktoken when provider lacks token counting", async () => {
       const adapter = createMockAdapter("test", false, [mockModelSpec]);
       const client = new LLMist({
         adapters: [adapter],
@@ -282,9 +282,8 @@ describe("LLMist Client", () => {
 
       const count = await client.countTokens("test:test-model", messages);
 
-      // Fallback: chars / 4, rounded up
-      const totalChars = "Hello".length + "World".length; // 10 chars
-      expect(count).toBe(Math.ceil(totalChars / 4)); // 3 tokens
+      // Fallback uses tiktoken o200k_base: "Hello" = 1 token, "World" = 1 token
+      expect(count).toBe(2);
     });
 
     it("should handle messages with no content", async () => {
@@ -302,8 +301,8 @@ describe("LLMist Client", () => {
 
       const count = await client.countTokens("test:test-model", messages);
 
-      // Only counts "Hello" = 5 chars
-      expect(count).toBe(Math.ceil(5 / 4)); // 2 tokens
+      // tiktoken o200k_base: "Hello" = 1 token, undefined content = 0 tokens
+      expect(count).toBe(1);
     });
 
     it("should handle empty messages array", async () => {

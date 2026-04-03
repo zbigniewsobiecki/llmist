@@ -630,8 +630,8 @@ describe("AnthropicMessagesProvider", () => {
         { provider: "anthropic", name: "claude-3-5-sonnet-20241022" },
       );
 
-      // Fallback: 11 chars / 4 = 2.75, ceil = 3
-      expect(count).toBe(3);
+      // Fallback: 11 chars / 2 = 5.5, ceil = 6
+      expect(count).toBe(6);
     });
 
     it("handles empty content with defensive checks", async () => {
@@ -1384,8 +1384,8 @@ describe("AnthropicMessagesProvider", () => {
         { provider: "anthropic", name: "claude-3-5-sonnet-20241022" },
       );
 
-      // "What is in this image?" = 22 chars => ceil(22/4) = 6 text tokens + 1000 image tokens
-      expect(count).toBe(1006);
+      // "What is in this image?" = 22 chars => ceil(22/2) = 11 text tokens + 1000 image tokens
+      expect(count).toBe(1011);
     });
   });
 });
