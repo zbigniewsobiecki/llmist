@@ -1,6 +1,7 @@
 import { AgentBuilder } from "../agent/builder.js";
 import { discoverProviderAdapters } from "../providers/discovery.js";
 import type { ProviderAdapter } from "../providers/provider.js";
+import { CHARS_PER_TOKEN } from "./constants.js";
 import type { LLMMessage } from "./messages.js";
 import type { ModelSpec } from "./model-catalog.js";
 import { ModelRegistry } from "./model-registry.js";
@@ -195,9 +196,45 @@ export class LLMist {
       return adapter.countTokens(messages, descriptor, spec);
     }
 
-    // Fallback: rough character-based estimation (4 chars per token)
-    const totalChars = messages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0);
-    return Math.ceil(totalChars / 4);
+    // Fallback: use tiktoken o200k_base for approximate counting
+    try {
+      const { get_encoding } = await import("tiktoken");
+      const encoding = get_encoding("o200k_base");
+      try {
+        let tokenCount = 0;
+        for (const msg of messages) {
+          const content = msg.content;
+          if (typeof content === "string") {
+            tokenCount += encoding.encode(content).length;
+          } else if (Array.isArray(content)) {
+            for (const part of content) {
+              if (part.type === "text") {
+                tokenCount += encoding.encode(part.text).length;
+              }
+            }
+          }
+        }
+        return tokenCount;
+      } finally {
+        encoding.free();
+      }
+    } catch {
+      // Ultimate fallback if tiktoken isn't available: extract text and estimate
+      let totalChars = 0;
+      for (const msg of messages) {
+        const content = msg.content;
+        if (typeof content === "string") {
+          totalChars += content.length;
+        } else if (Array.isArray(content)) {
+          for (const part of content) {
+            if (part.type === "text") {
+              totalChars += part.text.length;
+            }
+          }
+        }
+      }
+      return Math.ceil(totalChars / CHARS_PER_TOKEN);
+    }
   }
 
   private resolveAdapter(descriptor: ModelDescriptor): ProviderAdapter {

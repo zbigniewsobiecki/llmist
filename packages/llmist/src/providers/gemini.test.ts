@@ -349,8 +349,8 @@ describe("GeminiGenerativeProvider", () => {
         { provider: "gemini", name: "gemini-1.5-pro" },
       );
 
-      // Fallback: 11 chars / 4 = 2.75, ceil = 3
-      expect(count).toBe(3);
+      // Fallback: 11 chars / 2 = 5.5, ceil = 6
+      expect(count).toBe(6);
     });
 
     it("handles empty content with defensive checks", async () => {
@@ -465,8 +465,8 @@ describe("GeminiGenerativeProvider", () => {
         { provider: "gemini", name: "gemini-1.5-pro" },
       );
 
-      // 13 chars / 4 = 3.25 → 4 tokens + 258 tokens for image = 262
-      expect(count).toBe(262);
+      // 13 chars / 2 = 6.5 → 7 tokens + 258 tokens for image = 265
+      expect(count).toBe(265);
 
       warnSpy.mockRestore();
     });
@@ -526,8 +526,8 @@ describe("GeminiGenerativeProvider", () => {
         { provider: "gemini", name: "gemini-1.5-pro" },
       );
 
-      // 17 chars / 4 = 4.25 → 5 tokens + 258 tokens for audio = 263
-      expect(count).toBe(263);
+      // 17 chars / 2 = 8.5 → 9 tokens + 258 tokens for audio = 267
+      expect(count).toBe(267);
 
       warnSpy.mockRestore();
     });

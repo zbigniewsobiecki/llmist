@@ -25,20 +25,16 @@ export const ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 /**
  * Character-to-token ratio for fallback token estimation.
  *
- * Rationale: When native token counting APIs fail, we estimate tokens using
- * a rough heuristic of 4 characters per token. This is based on empirical
- * observations across multiple LLM providers:
- * - OpenAI's GPT models average ~4 chars/token for English text
- * - Anthropic's Claude models have similar characteristics
- * - Gemini models also approximate this ratio
+ * Used only when tiktoken (the primary fallback) is unavailable. A value of 2
+ * errs on the side of overestimating token count, which is safer for
+ * compaction triggers and output limiting.
  *
- * This is intentionally conservative to avoid underestimating token usage.
- * While not perfectly accurate, it provides a reasonable fallback when
- * precise tokenization is unavailable.
- *
- * Reference: https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
+ * Rationale: The previous value of 4 was based on English prose averages, but
+ * agentic sessions are dominated by JSON, code, and structured data where the
+ * real ratio is ~1.5-2.5 chars/token. A 4-char estimate underestimated tokens
+ * by up to 250%, causing compaction and output limiting to never trigger.
  */
-export const FALLBACK_CHARS_PER_TOKEN = 4;
+export const FALLBACK_CHARS_PER_TOKEN = 2;
 
 /**
  * OpenAI message structure overhead in tokens.

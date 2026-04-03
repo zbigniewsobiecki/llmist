@@ -14,8 +14,9 @@ export const DEFAULT_GADGET_OUTPUT_LIMIT = true;
 /** Default: limit gadget output to 15% of context window */
 export const DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT = 15;
 
-/** Approximate characters per token for limit calculation */
-export const CHARS_PER_TOKEN = 4;
+/** Approximate characters per token for output limit calculation.
+ * Conservative value of 2 errs toward overestimating tokens, which is safer. */
+export const CHARS_PER_TOKEN = 2;
 
 /** Fallback context window size if model is not in registry */
 export const FALLBACK_CONTEXT_WINDOW = 128_000;
