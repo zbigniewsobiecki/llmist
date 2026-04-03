@@ -3,11 +3,11 @@ import { z } from "zod";
 import { spawn } from "../spawn.js";
 
 /**
- * RunCommand gadget - Executes a command with arguments and returns its output.
+ * RunCommand gadget - Executes a shell command and returns its output.
  *
- * Uses argv array to bypass shell interpretation entirely - arguments are
- * passed directly to the process without any escaping or shell expansion.
- * This allows special characters (quotes, backticks, newlines) to work correctly.
+ * Runs commands through `sh -c` so pipes, redirects, chaining,
+ * and all shell features work naturally. LLMs write commands
+ * exactly as they would type them in a terminal.
  *
  * Safety should be added externally via the hook system (see example 10).
  *
@@ -16,11 +16,11 @@ import { spawn } from "../spawn.js";
 export const runCommand = createGadget({
   name: "RunCommand",
   description:
-    "Execute a command with arguments and return its output. Uses argv array to bypass shell - arguments are passed directly without interpretation. Returns stdout/stderr combined with exit status.",
+    "Execute a shell command and return its output. Supports pipes (|), redirects (>, >>), chaining (&&, ||), and all shell features. Returns stdout/stderr combined with exit status.",
   schema: z.object({
-    argv: z
-      .array(z.string())
-      .describe("Command and arguments as array (e.g., ['git', 'commit', '-m', 'message'])"),
+    command: z
+      .string()
+      .describe("Shell command to execute (e.g., 'ls -la', 'echo hello | grep h')"),
     cwd: z
       .string()
       .optional()
@@ -29,71 +29,56 @@ export const runCommand = createGadget({
   }),
   examples: [
     {
-      params: { argv: ["ls", "-la"], timeout: 30000 },
+      params: { command: "ls -la", timeout: 30000 },
       output:
         "status=0\n\ntotal 24\ndrwxr-xr-x  5 user  staff   160 Nov 27 10:00 .\ndrwxr-xr-x  3 user  staff    96 Nov 27 09:00 ..\n-rw-r--r--  1 user  staff  1024 Nov 27 10:00 package.json",
-      comment: "List directory contents with details",
+      comment: "List directory contents",
     },
     {
-      params: { argv: ["echo", "Hello World"], timeout: 30000 },
-      output: "status=0\n\nHello World",
-      comment: "Echo without shell - argument passed directly",
-    },
-    {
-      params: { argv: ["cat", "nonexistent.txt"], timeout: 30000 },
+      params: { command: "cat nonexistent.txt", timeout: 30000 },
       output: "status=1\n\ncat: nonexistent.txt: No such file or directory",
       comment: "Command that fails returns non-zero status",
     },
     {
-      params: { argv: ["pwd"], cwd: "/tmp", timeout: 30000 },
+      params: { command: "pwd", cwd: "/tmp", timeout: 30000 },
       output: "status=0\n\n/tmp",
       comment: "Execute command in a specific directory",
     },
     {
       params: {
-        argv: [
-          "gh",
-          "pr",
-          "review",
-          "123",
-          "--comment",
-          "--body",
-          "Review with `backticks` and 'quotes'",
-        ],
+        command:
+          'curl -X POST --header \'Content-Type: application/json\' --data \'{"key": "value", "count": 42}\' https://api.example.com/items',
         timeout: 30000,
       },
-      output: "status=0\n\n(no output)",
-      comment: "Complex arguments with special characters - no escaping needed",
+      output: 'status=0\n\n{"id": "abc123", "created": true}',
+      comment: "Complex flags with JSON data - just write the command naturally",
+    },
+    {
+      params: { command: "echo 'hello world' | tr 'h' 'H'", timeout: 30000 },
+      output: "status=0\n\nHello world",
+      comment: "Piping output between commands",
     },
     {
       params: {
-        argv: [
-          "gh",
-          "pr",
-          "review",
-          "123",
-          "--approve",
-          "--body",
-          "## Review Summary\n\n**Looks good!**\n\n- Clean code\n- Tests pass",
-        ],
+        command: "echo 'content' > /tmp/test.txt && cat /tmp/test.txt",
         timeout: 30000,
       },
-      output: "status=0\n\nApproving pull request #123",
-      comment: "Multiline body: --body flag and content must be SEPARATE array elements",
+      output: "status=0\n\ncontent",
+      comment: "File redirection and chaining with &&",
     },
   ],
-  execute: async ({ argv, cwd, timeout }) => {
+  execute: async ({ command, cwd, timeout }) => {
     const workingDir = cwd ?? process.cwd();
 
-    if (argv.length === 0) {
-      return "status=1\n\nerror: argv array cannot be empty";
+    if (!command) {
+      return "status=1\n\nerror: command cannot be empty";
     }
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      // Spawn process directly without shell - arguments passed as-is
-      const proc = spawn(argv, {
+      // Run through shell so pipes, redirects, and chaining work
+      const proc = spawn(["sh", "-c", command], {
         cwd: workingDir,
         stdout: "pipe",
         stderr: "pipe",
