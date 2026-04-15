@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   abbreviateToLines,
   formatBlockContent,
+  formatForBlock,
   formatGadgetAsText,
   getSystemMessageColor,
   getSystemMessageIcon,
@@ -258,6 +259,56 @@ describe("formatGadgetAsText", () => {
   it("returns empty string for unknown gadget names", () => {
     const gadget = makeGadgetNode({ name: "Calculator" });
     expect(formatGadgetAsText(gadget)).toBe("");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// formatForBlock — mode-aware dispatcher used by both create and update paths
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("formatForBlock", () => {
+  it("dispatches text-like gadgets to formatGadgetAsText in focused mode", () => {
+    const finish = makeGadgetNode({
+      name: "Finish",
+      parameters: { message: "All done" },
+    });
+    const tell = makeGadgetNode({
+      name: "TellUser",
+      parameters: { message: "Hello" },
+    });
+    const ask = makeGadgetNode({
+      name: "AskUser",
+      parameters: { question: "Ready?" },
+    });
+
+    expect(formatForBlock(finish, "focused", false, false)).toBe(formatGadgetAsText(finish));
+    expect(formatForBlock(tell, "focused", false, false)).toBe(formatGadgetAsText(tell));
+    expect(formatForBlock(ask, "focused", false, false)).toBe(formatGadgetAsText(ask));
+  });
+
+  it("dispatches non-text-like gadgets to formatBlockContent even in focused mode", () => {
+    const calc = makeGadgetNode({ name: "Calculator" });
+    expect(formatForBlock(calc, "focused", false, false)).toBe(
+      formatBlockContent(calc, false, false),
+    );
+  });
+
+  it("dispatches text-like gadgets to formatBlockContent in full mode (chrome view)", () => {
+    const finish = makeGadgetNode({
+      name: "Finish",
+      parameters: { message: "All done" },
+    });
+    expect(formatForBlock(finish, "full", false, false)).toBe(
+      formatBlockContent(finish, false, false),
+    );
+  });
+
+  it("dispatches non-gadget nodes to formatBlockContent regardless of mode", () => {
+    const text = makeTextNode({ content: "hello" });
+    expect(formatForBlock(text, "focused", false, false)).toBe(
+      formatBlockContent(text, false, false),
+    );
+    expect(formatForBlock(text, "full", true, true)).toBe(formatBlockContent(text, true, true));
   });
 });
 
