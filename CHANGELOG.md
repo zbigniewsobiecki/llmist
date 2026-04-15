@@ -1,3 +1,9 @@
+## [17.2.1](https://github.com/zbigniewsobiecki/llmist/compare/v17.2.0...v17.2.1) (2026-04-15)
+
+### Bug Fixes
+
+* **cli:** render Finish/TellUser/AskUser updates in focused TUI mode ([#564](https://github.com/zbigniewsobiecki/llmist/issues/564)) ([348abee](https://github.com/zbigniewsobiecki/llmist/commit/348abeebde887d01e5c0bb70a2ec305b2a47b1c5))
+
 ## [17.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.1.0...v17.2.0) (2026-04-03)
 
 ### Features
