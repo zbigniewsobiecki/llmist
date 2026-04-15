@@ -802,6 +802,70 @@ describe("BlockRenderer", () => {
       expect(boxes[0]?.getContent()).not.toContain("Finish");
     });
 
+    test("Finish update in focused mode preserves plain-text rendering", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      renderer.setContentFilterMode("focused");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_finish", "Finish", { message: "All done" });
+      renderer.completeGadget("gc_finish", { result: "ok" });
+
+      const boxes = container.children.filter((child) => child.type === "box");
+      expect(boxes).toHaveLength(1);
+      const content = boxes[0]?.getContent() ?? "";
+      expect(content).toContain("All done");
+      expect(content).toContain("✓");
+      expect(content).not.toContain("Finish");
+    });
+
+    test("TellUser update in focused mode preserves plain-text rendering", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      renderer.setContentFilterMode("focused");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_tell", "TellUser", { message: "Hello user" });
+      renderer.completeGadget("gc_tell", { result: "ok" });
+
+      const boxes = container.children.filter((child) => child.type === "box");
+      expect(boxes).toHaveLength(1);
+      const content = boxes[0]?.getContent() ?? "";
+      expect(content).toContain("Hello user");
+      expect(content).not.toContain("TellUser");
+    });
+
+    test("AskUser update in focused mode preserves plain-text rendering", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      renderer.setContentFilterMode("focused");
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_ask", "AskUser", { question: "Proceed?" });
+      renderer.completeGadget("gc_ask", { result: "yes" });
+
+      const boxes = container.children.filter((child) => child.type === "box");
+      expect(boxes).toHaveLength(1);
+      const content = boxes[0]?.getContent() ?? "";
+      expect(content).toContain("Proceed?");
+      expect(content).not.toContain("AskUser");
+    });
+
+    test("full mode: Finish completion renders gadget chrome (regression guard)", () => {
+      const container = createMockContainer();
+      const renderer = new BlockRenderer(container, () => {});
+
+      renderer.addLLMCall(1, "sonnet");
+      renderer.addGadget("gc_finish", "Finish", { message: "All done" });
+      renderer.completeGadget("gc_finish", { result: "ok" });
+
+      const finishBlockContent = container.children
+        .filter((child) => child.type === "box")
+        .map((box) => box.getContent())
+        .join("\n");
+      expect(finishBlockContent).toContain("Finish");
+    });
+
     test("non-TellUser gadgets are hidden in focused mode", () => {
       const container = createMockContainer();
       const renderer = new BlockRenderer(container, () => {});
