@@ -12,7 +12,7 @@ import { createScreen } from "./screen.js";
 import { SessionManager } from "./session-manager.js";
 import { StatusBar } from "./status-bar.js";
 import { TreeSubscriptionManager } from "./tree-subscription-manager.js";
-import { applyContentFilterMode, applyFocusMode } from "./tui-app-effects.js";
+import { applyContentFilterMode, applyFocusMode, applyMouseMode } from "./tui-app-effects.js";
 import type { TUIOptions, TUIScreenContext } from "./types.js";
 
 export interface TUIAppDependencies {
@@ -43,6 +43,12 @@ export function createTUIAppDependencies(options: TUIOptions): TUIAppDependencie
     title: "llmist",
   });
   const { screen } = screenCtx;
+
+  // Ensure mouse capture is off by default so native text selection works.
+  // Some blessed internals may enable mouse at the program/screen level even
+  // when individual widgets have mouse: false — this explicit call guarantees
+  // the default state is correct.
+  screen.program.disableMouse();
 
   const showHints = options.showHints ?? true;
   const layout = createBlockLayout(screen, showHints);
@@ -226,6 +232,9 @@ function createController(
       applyContentFilterMode(mode, blockRenderer, statusBar, screenCtx);
       hintsBar?.setContentFilterMode(mode);
     },
+    onMouseToggle: (enabled) => {
+      applyMouseMode(enabled, layout, statusBar, hintsBar, screenCtx);
+    },
   });
 }
 
@@ -248,6 +257,7 @@ function wireInputHandlers(
   inputHandler.onCtrlI(() => keyboardManager.handleForwardedKey("C-i"));
   inputHandler.onCtrlJ(() => keyboardManager.handleForwardedKey("C-j"));
   inputHandler.onCtrlP(() => keyboardManager.handleForwardedKey("C-p"));
+  inputHandler.onCtrlY(() => keyboardManager.handleForwardedKey("C-y"));
 
   inputHandler.onArrowUp(() => {
     keyActionHandler.handleKeyAction({ type: "scroll_line", direction: -1 });
@@ -258,6 +268,7 @@ function wireInputHandlers(
 
   inputHandler.setGetFocusMode(() => controller.getFocusMode());
   inputHandler.setGetContentFilterMode(() => controller.getContentFilterMode());
+  inputHandler.setGetMouseEnabled(() => controller.isMouseEnabled());
 }
 
 /**

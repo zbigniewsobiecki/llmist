@@ -9,6 +9,7 @@ describe("KeyActionHandler", () => {
       abort: vi.fn(),
       toggleFocusMode: vi.fn(),
       toggleContentFilterMode: vi.fn(),
+      toggleMouse: vi.fn(),
     },
     blockRenderer: {
       addText: vi.fn(),
@@ -126,6 +127,22 @@ describe("KeyActionHandler", () => {
     handler.handleKeyAction({ type: "toggle_content_filter" });
 
     expect(mocks.controller.toggleContentFilterMode).toHaveBeenCalled();
+  });
+
+  test("handles toggle_mouse", () => {
+    const mocks = createMocks();
+    const handler = new KeyActionHandler(
+      mocks.controller as any,
+      mocks.blockRenderer as any,
+      mocks.statusBar as any,
+      mocks.screenCtx as any,
+      mocks.modalManager as any,
+      mocks.layout as any,
+    );
+
+    handler.handleKeyAction({ type: "toggle_mouse" });
+
+    expect(mocks.controller.toggleMouse).toHaveBeenCalled();
   });
 
   test("handles cycle_profile", () => {
