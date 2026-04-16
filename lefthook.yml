@@ -3,7 +3,7 @@ pre-commit:
   commands:
     lint:
       glob: "*.{js,ts,tsx,json}"
-      run: npx biome check --write {staged_files} && git add {staged_files}
+      run: npx biome check --write --no-errors-on-unmatched {staged_files} && git add {staged_files}
     typecheck:
       run: npm run typecheck
 
