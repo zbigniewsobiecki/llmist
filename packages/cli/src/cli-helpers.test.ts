@@ -85,6 +85,11 @@ describe("createNumericParser", () => {
       const parse = createNumericParser({ label: "Value" });
       expect(parse("0")).toBe(0);
     });
+
+    it("treats empty string as 0 (Number('') === 0)", () => {
+      const parse = createNumericParser({ label: "Value" });
+      expect(parse("")).toBe(0);
+    });
   });
 
   describe("non-numeric input", () => {
@@ -92,11 +97,6 @@ describe("createNumericParser", () => {
       const parse = createNumericParser({ label: "Count" });
       expect(() => parse("abc")).toThrow(InvalidArgumentError);
       expect(() => parse("abc")).toThrow("Count must be a number.");
-    });
-
-    it("throws InvalidArgumentError for empty string", () => {
-      const parse = createNumericParser({ label: "Value" });
-      expect(() => parse("")).toThrow(InvalidArgumentError);
     });
 
     it("throws InvalidArgumentError for 'NaN' string", () => {
@@ -193,9 +193,9 @@ describe("isInteractive", () => {
   });
 
   it("returns false when isTTY is undefined", () => {
-    expect(
-      isInteractive({ isTTY: undefined } as NodeJS.ReadableStream & { isTTY?: boolean }),
-    ).toBe(false);
+    expect(isInteractive({ isTTY: undefined } as NodeJS.ReadableStream & { isTTY?: boolean })).toBe(
+      false,
+    );
   });
 });
 
