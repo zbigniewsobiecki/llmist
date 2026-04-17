@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createMockClient, getMockManager, mockLLM } from "../../../testing/src/index.js";
+import type { ContentPart } from "../core/input-content.js";
 import { createGadget } from "../gadgets/create-gadget.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
 import { AgentBuilder, type HistoryMessage } from "./builder.js";
@@ -1370,6 +1371,136 @@ describe("AgentBuilder", () => {
       const trailingMessage = result.modifiedOptions?.messages?.[1];
       expect(trailingMessage?.content).toBe("Iteration 3/10");
       expect(trailingMessage?.role).toBe("user");
+    });
+  });
+
+  describe("askWithImage", () => {
+    it("returns an Agent instance", () => {
+      const mockClient = createMockClient();
+      const builder = new AgentBuilder(mockClient).withModel("mock:test");
+      const imageBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0]); // JPEG magic bytes
+      const agent = builder.askWithImage("Describe this image", imageBuffer, "image/jpeg");
+
+      expect(agent).toBeDefined();
+    });
+
+    it("accepts a base64 string as image data", () => {
+      const mockClient = createMockClient();
+      const builder = new AgentBuilder(mockClient).withModel("mock:test");
+      const base64Data = Buffer.from("fake image data").toString("base64");
+      const agent = builder.askWithImage("What's in this image?", base64Data, "image/png");
+
+      expect(agent).toBeDefined();
+    });
+
+    it("accepts a Uint8Array as image data", () => {
+      const mockClient = createMockClient();
+      const builder = new AgentBuilder(mockClient).withModel("mock:test");
+      const imageData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
+      const agent = builder.askWithImage("Analyze image", imageData, "image/png");
+
+      expect(agent).toBeDefined();
+    });
+
+    it("chains correctly after configuration methods", () => {
+      const mockClient = createMockClient();
+      const imageBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0]); // JPEG magic bytes
+      const agent = new AgentBuilder(mockClient)
+        .withModel("mock:test")
+        .withSystem("You are a vision assistant")
+        .withMaxIterations(3)
+        .askWithImage("Look at this", imageBuffer, "image/jpeg");
+
+      expect(agent).toBeDefined();
+    });
+  });
+
+  describe("askWithContent", () => {
+    it("returns an Agent instance with ContentPart array", () => {
+      const mockClient = createMockClient();
+      const content: ContentPart[] = [{ type: "text", text: "What do you see?" }];
+      const agent = new AgentBuilder(mockClient).withModel("mock:test").askWithContent(content);
+
+      expect(agent).toBeDefined();
+    });
+
+    it("accepts mixed content parts (text and image)", () => {
+      const mockClient = createMockClient();
+      const content: ContentPart[] = [
+        { type: "text", text: "Describe this image" },
+        {
+          type: "image",
+          source: { type: "base64", data: "abc123", mediaType: "image/png" },
+        },
+      ];
+      const agent = new AgentBuilder(mockClient).withModel("mock:test").askWithContent(content);
+
+      expect(agent).toBeDefined();
+    });
+
+    it("accepts a single text content part", () => {
+      const mockClient = createMockClient();
+      const content: ContentPart[] = [{ type: "text", text: "Hello world" }];
+      const agent = new AgentBuilder(mockClient).withModel("mock:test").askWithContent(content);
+
+      expect(agent).toBeDefined();
+    });
+
+    it("chains correctly after configuration methods", () => {
+      const mockClient = createMockClient();
+      const content: ContentPart[] = [{ type: "text", text: "Do something" }];
+      const agent = new AgentBuilder(mockClient)
+        .withModel("mock:test")
+        .withSystem("You are helpful")
+        .withMaxIterations(5)
+        .askWithContent(content);
+
+      expect(agent).toBeDefined();
+    });
+  });
+
+  describe("askAndCollect", () => {
+    it("returns a promise that resolves to the collected text", async () => {
+      getMockManager().clear();
+      mockLLM().forAnyModel().returns("Hello, world!").register();
+
+      const mockClient = createMockClient();
+      const result = await new AgentBuilder(mockClient)
+        .withModel("haiku")
+        .askAndCollect("Say hello");
+
+      expect(result).toBe("Hello, world!");
+
+      getMockManager().clear();
+    });
+
+    it("collects text from a multi-word response", async () => {
+      getMockManager().clear();
+      mockLLM().forAnyModel().returns("The answer is 42.").register();
+
+      const mockClient = createMockClient();
+      const result = await new AgentBuilder(mockClient)
+        .withModel("haiku")
+        .askAndCollect("What is the answer?");
+
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThan(0);
+
+      getMockManager().clear();
+    });
+
+    it("returns empty string for empty response", async () => {
+      getMockManager().clear();
+      mockLLM().forAnyModel().returns("").register();
+
+      const mockClient = createMockClient();
+      const result = await new AgentBuilder(mockClient)
+        .withModel("haiku")
+        .askAndCollect("Say nothing");
+
+      expect(typeof result).toBe("string");
+
+      getMockManager().clear();
     });
   });
 
