@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { ChatCompletionChunk } from "openai/resources/chat/completions";
+import { get_encoding } from "tiktoken";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ContentPart, ImageContentPart } from "../core/input-content.js";
 import type { LLMMessage } from "../core/messages.js";
@@ -11,6 +12,15 @@ import {
   type OpenAICompatibleConfig,
   OpenAICompatibleProvider,
 } from "./openai-compatible-provider.js";
+
+// Allow per-test override of tiktoken while keeping real implementation by default
+vi.mock("tiktoken", async (importOriginal) => {
+  const original = await importOriginal<typeof import("tiktoken")>();
+  return {
+    ...original,
+    get_encoding: vi.fn().mockImplementation(original.get_encoding),
+  };
+});
 
 // ============================================================================
 // Concrete test subclass (follows base-provider.test.ts pattern)
@@ -844,6 +854,218 @@ describe("OpenAICompatibleProvider", () => {
       // This was the root cause of the warm-hill session failure.
       const oldChars4Estimate = Math.ceil(jsonContent.length / 4);
       expect(tiktokenCount).toBeGreaterThan(oldChars4Estimate);
+    });
+
+    it("should fall back to char-based estimation when tiktoken throws", async () => {
+      // Make get_encoding throw for this one call only
+      vi.mocked(get_encoding).mockImplementationOnce(() => {
+        throw new Error("tiktoken unavailable in this environment");
+      });
+
+      const provider = new TestOpenAICompatibleProvider(mockClient, {});
+      // "Hello world" = 11 chars → ceil(11 / FALLBACK_CHARS_PER_TOKEN)
+      const text = "Hello world";
+      const messages: LLMMessage[] = [{ role: "user", content: text }];
+
+      const count = await provider.countTokens(messages, descriptor);
+      expect(count).toBe(Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN));
+    });
+
+    it("should sum chars across multiple messages in the fallback path", async () => {
+      vi.mocked(get_encoding).mockImplementationOnce(() => {
+        throw new Error("tiktoken unavailable");
+      });
+
+      const provider = new TestOpenAICompatibleProvider(mockClient, {});
+      const messages: LLMMessage[] = [
+        { role: "user", content: "Hello" }, // 5 chars
+        { role: "assistant", content: "World!" }, // 6 chars
+      ];
+
+      const count = await provider.countTokens(messages, descriptor);
+      // total chars = 11 → ceil(11 / FALLBACK_CHARS_PER_TOKEN)
+      expect(count).toBe(Math.ceil(11 / FALLBACK_CHARS_PER_TOKEN));
+    });
+
+    it("should ignore image parts in the fallback path", async () => {
+      vi.mocked(get_encoding).mockImplementationOnce(() => {
+        throw new Error("tiktoken unavailable");
+      });
+
+      const provider = new TestOpenAICompatibleProvider(mockClient, {});
+      const text = "Describe this";
+      const messages: LLMMessage[] = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text },
+            {
+              type: "image",
+              source: { type: "url", url: "https://example.com/img.jpg" },
+            } as ImageContentPart,
+          ],
+        },
+      ];
+
+      const count = await provider.countTokens(messages, descriptor);
+      expect(count).toBe(Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN));
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // executeStreamRequest()
+  // --------------------------------------------------------------------------
+
+  describe("executeStreamRequest()", () => {
+    it("should call enhanceError when client.chat.completions.create throws", async () => {
+      const networkError = new Error("Network failure");
+      const mockClientWithError = {
+        chat: {
+          completions: {
+            create: vi.fn().mockRejectedValue(networkError),
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new TestOpenAICompatibleProvider(mockClientWithError, {});
+      const payload = {
+        model: "test-model",
+        messages: [],
+        stream: true as const,
+        stream_options: { include_usage: true },
+      };
+
+      await expect((provider as any).executeStreamRequest(payload)).rejects.toThrow(
+        "Network failure",
+      );
+    });
+
+    it("should surface subclass-enhanced errors from client throws", async () => {
+      const authError = new Error("401 Unauthorized");
+      const mockClientWithError = {
+        chat: {
+          completions: {
+            create: vi.fn().mockRejectedValue(authError),
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new EnhancingProvider(mockClientWithError, {});
+      const payload = {
+        model: "test-model",
+        messages: [],
+        stream: true as const,
+        stream_options: { include_usage: true },
+      };
+
+      await expect((provider as any).executeStreamRequest(payload)).rejects.toThrow(
+        "Custom auth error: check your ENHANCING_API_KEY",
+      );
+    });
+
+    it("should wrap non-Error throws from the client via enhanceError", async () => {
+      const mockClientWithError = {
+        chat: {
+          completions: {
+            create: vi.fn().mockRejectedValue("raw string error"),
+          },
+        },
+      } as unknown as OpenAI;
+
+      const provider = new TestOpenAICompatibleProvider(mockClientWithError, {});
+      const payload = {
+        model: "test-model",
+        messages: [],
+        stream: true as const,
+        stream_options: { include_usage: true },
+      };
+
+      const rejection = (provider as any).executeStreamRequest(payload);
+      await expect(rejection).rejects.toBeInstanceOf(Error);
+      await expect(rejection).rejects.toThrow("raw string error");
+    });
+
+    it("should pass custom headers to the client request", async () => {
+      const createMock = vi.fn().mockResolvedValue(
+        (async function* () {
+          yield {
+            id: "c1",
+            object: "chat.completion.chunk",
+            created: 1,
+            model: "test-model",
+            choices: [{ index: 0, delta: { content: "Hi" }, finish_reason: "stop" }],
+          } as ChatCompletionChunk;
+        })(),
+      );
+      const mockClientWithHeaders = {
+        chat: { completions: { create: createMock } },
+      } as unknown as OpenAI;
+
+      const provider = new HeaderProvider(mockClientWithHeaders, { appKey: "my-secret" });
+      const payload = {
+        model: "test-model",
+        messages: [],
+        stream: true as const,
+        stream_options: { include_usage: true },
+      };
+
+      await (provider as any).executeStreamRequest(payload);
+
+      expect(createMock).toHaveBeenCalledWith(
+        payload,
+        expect.objectContaining({ headers: { "X-App-Key": "my-secret" } }),
+      );
+    });
+
+    it("should omit requestOptions entirely when there are no custom headers and no signal", async () => {
+      const createMock = vi.fn().mockResolvedValue(
+        (async function* () {
+          /* empty stream */
+        })(),
+      );
+      const mockClientNoHeaders = {
+        chat: { completions: { create: createMock } },
+      } as unknown as OpenAI;
+
+      const provider = new TestOpenAICompatibleProvider(mockClientNoHeaders, {});
+      const payload = {
+        model: "test-model",
+        messages: [],
+        stream: true as const,
+        stream_options: { include_usage: true },
+      };
+
+      await (provider as any).executeStreamRequest(payload);
+
+      // No second argument should be passed when there's nothing to include
+      expect(createMock).toHaveBeenCalledWith(payload, undefined);
+    });
+
+    it("should pass AbortSignal when provided", async () => {
+      const createMock = vi.fn().mockResolvedValue(
+        (async function* () {
+          /* empty stream */
+        })(),
+      );
+      const mockClientWithSignal = {
+        chat: { completions: { create: createMock } },
+      } as unknown as OpenAI;
+
+      const provider = new TestOpenAICompatibleProvider(mockClientWithSignal, {});
+      const payload = {
+        model: "test-model",
+        messages: [],
+        stream: true as const,
+        stream_options: { include_usage: true },
+      };
+      const controller = new AbortController();
+
+      await (provider as any).executeStreamRequest(payload, controller.signal);
+
+      expect(createMock).toHaveBeenCalledWith(
+        payload,
+        expect.objectContaining({ signal: controller.signal }),
+      );
     });
   });
 
