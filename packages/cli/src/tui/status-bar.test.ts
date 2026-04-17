@@ -467,4 +467,437 @@ describe("StatusBar", () => {
       expect(content).not.toContain("#2");
     });
   });
+
+  describe("content filter mode", () => {
+    test("defaults to full mode", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      expect(bar.getContentFilterMode()).toBe("full");
+    });
+
+    test("setContentFilterMode updates the mode", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setContentFilterMode("focused");
+      expect(bar.getContentFilterMode()).toBe("focused");
+
+      bar.setContentFilterMode("full");
+      expect(bar.getContentFilterMode()).toBe("full");
+    });
+
+    test("setContentFilterMode uses immediate render", () => {
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback, renderNowCallback);
+
+      renderNowCallback.mockClear();
+      bar.setContentFilterMode("focused");
+
+      expect(renderNowCallback).toHaveBeenCalled();
+    });
+
+    test("focused content mode hides BROWSE badge even in browse focus mode", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      // Set browse focus mode but focused content mode
+      bar.setFocusMode("browse");
+      bar.setContentFilterMode("focused");
+
+      const content = statusBox.getContent();
+      expect(content).not.toContain("BROWSE");
+    });
+
+    test("browse mode shows BROWSE badge when content filter is full", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setFocusMode("browse");
+      bar.setContentFilterMode("full");
+
+      const content = statusBox.getContent();
+      expect(content).toContain("BROWSE");
+    });
+  });
+
+  describe("streaming token display", () => {
+    test("shows tilde prefix on input tokens during streaming", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      // startCall sets isStreaming=true and streamingInputTokens
+      bar.startCall("test-model", 500);
+
+      const content = statusBox.getContent();
+      // Input tokens with streaming prefix ~
+      expect(content).toContain("~500");
+    });
+
+    test("shows tilde prefix on output tokens during streaming", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.startCall("test-model", 100);
+      bar.updateStreaming(200);
+
+      const content = statusBox.getContent();
+      // Output tokens during streaming have ~ prefix
+      expect(content).toContain("~200");
+    });
+
+    test("no tilde prefix after call ends", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.startCall("test-model", 100);
+      bar.endCall(100, 50, 0, 0.001);
+
+      const content = statusBox.getContent();
+      expect(content).not.toContain("~100");
+      expect(content).not.toContain("~50");
+    });
+  });
+
+  describe("reasoning tokens display", () => {
+    test("shows reasoning tokens when present", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      // endCall with reasoningTokens parameter
+      bar.endCall(100, 50, 0, 0.001, 30);
+
+      const content = statusBox.getContent();
+      expect(content).toContain("30");
+    });
+
+    test("does not show reasoning tokens section when zero", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.endCall(100, 50, 0, 0.001, 0);
+
+      const content = statusBox.getContent();
+      // 💭 emoji is only shown when reasoning tokens > 0
+      expect(content).not.toContain("💭");
+    });
+
+    test("accumulates reasoning tokens across calls", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.endCall(100, 50, 0, 0.001, 20);
+      bar.endCall(100, 50, 0, 0.001, 15);
+
+      expect(bar.getMetrics().reasoningTokens ?? 0).toBe(35);
+    });
+  });
+
+  describe("rate limiting display", () => {
+    test("showThrottling displays daily limit message", () => {
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback, renderNowCallback);
+
+      bar.showThrottling(86400000, { daily: true });
+
+      const content = statusBox.getContent();
+      expect(content).toContain("Daily limit");
+      expect(content).toContain("midnight UTC");
+    });
+
+    test("showThrottling displays RPM countdown with reason", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.showThrottling(5000, { rpm: true });
+
+      const content = statusBox.getContent();
+      expect(content).toContain("Throttled 5s");
+      expect(content).toContain("(RPM)");
+    });
+
+    test("showThrottling displays TPM countdown with reason", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.showThrottling(3000, { tpm: true });
+
+      const content = statusBox.getContent();
+      expect(content).toContain("Throttled 3s");
+      expect(content).toContain("(TPM)");
+    });
+
+    test("showThrottling with no specific reason shows no reason suffix", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.showThrottling(2000);
+
+      const content = statusBox.getContent();
+      expect(content).toContain("Throttled 2s");
+      expect(content).not.toContain("(RPM)");
+      expect(content).not.toContain("(TPM)");
+    });
+
+    test("clearThrottling removes throttle indicator", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.showThrottling(5000, { rpm: true });
+      bar.clearThrottling();
+
+      const content = statusBox.getContent();
+      expect(content).not.toContain("Throttled");
+    });
+
+    test("showThrottling uses immediate render", () => {
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback, renderNowCallback);
+
+      renderNowCallback.mockClear();
+      bar.showThrottling(5000);
+
+      expect(renderNowCallback).toHaveBeenCalled();
+    });
+  });
+
+  describe("retry display", () => {
+    test("showRetry displays attempt number and total", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.showRetry(2, 1); // attempt 2, 1 retry left → total = 3
+
+      const content = statusBox.getContent();
+      expect(content).toContain("Retry 2/3");
+    });
+
+    test("clearRetry removes retry indicator", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.showRetry(1, 2);
+      bar.clearRetry();
+
+      const content = statusBox.getContent();
+      expect(content).not.toContain("Retry");
+    });
+
+    test("showRetry uses immediate render", () => {
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback, renderNowCallback);
+
+      renderNowCallback.mockClear();
+      bar.showRetry(1, 2);
+
+      expect(renderNowCallback).toHaveBeenCalled();
+    });
+  });
+
+  describe("multiple gadgets truncation", () => {
+    test("shows up to 3 gadgets inline", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.startGadget("ReadFile");
+      bar.startGadget("WriteFile");
+      bar.startGadget("BrowseWeb");
+
+      const content = statusBox.getContent();
+      expect(content).toContain("ReadFile");
+      expect(content).toContain("WriteFile");
+      expect(content).toContain("BrowseWeb");
+      expect(content).not.toContain("+");
+
+      bar.clearActivity();
+    });
+
+    test("shows +N for gadgets beyond 3", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.startGadget("ReadFile");
+      bar.startGadget("WriteFile");
+      bar.startGadget("BrowseWeb");
+      bar.startGadget("RunCommand");
+
+      const content = statusBox.getContent();
+      expect(content).toContain("+1");
+
+      bar.clearActivity();
+    });
+
+    test("shows correct +N count for many gadgets", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.startGadget("Gadget1");
+      bar.startGadget("Gadget2");
+      bar.startGadget("Gadget3");
+      bar.startGadget("Gadget4");
+      bar.startGadget("Gadget5");
+
+      const content = statusBox.getContent();
+      expect(content).toContain("+2");
+
+      bar.clearActivity();
+    });
+  });
+
+  describe("profile display truncation", () => {
+    test("truncates profiles longer than 12 chars with ellipsis", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setProfiles(["a-very-long-profile-name"]);
+
+      const content = statusBox.getContent();
+      // Should be truncated to 11 chars + ellipsis
+      expect(content).toContain("a-very-long…");
+      expect(content).not.toContain("a-very-long-profile-name");
+    });
+
+    test("does not truncate profiles 12 chars or shorter", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setProfiles(["twelve-chars"]); // exactly 12 chars
+
+      const content = statusBox.getContent();
+      expect(content).toContain("twelve-chars");
+      expect(content).not.toContain("…");
+    });
+  });
+
+  describe("selection debug callback", () => {
+    test("setSelectionDebugCallback shows debug info in status bar", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setSelectionDebugCallback(() => ({
+        index: 2,
+        total: 10,
+      }));
+
+      // Trigger a render
+      bar.startCall("test-model", 0);
+
+      const content = statusBox.getContent();
+      expect(content).toContain("sel:2/10");
+    });
+
+    test("setSelectionDebugCallback shows node type when provided", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setSelectionDebugCallback(() => ({
+        index: 0,
+        total: 5,
+        nodeType: "llm_call",
+      }));
+
+      bar.startCall("test-model", 0);
+
+      const content = statusBox.getContent();
+      expect(content).toContain("[llm_call]");
+    });
+
+    test("setSelectionDebugCallback shows no node type when not provided", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.setSelectionDebugCallback(() => ({
+        index: 1,
+        total: 3,
+      }));
+
+      bar.startCall("test-model", 0);
+
+      const content = statusBox.getContent();
+      expect(content).toContain("sel:1/3");
+      // No node type bracket suffix after the debug string
+      expect(content).not.toMatch(/sel:1\/3 \[/);
+    });
+  });
+
+  describe("cost display", () => {
+    test("shows cost with correct precision for small values", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.endCall(100, 50, 0, 0.00012);
+
+      const content = statusBox.getContent();
+      // formatCost(0.00012) = "0.00012" (5 decimal places for < 0.001)
+      expect(content).toContain("0.00012");
+    });
+
+    test("shows cost with correct precision for medium values", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.endCall(100, 50, 0, 0.123);
+
+      const content = statusBox.getContent();
+      // formatCost(0.123) = "0.123" (3 decimal places for < 1)
+      expect(content).toContain("0.123");
+    });
+
+    test("shows cost with 2 decimal places for values >= 1", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.endCall(100, 50, 0, 1.5);
+
+      const content = statusBox.getContent();
+      // formatCost(1.5) = "1.50"
+      expect(content).toContain("1.50");
+    });
+
+    test("does not show cost section when cost is zero", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      // No calls made, cost stays at 0
+      const content = statusBox.getContent();
+      expect(content).not.toContain("$");
+    });
+  });
+
+  describe("multiple LLM calls grouped by model", () => {
+    test("groups multiple calls by model in activity section", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      // Start two LLM calls with the same model
+      bar.startLLMCall("#1", "anthropic:claude-sonnet-4-5");
+      bar.startLLMCall("#2", "anthropic:claude-sonnet-4-5");
+
+      const content = statusBox.getContent();
+      // Both labels should appear
+      expect(content).toContain("#1");
+      expect(content).toContain("#2");
+
+      bar.clearActivity();
+    });
+
+    test("shows multiple model types separately in activity section", () => {
+      const renderCallback = vi.fn(() => {});
+      const bar = new StatusBar(statusBox, "test-model", renderCallback);
+
+      bar.startLLMCall("#1", "anthropic:claude-sonnet-4-5");
+      bar.startLLMCall("#2", "gemini:gemini-2.5-flash");
+
+      const content = statusBox.getContent();
+      // Both shortened model names should appear
+      expect(content).toContain("sonnet-4-5");
+      expect(content).toContain("2.5-flash");
+
+      bar.clearActivity();
+    });
+  });
 });
