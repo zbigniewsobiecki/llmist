@@ -74,8 +74,11 @@ for await (const event of agent.run()) {
 | `text` | `content: string` | Text chunk from LLM |
 | `gadget_call` | `call: { gadgetName, parameters }` | Gadget about to execute |
 | `gadget_result` | `result: { gadgetName, result?, error?, parameters }` | Gadget completed |
+| `gadget_skipped` | `gadgetName, invocationId, parameters, failedDependency, failedDependencyError` | Gadget skipped due to a failed dependency |
 | `thinking` | `content: string, thinkingType: "thinking" \| "redacted"` | Reasoning model thinking content |
 | `human_input_required` | `question, gadgetName, invocationId` | User input needed |
+| `llm_call_complete` | `response, usage?, finishReason?, cost?, thinkingContent?` | LLM call completed (after all gadgets finish) |
+| `compaction` | `event: { tokensBefore, tokensAfter, strategy, messagesRemoved }` | Context compaction occurred |
 
 ## Helper Functions
 
