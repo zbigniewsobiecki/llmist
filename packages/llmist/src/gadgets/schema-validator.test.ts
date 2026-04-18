@@ -314,6 +314,27 @@ describe("validateGadgetSchema", () => {
     });
   });
 
+  describe("array items traversal", () => {
+    it("detects z.unknown() inside array items (items keyword in JSON Schema)", () => {
+      // z.array(z.unknown()) produces { type: "array", items: {} }
+      // The items:{} has no type info — must be flagged
+      const schema = z.object({
+        data: z.array(z.unknown()),
+      });
+
+      expect(() => validateGadgetSchema(schema, "ArrayItemsGadget")).toThrow(/uses z\.unknown\(\)/);
+      expect(() => validateGadgetSchema(schema, "ArrayItemsGadget")).toThrow(/data/);
+    });
+
+    it("detects z.any() inside array items (same output as z.unknown())", () => {
+      const schema = z.object({
+        data: z.array(z.any()),
+      });
+
+      expect(() => validateGadgetSchema(schema, "AnyArrayGadget")).toThrow(/uses z\.unknown\(\)/);
+    });
+  });
+
   describe("hasNoType edge cases", () => {
     it("non-object property schema: does not flag z.never() property (has non-type key 'not')", () => {
       // z.never() produces { "not": {} } in JSON Schema — not a missing-type scenario

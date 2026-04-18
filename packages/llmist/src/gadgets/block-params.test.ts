@@ -161,21 +161,70 @@ second`;
       expect(() => parseBlockParams(content)).toThrow("Duplicate pointer: name");
     });
 
-    it("throws on array index gap", () => {
+    it("throws on array index gap at last segment", () => {
       const content = `!!!ARG:items/0
 first
 !!!ARG:items/2
 third`;
       expect(() => parseBlockParams(content)).toThrow("Array index gap");
+      expect(() => parseBlockParams(content)).toThrow("expected 1, got 2");
     });
 
-    it("treats negative index as object key (not array)", () => {
+    it("throws on array index gap in intermediate path", () => {
+      // items/0 creates items=["first"], then items/2/name tries to navigate to
+      // items[2] which is an intermediate segment — gap detected there
+      const content = `!!!ARG:items/0
+first
+!!!ARG:items/2/name
+Bob`;
+      expect(() => parseBlockParams(content)).toThrow("Array index gap");
+      expect(() => parseBlockParams(content)).toThrow("expected 1, got 2");
+    });
+
+    it("throws on invalid (non-numeric) array index in intermediate path", () => {
+      // items/0 creates items=["first"], then items/abc/prop tries to navigate
+      // items["abc"] which is an array — NaN index detected
+      const content = `!!!ARG:items/0
+first
+!!!ARG:items/abc/prop
+oops`;
+      expect(() => parseBlockParams(content)).toThrow("Invalid array index: abc");
+    });
+
+    it("throws on negative array index when array already exists", () => {
+      // items/0 creates items=["first"], then items/-1 tries to set items[-1]
+      // which is a negative index on an existing array
+      const content = `!!!ARG:items/0
+first
+!!!ARG:items/-1
+oops`;
+      expect(() => parseBlockParams(content)).toThrow("Invalid array index: -1");
+    });
+
+    it("treats negative index as object key when array not yet created", () => {
       // Negative indices aren't valid array indices, so they create object properties
       const content = `!!!ARG:items/-1
 invalid`;
       const result = parseBlockParams(content);
       // "-1" is not a valid array index, so "items" becomes an object
       expect(result).toEqual({ items: { "-1": "invalid" } });
+    });
+
+    it("throws on duplicate pointer with no trailing newline", () => {
+      // When arg has no newline (end of content), duplicate is still detected
+      const content = "!!!ARG:name!!!ARG:name";
+      expect(() => parseBlockParams(content)).toThrow("Duplicate pointer: name");
+    });
+
+    it("skips empty pointer (!!!ARG: with no pointer name)", () => {
+      // An arg prefix followed immediately by a newline has an empty pointer
+      const content = `!!!ARG:
+value
+!!!ARG:name
+John`;
+      const result = parseBlockParams(content);
+      // Empty pointer is skipped, only "name" is parsed
+      expect(result).toEqual({ name: "John" });
     });
   });
 
@@ -557,11 +606,19 @@ important
         expect(typeof result.count).toBe("number");
       });
 
-      it("still auto-coerces booleans without schema", () => {
+      it("still auto-coerces true without schema", () => {
         const content = `!!!ARG:enabled
 true`;
         const result = parseBlockParams(content);
         expect(result).toEqual({ enabled: true });
+        expect(typeof result.enabled).toBe("boolean");
+      });
+
+      it("still auto-coerces false without schema", () => {
+        const content = `!!!ARG:enabled
+false`;
+        const result = parseBlockParams(content);
+        expect(result).toEqual({ enabled: false });
         expect(typeof result.enabled).toBe("boolean");
       });
     });

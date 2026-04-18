@@ -172,6 +172,15 @@ describe("SchemaIntrospector", () => {
       const introspector = new SchemaIntrospector(schema);
       expect(introspector.getTypeAtPath("pair/2")).toBe("unknown");
     });
+
+    it("returns 'unknown' for non-numeric tuple key", () => {
+      const schema = z.object({
+        pair: z.tuple([z.string(), z.number()]),
+      });
+      const introspector = new SchemaIntrospector(schema);
+      // "abc" is not a valid numeric index for a tuple
+      expect(introspector.getTypeAtPath("pair/abc")).toBe("unknown");
+    });
   });
 
   describe("records", () => {
@@ -268,6 +277,15 @@ describe("SchemaIntrospector", () => {
       const introspector = new SchemaIntrospector(schema);
       expect(introspector.getTypeAtPath("value")).toBe("string");
     });
+
+    it("returns 'unknown' for complex intersection of non-string types", () => {
+      const schema = z.object({
+        value: z.intersection(z.number(), z.boolean()),
+      });
+      const introspector = new SchemaIntrospector(schema);
+      // Neither side is a string, and types differ → 'unknown'
+      expect(introspector.getTypeAtPath("value")).toBe("unknown");
+    });
   });
 
   describe("literals", () => {
@@ -293,6 +311,15 @@ describe("SchemaIntrospector", () => {
       });
       const introspector = new SchemaIntrospector(schema);
       expect(introspector.getTypeAtPath("flag")).toBe("boolean");
+    });
+
+    it("returns 'unknown' for null literal (not string/number/boolean)", () => {
+      const schema = z.object({
+        empty: z.literal(null),
+      });
+      const introspector = new SchemaIntrospector(schema);
+      // null is not a string, number, or boolean literal value
+      expect(introspector.getTypeAtPath("empty")).toBe("unknown");
     });
   });
 

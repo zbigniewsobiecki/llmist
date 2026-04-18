@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type ZodError, z } from "zod";
-import { GadgetExecutionErrorFormatter } from "./error-formatter.js";
+import { createErrorFormatter, GadgetExecutionErrorFormatter } from "./error-formatter.js";
 import { Gadget } from "./typed-gadget.js";
 
 // Test gadget with schema and examples
@@ -108,6 +108,24 @@ describe("GadgetExecutionErrorFormatter", () => {
       expect(formatted).toContain("b:");
     });
 
+    it("uses 'root' label for root-level validation errors (empty path)", () => {
+      const gadget = new SimpleGadget();
+      // A schema that fails at the root level (not a specific field)
+      const schema = z.string();
+
+      const result = schema.safeParse(42);
+      expect(result.success).toBe(false);
+
+      const formatted = formatter.formatValidationError(
+        "SimpleGadget",
+        (result as { error: ZodError }).error,
+        gadget,
+      );
+
+      // Root-level errors have empty path → should be labeled "root"
+      expect(formatted).toContain("root:");
+    });
+
     it("handles nested path errors", () => {
       const gadget = new SimpleGadget();
       const schema = z.object({
@@ -203,6 +221,41 @@ describe("GadgetExecutionErrorFormatter", () => {
       expect(formatted).toContain("@@START:Calculator");
       expect(formatted).toContain("@@PARAM:parameterName");
       expect(formatted).toContain("@@END");
+    });
+  });
+
+  describe("createErrorFormatter factory", () => {
+    it("creates a GadgetExecutionErrorFormatter instance with default options", () => {
+      const factory = createErrorFormatter();
+
+      expect(factory).toBeInstanceOf(GadgetExecutionErrorFormatter);
+    });
+
+    it("creates a formatter with custom options via factory", () => {
+      const factory = createErrorFormatter({
+        argPrefix: "##ARG:",
+        startPrefix: "##START:",
+        endPrefix: "##END",
+      });
+
+      const gadget = new CalculatorGadget();
+      const formatted = factory.formatParseError("Calculator", "Some error", gadget);
+
+      expect(formatted).toContain("##START:Calculator");
+      expect(formatted).toContain("##ARG:parameterName");
+      expect(formatted).toContain("##END");
+    });
+
+    it("creates a formatter that works identically to direct instantiation", () => {
+      const direct = new GadgetExecutionErrorFormatter();
+      const viaFactory = createErrorFormatter();
+
+      const gadget = new CalculatorGadget();
+      const parseError = "Test parse error";
+
+      expect(viaFactory.formatParseError("Calculator", parseError, gadget)).toBe(
+        direct.formatParseError("Calculator", parseError, gadget),
+      );
     });
   });
 });
