@@ -25,6 +25,9 @@ export GEMINI_API_KEY="..."
 
 # OpenRouter (400+ models via unified gateway)
 export OPENROUTER_API_KEY="sk-or-..."
+
+# HuggingFace (free tier, serverless inference)
+export HF_TOKEN="hf_..."
 ```
 
 <Aside type="tip">
@@ -115,6 +118,29 @@ These can also be set via command-line flags:
 | `OPENROUTER_API_KEY` | API key (required) |
 | `OPENROUTER_SITE_URL` | Your app URL for analytics (optional) |
 | `OPENROUTER_APP_NAME` | Your app name for analytics (optional) |
+
+### HuggingFace
+
+Access thousands of open-source models via HuggingFace's serverless inference router.
+
+| Variable | Description |
+|----------|-------------|
+| `HF_TOKEN` | HuggingFace access token (primary, required) |
+| `HUGGING_FACE_API_KEY` | Fallback token if `HF_TOKEN` is not set (optional) |
+| `HF_ENDPOINT_URL` | Custom inference endpoint URL (optional, for dedicated endpoints) |
+
+```bash
+# Standard serverless inference (router.huggingface.co)
+export HF_TOKEN="hf_..."
+
+# Dedicated endpoint (overrides the default router URL)
+export HF_TOKEN="hf_..."
+export HF_ENDPOINT_URL="https://xxx.endpoints.huggingface.cloud"
+```
+
+<Aside type="tip">
+  Get a free HuggingFace token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). The free tier provides access to thousands of open-source models including Llama, Mistral, Qwen, and DeepSeek via `huggingface:` or `hf:` prefix.
+</Aside>
 
 ## Best Practices
 
