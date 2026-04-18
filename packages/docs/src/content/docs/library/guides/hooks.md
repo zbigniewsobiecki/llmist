@@ -262,8 +262,12 @@ const myHooks = HookPresets.merge(
 | `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger`, `subagentContext?` |
 | `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `finalResult`, `error`, `executionTimeMs`, `cost?`, `logger`, `subagentContext?` |
 | `onGadgetSkipped` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `failedDependency`, `failedDependencyError`, `logger`, `subagentContext?` |
+| `onStreamChunk` | `iteration`, `rawChunk`, `accumulatedText`, `usage?`, `logger`, `subagentContext?` |
+| `onCompaction` | `iteration`, `event`, `stats`, `logger`, `subagentContext?` |
+| `onAbort` | `iteration`, `reason?`, `logger`, `subagentContext?` |
 | `onRateLimitThrottle` | `iteration`, `delayMs`, `stats`, `logger`, `subagentContext?` |
 | `onRetryAttempt` | `iteration`, `attemptNumber`, `retriesLeft`, `error`, `retryAfterMs?`, `logger`, `subagentContext?` |
+| `onSkillActivated` | `skillName`, `arguments?`, `iteration`, `logger` |
 
 ## Rate Limiting & Retry Observers
 
