@@ -214,7 +214,7 @@ describe('Error Handling', () => {
   it('should handle LLM errors gracefully', async () => {
     mockLLM()
       .forAnyModel()
-      .throwsError(new Error('Rate limit exceeded'))
+      .throws(new Error('Rate limit exceeded'))
       .register();
 
     const client = createMockClient();
