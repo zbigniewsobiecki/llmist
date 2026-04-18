@@ -74,7 +74,7 @@ describe('My AI Feature', () => {
 | Gadget execution | `testGadget()` |
 | Gadget call verification | `createMockGadget()` |
 | Multi-turn conversations | `mockLLM().times(n)` |
-| Error handling | `mockLLM().throwsError()` |
+| Error handling | `mockLLM().withResponse(() => { throw new Error(...) })` |
 | Streaming behavior | `collectStream()` |
 
 ## Next Steps
