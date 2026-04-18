@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
-import { OpenAIChatProvider } from "./openai.js";
+import { createOpenAIProviderFromEnv, OpenAIChatProvider } from "./openai.js";
 import { openaiImageModels } from "./openai-image-models.js";
 import { openaiSpeechModels } from "./openai-speech-models.js";
 
@@ -1753,5 +1753,67 @@ describe("OpenAIChatProvider", () => {
 
       expect(fallbackEstimate).toBeGreaterThanOrEqual(tiktokenCount);
     });
+  });
+});
+
+describe("createOpenAIProviderFromEnv", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it("creates provider when OPENAI_API_KEY is set", () => {
+    process.env.OPENAI_API_KEY = "sk-test-key-123";
+
+    const provider = createOpenAIProviderFromEnv();
+
+    expect(provider).toBeInstanceOf(OpenAIChatProvider);
+    expect(provider?.providerId).toBe("openai");
+  });
+
+  it("returns null when OPENAI_API_KEY is not set", () => {
+    delete process.env.OPENAI_API_KEY;
+
+    const provider = createOpenAIProviderFromEnv();
+
+    expect(provider).toBeNull();
+  });
+
+  it("returns null when OPENAI_API_KEY is an empty string", () => {
+    process.env.OPENAI_API_KEY = "";
+
+    const provider = createOpenAIProviderFromEnv();
+
+    expect(provider).toBeNull();
+  });
+
+  it("returns null when OPENAI_API_KEY is only whitespace", () => {
+    process.env.OPENAI_API_KEY = "   ";
+
+    const provider = createOpenAIProviderFromEnv();
+
+    expect(provider).toBeNull();
+  });
+
+  it("trims whitespace from the API key", () => {
+    process.env.OPENAI_API_KEY = "  sk-test-key  ";
+
+    const provider = createOpenAIProviderFromEnv();
+
+    expect(provider).toBeInstanceOf(OpenAIChatProvider);
+  });
+
+  it("created provider supports openai descriptor", () => {
+    process.env.OPENAI_API_KEY = "sk-test-key-456";
+
+    const provider = createOpenAIProviderFromEnv();
+
+    expect(provider?.supports({ provider: "openai", name: "gpt-4" })).toBe(true);
+    expect(provider?.supports({ provider: "anthropic", name: "claude-3" })).toBe(false);
   });
 });
