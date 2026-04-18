@@ -61,6 +61,14 @@ LLMist.createAgent()
 | `.withGadgets(...gadgets)` | `GadgetOrClass[]` | Register gadgets (classes or instances) |
 | `.withDefaultGadgetTimeout(ms)` | `number` | Default timeout for all gadgets |
 
+### Skills
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `.withSkills(registry)` | `SkillRegistry` | Register all skills from a registry |
+| `.withSkill(name, args?)` | `string, string?` | Pre-activate a specific skill by name |
+| `.withSkillsFrom(dir)` | `string` | Scan a directory and register all skills found (can be called multiple times) |
+
 ### Error Handling & Retry
 
 | Method | Type | Default | Description |
