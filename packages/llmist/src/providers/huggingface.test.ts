@@ -154,6 +154,54 @@ describe("HuggingFaceProvider", () => {
 
       expect(request.max_tokens).toBeUndefined();
     });
+
+    it("should inject DeepSeek thinking mode when reasoning is enabled for DeepSeek models", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const messages: LLMMessage[] = [{ role: "user", content: "Solve this" }];
+
+      const request = (provider as any).buildApiRequest(
+        { messages, reasoning: { enabled: true } },
+        { provider: "huggingface", name: "deepseek-ai/DeepSeek-V3.2" },
+        undefined,
+        messages,
+      );
+
+      expect((request as any).extra_body).toEqual({ thinking: { type: "enabled" } });
+    });
+
+    it("should not inject thinking mode when reasoning is disabled for DeepSeek models", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const messages: LLMMessage[] = [{ role: "user", content: "Solve this" }];
+
+      const request = (provider as any).buildApiRequest(
+        { messages, reasoning: { enabled: false } },
+        { provider: "huggingface", name: "deepseek-ai/DeepSeek-V3.2" },
+        undefined,
+        messages,
+      );
+
+      expect((request as any).extra_body).toBeUndefined();
+    });
+
+    it("should not inject thinking mode for non-DeepSeek models even when reasoning is enabled", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const messages: LLMMessage[] = [{ role: "user", content: "Solve this" }];
+
+      const request = (provider as any).buildApiRequest(
+        { messages, reasoning: { enabled: true } },
+        { provider: "huggingface", name: "meta-llama/Llama-3.1-8B-Instruct" },
+        undefined,
+        messages,
+      );
+
+      expect((request as any).extra_body).toBeUndefined();
+    });
   });
 
   describe("normalizeProviderStream", () => {
@@ -305,6 +353,23 @@ describe("HuggingFaceProvider", () => {
   });
 
   describe("enhanceError", () => {
+    it("should wrap non-Error values into an Error", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new HuggingFaceProvider(mockClient);
+
+      const stringError = (provider as any).enhanceError("something went wrong");
+      expect(stringError).toBeInstanceOf(Error);
+      expect(stringError.message).toBe("something went wrong");
+
+      const numberError = (provider as any).enhanceError(42);
+      expect(numberError).toBeInstanceOf(Error);
+      expect(numberError.message).toBe("42");
+
+      const objectError = (provider as any).enhanceError({ code: 500 });
+      expect(objectError).toBeInstanceOf(Error);
+      expect(objectError.message).toBe("[object Object]");
+    });
+
     it("should enhance 429 (rate limit) errors", () => {
       const mockClient = {} as OpenAI;
       const provider = new HuggingFaceProvider(mockClient);
