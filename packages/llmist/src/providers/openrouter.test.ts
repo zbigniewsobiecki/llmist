@@ -658,6 +658,38 @@ describe("OpenRouterProvider", () => {
       expect(enhanced.message).toContain("OPENROUTER_API_KEY");
     });
 
+    it("should enhance 400 (bad request) errors and include provider guidance", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const error = new Error("400 invalid request payload");
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect(enhanced.message).toContain("400");
+      expect(enhanced.message).toContain("model's limits");
+    });
+
+    it("should preserve original status code on 400 errors", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      const error = Object.assign(new Error("400 bad request"), { status: 400 });
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect((enhanced as any).status).toBe(400);
+    });
+
+    it("should default to status 400 when original error has no status property", () => {
+      const mockClient = {} as OpenAI;
+      const provider = new OpenRouterProvider(mockClient, {});
+
+      // Error without a status field — status should default to 400
+      const error = new Error("bad request");
+      const enhanced = (provider as any).enhanceError(error);
+
+      expect((enhanced as any).status).toBe(400);
+    });
+
     it("should pass through other errors unchanged", () => {
       const mockClient = {} as OpenAI;
       const provider = new OpenRouterProvider(mockClient, {});
