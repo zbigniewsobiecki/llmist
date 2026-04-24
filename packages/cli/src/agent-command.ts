@@ -14,7 +14,8 @@ import { resolveRateLimitConfig, resolveRetryConfig } from "./rate-limit-resolve
 import { CLISkillManager } from "./skills/skill-manager.js";
 import { parseSlashCommand } from "./skills/slash-handler.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
-import { StatusBar, TUIApp } from "./tui/index.js";
+import { TUIApp } from "./tui/index.js";
+import { createTUIHooks } from "./tui/tui-hooks.js";
 import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
 
 /**
@@ -194,8 +195,8 @@ export async function executeAgent(
   // - TUI mode: TUI's modal dialogs (in beforeGadgetExecution controller)
   // - Piped mode: auto-deny gadgets requiring approval (can't prompt)
 
-  let _usage: TokenUsage | undefined;
-  let iterations = 0;
+  const usageRef: { value: TokenUsage | undefined } = { value: undefined };
+  const iterationsRef: { value: number } = { value: 0 };
 
   // LLM request logging: use session directory if enabled
   const llmLogsEnabled = options.logLlmRequests === true;
@@ -220,178 +221,14 @@ export async function executeAgent(
   );
 
   // Build TUI-specific hooks for progress tracking and UI updates
-  const tuiHooks: AgentHooks = {
-    observers: {
-      // onLLMCallStart: Track iteration for status bar label formatting
-      onLLMCallStart: async (context: any) => {
-        if (context.subagentContext) return;
-
-        if (tui) {
-          // Only track iteration - tree subscription handles block creation
-          tui.showLLMCallStart(iterations + 1);
-        }
-      },
-
-      // onStreamChunk: Update status bar with real-time output token estimate
-      onStreamChunk: async (context: any) => {
-        if (context.subagentContext) return;
-        if (!tui) return;
-
-        // Use accumulated text from context to estimate output tokens
-        const estimatedOutputTokens = StatusBar.estimateTokens(context.accumulatedText);
-        tui.updateStreamingTokens(estimatedOutputTokens);
-      },
-
-      // onLLMCallComplete: Capture metadata for final summary
-      onLLMCallComplete: async (context: any) => {
-        if (context.subagentContext) return;
-
-        // Capture completion metadata for final summary
-        _usage = context.usage;
-        iterations = Math.max(iterations, context.iteration + 1);
-
-        // Clear retry indicator on successful LLM call completion
-        if (tui) {
-          tui.clearRetry();
-        }
-      },
-
-      // onRateLimitThrottle: Show throttling delay in status bar and conversation
-      onRateLimitThrottle: async (context: any) => {
-        if (context.subagentContext) return; // Only main agent
-
-        if (tui) {
-          const seconds = Math.ceil(context.delayMs / 1000);
-          const { triggeredBy } = context.stats;
-
-          // Status bar indicator (will auto-clear after delay via timer below)
-          tui.showThrottling(context.delayMs, triggeredBy);
-
-          // Format conversation message based on which limit triggered
-          let message: string;
-          if (triggeredBy?.daily) {
-            // Daily limit: show token counts and wait until midnight
-            const current = Math.round(triggeredBy.daily.current / 1000);
-            const limit = Math.round(triggeredBy.daily.limit / 1000);
-            message = `Daily token limit reached (${current}K/${limit}K), waiting until midnight UTC...`;
-          } else {
-            // RPM/TPM: show current stats and countdown
-            const statsMsg: string[] = [];
-            if (context.stats.rpm > 0) statsMsg.push(`${context.stats.rpm} RPM`);
-            if (context.stats.tpm > 0)
-              statsMsg.push(`${Math.round(context.stats.tpm / 1000)}K TPM`);
-            const statsStr = statsMsg.length > 0 ? ` (${statsMsg.join(", ")})` : "";
-            message = `Rate limit approaching${statsStr}, waiting ${seconds}s...`;
-          }
-
-          tui.addSystemMessage(message, "throttle");
-
-          // Auto-clear status bar indicator after delay
-          setTimeout(() => tui.clearThrottling(), context.delayMs);
-        }
-      },
-
-      // onRetryAttempt: Show retry attempt in status bar and conversation
-      onRetryAttempt: async (context: any) => {
-        if (context.subagentContext) return; // Only main agent
-
-        if (tui) {
-          const totalAttempts = context.attemptNumber + context.retriesLeft;
-
-          // Status bar indicator (cleared on next successful LLM call or final failure)
-          tui.showRetry(context.attemptNumber, context.retriesLeft);
-
-          // Conversation log entry with retry details
-          const retryAfterInfo = context.retryAfterMs
-            ? ` (server requested ${Math.ceil(context.retryAfterMs / 1000)}s wait)`
-            : "";
-
-          tui.addSystemMessage(
-            `Request failed (attempt ${context.attemptNumber}/${totalAttempts}), retrying...${retryAfterInfo}`,
-            "retry",
-          );
-        }
-      },
-    },
-
-    // SHOWCASE: Controller-based approval gating for gadgets
-    //
-    // This demonstrates how to add safety layers WITHOUT modifying gadgets.
-    // The ApprovalManager handles approval flows externally via beforeGadgetExecution.
-    // Approval modes are configurable via cli.toml:
-    //   - "allowed": auto-proceed
-    //   - "denied": auto-reject, return message to LLM
-    //   - "approval-required": prompt user interactively
-    //
-    // Default: RunCommand, WriteFile, EditFile require approval unless overridden.
-    controllers: {
-      beforeGadgetExecution: async (ctx: any) => {
-        // Get approval mode from config
-        const normalizedGadgetName = ctx.gadgetName.toLowerCase();
-        const configuredMode = Object.entries(gadgetApprovals).find(
-          ([key]) => key.toLowerCase() === normalizedGadgetName,
-        )?.[1];
-        const mode = configuredMode ?? approvalConfig.defaultMode;
-
-        // Fast path: allowed gadgets proceed immediately
-        if (mode === "allowed") {
-          return { action: "proceed" };
-        }
-
-        // Check if we can prompt (interactive mode required for approval-required)
-        const stdinTTY = isInteractive(env.stdin);
-        const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-        const canPrompt = stdinTTY && stderrTTY;
-
-        // Non-interactive mode handling
-        if (!canPrompt) {
-          if (mode === "approval-required") {
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Run in a terminal to approve.`,
-            };
-          }
-          if (mode === "denied") {
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\n${ctx.gadgetName} is denied by configuration.`,
-            };
-          }
-          return { action: "proceed" };
-        }
-
-        // TUI mode: use TUI's modal approval dialog
-        if (tui) {
-          const response = await tui.showApproval({
-            gadgetName: ctx.gadgetName,
-            parameters: ctx.parameters,
-          });
-
-          // Persist "always" and "deny" responses for future calls in this session
-          if (response === "always") {
-            gadgetApprovals[ctx.gadgetName] = "allowed";
-          } else if (response === "deny") {
-            gadgetApprovals[ctx.gadgetName] = "denied";
-          }
-
-          if (response === "yes" || response === "always") {
-            return { action: "proceed" };
-          }
-          return {
-            action: "skip",
-            syntheticResult: `status=denied\n\nDenied by user`,
-          };
-        }
-
-        // Piped mode with terminal available but TUI disabled (e.g., stdout redirected)
-        // Suggest adjusting config or enabling full interactive mode
-        return {
-          action: "skip",
-          syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Enable TUI mode or adjust 'gadget-approval' in your config to allow this gadget.`,
-        };
-      },
-    },
-  };
+  const tuiHooks: AgentHooks = createTUIHooks({
+    tui,
+    env,
+    gadgetApprovals,
+    approvalConfig,
+    iterationsRef,
+    usageRef,
+  });
 
   // Combine TUI hooks with file logging (if enabled via --log-llm-requests flag)
   const finalHooks = llmLogDir
