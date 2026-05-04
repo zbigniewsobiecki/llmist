@@ -3,7 +3,7 @@ import type { Agent, AgentHooks, ContentPart, ReasoningEffort, TokenUsage } from
 import { AgentBuilder, GadgetRegistry, HookPresets, isAbortError, text } from "llmist";
 import type { ApprovalConfig } from "./approval/index.js";
 import { getBuiltinGadgets } from "./builtin-gadgets.js";
-import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
+import type { AgentConfig, CLIConfig, GlobalSubagentConfig } from "./config.js";
 import { getCustomCommandNames, loadConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
@@ -16,6 +16,18 @@ import { parseSlashCommand } from "./skills/slash-handler.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
 import { StatusBar, TUIApp } from "./tui/index.js";
 import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
+
+/**
+ * Safely loads the CLI config, returning null if loading fails (e.g., no config file present).
+ * Use this instead of calling loadConfig() directly when config is optional.
+ */
+function loadConfigSafe(): CLIConfig | null {
+  try {
+    return loadConfig();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Executes the agent command.
@@ -61,18 +73,14 @@ export async function executeAgent(
     prompt = await resolvePrompt(promptArg, env);
   }
 
+  // Load config once at the top — all config values are derived from this single result.
+  // loadConfigSafe() returns null if no config file exists or loading fails.
+  const fullConfig = loadConfigSafe();
+  const speechConfig = fullConfig?.speech;
+  const skillsConfig = fullConfig?.skills;
+
   // SHOWCASE: llmist's GadgetRegistry for dynamic tool loading
   const registry = new GadgetRegistry();
-
-  // Load config for speech settings (used by TextToSpeech gadget)
-  // Note: loadConfig() is safe to call multiple times and caches the result
-  let speechConfig: import("./config.js").SpeechConfig | undefined;
-  try {
-    const fullConfig = loadConfig();
-    speechConfig = fullConfig.speech;
-  } catch {
-    // Config loading may fail (e.g., no config file) - use defaults
-  }
 
   // Register built-in gadgets for basic agent interaction
   // AskUser is auto-excluded when stdin/stdout is not interactive (piped input/output)
@@ -103,13 +111,6 @@ export async function executeAgent(
   }
 
   // Load skills from config sources and standard locations
-  let skillsConfig: import("./skills/config-types.js").SkillsConfig | undefined;
-  try {
-    const fullConfig = loadConfig();
-    skillsConfig = fullConfig.skills;
-  } catch {
-    // Config loading may fail - skills are optional
-  }
   const skillManager = new CLISkillManager();
   const skillRegistry = await skillManager.loadAll(skillsConfig);
 
@@ -125,16 +126,11 @@ export async function executeAgent(
 
     // Load available profiles for Ctrl+P cycling
     // Profiles allow users to switch between agent configurations between sessions
-    try {
-      const fullConfig = loadConfig();
-      const customProfiles = getCustomCommandNames(fullConfig);
-      // "agent" is the default profile, custom profiles come from cli.toml sections
-      const profiles = ["agent", ...customProfiles];
-      // Set initial profile to match the command being run
-      tui.setProfiles(profiles, commandName ?? "agent");
-    } catch {
-      // Config loading may fail (e.g., no config file) - profiles are optional
-    }
+    const customProfiles = fullConfig ? getCustomCommandNames(fullConfig) : [];
+    // "agent" is the default profile, custom profiles come from cli.toml sections
+    const profiles = ["agent", ...customProfiles];
+    // Set initial profile to match the command being run
+    tui.setProfiles(profiles, commandName ?? "agent");
 
     // If no initial prompt, start waiting for input early
     // This puts the REPL in "waiting" mode immediately, enabling Ctrl+P profile cycling

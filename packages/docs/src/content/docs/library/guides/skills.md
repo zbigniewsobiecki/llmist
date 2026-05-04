@@ -174,13 +174,40 @@ Discovery order (later overrides earlier on name collision):
 ```typescript
 const builder = new AgentBuilder()
   .withModel('sonnet')
-  .withSkills(registry)           // Register all skills
+  .withSkills(registry)           // Register all skills from a SkillRegistry
   .withSkill('code-review', 'PR #42')  // Pre-activate a specific skill
-  .withSkillsFrom('./my-skills')  // Load from directory
+  .withSkillsFrom('./my-skills')  // Load all skills from a directory
   .ask('Help me with this task');
 ```
 
 When skills are registered, a `LoadSkill` meta-gadget is automatically added. The LLM can invoke it like any gadget to activate a skill mid-conversation.
+
+### withSkillsFrom()
+
+The `.withSkillsFrom(dir)` method is a convenience shortcut that scans a directory for skills and registers them with the agent — no need to create a `SkillRegistry` manually.
+
+```typescript
+const agent = new AgentBuilder()
+  .withModel('sonnet')
+  .withSkillsFrom('./skills')          // Load from relative path
+  .withSkillsFrom('/usr/local/skills') // Chain multiple directories
+  .ask('Help me review this code');
+```
+
+Skills are discovered by scanning the directory for subdirectories that contain a `SKILL.md` file. Each call to `.withSkillsFrom()` adds more directories — calls accumulate rather than replace.
+
+```typescript
+// Equivalent manual approach
+import { loadSkillsFromDirectory, SkillRegistry } from 'llmist';
+
+const registry = new SkillRegistry();
+registry.registerMany(loadSkillsFromDirectory('./skills'));
+
+const agent = new AgentBuilder()
+  .withModel('sonnet')
+  .withSkills(registry)
+  .ask('Help me review this code');
+```
 
 ## How It Works
 

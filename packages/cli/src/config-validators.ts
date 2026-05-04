@@ -154,6 +154,175 @@ export function validateTable(
   return obj;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Declarative field schema infrastructure
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A single field validation rule used in declarative field schema maps.
+ */
+type FieldRule =
+  | { type: "string" }
+  | { type: "path" } // string with tilde expansion
+  | { type: "boolean" }
+  | { type: "number"; min?: number; max?: number; integer?: boolean }
+  | { type: "string[]" }
+  | { type: "enum"; values: readonly string[] }
+  | { type: "custom"; validate: (value: unknown, key: string, section: string) => unknown };
+
+/**
+ * A map from field names to their validation rules.
+ */
+type FieldSchemaMap = Record<string, FieldRule>;
+
+/**
+ * Validates a raw object's fields against a declarative schema map.
+ * Only processes keys present in both `rawObj` and `schema`.
+ * Returns a plain object with the validated values.
+ */
+function validateFields(
+  rawObj: Record<string, unknown>,
+  section: string,
+  schema: FieldSchemaMap,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, rule] of Object.entries(schema)) {
+    if (!(key in rawObj)) continue;
+    const value = rawObj[key];
+    switch (rule.type) {
+      case "string":
+        result[key] = validateString(value, key, section);
+        break;
+      case "path":
+        result[key] = validatePathString(value, key, section);
+        break;
+      case "boolean":
+        result[key] = validateBoolean(value, key, section);
+        break;
+      case "number":
+        result[key] = validateNumber(value, key, section, {
+          min: rule.min,
+          max: rule.max,
+          integer: rule.integer,
+        });
+        break;
+      case "string[]":
+        result[key] = validateStringArray(value, key, section);
+        break;
+      case "enum": {
+        const str = validateString(value, key, section);
+        if (!rule.values.includes(str)) {
+          throw new ConfigError(
+            `[${section}].${key} must be one of: ${rule.values.join(", ")} (got "${str}")`,
+          );
+        }
+        result[key] = str;
+        break;
+      }
+      case "custom":
+        result[key] = rule.validate(value, key, section);
+        break;
+    }
+  }
+  return result;
+}
+
+/**
+ * Handles the shared rate-limits / retry / reasoning sub-sections that appear
+ * in validateCompleteConfig, validateAgentConfig, and validateCustomConfig.
+ */
+function validateSharedNestedSections(
+  rawObj: Record<string, unknown>,
+  section: string,
+  result: Record<string, unknown>,
+): void {
+  if ("rate-limits" in rawObj) {
+    result["rate-limits"] = validateRateLimitsConfig(
+      rawObj["rate-limits"],
+      `${section}.rate-limits`,
+    );
+  }
+  if ("retry" in rawObj) {
+    result.retry = validateRetryConfig(rawObj.retry, `${section}.retry`);
+  }
+  if ("reasoning" in rawObj) {
+    result.reasoning = validateReasoningConfig(rawObj.reasoning, `${section}.reasoning`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Declarative schemas for each config section
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RATE_LIMITS_SCHEMA: FieldSchemaMap = {
+  "requests-per-minute": { type: "number", integer: true, min: 1 },
+  "tokens-per-minute": { type: "number", integer: true, min: 1 },
+  "tokens-per-day": { type: "number", integer: true, min: 1 },
+  "safety-margin": { type: "number", min: 0, max: 1 },
+  enabled: { type: "boolean" },
+};
+
+const RETRY_SCHEMA: FieldSchemaMap = {
+  enabled: { type: "boolean" },
+  retries: { type: "number", integer: true, min: 0 },
+  "min-timeout": { type: "number", integer: true, min: 0 },
+  "max-timeout": { type: "number", integer: true, min: 0 },
+  factor: { type: "number", min: 1 },
+  randomize: { type: "boolean" },
+  "respect-retry-after": { type: "boolean" },
+  "max-retry-after-ms": { type: "number", integer: true, min: 0 },
+};
+
+const REASONING_SCHEMA: FieldSchemaMap = {
+  enabled: { type: "boolean" },
+  effort: { type: "enum", values: [...VALID_REASONING_EFFORTS] },
+  "budget-tokens": { type: "number", integer: true, min: 1 },
+};
+
+const IMAGE_SCHEMA: FieldSchemaMap = {
+  model: { type: "string" },
+  size: { type: "string" },
+  quality: { type: "string" },
+  count: { type: "number", integer: true, min: 1, max: 10 },
+  output: { type: "path" },
+  quiet: { type: "boolean" },
+};
+
+const SPEECH_SCHEMA: FieldSchemaMap = {
+  model: { type: "string" },
+  voice: { type: "string" },
+  format: { type: "string" },
+  speed: { type: "number", min: 0.25, max: 4.0 },
+  output: { type: "path" },
+  quiet: { type: "boolean" },
+};
+
+const COMPLETE_EXTRA_SCHEMA: FieldSchemaMap = {
+  "max-tokens": { type: "number", integer: true, min: 1 },
+  quiet: { type: "boolean" },
+  "log-llm-requests": { type: "boolean" },
+};
+
+/** Simple agent/custom fields that map directly to a single validate call. */
+const AGENT_SIMPLE_FIELDS_SCHEMA: FieldSchemaMap = {
+  "max-iterations": { type: "number", integer: true, min: 1 },
+  budget: { type: "number", min: 0 },
+  gadgets: { type: "string[]" },
+  "gadget-add": { type: "string[]" },
+  "gadget-remove": { type: "string[]" },
+  builtins: { type: "boolean" },
+  "builtin-interaction": { type: "boolean" },
+  "gadget-start-prefix": { type: "string" },
+  "gadget-end-prefix": { type: "string" },
+  "gadget-arg-prefix": { type: "string" },
+  quiet: { type: "boolean" },
+  "log-llm-requests": { type: "boolean" },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Complex / nested validators (unchanged public API)
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Validates a single subagent configuration.
  * Subagent configs are flexible objects with optional model and maxIterations.
@@ -239,30 +408,7 @@ export function validateSubagentConfigMap(value: unknown, section: string): Suba
  */
 export function validateRateLimitsConfig(value: unknown, section: string): RateLimitsConfig {
   const raw = validateTable(value, section, RATE_LIMITS_CONFIG_KEYS);
-  const result: RateLimitsConfig = {};
-
-  for (const [key, val] of Object.entries(raw)) {
-    switch (key) {
-      case "requests-per-minute":
-        result["requests-per-minute"] = validateNumber(val, key, section, {
-          integer: true,
-          min: 1,
-        });
-        break;
-      case "tokens-per-minute":
-        result["tokens-per-minute"] = validateNumber(val, key, section, { integer: true, min: 1 });
-        break;
-      case "tokens-per-day":
-        result["tokens-per-day"] = validateNumber(val, key, section, { integer: true, min: 1 });
-        break;
-      case "safety-margin":
-        result["safety-margin"] = validateNumber(val, key, section, { min: 0, max: 1 });
-        break;
-      case "enabled":
-        result.enabled = validateBoolean(val, key, section);
-        break;
-    }
-  }
+  const result = validateFields(raw, section, RATE_LIMITS_SCHEMA) as RateLimitsConfig;
 
   // Warn for suspiciously high limits
   if (result["requests-per-minute"] && result["requests-per-minute"] > 10_000) {
@@ -285,38 +431,7 @@ export function validateRateLimitsConfig(value: unknown, section: string): RateL
  */
 export function validateRetryConfig(value: unknown, section: string): RetryConfigCLI {
   const raw = validateTable(value, section, RETRY_CONFIG_KEYS);
-  const result: RetryConfigCLI = {};
-
-  for (const [key, val] of Object.entries(raw)) {
-    switch (key) {
-      case "enabled":
-        result.enabled = validateBoolean(val, key, section);
-        break;
-      case "retries":
-        result.retries = validateNumber(val, key, section, { integer: true, min: 0 });
-        break;
-      case "min-timeout":
-        result["min-timeout"] = validateNumber(val, key, section, { integer: true, min: 0 });
-        break;
-      case "max-timeout":
-        result["max-timeout"] = validateNumber(val, key, section, { integer: true, min: 0 });
-        break;
-      case "factor":
-        result.factor = validateNumber(val, key, section, { min: 1 });
-        break;
-      case "randomize":
-        result.randomize = validateBoolean(val, key, section);
-        break;
-      case "respect-retry-after":
-        result["respect-retry-after"] = validateBoolean(val, key, section);
-        break;
-      case "max-retry-after-ms":
-        result["max-retry-after-ms"] = validateNumber(val, key, section, { integer: true, min: 0 });
-        break;
-    }
-  }
-
-  return result;
+  return validateFields(raw, section, RETRY_SCHEMA) as RetryConfigCLI;
 }
 
 /**
@@ -324,30 +439,7 @@ export function validateRetryConfig(value: unknown, section: string): RetryConfi
  */
 export function validateReasoningConfig(value: unknown, section: string): ReasoningConfigCLI {
   const raw = validateTable(value, section, REASONING_CONFIG_KEYS);
-  const result: ReasoningConfigCLI = {};
-
-  for (const [key, val] of Object.entries(raw)) {
-    switch (key) {
-      case "enabled":
-        result.enabled = validateBoolean(val, key, section);
-        break;
-      case "effort": {
-        const effort = validateString(val, key, section);
-        if (!VALID_REASONING_EFFORTS.has(effort)) {
-          throw new ConfigError(
-            `[${section}].effort must be one of: none, low, medium, high, maximum (got "${effort}")`,
-          );
-        }
-        result.effort = effort;
-        break;
-      }
-      case "budget-tokens":
-        result["budget-tokens"] = validateNumber(val, key, section, { integer: true, min: 1 });
-        break;
-    }
-  }
-
-  return result;
+  return validateFields(raw, section, REASONING_SCHEMA) as ReasoningConfigCLI;
 }
 
 /**
@@ -520,60 +612,10 @@ export function validateAgentFields(
   section: string,
   result: AgentConfig | CustomCommandConfig,
 ): void {
-  if ("max-iterations" in rawObj) {
-    result["max-iterations"] = validateNumber(rawObj["max-iterations"], "max-iterations", section, {
-      integer: true,
-      min: 1,
-    });
-  }
-  if ("budget" in rawObj) {
-    result.budget = validateNumber(rawObj.budget, "budget", section, { min: 0 });
-  }
-  // Gadget configuration (new plural form preferred)
-  if ("gadgets" in rawObj) {
-    result.gadgets = validateStringArray(rawObj.gadgets, "gadgets", section);
-  }
-  if ("gadget-add" in rawObj) {
-    result["gadget-add"] = validateStringArray(rawObj["gadget-add"], "gadget-add", section);
-  }
-  if ("gadget-remove" in rawObj) {
-    result["gadget-remove"] = validateStringArray(
-      rawObj["gadget-remove"],
-      "gadget-remove",
-      section,
-    );
-  }
-  if ("builtins" in rawObj) {
-    result.builtins = validateBoolean(rawObj.builtins, "builtins", section);
-  }
-  if ("builtin-interaction" in rawObj) {
-    result["builtin-interaction"] = validateBoolean(
-      rawObj["builtin-interaction"],
-      "builtin-interaction",
-      section,
-    );
-  }
-  if ("gadget-start-prefix" in rawObj) {
-    result["gadget-start-prefix"] = validateString(
-      rawObj["gadget-start-prefix"],
-      "gadget-start-prefix",
-      section,
-    );
-  }
-  if ("gadget-end-prefix" in rawObj) {
-    result["gadget-end-prefix"] = validateString(
-      rawObj["gadget-end-prefix"],
-      "gadget-end-prefix",
-      section,
-    );
-  }
-  if ("gadget-arg-prefix" in rawObj) {
-    result["gadget-arg-prefix"] = validateString(
-      rawObj["gadget-arg-prefix"],
-      "gadget-arg-prefix",
-      section,
-    );
-  }
+  // Validate simple scalar/array fields declaratively
+  Object.assign(result, validateFields(rawObj, section, AGENT_SIMPLE_FIELDS_SCHEMA));
+
+  // Complex fields with nested validation logic kept inline
   if ("gadget-approval" in rawObj) {
     result["gadget-approval"] = validateGadgetApproval(rawObj["gadget-approval"], section);
   }
@@ -582,16 +624,6 @@ export function validateAgentFields(
   }
   if ("initial-gadgets" in rawObj) {
     result["initial-gadgets"] = validateInitialGadgets(rawObj["initial-gadgets"], section);
-  }
-  if ("quiet" in rawObj) {
-    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
-  }
-  if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateBoolean(
-      rawObj["log-llm-requests"],
-      "log-llm-requests",
-      section,
-    );
   }
 }
 
@@ -612,36 +644,10 @@ export function validateCompleteConfig(raw: unknown, section: string): CompleteC
   const result: CompleteConfig = {
     ...validateBaseConfig(rawObj, section),
     ...validateLoggingConfig(rawObj, section),
+    ...validateFields(rawObj, section, COMPLETE_EXTRA_SCHEMA),
   };
 
-  if ("max-tokens" in rawObj) {
-    result["max-tokens"] = validateNumber(rawObj["max-tokens"], "max-tokens", section, {
-      integer: true,
-      min: 1,
-    });
-  }
-  if ("quiet" in rawObj) {
-    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
-  }
-  if ("log-llm-requests" in rawObj) {
-    result["log-llm-requests"] = validateBoolean(
-      rawObj["log-llm-requests"],
-      "log-llm-requests",
-      section,
-    );
-  }
-  if ("rate-limits" in rawObj) {
-    result["rate-limits"] = validateRateLimitsConfig(
-      rawObj["rate-limits"],
-      `${section}.rate-limits`,
-    );
-  }
-  if ("retry" in rawObj) {
-    result.retry = validateRetryConfig(rawObj.retry, `${section}.retry`);
-  }
-  if ("reasoning" in rawObj) {
-    result.reasoning = validateReasoningConfig(rawObj.reasoning, `${section}.reasoning`);
-  }
+  validateSharedNestedSections(rawObj, section, result as Record<string, unknown>);
 
   return result;
 }
@@ -658,19 +664,7 @@ export function validateAgentConfig(raw: unknown, section: string): AgentConfig 
   };
 
   validateAgentFields(rawObj, section, result);
-
-  if ("rate-limits" in rawObj) {
-    result["rate-limits"] = validateRateLimitsConfig(
-      rawObj["rate-limits"],
-      `${section}.rate-limits`,
-    );
-  }
-  if ("retry" in rawObj) {
-    result.retry = validateRetryConfig(rawObj.retry, `${section}.retry`);
-  }
-  if ("reasoning" in rawObj) {
-    result.reasoning = validateReasoningConfig(rawObj.reasoning, `${section}.reasoning`);
-  }
+  validateSharedNestedSections(rawObj, section, result as Record<string, unknown>);
 
   return result;
 }
@@ -680,32 +674,7 @@ export function validateAgentConfig(raw: unknown, section: string): AgentConfig 
  */
 export function validateImageConfig(raw: unknown, section: string): ImageConfig {
   const rawObj = validateTable(raw, section, IMAGE_CONFIG_KEYS);
-  const result: ImageConfig = {};
-
-  if ("model" in rawObj) {
-    result.model = validateString(rawObj.model, "model", section);
-  }
-  if ("size" in rawObj) {
-    result.size = validateString(rawObj.size, "size", section);
-  }
-  if ("quality" in rawObj) {
-    result.quality = validateString(rawObj.quality, "quality", section);
-  }
-  if ("count" in rawObj) {
-    result.count = validateNumber(rawObj.count, "count", section, {
-      integer: true,
-      min: 1,
-      max: 10,
-    });
-  }
-  if ("output" in rawObj) {
-    result.output = validatePathString(rawObj.output, "output", section);
-  }
-  if ("quiet" in rawObj) {
-    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
-  }
-
-  return result;
+  return validateFields(rawObj, section, IMAGE_SCHEMA) as ImageConfig;
 }
 
 /**
@@ -713,31 +682,7 @@ export function validateImageConfig(raw: unknown, section: string): ImageConfig 
  */
 export function validateSpeechConfig(raw: unknown, section: string): SpeechConfig {
   const rawObj = validateTable(raw, section, SPEECH_CONFIG_KEYS);
-  const result: SpeechConfig = {};
-
-  if ("model" in rawObj) {
-    result.model = validateString(rawObj.model, "model", section);
-  }
-  if ("voice" in rawObj) {
-    result.voice = validateString(rawObj.voice, "voice", section);
-  }
-  if ("format" in rawObj) {
-    result.format = validateString(rawObj.format, "format", section);
-  }
-  if ("speed" in rawObj) {
-    result.speed = validateNumber(rawObj.speed, "speed", section, {
-      min: 0.25,
-      max: 4.0,
-    });
-  }
-  if ("output" in rawObj) {
-    result.output = validatePathString(rawObj.output, "output", section);
-  }
-  if ("quiet" in rawObj) {
-    result.quiet = validateBoolean(rawObj.quiet, "quiet", section);
-  }
-
-  return result;
+  return validateFields(rawObj, section, SPEECH_SCHEMA) as SpeechConfig;
 }
 
 /**

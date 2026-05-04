@@ -233,7 +233,7 @@ In `packages/llmist/src/e2e/`. Use mocks by default (no API calls in CI).
 
 ### Mocking LLM Responses
 ```typescript
-import { mockLLM, createMockClient, resetMocks } from '@llmist/testing';
+import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
 
 mockLLM()
   .whenMessageContains('hello')
@@ -243,6 +243,9 @@ mockLLM()
 const agent = LLMist.createAgent()
   .withClient(createMockClient())
   .ask('hello');
+
+// Clear mocks between tests
+getMockManager().clear();
 ```
 
 ### Testing Gadgets

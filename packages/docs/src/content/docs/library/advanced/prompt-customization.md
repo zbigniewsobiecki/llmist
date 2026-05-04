@@ -223,5 +223,4 @@ Informs the LLM about iteration progress. Supports placeholders:
 ## See Also
 
 - [Creating Gadgets](/library/guides/creating-gadgets/) - Define custom gadgets
-- [Hints System](/library/advanced/hints/) - Advanced hint configuration
-- [Agent Builder](/library/guides/agent-builder/) - Full builder API reference
+- [Agent Builder](/library/getting-started/configuration/) - Full builder API reference

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { MathGadget, TestGadget } from "../../../testing/src/helpers.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
+import type { GadgetMediaOutput, StoredMedia } from "../gadgets/types.js";
 import { GADGET_ARG_PREFIX, GADGET_END_PREFIX, GADGET_START_PREFIX } from "./constants.js";
 import { audioFromBase64, imageFromBase64, imageFromUrl, text } from "./input-content.js";
 import {
@@ -270,6 +271,300 @@ describe("LLMMessageBuilder", () => {
 
       expect(callMessage).toContain(`${GADGET_START_PREFIX}EmptyGadget`);
       expect(callMessage).toContain(GADGET_END_PREFIX);
+    });
+
+    it("produces multimodal content with imageFromBase64 when image media is provided", () => {
+      const builder = new LLMMessageBuilder();
+      const media: GadgetMediaOutput[] = [
+        { kind: "image", data: "SGVsbG8=", mimeType: "image/png" },
+      ];
+      const mediaIds = ["media_img1"];
+
+      builder.addGadgetCallResult(
+        "ImageGadget",
+        { prompt: "draw a cat" },
+        "Image generated",
+        "gc_img",
+        media,
+        mediaIds,
+      );
+
+      const messages = builder.build();
+      expect(messages).toHaveLength(2);
+
+      const resultMessage = messages[1];
+      expect(resultMessage?.role).toBe("user");
+      expect(Array.isArray(resultMessage?.content)).toBe(true);
+
+      const parts = resultMessage?.content as unknown[];
+      expect(parts).toHaveLength(2);
+
+      // First part: text with ID references
+      expect(parts[0]).toMatchObject({ type: "text" });
+      const textPart = parts[0] as { type: string; text: string };
+      expect(textPart.text).toContain("Result (gc_img): Image generated");
+      expect(textPart.text).toContain("[Media: media_img1 (image)]");
+
+      // Second part: imageFromBase64 content part
+      expect(parts[1]).toMatchObject({
+        type: "image",
+        source: { type: "base64", mediaType: "image/png", data: "SGVsbG8=" },
+      });
+    });
+
+    it("produces multimodal content with audioFromBase64 when audio media is provided", () => {
+      const builder = new LLMMessageBuilder();
+      const media: GadgetMediaOutput[] = [
+        { kind: "audio", data: "dGVzdA==", mimeType: "audio/mp3" },
+      ];
+      const mediaIds = ["media_aud1"];
+
+      builder.addGadgetCallResult(
+        "AudioGadget",
+        { text: "hello world" },
+        "Speech generated",
+        "gc_aud",
+        media,
+        mediaIds,
+      );
+
+      const messages = builder.build();
+      expect(messages).toHaveLength(2);
+
+      const resultMessage = messages[1];
+      expect(Array.isArray(resultMessage?.content)).toBe(true);
+
+      const parts = resultMessage?.content as unknown[];
+      expect(parts).toHaveLength(2);
+
+      // First part: text with ID references
+      const textPart = parts[0] as { type: string; text: string };
+      expect(textPart.text).toContain("Result (gc_aud): Speech generated");
+      expect(textPart.text).toContain("[Media: media_aud1 (audio)]");
+
+      // Second part: audioFromBase64 content part
+      expect(parts[1]).toMatchObject({
+        type: "audio",
+        source: { type: "base64", mediaType: "audio/mp3", data: "dGVzdA==" },
+      });
+    });
+
+    it("produces multimodal content with both image and audio when mixed media is provided", () => {
+      const builder = new LLMMessageBuilder();
+      const media: GadgetMediaOutput[] = [
+        { kind: "image", data: "aW1hZ2U=", mimeType: "image/jpeg" },
+        { kind: "audio", data: "YXVkaW8=", mimeType: "audio/wav" },
+      ];
+      const mediaIds = ["media_img2", "media_aud2"];
+
+      builder.addGadgetCallResult("MultiGadget", {}, "Mixed result", "gc_mix", media, mediaIds);
+
+      const messages = builder.build();
+      const resultMessage = messages[1];
+      expect(Array.isArray(resultMessage?.content)).toBe(true);
+
+      const parts = resultMessage?.content as unknown[];
+      // text + image + audio
+      expect(parts).toHaveLength(3);
+
+      const textPart = parts[0] as { type: string; text: string };
+      expect(textPart.text).toContain("[Media: media_img2 (image)]");
+      expect(textPart.text).toContain("[Media: media_aud2 (audio)]");
+
+      // Image comes first in order
+      expect(parts[1]).toMatchObject({
+        type: "image",
+        source: { type: "base64", mediaType: "image/jpeg" },
+      });
+
+      // Audio comes second
+      expect(parts[2]).toMatchObject({
+        type: "audio",
+        source: { type: "base64", mediaType: "audio/wav" },
+      });
+    });
+
+    it("includes file path in text when storedMedia is provided", () => {
+      const builder = new LLMMessageBuilder();
+      const media: GadgetMediaOutput[] = [
+        { kind: "image", data: "cGF0aA==", mimeType: "image/png" },
+      ];
+      const mediaIds = ["media_stored1"];
+      const storedMedia: StoredMedia[] = [
+        {
+          id: "media_stored1",
+          kind: "image",
+          path: "/tmp/llmist/media_stored1.png",
+          mimeType: "image/png",
+        },
+      ];
+
+      builder.addGadgetCallResult(
+        "StoreGadget",
+        {},
+        "Stored result",
+        "gc_stored",
+        media,
+        mediaIds,
+        storedMedia,
+      );
+
+      const messages = builder.build();
+      const resultMessage = messages[1];
+      const parts = resultMessage?.content as unknown[];
+      const textPart = parts[0] as { type: string; text: string };
+
+      // Should include the "→ saved to: path" format
+      expect(textPart.text).toContain(
+        "[Media: media_stored1 (image) → saved to: /tmp/llmist/media_stored1.png]",
+      );
+    });
+
+    it("omits file path in text when storedMedia has no path for that index", () => {
+      const builder = new LLMMessageBuilder();
+      const media: GadgetMediaOutput[] = [
+        { kind: "image", data: "cGF0aA==", mimeType: "image/png" },
+      ];
+      const mediaIds = ["media_nopath"];
+
+      // storedMedia provided but without path for the item
+      builder.addGadgetCallResult(
+        "NoPathGadget",
+        {},
+        "result",
+        "gc_np",
+        media,
+        mediaIds,
+        undefined,
+      );
+
+      const messages = builder.build();
+      const resultMessage = messages[1];
+      const parts = resultMessage?.content as unknown[];
+      const textPart = parts[0] as { type: string; text: string };
+
+      expect(textPart.text).toContain("[Media: media_nopath (image)]");
+      expect(textPart.text).not.toContain("→ saved to:");
+    });
+
+    it("falls back to simple text result when no media is provided", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addGadgetCallResult("PlainGadget", { key: "val" }, "plain result", "gc_plain");
+
+      const messages = builder.build();
+      const resultMessage = messages[1];
+      expect(typeof resultMessage?.content).toBe("string");
+      expect(resultMessage?.content).toBe("Result (gc_plain): plain result");
+    });
+
+    it("falls back to simple text result when media array is empty", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addGadgetCallResult("PlainGadget", {}, "empty media result", "gc_empty", [], []);
+
+      const messages = builder.build();
+      const resultMessage = messages[1];
+      expect(typeof resultMessage?.content).toBe("string");
+      expect(resultMessage?.content).toBe("Result (gc_empty): empty media result");
+    });
+  });
+
+  describe("formatBlockParameters (via addGadgetCallResult)", () => {
+    it("formats deeply nested objects using JSON Pointer path format", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addGadgetCallResult(
+        "DeepGadget",
+        {
+          config: {
+            database: {
+              host: "localhost",
+              port: 5432,
+            },
+          },
+        },
+        "done",
+        "gc_deep",
+      );
+
+      const messages = builder.build();
+      const callMessage = messages[0]?.content ?? "";
+
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}config/database/host`);
+      expect(callMessage).toContain("localhost");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}config/database/port`);
+      expect(callMessage).toContain("5432");
+    });
+
+    it("formats arrays with numeric index paths", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addGadgetCallResult(
+        "ArrayGadget",
+        { items: ["alpha", "beta", "gamma"] },
+        "done",
+        "gc_arr",
+      );
+
+      const messages = builder.build();
+      const callMessage = messages[0]?.content ?? "";
+
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}items/0`);
+      expect(callMessage).toContain("alpha");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}items/1`);
+      expect(callMessage).toContain("beta");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}items/2`);
+      expect(callMessage).toContain("gamma");
+    });
+
+    it("formats arrays of objects using nested JSON Pointer paths", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addGadgetCallResult(
+        "ObjArrayGadget",
+        {
+          users: [
+            { name: "Alice", age: 30 },
+            { name: "Bob", age: 25 },
+          ],
+        },
+        "done",
+        "gc_objarr",
+      );
+
+      const messages = builder.build();
+      const callMessage = messages[0]?.content ?? "";
+
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}users/0/name`);
+      expect(callMessage).toContain("Alice");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}users/0/age`);
+      expect(callMessage).toContain("30");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}users/1/name`);
+      expect(callMessage).toContain("Bob");
+    });
+
+    it("formats mixed structures with objects and primitive arrays", () => {
+      const builder = new LLMMessageBuilder();
+      builder.addGadgetCallResult(
+        "MixedGadget",
+        {
+          title: "My Report",
+          tags: ["important", "urgent"],
+          meta: { author: "Alice", version: 2 },
+        },
+        "done",
+        "gc_mixed",
+      );
+
+      const messages = builder.build();
+      const callMessage = messages[0]?.content ?? "";
+
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}title`);
+      expect(callMessage).toContain("My Report");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}tags/0`);
+      expect(callMessage).toContain("important");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}tags/1`);
+      expect(callMessage).toContain("urgent");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}meta/author`);
+      expect(callMessage).toContain("Alice");
+      expect(callMessage).toContain(`${GADGET_ARG_PREFIX}meta/version`);
+      expect(callMessage).toContain("2");
     });
   });
 

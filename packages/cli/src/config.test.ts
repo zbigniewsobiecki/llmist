@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CLIConfig,
   ConfigError,
@@ -1204,6 +1204,40 @@ describe("config", () => {
       expect(result).not.toContain("prompts");
       expect(result).not.toContain("complete");
       expect(result).not.toContain("agent");
+    });
+  });
+
+  describe("getCustomCommandNames (additional coverage)", () => {
+    it("filters out all reserved section names", () => {
+      const config: CLIConfig = {
+        global: { "log-level": "debug" },
+        complete: { model: "test" },
+        agent: { model: "test" },
+        image: { model: "test" },
+        speech: { model: "test" },
+        prompts: { greeting: "Hello" },
+        subagents: {},
+        "rate-limits": {},
+        retry: {},
+        "my-custom-cmd": { model: "test" },
+      };
+
+      const result = getCustomCommandNames(config);
+      expect(result).toEqual(["my-custom-cmd"]);
+    });
+
+    it("returns names of all custom commands when no reserved keys present", () => {
+      const config: CLIConfig = {
+        "cmd-one": { model: "test" },
+        "cmd-two": { model: "other" },
+        "cmd-three": { model: "third" },
+      };
+
+      const result = getCustomCommandNames(config);
+      expect(result).toHaveLength(3);
+      expect(result).toContain("cmd-one");
+      expect(result).toContain("cmd-two");
+      expect(result).toContain("cmd-three");
     });
   });
 

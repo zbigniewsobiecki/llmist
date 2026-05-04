@@ -1726,6 +1726,90 @@ describe("GeminiGenerativeProvider", () => {
   });
 
   // =========================================================================
+  // buildApiRequest Tests
+  // =========================================================================
+
+  describe("buildApiRequest", () => {
+    it("converts messages to Gemini content format", () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const messages = [{ role: "user" as const, content: "Hello" }];
+      const result = (provider as any).buildApiRequest(
+        { maxTokens: 100 },
+        { provider: "gemini", name: "gemini-2.5-flash" },
+        undefined,
+        messages,
+      );
+
+      expect(result).toBeDefined();
+      expect(result.model).toBe("gemini-2.5-flash");
+      expect(result.contents).toBeDefined();
+      expect(Array.isArray(result.contents)).toBe(true);
+    });
+
+    it("passes options through to the request config", () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const messages = [{ role: "user" as const, content: "Test" }];
+      const result = (provider as any).buildApiRequest(
+        { maxTokens: 512, temperature: 0.5 },
+        { provider: "gemini", name: "gemini-2.5-pro" },
+        undefined,
+        messages,
+      );
+
+      expect(result.config).toBeDefined();
+      expect(result.config.maxOutputTokens).toBe(512);
+      expect(result.config.temperature).toBe(0.5);
+    });
+
+    it("includes user message content in converted contents", () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      const messages = [
+        { role: "user" as const, content: "What is 2+2?" },
+        { role: "assistant" as const, content: "4" },
+      ];
+      const result = (provider as any).buildApiRequest(
+        {},
+        { provider: "gemini", name: "gemini-2.5-flash" },
+        undefined,
+        messages,
+      );
+
+      expect(result.contents.length).toBeGreaterThan(0);
+      const userContent = result.contents.find((c: { role: string }) => c.role === "user");
+      expect(userContent).toBeDefined();
+    });
+  });
+
+  // =========================================================================
+  // Speech Generation Support Tests
+  // =========================================================================
+
+  describe("supportsSpeechGeneration", () => {
+    it("returns true for known Gemini TTS models", () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      expect(provider.supportsSpeechGeneration("gemini-2.5-flash-preview-tts")).toBe(true);
+      expect(provider.supportsSpeechGeneration("gemini-2.5-pro-preview-tts")).toBe(true);
+    });
+
+    it("returns false for non-speech models", () => {
+      const { client } = createClient();
+      const provider = new GeminiGenerativeProvider(client);
+
+      expect(provider.supportsSpeechGeneration("gemini-2.5-flash")).toBe(false);
+      expect(provider.supportsSpeechGeneration("gemini-1.5-pro")).toBe(false);
+      expect(provider.supportsSpeechGeneration("unknown-model")).toBe(false);
+    });
+  });
+
+  // =========================================================================
   // Speech Generation Tests
   // =========================================================================
 

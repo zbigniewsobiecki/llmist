@@ -3,6 +3,13 @@ import { Box, NodeRuntime, Screen, setRuntime, Text, Textbox } from "@unblessed/
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { InputHandler } from "./input-handler.js";
 
+// Mock editor module to prevent spawning real editors in tests
+vi.mock("./editor.js", () => ({
+  openEditorSync: vi.fn(() => null),
+}));
+
+import { openEditorSync } from "./editor.js";
+
 // TUI tests use mock streams - no real TTY needed
 
 // Mock streams to prevent terminal escape sequences from being written
@@ -476,6 +483,242 @@ describe("InputHandler", () => {
       // Clean up
       handler.cancelPending();
       await promptPromise.catch(() => {});
+    });
+  });
+
+  describe("startWaitingForPrompt", () => {
+    test("sets waiting for REPL prompt state", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      handler.startWaitingForPrompt();
+
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+    });
+
+    test("does not create a pending input promise", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      // startWaitingForPrompt sets REPL state but does NOT set pendingInput
+      handler.startWaitingForPrompt();
+
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+      expect(handler.hasPendingInput()).toBe(false);
+    });
+
+    test("calls render callback", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      renderCallback.mockClear();
+      handler.startWaitingForPrompt();
+
+      expect(renderCallback).toHaveBeenCalled();
+    });
+
+    test("shows idle prompt and clears input bar", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      handler.startWaitingForPrompt();
+
+      expect(promptLabel.getContent()).toBe("> ");
+      expect(inputBar.getValue()).toBe("");
+    });
+
+    test("does not set isActive flag", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      handler.startWaitingForPrompt();
+
+      expect(handler.isInputActive()).toBe(false);
+    });
+  });
+
+  describe("state transitions", () => {
+    test("setActive via waitForInput calls renderNowCallback", async () => {
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
+      const handler = new InputHandler(
+        inputBar,
+        promptLabel,
+        body,
+        screen,
+        renderCallback,
+        renderNowCallback,
+      );
+
+      renderNowCallback.mockClear();
+      const promise = handler.waitForInput("test?", "TestGadget");
+
+      expect(renderNowCallback).toHaveBeenCalled();
+      expect(handler.isInputActive()).toBe(true);
+
+      // Clean up
+      handler.cancelPending();
+      await promise.catch(() => {});
+    });
+
+    test("setActive via waitForInput shows input bar and prompt", async () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const promise = handler.waitForInput("Test question?", "TestGadget");
+
+      expect(inputBar.hidden).toBe(false);
+      expect(promptLabel.hidden).toBe(false);
+      expect(handler.isInputActive()).toBe(true);
+
+      // Clean up
+      handler.cancelPending();
+      await promise.catch(() => {});
+    });
+
+    test("setIdle via cancelPending calls renderCallback", async () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const promise = handler.waitForInput("test?", "TestGadget");
+      renderCallback.mockClear();
+      handler.cancelPending();
+      await promise.catch(() => {});
+
+      expect(renderCallback).toHaveBeenCalled();
+      expect(handler.isInputActive()).toBe(false);
+      expect(inputBar.getValue()).toBe("");
+    });
+
+    test("setIdle clears isWaitingForREPLPrompt", async () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const promptPromise = handler.waitForPrompt();
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+
+      handler.cancelPending();
+      // After cancel, setIdle is called which clears isPendingREPLPrompt
+      expect(handler.isWaitingForREPLPrompt()).toBe(false);
+
+      await promptPromise.catch(() => {});
+    });
+
+    test("setPendingPrompt via waitForPrompt does not activate input", async () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const promptPromise = handler.waitForPrompt();
+
+      // setPendingPrompt sets REPL state but does NOT make input active
+      expect(handler.isWaitingForREPLPrompt()).toBe(true);
+      expect(handler.isInputActive()).toBe(false);
+      expect(handler.hasPendingInput()).toBe(true);
+
+      handler.cancelPending();
+      await promptPromise.catch(() => {});
+    });
+
+    test("setPendingPrompt via waitForPrompt calls renderCallback (not renderNow)", () => {
+      const renderCallback = vi.fn(() => {});
+      const renderNowCallback = vi.fn(() => {});
+      const handler = new InputHandler(
+        inputBar,
+        promptLabel,
+        body,
+        screen,
+        renderCallback,
+        renderNowCallback,
+      );
+
+      renderCallback.mockClear();
+      renderNowCallback.mockClear();
+
+      const promptPromise = handler.waitForPrompt();
+
+      // setPendingPrompt uses regular renderCallback (not immediate)
+      expect(renderCallback).toHaveBeenCalled();
+      expect(renderNowCallback).not.toHaveBeenCalled();
+
+      handler.cancelPending();
+      promptPromise.catch(() => {});
+    });
+  });
+
+  describe("handlePaste", () => {
+    test("single-line paste calls readInput on inputBar", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const readInputSpy = vi.spyOn(inputBar, "readInput").mockImplementation(() => {});
+
+      // Call the private handlePaste method directly with single-line content
+      (handler as unknown as { handlePaste: (content: string) => void }).handlePaste("hello world");
+
+      expect(readInputSpy).toHaveBeenCalled();
+
+      readInputSpy.mockRestore();
+    });
+
+    test("single-line paste does not trigger openEditorSync", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      vi.mocked(openEditorSync).mockClear();
+      vi.spyOn(inputBar, "readInput").mockImplementation(() => {});
+
+      // Single-line paste should NOT open editor
+      (handler as unknown as { handlePaste: (content: string) => void }).handlePaste("no newlines");
+
+      expect(openEditorSync).not.toHaveBeenCalled();
+    });
+
+    test("multiline paste triggers openEditorForInput (calls openEditorSync)", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      vi.mocked(openEditorSync).mockClear();
+      vi.mocked(openEditorSync).mockReturnValue(null); // User cancels editor
+
+      // Multiline paste should open editor
+      (handler as unknown as { handlePaste: (content: string) => void }).handlePaste(
+        "line one\nline two",
+      );
+
+      expect(openEditorSync).toHaveBeenCalled();
+    });
+
+    test("empty paste content does nothing", () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      const readInputSpy = vi.spyOn(inputBar, "readInput").mockImplementation(() => {});
+      vi.mocked(openEditorSync).mockClear();
+
+      (handler as unknown as { handlePaste: (content: string) => void }).handlePaste("");
+
+      expect(readInputSpy).not.toHaveBeenCalled();
+      expect(openEditorSync).not.toHaveBeenCalled();
+
+      readInputSpy.mockRestore();
+    });
+
+    test("multiline paste with editor result submits content", async () => {
+      const renderCallback = vi.fn(() => {});
+      const handler = new InputHandler(inputBar, promptLabel, body, screen, renderCallback);
+
+      // Start waiting for input so there's a pending promise
+      const inputPromise = handler.waitForInput("question?", "TestGadget");
+
+      vi.mocked(openEditorSync).mockReturnValue("edited content");
+
+      (handler as unknown as { handlePaste: (content: string) => void }).handlePaste("multi\nline");
+
+      // setImmediate is used by openEditorForInput - advance to let it run
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const result = await inputPromise;
+      expect(result).toBe("edited content");
     });
   });
 });

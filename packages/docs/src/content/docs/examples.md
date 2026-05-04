@@ -29,6 +29,7 @@ npx tsx examples/01-basic-usage.ts
 | [09-filesystem-gadgets.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/09-filesystem-gadgets.ts) | Secure file system operations with path sandboxing |
 | [10-text-handling.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/10-text-handling.ts) | Text response handling: textOnlyHandler, textWithGadgetsHandler |
 | [11-gadget-dependencies.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/11-gadget-dependencies.ts) | Gadget dependencies (DAG execution) |
+| [12-error-handling.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/12-error-handling.ts) | Error handling strategies and recovery patterns |
 
 ## API Patterns
 
@@ -60,6 +61,7 @@ npx tsx examples/01-basic-usage.ts
 |---------|-------------|
 | [22-format-timing.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/22-format-timing.ts) | Response formatting and timing utilities |
 | [23-session-manager.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/23-session-manager.ts) | Session management |
+| [24-huggingface-test.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/24-huggingface-test.ts) | HuggingFace model testing with free open-source models |
 | [25-reasoning-models.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/25-reasoning-models.ts) | Reasoning models with thinking/extended thinking |
 | [26-budget-limits.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/26-budget-limits.ts) | Budget and cost limiting configuration |
 | [27-skills.ts](https://github.com/zbigniewsobiecki/llmist/blob/main/examples/27-skills.ts) | Agent Skills (SKILL.md) integration and usage |
