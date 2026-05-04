@@ -224,6 +224,7 @@ describe("OutputLimitManager", () => {
       expect(intercepted).not.toBe(oversizedResult);
       expect(intercepted).toContain('Gadget "MyGadget" returned too much data');
       expect(intercepted).toContain("GadgetOutputViewer");
+      expect(intercepted).toContain('mode: "character"');
     });
 
     it("should store oversized output in the output store", () => {
@@ -252,6 +253,20 @@ describe("OutputLimitManager", () => {
       const storedIds = manager.getOutputStore().getIds();
       expect(storedIds).toHaveLength(1);
       expect(intercepted).toContain(storedIds[0]);
+    });
+
+    it("should avoid character-mode advice for multiline output", () => {
+      const client = createMockClient(100);
+      const registry = new GadgetRegistry();
+      const manager = new OutputLimitManager(client, "small-model", { limitPercent: 10 }, registry);
+
+      const oversizedMultiline = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`).join("\n");
+      const hooks = manager.getHooks();
+      const ctx = createGadgetResultCtx("LogGadget");
+      const intercepted = hooks.interceptors?.interceptGadgetResult?.(oversizedMultiline, ctx);
+
+      expect(intercepted).toContain('Gadget "LogGadget" returned too much data');
+      expect(intercepted).not.toContain('mode: "character"');
     });
 
     it("should not limit GadgetOutputViewer results (recursion prevention)", () => {
