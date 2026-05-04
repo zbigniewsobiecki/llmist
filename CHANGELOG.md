@@ -1,3 +1,15 @@
+## [17.3.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.2.1...v17.3.0) (2026-05-04)
+
+### Features
+
+* add character mode to GadgetOutputViewer ([#592](https://github.com/zbigniewsobiecki/llmist/issues/592)) ([ca29faf](https://github.com/zbigniewsobiecki/llmist/commit/ca29fafb2fe8f791ff889ff197a4c8f0ef445b66))
+
+### Bug Fixes
+
+* **docs:** fix broken internal doc links ([#583](https://github.com/zbigniewsobiecki/llmist/issues/583)) ([47c5149](https://github.com/zbigniewsobiecki/llmist/commit/47c51494acdeba3cafde55f8f331f8ceed217e64))
+* **docs:** replace .throwsError() with .throws() and update mock import pattern ([#582](https://github.com/zbigniewsobiecki/llmist/issues/582)) ([08f2654](https://github.com/zbigniewsobiecki/llmist/commit/08f2654cda9350aa01d6808e31ddc2113b7401ed))
+* **docs:** sync model alias documentation with model-shortcuts.ts source ([#584](https://github.com/zbigniewsobiecki/llmist/issues/584)) ([a34f32e](https://github.com/zbigniewsobiecki/llmist/commit/a34f32e47acb61ed842e2b09d971823034d20067))
+
 ## [17.2.1](https://github.com/zbigniewsobiecki/llmist/compare/v17.2.0...v17.2.1) (2026-04-15)
 
 ### Bug Fixes
