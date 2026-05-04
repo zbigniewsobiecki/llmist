@@ -14,7 +14,11 @@ import {
   DEFAULT_GADGET_OUTPUT_LIMIT_PERCENT,
   FALLBACK_CONTEXT_WINDOW,
 } from "../core/constants.js";
-import { createGadgetOutputViewer } from "../gadgets/output-viewer.js";
+import {
+  buildCharacterModeSuggestion,
+  createGadgetOutputViewer,
+  shouldSuggestCharacterMode,
+} from "../gadgets/output-viewer.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import { createLogger } from "../logging/logger.js";
 import { GadgetOutputStore } from "./gadget-output-store.js";
@@ -93,21 +97,29 @@ export class OutputLimitManager {
 
       if (result.length > this.charLimit) {
         const id = this.outputStore.store(ctx.gadgetName, result);
-        const lines = result.split("\n").length;
-        const bytes = new TextEncoder().encode(result).length;
+        const stored = this.outputStore.get(id);
+        const lines = stored?.lineCount ?? result.split("\n").length;
+        const bytes = stored?.byteSize ?? new TextEncoder().encode(result).length;
+        const denseSuggestion =
+          stored && shouldSuggestCharacterMode(stored, this.charLimit)
+            ? ` ${buildCharacterModeSuggestion(stored)}`
+            : "";
 
         this.logger.info("Gadget output exceeded limit, stored for browsing", {
           gadgetName: ctx.gadgetName,
           outputId: id,
           bytes,
           lines,
+          charCount: stored?.charCount,
+          maxLineLength: stored?.maxLineLength,
           charLimit: this.charLimit,
         });
 
         return (
           `[Gadget "${ctx.gadgetName}" returned too much data: ` +
           `${bytes.toLocaleString()} bytes, ${lines.toLocaleString()} lines. ` +
-          `Use GadgetOutputViewer with id "${id}" to read it]`
+          `Use GadgetOutputViewer with id "${id}" to read it.]` +
+          denseSuggestion
         );
       }
 
