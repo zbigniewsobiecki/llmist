@@ -26,6 +26,7 @@ export interface TUIControllerCallbacks {
   onMidSessionInput?: (message: string) => void;
   onFocusModeChange?: (mode: FocusMode) => void;
   onContentFilterModeChange?: (mode: ContentFilterMode) => void;
+  onMouseToggle?: (enabled: boolean) => void;
 }
 
 export class TUIController {
@@ -33,6 +34,8 @@ export class TUIController {
   private abortManager: AbortManager;
   private callbacks: TUIControllerCallbacks;
   private lastCtrlCTime = 0;
+  /** Whether terminal mouse capture is enabled (default: false — allows native text selection) */
+  private mouseEnabled = false;
 
   constructor(callbacks?: TUIControllerCallbacks) {
     this.modeManager = new InputModeManager();
@@ -78,6 +81,25 @@ export class TUIController {
       this.callbacks.onFocusModeChange?.(mode);
     }
     return changed;
+  }
+
+  /**
+   * Toggle mouse capture mode on/off.
+   * When enabled: terminal mouse reporting is active (scrolling/clicking works).
+   * When disabled: native text selection works in the terminal emulator.
+   * @returns the new enabled state
+   */
+  toggleMouse(): boolean {
+    this.mouseEnabled = !this.mouseEnabled;
+    this.callbacks.onMouseToggle?.(this.mouseEnabled);
+    return this.mouseEnabled;
+  }
+
+  /**
+   * Query whether mouse capture is currently enabled.
+   */
+  isMouseEnabled(): boolean {
+    return this.mouseEnabled;
   }
 
   /**

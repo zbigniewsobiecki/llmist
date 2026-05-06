@@ -715,9 +715,10 @@ export class Agent {
         registry: this.registry,
         conversation: this.conversation,
         prefixConfig: this.prefixConfig,
-        systemPrompt: this.conversation.getBaseMessages()[0]?.role === "system"
-          ? (this.conversation.getBaseMessages()[0]!.content as string)
-          : undefined,
+        systemPrompt:
+          this.conversation.getBaseMessages()[0]?.role === "system"
+            ? (this.conversation.getBaseMessages()[0]!.content as string)
+            : undefined,
         logger: this.logger,
         onPromptDiscovered: (skill) => this.mcpDiscoveredPrompts.push(skill),
       });

@@ -16,16 +16,11 @@ interface FakeClient {
   readonly serverName: string;
 }
 
-function fakeClient(opts: {
-  reply?: McpToolResult;
-  serverName?: string;
-}): FakeClient {
+function fakeClient(opts: { reply?: McpToolResult; serverName?: string }): FakeClient {
   return {
     serverName: opts.serverName ?? "fake",
     callTool: vi.fn(async (_name: string, _args: unknown) => {
-      return (
-        opts.reply ?? { content: [{ type: "text", text: "ok" }], isError: false }
-      );
+      return opts.reply ?? { content: [{ type: "text", text: "ok" }], isError: false };
     }),
   };
 }
@@ -45,9 +40,7 @@ describe("mcpToolToGadget", () => {
     expect(gadget.name).toBe("read_file");
     expect(gadget.description).toBe("reads a file");
     expect(gadget.parameterSchema).toBeDefined();
-    expect(gadget.parameterSchema?.safeParse({ path: "/etc/hosts" }).success).toBe(
-      true,
-    );
+    expect(gadget.parameterSchema?.safeParse({ path: "/etc/hosts" }).success).toBe(true);
     expect(gadget.parameterSchema?.safeParse({}).success).toBe(false);
   });
 
@@ -133,10 +126,7 @@ describe("mcpToolToGadget", () => {
   it("passes through unknown content kinds as JSON-stringified text", async () => {
     const client = fakeClient({
       reply: {
-        content: [
-          { type: "text", text: "main" },
-          { type: "weird", payload: { foo: 1 } } as never,
-        ],
+        content: [{ type: "text", text: "main" }, { type: "weird", payload: { foo: 1 } } as never],
       },
     });
     const tool: McpToolDescriptor = { name: "t" };

@@ -7,14 +7,14 @@
  */
 
 import type { ILogObj, Logger } from "tslog";
-import { LLMMessageBuilder } from "../core/messages.js";
-import type { GadgetRegistry } from "../gadgets/registry.js";
 import type { PrefixConfig } from "../agent/agent.js";
 import type { ConversationManager } from "../agent/conversation-manager.js";
+import { LLMMessageBuilder } from "../core/messages.js";
+import type { GadgetRegistry } from "../gadgets/registry.js";
 import { McpClient } from "./client.js";
 import { McpLifecycle } from "./lifecycle.js";
 import { resolveToolNames, type ServerToolList } from "./multi-server.js";
-import { mcpPromptToSkill, type McpPromptSkill } from "./prompt-adapter.js";
+import { type McpPromptSkill, mcpPromptToSkill } from "./prompt-adapter.js";
 import { mcpToolToGadget } from "./tool-adapter.js";
 import type { McpServerSpec } from "./types.js";
 
@@ -43,10 +43,9 @@ export interface SetupMcpServersOptions {
  * skipped — the agent continues with whatever servers connected
  * successfully. (Plan 2 will polish this with hook-driven error events.)
  */
-export async function setupMcpServers(
-  opts: SetupMcpServersOptions,
-): Promise<McpLifecycle> {
-  const { specs, registry, conversation, prefixConfig, systemPrompt, logger, onPromptDiscovered } = opts;
+export async function setupMcpServers(opts: SetupMcpServersOptions): Promise<McpLifecycle> {
+  const { specs, registry, conversation, prefixConfig, systemPrompt, logger, onPromptDiscovered } =
+    opts;
 
   const lifecycle = new McpLifecycle();
   lifecycle.installSignalHandlers();

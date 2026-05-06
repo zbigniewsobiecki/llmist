@@ -52,11 +52,7 @@ export function parseClaudeCodeMcp(raw: unknown): ParseResult {
   if (projects && typeof projects === "object") {
     for (const proj of Object.values(projects)) {
       if (proj && typeof proj === "object") {
-        collectFrom(
-          (proj as Record<string, unknown>).mcpServers,
-          servers,
-          warnings,
-        );
+        collectFrom((proj as Record<string, unknown>).mcpServers, servers, warnings);
       }
     }
   }
@@ -64,11 +60,7 @@ export function parseClaudeCodeMcp(raw: unknown): ParseResult {
   return { servers, warnings };
 }
 
-function collectFrom(
-  candidate: unknown,
-  out: ImportedServer[],
-  warnings: string[],
-): void {
+function collectFrom(candidate: unknown, out: ImportedServer[], warnings: string[]): void {
   if (!candidate || typeof candidate !== "object") return;
   for (const [name, raw] of Object.entries(candidate as Record<string, unknown>)) {
     if (!raw || typeof raw !== "object") {
@@ -134,9 +126,7 @@ function formatTomlBlock(server: ImportedServer): string {
     lines.push(`transport = "stdio"`);
     lines.push(`command = ${tomlString(server.spec.command)}`);
     if (server.spec.args && server.spec.args.length > 0) {
-      lines.push(
-        `args = [${server.spec.args.map((a) => tomlString(a)).join(", ")}]`,
-      );
+      lines.push(`args = [${server.spec.args.map((a) => tomlString(a)).join(", ")}]`);
     }
     if (server.spec.env) {
       lines.push("");
@@ -187,9 +177,7 @@ export async function readClaudeCodeMcpConfig(
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    throw new Error(
-      `Failed to parse Claude Code config at ${target}: ${(err as Error).message}`,
-    );
+    throw new Error(`Failed to parse Claude Code config at ${target}: ${(err as Error).message}`);
   }
   return { source: target, result: parseClaudeCodeMcp(parsed) };
 }

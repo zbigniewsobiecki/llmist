@@ -5,10 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { Skill } from "../skills/skill.js";
 import type { ParsedSkill } from "../skills/types.js";
-import {
-  renderSkillForMcpPrompt,
-  skillToMcpPrompt,
-} from "./skill-exporter.js";
+import { renderSkillForMcpPrompt, skillToMcpPrompt } from "./skill-exporter.js";
 
 function buildSkill(opts: {
   name: string;
@@ -79,12 +76,12 @@ describe("renderSkillForMcpPrompt", () => {
     const result = await renderSkillForMcpPrompt(skill, { arguments: "<diff>" });
     expect(result.messages).toHaveLength(1);
     expect(result.messages[0]?.role).toBe("user");
-    expect(
-      (result.messages[0]?.content as { type: "text"; text: string }).text,
-    ).toContain("<diff>");
-    expect(
-      (result.messages[0]?.content as { type: "text"; text: string }).text,
-    ).toContain("Review the code:");
+    expect((result.messages[0]?.content as { type: "text"; text: string }).text).toContain(
+      "<diff>",
+    );
+    expect((result.messages[0]?.content as { type: "text"; text: string }).text).toContain(
+      "Review the code:",
+    );
   });
 
   it("substitutes $0 etc. positional arguments", async () => {
@@ -107,8 +104,6 @@ describe("renderSkillForMcpPrompt", () => {
       body: "say pong",
     });
     const result = await renderSkillForMcpPrompt(skill, {});
-    expect(
-      (result.messages[0]?.content as { type: "text"; text: string }).text,
-    ).toContain("pong");
+    expect((result.messages[0]?.content as { type: "text"; text: string }).text).toContain("pong");
   });
 });

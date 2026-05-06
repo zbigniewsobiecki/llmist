@@ -125,7 +125,7 @@ export function showRawViewer(options: RawViewerOptions): RawViewerHandle {
       alwaysScroll: true,
       keys: true,
       vi: true,
-      mouse: true,
+      mouse: false, // Default off — allows native text selection. Toggle with Ctrl+Y.
       scrollbar: {
         ch: " ",
         style: { bg: "blue" },

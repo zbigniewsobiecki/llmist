@@ -14,12 +14,8 @@
  * @module mcp/skill-exporter
  */
 
-import { Skill } from "../skills/skill.js";
-import type {
-  McpPromptArgument,
-  McpPromptDescriptor,
-  McpPromptResult,
-} from "./types.js";
+import type { Skill } from "../skills/skill.js";
+import type { McpPromptArgument, McpPromptDescriptor, McpPromptResult } from "./types.js";
 
 export function skillToMcpPrompt(skill: Skill): McpPromptDescriptor {
   const description =
@@ -59,7 +55,9 @@ export async function renderSkillForMcpPrompt(
   const argString =
     typeof args.arguments === "string"
       ? args.arguments
-      : Object.values(args).filter((v) => typeof v === "string").join(" ");
+      : Object.values(args)
+          .filter((v) => typeof v === "string")
+          .join(" ");
 
   const activation = await skill.activate({
     arguments: argString || undefined,
