@@ -1,46 +1,41 @@
 /**
  * Translate `[mcp.servers.<name>]` TOML blocks into runtime
- * `McpServerSpec` values, plus a small validator that returns user-readable
- * error strings.
+ * `McpServerSpec` values.
  *
  * @module cli/mcp-toml
  */
 
 import type { McpServerSpec } from "llmist";
 import type { McpConfig, McpServerToml } from "./config-types.js";
+import {
+  ConfigError,
+  validateBoolean,
+  validateNumber,
+  validateString,
+  validateStringArray,
+  validateTable,
+} from "./config-validators.js";
 
 /**
- * Validate an `[mcp]` config block. Returns an array of human-readable error
- * messages — empty when the config is valid.
+ * Validate and normalize an `[mcp]` config block.
  */
-export function validateMcpServersConfig(config: McpConfig | undefined): string[] {
-  if (!config || !config.servers) return [];
-  const errors: string[] = [];
-  for (const [name, raw] of Object.entries(config.servers)) {
-    if (!raw || typeof raw !== "object") {
-      errors.push(`mcp.servers.${name}: must be a table`);
-      continue;
-    }
-    const transport = (raw as { transport?: string }).transport;
-    if (transport !== "stdio" && transport !== "http") {
-      errors.push(
-        `mcp.servers.${name}: missing or invalid 'transport' (expected "stdio" or "http")`,
-      );
-      continue;
-    }
-    if (transport === "stdio") {
-      const command = (raw as { command?: unknown }).command;
-      if (typeof command !== "string" || command.length === 0) {
-        errors.push(`mcp.servers.${name}: stdio transport requires a non-empty 'command'`);
-      }
-    } else {
-      const url = (raw as { url?: unknown }).url;
-      if (typeof url !== "string" || url.length === 0) {
-        errors.push(`mcp.servers.${name}: http transport requires a non-empty 'url'`);
-      }
-    }
+export function validateMcpServersConfig(raw: unknown, section = "mcp"): McpConfig {
+  const rawObj = validateTable(raw, section, new Set(["servers"]));
+  const result: McpConfig = {};
+
+  if (!("servers" in rawObj)) {
+    return result;
   }
-  return errors;
+
+  const serversObj = validateTable(rawObj.servers, `${section}.servers`);
+  const servers: Record<string, McpServerToml> = {};
+
+  for (const [name, serverRaw] of Object.entries(serversObj)) {
+    servers[name] = validateMcpServerBlock(serverRaw, name, `${section}.servers`);
+  }
+
+  result.servers = servers;
+  return result;
 }
 
 /**
@@ -48,9 +43,6 @@ export function validateMcpServersConfig(config: McpConfig | undefined): string[
  *
  * - Skips blocks with `enabled = false`.
  * - Maps `timeout-ms` → `timeoutMs`.
- * - Validation errors are NOT thrown here; call `validateMcpServersConfig`
- *   first if you want to surface them. Invalid blocks are silently skipped
- *   so a partial-bad config doesn't break agent startup.
  */
 export function mcpServersTomlToSpecs(config: McpConfig | undefined): McpServerSpec[] {
   if (!config?.servers) return [];
@@ -86,4 +78,82 @@ export function mcpServersTomlToSpecs(config: McpConfig | undefined): McpServerS
   }
 
   return specs;
+}
+
+function validateMcpServerBlock(raw: unknown, name: string, parentSection: string): McpServerToml {
+  const section = `${parentSection}.${name}`;
+  const rawObj = validateTable(raw, section);
+  const transport = validateString(rawObj.transport, "transport", section);
+
+  if (transport !== "stdio" && transport !== "http") {
+    throw new ConfigError(
+      `[${section}].transport must be one of: stdio, http (got "${transport}")`,
+    );
+  }
+
+  const validKeys =
+    transport === "stdio"
+      ? new Set(["transport", "command", "args", "env", "trust", "enabled", "timeout-ms"])
+      : new Set(["transport", "url", "headers", "enabled", "timeout-ms"]);
+
+  for (const key of Object.keys(rawObj)) {
+    if (!validKeys.has(key)) {
+      throw new ConfigError(`[${section}].${key} is not a valid option`);
+    }
+  }
+
+  const common = {
+    transport,
+    ...("enabled" in rawObj
+      ? { enabled: validateBoolean(rawObj.enabled, "enabled", section) }
+      : {}),
+    ...("timeout-ms" in rawObj
+      ? {
+          "timeout-ms": validateNumber(rawObj["timeout-ms"], "timeout-ms", section, {
+            integer: true,
+            min: 0,
+          }),
+        }
+      : {}),
+  };
+
+  if (transport === "stdio") {
+    const command = validateString(rawObj.command, "command", section);
+    if (command.length === 0) {
+      throw new ConfigError(`[${section}].command must be a non-empty string`);
+    }
+    return {
+      ...common,
+      transport: "stdio",
+      command,
+      ...("args" in rawObj ? { args: validateStringArray(rawObj.args, "args", section) } : {}),
+      ...("env" in rawObj ? { env: validateStringMap(rawObj.env, "env", section) } : {}),
+      ...("trust" in rawObj ? { trust: validateBoolean(rawObj.trust, "trust", section) } : {}),
+    };
+  }
+
+  const url = validateString(rawObj.url, "url", section);
+  if (url.length === 0) {
+    throw new ConfigError(`[${section}].url must be a non-empty string`);
+  }
+  return {
+    ...common,
+    transport: "http",
+    url,
+    ...("headers" in rawObj
+      ? { headers: validateStringMap(rawObj.headers, "headers", section) }
+      : {}),
+  };
+}
+
+function validateStringMap(value: unknown, key: string, section: string): Record<string, string> {
+  const raw = validateTable(value, `${section}.${key}`);
+  const result: Record<string, string> = {};
+  for (const [entryKey, entryValue] of Object.entries(raw)) {
+    if (typeof entryValue !== "string") {
+      throw new ConfigError(`[${section}].${key}.${entryKey} must be a string`);
+    }
+    result[entryKey] = entryValue;
+  }
+  return result;
 }

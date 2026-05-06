@@ -11,7 +11,7 @@
 
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { assertCommandAllowed } from "./allowlist.js";
-import { McpConnectError, McpToolCallError } from "./errors.js";
+import { McpConnectError, McpTimeoutError, McpToolCallError } from "./errors.js";
 import type {
   McpPromptDescriptor,
   McpPromptResult,
@@ -37,23 +37,21 @@ interface SdkClientLike {
   getServerCapabilities(): McpServerCapabilities | undefined;
 }
 
-let cachedSdk:
-  | Promise<{
-      Client: new (
-        info: { name: string; version: string },
-        opts?: { capabilities?: object },
-      ) => SdkClientLike;
-      StdioClientTransport: new (params: {
-        command: string;
-        args?: string[];
-        env?: Record<string, string>;
-      }) => Transport & { pid: number | null };
-      StreamableHTTPClientTransport: new (
-        url: URL,
-        opts?: { requestInit?: { headers?: Record<string, string> } },
-      ) => Transport;
-    }>
-  | null = null;
+let cachedSdk: Promise<{
+  Client: new (
+    info: { name: string; version: string },
+    opts?: { capabilities?: object },
+  ) => SdkClientLike;
+  StdioClientTransport: new (params: {
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }) => Transport & { pid: number | null };
+  StreamableHTTPClientTransport: new (
+    url: URL,
+    opts?: { requestInit?: { headers?: Record<string, string> } },
+  ) => Transport;
+}> | null = null;
 
 async function loadSdk() {
   if (!cachedSdk) {
@@ -69,11 +67,10 @@ async function loadSdk() {
           opts?: { capabilities?: object },
         ) => SdkClientLike,
         StdioClientTransport: stdio.StdioClientTransport,
-        StreamableHTTPClientTransport:
-          http.StreamableHTTPClientTransport as unknown as new (
-            url: URL,
-            opts?: { requestInit?: { headers?: Record<string, string> } },
-          ) => Transport,
+        StreamableHTTPClientTransport: http.StreamableHTTPClientTransport as unknown as new (
+          url: URL,
+          opts?: { requestInit?: { headers?: Record<string, string> } },
+        ) => Transport,
       };
     })();
   }
@@ -161,7 +158,7 @@ export class McpClient {
     const client = new Client(this.clientInfo, { capabilities: {} });
 
     try {
-      await client.connect(transport);
+      await this.withTimeout(() => client.connect(transport), "connect");
     } catch (err) {
       throw new McpConnectError(
         `Failed to connect to MCP server "${this.spec.name}": ${(err as Error).message}`,
@@ -180,7 +177,7 @@ export class McpClient {
 
   async listTools(): Promise<McpToolDescriptor[]> {
     const client = this.requireClient();
-    const res = await client.listTools();
+    const res = await this.withTimeout(() => client.listTools(), "tools/list");
     return res.tools.map((t) => ({
       name: t.name,
       description: t.description,
@@ -191,10 +188,14 @@ export class McpClient {
   async callTool(name: string, args: unknown): Promise<McpToolResult> {
     const client = this.requireClient();
     try {
-      const res = await client.callTool({
-        name,
-        arguments: (args as Record<string, unknown> | undefined) ?? {},
-      });
+      const res = await this.withTimeout(
+        () =>
+          client.callTool({
+            name,
+            arguments: (args as Record<string, unknown> | undefined) ?? {},
+          }),
+        `tools/call ${name}`,
+      );
       return {
         content: (res.content as McpToolResult["content"]) ?? [],
         isError: res.isError,
@@ -213,7 +214,8 @@ export class McpClient {
     if (!client.listPrompts) {
       return [];
     }
-    const res = await client.listPrompts();
+    const listPrompts = client.listPrompts.bind(client);
+    const res = await this.withTimeout(() => listPrompts(), "prompts/list");
     return res.prompts.map((p) => ({
       name: p.name,
       description: p.description,
@@ -221,18 +223,19 @@ export class McpClient {
     }));
   }
 
-  async getPrompt(
-    name: string,
-    args?: Record<string, unknown>,
-  ): Promise<McpPromptResult> {
+  async getPrompt(name: string, args?: Record<string, unknown>): Promise<McpPromptResult> {
     const client = this.requireClient();
     if (!client.getPrompt) {
       throw new McpToolCallError(name, "Server has no getPrompt method", {
         serverName: this.spec.name,
       });
     }
+    const getPrompt = client.getPrompt.bind(client);
     try {
-      const res = await client.getPrompt({ name, arguments: args ?? {} });
+      const res = await this.withTimeout(
+        () => getPrompt({ name, arguments: args ?? {} }),
+        `prompts/get ${name}`,
+      );
       return {
         description: res.description,
         messages: res.messages.map((m) => ({
@@ -270,5 +273,35 @@ export class McpClient {
       );
     }
     return this.sdkClient;
+  }
+
+  private async withTimeout<T>(fn: () => Promise<T>, operation: string): Promise<T> {
+    const timeoutMs = this.spec.timeoutMs;
+    if (timeoutMs === undefined || timeoutMs <= 0) {
+      return fn();
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new McpTimeoutError(operation, timeoutMs, this.spec.name));
+      }, timeoutMs);
+
+      fn()
+        .then((result) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          resolve(result);
+        })
+        .catch((err) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          reject(err);
+        });
+    });
   }
 }

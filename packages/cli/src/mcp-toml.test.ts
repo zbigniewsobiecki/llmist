@@ -4,14 +4,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  mcpServersTomlToSpecs,
-  validateMcpServersConfig,
-} from "./mcp-toml.js";
+import { ConfigError } from "./config.js";
+import { mcpServersTomlToSpecs, validateMcpServersConfig } from "./mcp-toml.js";
 
 describe("validateMcpServersConfig", () => {
   it("accepts a valid stdio block", () => {
-    const errors = validateMcpServersConfig({
+    const config = validateMcpServersConfig({
       servers: {
         fs: {
           transport: "stdio",
@@ -20,11 +18,11 @@ describe("validateMcpServersConfig", () => {
         },
       },
     });
-    expect(errors).toEqual([]);
+    expect(config.servers?.fs?.transport).toBe("stdio");
   });
 
   it("accepts a valid http block", () => {
-    const errors = validateMcpServersConfig({
+    const config = validateMcpServersConfig({
       servers: {
         api: {
           transport: "http",
@@ -33,41 +31,82 @@ describe("validateMcpServersConfig", () => {
         },
       },
     });
-    expect(errors).toEqual([]);
+    expect(config.servers?.api?.transport).toBe("http");
   });
 
   it("rejects a block missing transport", () => {
-    const errors = validateMcpServersConfig({
-      servers: { fs: { command: "node" } as never },
-    });
-    expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]).toMatch(/transport/i);
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { command: "node" } },
+      }),
+    ).toThrow(ConfigError);
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { command: "node" } },
+      }),
+    ).toThrow("[mcp.servers.fs].transport must be a string");
   });
 
   it("rejects a stdio block missing command", () => {
-    const errors = validateMcpServersConfig({
-      servers: { fs: { transport: "stdio" } as never },
-    });
-    expect(errors[0]).toMatch(/command/i);
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { transport: "stdio" } },
+      }),
+    ).toThrow("[mcp.servers.fs].command must be a string");
   });
 
   it("rejects an http block missing url", () => {
-    const errors = validateMcpServersConfig({
-      servers: { api: { transport: "http" } as never },
-    });
-    expect(errors[0]).toMatch(/url/i);
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { api: { transport: "http" } },
+      }),
+    ).toThrow("[mcp.servers.api].url must be a string");
   });
 
   it("rejects an unknown transport value", () => {
-    const errors = validateMcpServersConfig({
-      servers: { x: { transport: "websocket" as never, url: "ws://x" } as never },
-    });
-    expect(errors[0]).toMatch(/transport/i);
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { x: { transport: "websocket", url: "ws://x" } },
+      }),
+    ).toThrow(/transport must be one of/);
   });
 
-  it("warns when no servers are configured (returns empty errors)", () => {
-    expect(validateMcpServersConfig({})).toEqual([]);
-    expect(validateMcpServersConfig({ servers: {} })).toEqual([]);
+  it("accepts when no servers are configured", () => {
+    expect(validateMcpServersConfig({})).toEqual({});
+    expect(validateMcpServersConfig({ servers: {} })).toEqual({ servers: {} });
+  });
+
+  it("rejects bad timeout, args, env, headers, booleans, and unknown keys", () => {
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { transport: "stdio", command: "node", "timeout-ms": -1 } },
+      }),
+    ).toThrow("[mcp.servers.fs].timeout-ms must be >= 0");
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { transport: "stdio", command: "node", args: ["ok", 1] } },
+      }),
+    ).toThrow("[mcp.servers.fs].args[1] must be a string");
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { transport: "stdio", command: "node", env: { TOKEN: 123 } } },
+      }),
+    ).toThrow("[mcp.servers.fs].env.TOKEN must be a string");
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { api: { transport: "http", url: "https://x", headers: { Auth: 123 } } },
+      }),
+    ).toThrow("[mcp.servers.api].headers.Auth must be a string");
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { transport: "stdio", command: "node", trust: "yes" } },
+      }),
+    ).toThrow("[mcp.servers.fs].trust must be a boolean");
+    expect(() =>
+      validateMcpServersConfig({
+        servers: { fs: { transport: "stdio", command: "node", extra: true } },
+      }),
+    ).toThrow("[mcp.servers.fs].extra is not a valid option");
   });
 });
 
@@ -89,13 +128,13 @@ describe("mcpServersTomlToSpecs", () => {
       },
     });
     expect(specs).toHaveLength(2);
-    const fs = specs.find((s) => s.name === "fs")!;
-    const api = specs.find((s) => s.name === "api")!;
-    expect(fs.transport).toBe("stdio");
-    expect((fs as { command: string }).command).toBe("npx");
-    expect((fs as { trust?: boolean }).trust).toBe(true);
-    expect(api.transport).toBe("http");
-    expect((api as { url: string }).url).toBe("https://example.com/mcp");
+    const fs = specs.find((s) => s.name === "fs");
+    const api = specs.find((s) => s.name === "api");
+    expect(fs?.transport).toBe("stdio");
+    expect((fs as { command: string } | undefined)?.command).toBe("npx");
+    expect((fs as { trust?: boolean } | undefined)?.trust).toBe(true);
+    expect(api?.transport).toBe("http");
+    expect((api as { url: string } | undefined)?.url).toBe("https://example.com/mcp");
   });
 
   it("skips disabled servers", () => {

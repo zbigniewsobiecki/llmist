@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type CLIConfig,
   ConfigError,
@@ -86,6 +86,31 @@ describe("config", () => {
       expect(result.agent?.gadgets).toEqual(["~/gadgets/tools.ts", "./local-gadget.ts"]);
       expect(result.agent?.builtins).toBe(true);
       expect(result.agent?.["builtin-interaction"]).toBe(false);
+    });
+
+    it("should validate mcp section", () => {
+      const raw = {
+        mcp: {
+          servers: {
+            fs: {
+              transport: "stdio",
+              command: "node",
+              args: ["server.js"],
+              "timeout-ms": 30000,
+            },
+            api: {
+              transport: "http",
+              url: "https://example.com/mcp",
+              headers: { Authorization: "Bearer xyz" },
+            },
+          },
+        },
+      };
+
+      const result = validateConfig(raw);
+
+      expect(result.mcp?.servers?.fs?.transport).toBe("stdio");
+      expect(result.mcp?.servers?.api?.transport).toBe("http");
     });
 
     it("should validate custom command section with type=agent", () => {
@@ -196,6 +221,21 @@ describe("config", () => {
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
         expect(() => validateConfig(raw)).toThrow("[my-command].unknown-key is not a valid option");
+      });
+
+      it("should reject invalid mcp section", () => {
+        const raw = {
+          mcp: {
+            servers: {
+              fs: {
+                transport: "stdio",
+              },
+            },
+          },
+        };
+
+        expect(() => validateConfig(raw)).toThrow(ConfigError);
+        expect(() => validateConfig(raw)).toThrow("[mcp.servers.fs].command must be a string");
       });
 
       it("should reject invalid model type", () => {
@@ -1219,6 +1259,7 @@ describe("config", () => {
         subagents: {},
         "rate-limits": {},
         retry: {},
+        mcp: { servers: {} },
         "my-custom-cmd": { model: "test" },
       };
 

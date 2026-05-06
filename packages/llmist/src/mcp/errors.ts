@@ -50,15 +50,26 @@ export class McpToolCallError extends McpError {
   readonly toolName: string;
   readonly cause?: unknown;
 
-  constructor(
-    toolName: string,
-    message: string,
-    opts?: { serverName?: string; cause?: unknown },
-  ) {
+  constructor(toolName: string, message: string, opts?: { serverName?: string; cause?: unknown }) {
     super(message, opts?.serverName);
     this.name = "McpToolCallError";
     this.toolName = toolName;
     this.cause = opts?.cause;
+  }
+}
+
+export class McpTimeoutError extends McpError {
+  readonly operation: string;
+  readonly timeoutMs: number;
+
+  constructor(operation: string, timeoutMs: number, serverName?: string) {
+    super(
+      `MCP operation "${operation}" on server "${serverName ?? "<unknown>"}" timed out after ${timeoutMs}ms`,
+      serverName,
+    );
+    this.name = "McpTimeoutError";
+    this.operation = operation;
+    this.timeoutMs = timeoutMs;
   }
 }
 
