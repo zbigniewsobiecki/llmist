@@ -1,7 +1,7 @@
 import type { ILogObj, Logger } from "tslog";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { LLMist } from "../core/client.js";
+import type { LLMist } from "../core/client.js";
 import { ExecutionTree } from "../core/execution-tree.js";
 import { createGadget } from "../gadgets/create-gadget.js";
 import { Gadget } from "../gadgets/typed-gadget.js";
@@ -10,10 +10,14 @@ import { AgentBuilder } from "./builder.js";
 import type { AgentHooks } from "./hooks.js";
 import { createSubagent, hasHostExports } from "./subagent.js";
 
-// Mock host exports for testing
+// Stub LLMist that doesn't require provider adapters or API keys, so these
+// tests stay hermetic when run in environments without provider credentials
+// (e.g. Dependabot PR CI).
+class StubLLMist {}
+
 const mockHostExports: HostExports = {
   AgentBuilder,
-  LLMist,
+  LLMist: StubLLMist as unknown as typeof LLMist,
   ExecutionTree,
   Gadget,
   createGadget,
