@@ -16,7 +16,7 @@ The **llmist CLI** brings the power of AI agents directly to your terminal. Run 
     Get AI responses without writing any code - pipe input, get output
   </Card>
   <Card title="Interactive Agents" icon="puzzle">
-    Run agents with gadgets (tools) in an interactive TUI
+    Run agents with gadgets and MCP tools in an interactive TUI
   </Card>
   <Card title="Automation" icon="seti:pipeline">
     Build powerful pipelines with stdin/stdout integration
@@ -28,9 +28,10 @@ The **llmist CLI** brings the power of AI agents directly to your terminal. Run 
 
 ## Key Features
 
-- **8 built-in commands** - complete, agent, image, speech, vision, models, gadget, init
+- **Built-in commands** - complete, agent, image, speech, vision, models, gadget, mcp, init, config
 - **TUI mode** - Beautiful terminal interface with expandable blocks and keyboard navigation
 - **Gadget ecosystem** - Load gadgets from local files, npm packages, or git repositories
+- **MCP integration** - Attach external MCP servers, import Claude Code config, or publish llmist gadgets via `llmist mcp serve`
 - **TOML configuration** - Define custom commands, templates, and workflows
 - **Gadget approval** - Security controls for tool execution
 
@@ -42,6 +43,11 @@ The **llmist CLI** brings the power of AI agents directly to your terminal. Run 
 
     # Interactive agent (TUI activates automatically in terminals)
     npx @llmist/cli agent "Help me organize my project"
+
+    # Agent with an MCP filesystem server
+    npx @llmist/cli agent \
+      --mcp-server fs="npx -- -y @modelcontextprotocol/server-filesystem /tmp" \
+      "List files in /tmp"
 
     # Generate an image
     npx @llmist/cli image "A sunset over mountains" -o sunset.png
@@ -76,5 +82,10 @@ The **llmist CLI** brings the power of AI agents directly to your terminal. Run 
     title="Configuration"
     description="TOML config and custom commands"
     href="/cli/configuration/toml-reference/"
+  />
+  <LinkCard
+    title="MCP Quick Start"
+    description="Use MCP servers from the CLI"
+    href="/cli/getting-started/mcp/"
   />
 </CardGrid>

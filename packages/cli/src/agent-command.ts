@@ -496,6 +496,35 @@ export async function executeAgent(
     builder.withGadgets(...gadgets);
   }
 
+  // MCP servers: TOML-defined first, then ad-hoc CLI flags (CLI flags can
+  // override TOML by providing the same name, but we warn on collision).
+  const mcpFromToml = (
+    await import("./mcp-toml.js")
+  ).mcpServersTomlToSpecs(fullConfig?.mcp);
+  const mcpFromFlags =
+    options.mcpServer && options.mcpServer.length > 0
+      ? (await import("./mcp-options.js")).parseMcpServerFlags(
+          options.mcpServer,
+          options.mcpTrust ?? [],
+        )
+      : [];
+
+  if (mcpFromToml.length > 0 || mcpFromFlags.length > 0) {
+    const seen = new Set<string>();
+    for (const spec of mcpFromToml) {
+      builder.withMcpServer(spec);
+      seen.add(spec.name);
+    }
+    for (const spec of mcpFromFlags) {
+      if (seen.has(spec.name)) {
+        env.stderr.write(
+          `[mcp] --mcp-server "${spec.name}" overrides TOML mcp.servers.${spec.name}\n`,
+        );
+      }
+      builder.withMcpServer(spec);
+    }
+  }
+
   // Set custom gadget markers if configured, otherwise use library defaults
   if (options.gadgetStartPrefix) {
     builder.withGadgetStartPrefix(options.gadgetStartPrefix);

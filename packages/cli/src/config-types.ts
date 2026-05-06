@@ -184,6 +184,31 @@ export interface CustomCommandConfig extends AgentConfig, CompleteConfig {
 /**
  * Root configuration structure matching ~/.llmist/cli.toml.
  */
+/** Plan 2: TOML schema for `[mcp.servers.<name>]` blocks. */
+export interface McpStdioServerToml {
+  transport: "stdio";
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  trust?: boolean;
+  enabled?: boolean;
+  "timeout-ms"?: number;
+}
+
+export interface McpHttpServerToml {
+  transport: "http";
+  url: string;
+  headers?: Record<string, string>;
+  enabled?: boolean;
+  "timeout-ms"?: number;
+}
+
+export type McpServerToml = McpStdioServerToml | McpHttpServerToml;
+
+export interface McpConfig {
+  servers?: Record<string, McpServerToml>;
+}
+
 export interface CLIConfig {
   global?: GlobalConfig;
   complete?: CompleteConfig;
@@ -199,6 +224,8 @@ export interface CLIConfig {
   retry?: RetryConfigCLI;
   /** Skills configuration */
   skills?: import("./skills/config-types.js").SkillsConfig;
+  /** MCP servers configuration (plan 2). */
+  mcp?: McpConfig;
   [customCommand: string]:
     | CustomCommandConfig
     | CompleteConfig
@@ -211,6 +238,7 @@ export interface CLIConfig {
     | RateLimitsConfig
     | RetryConfigCLI
     | import("./skills/config-types.js").SkillsConfig
+    | McpConfig
     | undefined;
 }
 

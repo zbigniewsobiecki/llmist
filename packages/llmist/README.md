@@ -57,8 +57,28 @@ console.log(answer);
 - **Multi-provider** - OpenAI, Anthropic, Gemini, HuggingFace with unified API
 - **Type-safe** - Full TypeScript inference from Zod schemas
 - **Flexible hooks** - Observers, interceptors, and controllers for deep integration
+- **MCP integration** - Consume stdio and Streamable HTTP MCP servers; publish llmist gadgets and skills as MCP tools and prompts
 - **Built-in cost tracking** - Real-time token counting and cost estimation
 - **Multimodal** - Vision and audio input support
+
+## Model Context Protocol (MCP)
+
+Attach MCP servers to an agent with the same gadget execution pipeline as native tools:
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel('sonnet')
+  .withMcpServer({
+    name: 'filesystem',
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+    timeoutMs: 30000,
+  })
+  .askAndCollect('List files in /tmp');
+```
+
+llmist also exports `createMcpServer({ gadgets, skills })` so applications can publish native gadgets as MCP tools and skills as MCP prompts.
 
 ## Providers
 
@@ -87,6 +107,7 @@ Full documentation at [llmist.dev](https://llmist.dev)
 - [Getting Started](https://llmist.dev/library/getting-started/introduction/)
 - [Creating Gadgets](https://llmist.dev/library/guides/creating-gadgets/)
 - [Hooks System](https://llmist.dev/library/guides/hooks/)
+- [MCP Integration](https://llmist.dev/library/advanced/mcp/)
 - [Provider Configuration](https://llmist.dev/library/providers/overview/)
 
 ## Examples

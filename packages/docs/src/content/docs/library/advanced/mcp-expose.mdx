@@ -1,0 +1,105 @@
+---
+title: MCP — Expose (library)
+description: Publish llmist gadgets and skills as a Model Context Protocol server programmatically
+---
+
+Embedding the MCP server inside another Node app — `createMcpServer({ gadgets, skills })`.
+
+For the CLI command, see [`llmist mcp serve`](/cli/commands/mcp-serve/).
+
+## Quick start
+
+```typescript
+import { createGadget, createMcpServer, GadgetRegistry, z } from "llmist";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const calc = createGadget({
+  name: "Calculator",
+  description: "Adds two numbers",
+  schema: z.object({ a: z.number(), b: z.number() }),
+  execute: ({ a, b }) => String(a + b),
+});
+
+const registry = new GadgetRegistry();
+registry.registerByClass(calc);
+
+const handle = createMcpServer({ gadgets: registry });
+
+const transport = new StdioServerTransport();
+await handle.connect(transport);
+```
+
+The handle stays alive until you call `handle.stop()` or the transport closes.
+
+## API
+
+### `createMcpServer(options)`
+
+```typescript
+interface CreateMcpServerOptions {
+  gadgets: GadgetRegistry;     // Native gadgets exposed as MCP tools
+  skills?: SkillRegistry;      // Native skills exposed as MCP prompts (optional)
+  protocolVersion?: string;    // Default: 2025-06-18
+  serverInfo?: { name: string; version: string };
+}
+```
+
+Returns an `McpServerHandle`:
+
+```typescript
+interface McpServerHandle {
+  connect(transport: Transport): Promise<void>;
+  stop(): Promise<void>;
+  readonly running: boolean;
+}
+```
+
+### `gadgetToMcpTool(gadget)`
+
+Exports the gadget's name, description, and JSON-Schema input descriptor. Available as a building block for callers wiring their own server (e.g. behind an HTTP gateway).
+
+### `runGadgetForMcp(gadget, args)`
+
+Runs the gadget against the supplied arguments, validating against its Zod schema and returning an MCP-shaped `{ content, isError? }` result. Used internally by `createMcpServer`.
+
+### `skillToMcpPrompt(skill)` and `renderSkillForMcpPrompt(skill, args)`
+
+The prompt analogs.
+
+## Capability advertisement
+
+| Condition | Advertised |
+|---|---|
+| `gadgets` non-empty | `tools` |
+| `skills` non-empty | `prompts` |
+
+Resources, sampling, and elicitation are **not** advertised — scoped for follow-up specs.
+
+## Lifecycle
+
+The handle's lifecycle is independent of any signal handlers. If you embed the server in a long-running process, install your own SIGTERM/SIGINT handlers that call `handle.stop()`. The CLI's `mcp serve` does this for you.
+
+## Embedding in tests
+
+The exported `createMcpServer` works seamlessly with the SDK's `InMemoryTransport.createLinkedPair()` for in-process tests. See `packages/llmist/src/mcp/server.test.ts` for an example.
+
+## Mapping reference
+
+| llmist concept | MCP primitive | Mapping |
+|---|---|---|
+| Gadget name | tool name | identity |
+| Gadget description | tool description | falls back to a synthesized string when empty |
+| `parameterSchema` (Zod) | `inputSchema` (JSON Schema) | via existing `schemaToJSONSchema` |
+| Gadget execute return string | tool result `content[]` with one `text` block | identity |
+| Gadget execute return `{ result, media }` | text block + per-media block | image/audio passed through with mime type |
+| Gadget thrown error | tool result with `isError: true` | error message goes in the text block |
+| Skill name | prompt name | identity |
+| Skill description | prompt description | falls back to synthesized when empty |
+| `argumentHint` | single optional `arguments` parameter | the existing `$ARGUMENTS` / `$0` substitution kicks in at render time |
+| Skill body | prompts/get response — single `user` text message | activated through `Skill.activate()` so substitution and shell preprocessing all run |
+
+## Related
+
+- [MCP consume — library guide](/library/advanced/mcp/)
+- [MCP security](/library/advanced/mcp-security/)
+- [llmist mcp serve — CLI](/cli/commands/mcp-serve/)

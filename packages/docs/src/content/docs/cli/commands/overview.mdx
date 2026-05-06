@@ -76,6 +76,8 @@ Run the full agent loop with tools:
 | `--temperature <n>` | `-t` | Temperature (0-2) | Provider default |
 | `--max-iterations <n>` | `-i` | Max agent iterations | 10 |
 | `--gadget <path>` | `-g` | Gadget file (repeatable) | none |
+| `--mcp-server <spec>` | | Attach an MCP stdio server; repeatable | none |
+| `--mcp-trust <name>` | | Bypass stdio command allowlist for a named MCP server | none |
 | `--no-builtins` | | Disable all built-in gadgets | false |
 | `--no-builtin-interaction` | | Disable AskUser gadget | false |
 | `--quiet` | `-q` | Suppress output except TellUser | false |
@@ -86,6 +88,20 @@ Run the full agent loop with tools:
 |--------|-------------|
 | `AskUser` | Asks the user a question and waits for response |
 | `TellUser` | Outputs a message with type indicator. Set `done=true` to end conversation |
+
+### `mcp` - Model Context Protocol
+
+Manage MCP interoperability:
+
+```bash
+    # Import existing Claude Code MCP servers as llmist TOML
+    npx @llmist/cli mcp import-claude-code >> ~/.llmist/cli.toml
+
+    # Publish llmist gadgets and skills as an MCP stdio server
+    npx @llmist/cli mcp serve --gadgets ./gadgets/ --skills ./skills/
+    ```
+
+Use `[mcp.servers.<name>]` config blocks for persistent stdio or Streamable HTTP servers. See [MCP Quick Start](/cli/getting-started/mcp/), [`llmist mcp import-claude-code`](/cli/commands/mcp-import-claude-code/), and [`llmist mcp serve`](/cli/commands/mcp-serve/).
 
 ### `gadget` - Test and Inspect Gadgets
 
@@ -110,6 +126,12 @@ temperature = 0.7
 model = "anthropic:claude-sonnet-4-5"
 max-iterations = 15
 gadget = ["~/gadgets/common-tools.ts"]
+
+[mcp.servers.fs]
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+timeout-ms = 30000
 
 # Custom command
 [code-review]

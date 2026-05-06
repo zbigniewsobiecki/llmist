@@ -1,0 +1,174 @@
+---
+title: MCP (Model Context Protocol)
+description: Connect llmist agents to MCP servers and use their tools and prompts
+---
+
+llmist supports the [Model Context Protocol](https://modelcontextprotocol.io) bidirectionally. This page covers the **consume** side: connecting agents to stdio or Streamable HTTP MCP servers, using their tools as native gadgets, and loading MCP prompts as slash-invocable skills.
+
+To publish llmist gadgets and skills as an MCP server, see [MCP — expose (library)](/library/advanced/mcp-expose/) or [`llmist mcp serve`](/cli/commands/mcp-serve/).
+
+## Quick start
+
+```typescript
+import { LLMist } from "llmist";
+
+const answer = await LLMist.createAgent()
+  .withModel("sonnet")
+  .withMcpServer({
+    name: "filesystem",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  })
+  .askAndCollect("list files in /tmp");
+```
+
+That's it. The agent connects to the server when `run()` starts, lists its tools, wraps each as a native gadget, and passes the merged catalog to the LLM. When the run finishes (success, abort, or error), the spawned child process is terminated.
+
+## API
+
+### `withMcpServer(spec)`
+
+Attach a Model Context Protocol server. Call it multiple times to attach more than one server.
+
+```typescript
+type StdioMcpServerSpec = {
+  name: string;                     // Stable name surfaced in logs and collision prefixes
+  transport: "stdio";
+  command: string;                  // Executable basename — checked against allowlist unless trust: true
+  args?: string[];                  // Arguments passed to the executable
+  env?: Record<string, string>;     // Environment overrides for the child
+  trust?: boolean;                  // Skip the allowlist check (default false)
+  timeoutMs?: number;               // Per-operation timeout; <= 0 disables timeout
+};
+
+type HttpMcpServerSpec = {
+  name: string;
+  transport: "http";
+  url: string;                      // Streamable HTTP endpoint
+  headers?: Record<string, string>;
+  timeoutMs?: number;               // Per-operation timeout; <= 0 disables timeout
+};
+```
+
+### What gets registered
+
+Each tool advertised by the server becomes a native gadget. The gadget's:
+
+- **name** is the MCP tool name, prefixed with `<server>__` when needed to resolve cross-server collisions
+- **description** is the tool's description (or a synthesized fallback when missing)
+- **schema** is a Zod schema converted from the tool's `inputSchema` JSON Schema
+- **execute** delegates to the MCP `tools/call` and converts the response back into the gadget's expected shape (text content blocks → string; image blocks → media output; mixed → `{ result, media }`)
+- **isError = true** responses are thrown as gadget errors so the existing executor surfaces them
+
+## Security
+
+STDIO MCP server commands are gated by an allowlist by default. The allowlist contains common runtime entrypoints (`npx`, `node`, `uvx`, `python`, `python3`, `deno`, `bun`). Anything else fails fast with a `McpUntrustedCommandError` whose message tells you how to opt in.
+
+To allow a non-allowlisted binary for a specific server:
+
+```typescript
+.withMcpServer({
+  name: "my-tool",
+  transport: "stdio",
+  command: "/usr/local/bin/my-tool",
+  trust: true,                                      // ← opt in
+})
+```
+
+This default-safe posture mitigates [CVE-2026-30623](https://docs.litellm.ai/blog/mcp-stdio-command-injection-april-2026) and the wider STDIO command-injection family. See [MCP security](/library/advanced/mcp-security/) for context.
+
+## Lifecycle
+
+- The MCP module is **dynamic-imported** only when `withMcpServer(...)` was called at least once. Agents that don't use MCP pay zero load-time overhead.
+- Connections happen at the start of `run()`, not at builder time — failures don't crash construction.
+- Child processes are terminated when `run()` exits (success, abort, or thrown error).
+- A server that fails to connect is logged and skipped; the agent continues with whatever connected.
+- `timeoutMs` applies to connect, tool listing, tool calls, prompt listing, and prompt rendering. `undefined` and values `<= 0` disable the timeout. A timed-out operation rejects but does not permanently close or poison the client.
+
+## Errors
+
+MCP exports the following typed errors:
+
+| Error | When it's thrown |
+|---|---|
+| `McpUntrustedCommandError` | Spawn was refused by the allowlist |
+| `McpConnectError` | Initialize handshake failed |
+| `McpToolCallError` | A `tools/call` raised at the transport level |
+| `McpTimeoutError` | An MCP operation exceeded `timeoutMs` |
+| `JsonSchemaConversionError` | Tool's `inputSchema` uses features outside the supported subset (`$ref`, `allOf`, exotic composition) |
+
+`tools/call` results with `isError=true` are not exceptions — they're surfaced as a gadget error trailing message and the agent continues.
+
+## Multi-server
+
+Attach more than one server. Tool name collisions across servers are resolved deterministically: any server with at least one colliding tool gets every one of its tools prefixed with `<server>__`. Unique names pass through unchanged.
+
+```typescript
+const agent = LLMist.createAgent()
+  .withModel("sonnet")
+  .withMcpServer({
+    name: "fs",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  })
+  .withMcpServer({
+    name: "git",
+    transport: "stdio",
+    command: "uvx",
+    args: ["mcp-server-git"],
+  });
+```
+
+If both servers expose a `read`, the LLM sees `fs__read` and `git__read`. If only one exposes it, the name is unprefixed.
+
+## Streamable HTTP
+
+For modern remote MCP servers, use `transport: "http"`:
+
+```typescript
+.withMcpServer({
+  name: "remote",
+  transport: "http",
+  url: "https://my-mcp.example.com/mcp",
+  headers: { Authorization: "Bearer xyz" },
+})
+```
+
+The legacy HTTP+SSE transport is **not supported** — it's deprecated upstream as of MCP spec 2025-06-18.
+
+## MCP Prompts
+
+Servers that advertise prompt capability appear in the agent's effective skill set. Each prompt becomes a slash-invocable skill (`/<prompt-name>`) that, when activated, calls the server's `prompts/get` to render the message and inject it.
+
+## TOML configuration
+
+Persist MCP servers in your llmist config with `[mcp.servers.<name>]` blocks. Invalid MCP config fails fast during config validation so typos do not silently drop a server.
+
+```toml
+[mcp.servers.fs]
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+timeout-ms = 30000
+
+[mcp.servers.remote]
+transport = "http"
+url = "https://my-mcp.example.com/mcp"
+
+[mcp.servers.remote.headers]
+Authorization = "Bearer xyz"
+```
+
+See [TOML configuration — MCP servers](/cli/configuration/toml-reference/#mcp-servers-mcpserversname) for the full schema.
+
+## Capability negotiation
+
+The runtime reads server capabilities on initialize and only fetches tools / prompts the server advertises. Resources, sampling, and elicitation are logged at debug level when advertised but not yet implemented (deferred to v1.5+).
+
+## Lifecycle hardening
+
+- Signal handling: SIGTERM and SIGINT to the agent process trigger graceful close of every registered MCP client.
+- Lifecycle is idempotent — double-shutdown is safe.
+- Signal handlers are removed after teardown to avoid leaked listeners across REPL iterations.

@@ -17,6 +17,7 @@ import {
   validateRetryConfig,
   validateSpeechConfig,
 } from "./config-validators.js";
+import { validateMcpServersConfig } from "./mcp-toml.js";
 import { validateSkillsConfig } from "./skills/config-types.js";
 
 // ---------------------------------------------------------------------------
@@ -37,6 +38,7 @@ export type {
   ImageConfig,
   InitialGadget,
   LogLevel,
+  McpConfig,
   RateLimitsConfig,
   ReasoningConfigCLI,
   RetryConfigCLI,
@@ -94,6 +96,8 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.retry = validateRetryConfig(value, key);
       } else if (key === "skills") {
         result.skills = validateSkillsConfig(value, key);
+      } else if (key === "mcp") {
+        result.mcp = validateMcpServersConfig(value, key);
       } else {
         // Custom command section
         result[key] = validateCustomConfig(value, key);
@@ -161,6 +165,7 @@ export function getCustomCommandNames(config: CLIConfig): string[] {
     "subagents",
     "rate-limits",
     "retry",
+    "mcp",
   ]);
   return Object.keys(config).filter((key) => !reserved.has(key));
 }
