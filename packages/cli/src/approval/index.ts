@@ -28,6 +28,9 @@
  * ```
  */
 
+export type { ApprovalControllerOptions } from "./approval-controller.js";
+// Approval controller
+export { createApprovalController } from "./approval-controller.js";
 // Context providers
 export {
   builtinContextProviders,
