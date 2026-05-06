@@ -107,15 +107,13 @@ describe("jsonSchemaToZod", () => {
   });
 
   it("throws JsonSchemaConversionError on $ref", () => {
-    expect(() => jsonSchemaToZod({ $ref: "#/definitions/Foo" })).toThrow(
-      JsonSchemaConversionError,
-    );
+    expect(() => jsonSchemaToZod({ $ref: "#/definitions/Foo" })).toThrow(JsonSchemaConversionError);
   });
 
   it("throws JsonSchemaConversionError on allOf", () => {
-    expect(() =>
-      jsonSchemaToZod({ allOf: [{ type: "string" }, { type: "number" }] }),
-    ).toThrow(JsonSchemaConversionError);
+    expect(() => jsonSchemaToZod({ allOf: [{ type: "string" }, { type: "number" }] })).toThrow(
+      JsonSchemaConversionError,
+    );
   });
 
   it("treats an object schema with no properties as an unknown record", () => {

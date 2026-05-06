@@ -4,10 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  assertCommandAllowed,
-  DEFAULT_MCP_COMMAND_ALLOWLIST,
-} from "./allowlist.js";
+import { assertCommandAllowed, DEFAULT_MCP_COMMAND_ALLOWLIST } from "./allowlist.js";
 import { McpUntrustedCommandError } from "./errors.js";
 
 describe("DEFAULT_MCP_COMMAND_ALLOWLIST", () => {
@@ -28,15 +25,11 @@ describe("assertCommandAllowed", () => {
   });
 
   it("accepts an allowlisted command via absolute path (basename match)", () => {
-    expect(() =>
-      assertCommandAllowed("/usr/local/bin/node", false),
-    ).not.toThrow();
+    expect(() => assertCommandAllowed("/usr/local/bin/node", false)).not.toThrow();
   });
 
   it("rejects a non-allowlisted command without trust", () => {
-    expect(() => assertCommandAllowed("curl", false)).toThrow(
-      McpUntrustedCommandError,
-    );
+    expect(() => assertCommandAllowed("curl", false)).toThrow(McpUntrustedCommandError);
   });
 
   it("accepts a non-allowlisted command when trust=true", () => {
@@ -44,21 +37,13 @@ describe("assertCommandAllowed", () => {
   });
 
   it("rejects a command that contains whitespace (must split args separately)", () => {
-    expect(() => assertCommandAllowed("npx -y something", false)).toThrow(
-      McpUntrustedCommandError,
-    );
+    expect(() => assertCommandAllowed("npx -y something", false)).toThrow(McpUntrustedCommandError);
   });
 
   it("rejects shell metacharacters", () => {
-    expect(() => assertCommandAllowed("npx;rm -rf /", false)).toThrow(
-      McpUntrustedCommandError,
-    );
-    expect(() => assertCommandAllowed("npx|cat", false)).toThrow(
-      McpUntrustedCommandError,
-    );
-    expect(() => assertCommandAllowed("npx&node", false)).toThrow(
-      McpUntrustedCommandError,
-    );
+    expect(() => assertCommandAllowed("npx;rm -rf /", false)).toThrow(McpUntrustedCommandError);
+    expect(() => assertCommandAllowed("npx|cat", false)).toThrow(McpUntrustedCommandError);
+    expect(() => assertCommandAllowed("npx&node", false)).toThrow(McpUntrustedCommandError);
   });
 
   it("error message includes the command and the opt-in instructions", () => {
@@ -76,14 +61,10 @@ describe("assertCommandAllowed", () => {
   it("respects a custom allowlist when provided", () => {
     const custom = new Set(["mybin"]);
     expect(() => assertCommandAllowed("mybin", false, custom)).not.toThrow();
-    expect(() => assertCommandAllowed("npx", false, custom)).toThrow(
-      McpUntrustedCommandError,
-    );
+    expect(() => assertCommandAllowed("npx", false, custom)).toThrow(McpUntrustedCommandError);
   });
 
   it("rejects empty command", () => {
-    expect(() => assertCommandAllowed("", false)).toThrow(
-      McpUntrustedCommandError,
-    );
+    expect(() => assertCommandAllowed("", false)).toThrow(McpUntrustedCommandError);
   });
 });

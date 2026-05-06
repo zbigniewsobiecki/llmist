@@ -24,8 +24,8 @@
  * The CLI variant ships as `llmist mcp serve --gadgets <spec>`.
  */
 
-import { GadgetRegistry, createGadget, createMcpServer, z } from "llmist";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createGadget, createMcpServer, GadgetRegistry, z } from "llmist";
 
 const calc = createGadget({
   name: "Calculator",

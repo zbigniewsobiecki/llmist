@@ -34,11 +34,7 @@ export class McpPromptSkill {
   private readonly client: McpClient;
   private readonly mcpToolName: string;
 
-  constructor(
-    descriptor: McpPromptDescriptor,
-    client: McpClient,
-    opts?: McpPromptSkillOptions,
-  ) {
+  constructor(descriptor: McpPromptDescriptor, client: McpClient, opts?: McpPromptSkillOptions) {
     const prefix = opts?.prefix ?? "";
     this.name = prefix + descriptor.name;
     this.description =

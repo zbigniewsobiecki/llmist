@@ -335,9 +335,7 @@ export async function executeAgent(
 
   // MCP servers: TOML-defined first, then ad-hoc CLI flags (CLI flags can
   // override TOML by providing the same name, but we warn on collision).
-  const mcpFromToml = (
-    await import("./mcp-toml.js")
-  ).mcpServersTomlToSpecs(fullConfig?.mcp);
+  const mcpFromToml = (await import("./mcp-toml.js")).mcpServersTomlToSpecs(fullConfig?.mcp);
   const mcpFromFlags =
     options.mcpServer && options.mcpServer.length > 0
       ? (await import("./mcp-options.js")).parseMcpServerFlags(

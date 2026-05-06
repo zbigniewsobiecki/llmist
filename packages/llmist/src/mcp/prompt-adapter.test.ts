@@ -18,17 +18,23 @@ interface FakeClient {
   getPrompt: ReturnType<typeof vi.fn>;
 }
 
-function fakeClient(opts: {
-  reply?: { description?: string; messages: Array<{ role: "user" | "assistant"; content: { type: string; text?: string } }> };
-  serverName?: string;
-} = {}): FakeClient {
+function fakeClient(
+  opts: {
+    reply?: {
+      description?: string;
+      messages: Array<{ role: "user" | "assistant"; content: { type: string; text?: string } }>;
+    };
+    serverName?: string;
+  } = {},
+): FakeClient {
   return {
     serverName: opts.serverName ?? "fake",
-    getPrompt: vi.fn(async () =>
-      opts.reply ?? {
-        description: "rendered",
-        messages: [{ role: "user" as const, content: { type: "text", text: "hello" } }],
-      },
+    getPrompt: vi.fn(
+      async () =>
+        opts.reply ?? {
+          description: "rendered",
+          messages: [{ role: "user" as const, content: { type: "text", text: "hello" } }],
+        },
     ),
   };
 }
@@ -82,11 +88,7 @@ describe("mcpPromptToSkill", () => {
   });
 
   it("applies a name prefix when provided", () => {
-    const skill = mcpPromptToSkill(
-      { name: "review" },
-      fakeClient() as never,
-      { prefix: "fs__" },
-    );
+    const skill = mcpPromptToSkill({ name: "review" }, fakeClient() as never, { prefix: "fs__" });
     expect(skill.name).toBe("fs__review");
   });
 

@@ -350,14 +350,14 @@ export type {
 // ============================================================================
 export {
   assertCommandAllowed,
-  createMcpServer,
   type CreateMcpServerOptions,
+  createMcpServer,
   DEFAULT_MCP_COMMAND_ALLOWLIST,
   gadgetResultToMcpContent,
   gadgetToMcpTool,
   type HttpMcpServerSpec,
-  JsonSchemaConversionError,
   type JSONSchemaLike,
+  JsonSchemaConversionError,
   jsonSchemaToZod,
   McpClient,
   type McpClientOptions,
@@ -369,15 +369,15 @@ export {
   type McpServerHandle,
   type McpServerSpec,
   type McpToolAdapterOptions,
-  type McpToolDescriptor,
-  mcpToolToGadget,
-  type McpToolResult,
   McpToolCallError,
+  type McpToolDescriptor,
+  type McpToolResult,
   McpUntrustedCommandError,
+  mcpToolToGadget,
   renderSkillForMcpPrompt,
   runGadgetForMcp,
-  skillToMcpPrompt,
   type StdioMcpServerSpec,
+  skillToMcpPrompt,
 } from "./mcp/index.js";
 // Provider constants (for token estimation)
 export { FALLBACK_CHARS_PER_TOKEN } from "./providers/constants.js";

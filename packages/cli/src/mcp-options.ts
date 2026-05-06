@@ -21,10 +21,7 @@ import type { McpServerSpec } from "llmist";
  *   on whitespace, so the value is a single string here that we re-tokenize).
  * - Duplicate names raise an error.
  */
-export function parseMcpServerFlags(
-  serverFlags: string[],
-  trustFlags: string[],
-): McpServerSpec[] {
+export function parseMcpServerFlags(serverFlags: string[], trustFlags: string[]): McpServerSpec[] {
   const trustSet = new Set(trustFlags);
   const seen = new Set<string>();
   const specs: McpServerSpec[] = [];
@@ -42,21 +39,15 @@ export function parseMcpServerFlags(
     const tail = value.slice(eqIdx + 1).trim();
 
     if (!name) {
-      throw new Error(
-        `Invalid --mcp-server flag value "${raw}": missing server name before "=".`,
-      );
+      throw new Error(`Invalid --mcp-server flag value "${raw}": missing server name before "=".`);
     }
 
     if (!tail) {
-      throw new Error(
-        `Invalid --mcp-server flag value "${raw}": missing command after "=".`,
-      );
+      throw new Error(`Invalid --mcp-server flag value "${raw}": missing command after "=".`);
     }
 
     if (seen.has(name)) {
-      throw new Error(
-        `Duplicate --mcp-server name "${name}". Each server name must be unique.`,
-      );
+      throw new Error(`Duplicate --mcp-server name "${name}". Each server name must be unique.`);
     }
     seen.add(name);
 

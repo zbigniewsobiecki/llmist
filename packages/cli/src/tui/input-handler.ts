@@ -59,6 +59,9 @@ export class InputHandler {
   /** Callback when Ctrl+P is pressed (cycle profiles) */
   private ctrlPCallback: (() => void) | null = null;
 
+  /** Callback when Ctrl+Y is pressed (toggle mouse mode) */
+  private ctrlYCallback: (() => void) | null = null;
+
   /** Callback when Arrow Up is pressed (scroll up in focused mode) */
   private arrowUpCallback: (() => void) | null = null;
 
@@ -73,6 +76,9 @@ export class InputHandler {
 
   /** Callback to check current content filter mode */
   private getContentFilterModeCallback: (() => "full" | "focused") | null = null;
+
+  /** Callback to check whether mouse capture is currently enabled */
+  private getMouseEnabledCallback: (() => boolean) | null = null;
 
   /** Body height when input bar is visible */
   private bodyHeightWithInput: string;
@@ -169,6 +175,14 @@ export class InputHandler {
       }
     });
 
+    // Handle Ctrl+Y on the input bar - toggle mouse mode
+    // This ensures Ctrl+Y works to toggle mouse capture when inputBar has focus
+    this.inputBar.key(["C-y"], () => {
+      if (this.ctrlYCallback) {
+        this.ctrlYCallback();
+      }
+    });
+
     // Handle Arrow Up on the input bar - scroll up in focused mode
     // In focused mode, we want arrows to scroll; in full mode, they move cursor
     this.inputBar.key(["up"], () => {
@@ -249,6 +263,21 @@ export class InputHandler {
    */
   onCtrlP(callback: () => void): void {
     this.ctrlPCallback = callback;
+  }
+
+  /**
+   * Set callback for Ctrl+Y events (toggle mouse mode).
+   */
+  onCtrlY(callback: () => void): void {
+    this.ctrlYCallback = callback;
+  }
+
+  /**
+   * Set callback to check whether mouse capture is currently enabled.
+   * Used to decide whether to re-enable mouse after editor use.
+   */
+  setGetMouseEnabled(callback: () => boolean): void {
+    this.getMouseEnabledCallback = callback;
   }
 
   /**
@@ -652,7 +681,11 @@ export class InputHandler {
     // Restore blessed terminal control
     this.screen.program.alternateBuffer();
     this.screen.program.hideCursor();
-    this.screen.program.enableMouse();
+    // Only re-enable mouse if it was enabled before opening the editor.
+    // Mouse is disabled by default so native text selection works.
+    if (this.getMouseEnabledCallback?.() === true) {
+      this.screen.program.enableMouse();
+    }
 
     // Force full screen redraw
     this.screen.alloc();

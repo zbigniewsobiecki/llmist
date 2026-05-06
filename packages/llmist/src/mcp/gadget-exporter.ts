@@ -43,9 +43,7 @@ export function gadgetToMcpTool(gadget: AbstractGadget): McpToolDescriptor {
  *  - { result, media[] } → `text` block + per-media block
  *  - other (object) → JSON-stringified `text` block
  */
-export function gadgetResultToMcpContent(
-  ret: GadgetExecuteReturn,
-): McpContentBlock[] {
+export function gadgetResultToMcpContent(ret: GadgetExecuteReturn): McpContentBlock[] {
   if (typeof ret === "string") {
     return [{ type: "text", text: ret }];
   }

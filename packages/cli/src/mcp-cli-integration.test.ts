@@ -7,9 +7,8 @@
  * the e2e directory.
  */
 
-import { describe, expect, it } from "vitest";
-
 import { AgentBuilder, type McpServerSpec } from "llmist";
+import { describe, expect, it } from "vitest";
 import { parseMcpServerFlags } from "./mcp-options.js";
 
 describe("CLI --mcp-server → builder integration", () => {
@@ -37,10 +36,7 @@ describe("CLI --mcp-server → builder integration", () => {
   });
 
   it("multiple --mcp-server flags accumulate in order", () => {
-    const specs: McpServerSpec[] = parseMcpServerFlags(
-      ["a=node", "b=python3"],
-      [],
-    );
+    const specs: McpServerSpec[] = parseMcpServerFlags(["a=node", "b=python3"], []);
     const builder = new AgentBuilder().withModel("openai:gpt-5-nano");
     specs.forEach((s) => builder.withMcpServer(s));
     expect(builder.getMcpServerSpecs().map((s) => s.name)).toEqual(["a", "b"]);

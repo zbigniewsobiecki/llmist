@@ -7,11 +7,7 @@ import { z } from "zod";
 
 import { createGadget } from "../gadgets/create-gadget.js";
 import { schemaToJSONSchema } from "../gadgets/schema-to-json.js";
-import {
-  gadgetResultToMcpContent,
-  gadgetToMcpTool,
-  runGadgetForMcp,
-} from "./gadget-exporter.js";
+import { gadgetResultToMcpContent, gadgetToMcpTool, runGadgetForMcp } from "./gadget-exporter.js";
 
 describe("gadgetToMcpTool", () => {
   it("exports a Zod-schema gadget — name, description, inputSchema match", () => {
@@ -28,7 +24,9 @@ describe("gadgetToMcpTool", () => {
     expect(tool.name).toBe("Calculator");
     expect(tool.description).toBe("Adds two numbers");
     expect(tool.inputSchema).toEqual(
-      schemaToJSONSchema(z.object({ a: z.number().describe("first"), b: z.number().describe("second") })),
+      schemaToJSONSchema(
+        z.object({ a: z.number().describe("first"), b: z.number().describe("second") }),
+      ),
     );
   });
 
@@ -66,9 +64,7 @@ describe("gadgetResultToMcpContent", () => {
   it("object with result and media → text + image blocks", () => {
     const blocks = gadgetResultToMcpContent({
       result: "captured",
-      media: [
-        { kind: "image", data: "AAAA", mimeType: "image/png" },
-      ],
+      media: [{ kind: "image", data: "AAAA", mimeType: "image/png" }],
     });
     expect(blocks).toContainEqual({ type: "text", text: "captured" });
     expect(blocks).toContainEqual({

@@ -52,6 +52,10 @@ export class KeyActionHandler {
         this.controller.toggleContentFilterMode();
         break;
 
+      case "toggle_mouse":
+        this.controller.toggleMouse();
+        break;
+
       case "cycle_profile":
         this.statusBar.cycleProfile();
         break;

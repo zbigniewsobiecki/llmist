@@ -20,6 +20,10 @@ vi.mock("./screen.js", () => ({
       key: vi.fn(),
       render: vi.fn(),
       destroy: vi.fn(),
+      program: {
+        disableMouse: vi.fn(),
+        enableMouse: vi.fn(),
+      },
     },
     requestRender: vi.fn(),
     renderNow: vi.fn(),
@@ -53,6 +57,7 @@ vi.mock("./status-bar.js", () => ({
     getMetrics: vi.fn(() => ({})),
     setFocusMode: vi.fn(),
     setContentFilterMode: vi.fn(),
+    setMouseEnabled: vi.fn(),
     cycleProfile: vi.fn(),
   })),
 }));
@@ -68,12 +73,14 @@ vi.mock("./input-handler.js", () => ({
     cancelPending: vi.fn(),
     setGetFocusMode: vi.fn(),
     setGetContentFilterMode: vi.fn(),
+    setGetMouseEnabled: vi.fn(),
     onCtrlC: vi.fn(),
     onCtrlB: vi.fn(),
     onCtrlK: vi.fn(),
     onCtrlI: vi.fn(),
     onCtrlJ: vi.fn(),
     onCtrlP: vi.fn(),
+    onCtrlY: vi.fn(),
     onArrowUp: vi.fn(),
     onArrowDown: vi.fn(),
     isWaitingForREPLPrompt: vi.fn(() => false),
@@ -111,9 +118,11 @@ vi.mock("./controller.js", () => ({
   TUIController: vi.fn().mockImplementation(() => ({
     getFocusMode: vi.fn(() => "browse"),
     getContentFilterMode: vi.fn(() => "full"),
+    isMouseEnabled: vi.fn(() => false),
     toggleFocusMode: vi.fn(),
     setFocusMode: vi.fn(),
     toggleContentFilterMode: vi.fn(),
+    toggleMouse: vi.fn(),
     pushInputMode: vi.fn(),
     popInputMode: vi.fn(),
     getAbortSignal: vi.fn(() => new AbortController().signal),
@@ -153,6 +162,7 @@ vi.mock("./hints-bar.js", () => ({
     setHasContent: vi.fn(),
     setFocusMode: vi.fn(),
     setContentFilterMode: vi.fn(),
+    setMouseEnabled: vi.fn(),
   })),
 }));
 
