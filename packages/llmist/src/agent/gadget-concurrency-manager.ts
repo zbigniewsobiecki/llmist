@@ -68,6 +68,9 @@ export class GadgetConcurrencyManager {
   /** All active gadget promises, keyed by invocationId */
   private inFlightExecutions: Map<string, Promise<void>> = new Map();
 
+  /** Gadget name for each in-flight invocationId (for timeout event emission) */
+  private inFlightGadgetNames: Map<string, string> = new Map();
+
   /** Queue of exclusive gadgets deferred until in-flight gadgets complete */
   private exclusiveQueue: ParsedGadgetCall[] = [];
 
@@ -221,6 +224,7 @@ export class GadgetConcurrencyManager {
     const currentCount = this.activeCountByGadget.get(gadgetName) ?? 0;
     this.activeCountByGadget.set(gadgetName, currentCount + 1);
     this.inFlightExecutions.set(invocationId, promise);
+    this.inFlightGadgetNames.set(invocationId, gadgetName);
   }
 
   /**
@@ -268,11 +272,26 @@ export class GadgetConcurrencyManager {
   }
 
   /**
-   * Clear the inFlightExecutions map after all promises have completed.
-   * Called after waitForAll resolves.
+   * Clear all in-flight tracking state.
+   * Called after all promises have completed, or on force-timeout.
+   * Also clears active gadget counts to prevent stale state when
+   * hanging promises eventually resolve into the void.
    */
   clearInFlight(): void {
     this.inFlightExecutions.clear();
+    this.inFlightGadgetNames.clear();
+    this.activeCountByGadget.clear();
+  }
+
+  /**
+   * Get metadata for all currently in-flight executions.
+   * Used by the dispatcher to emit skip events when the in-flight timeout fires.
+   */
+  getInFlightEntries(): Array<{ invocationId: string; gadgetName: string }> {
+    return Array.from(this.inFlightGadgetNames.entries()).map(([invocationId, gadgetName]) => ({
+      invocationId,
+      gadgetName,
+    }));
   }
 
   // ==========================================================================

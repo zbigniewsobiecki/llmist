@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { GadgetOutputStore } from "../agent/gadget-output-store.js";
 import {
+  applyCharacterLimit,
   applyLineLimit,
   applyPattern,
   applyPatterns,
   createGadgetOutputViewer,
+  shouldSuggestCharacterMode,
 } from "./output-viewer.js";
 
 describe("applyPattern", () => {
@@ -253,7 +255,7 @@ describe("createGadgetOutputViewer", () => {
 
     const result = viewer.execute({ id });
 
-    expect(result).toContain("[Showing all 3 lines]");
+    expect(result).toContain("[Mode: line | Showing all 3 lines]");
     expect(result).toContain("line 1");
     expect(result).toContain("line 2");
     expect(result).toContain("line 3");
@@ -270,7 +272,7 @@ describe("createGadgetOutputViewer", () => {
       patterns: [{ regex: "ERROR", include: true, before: 0, after: 0 }],
     });
 
-    expect(result).toContain("[Showing 1 of 3 lines]");
+    expect(result).toContain("[Mode: line | Showing 1 of 3 lines]");
     expect(result).toContain("ERROR: fail");
     expect(result).not.toContain("line 1");
     expect(result).not.toContain("line 3");
@@ -288,7 +290,7 @@ describe("createGadgetOutputViewer", () => {
       limit: "2-",
     });
 
-    expect(result).toContain("[Showing 2 of 6 lines]");
+    expect(result).toContain("[Mode: line | Showing 2 of 6 lines]");
     expect(result).toContain("TODO 1");
     expect(result).toContain("TODO 2");
     expect(result).not.toContain("TODO 3");
@@ -339,7 +341,7 @@ describe("createGadgetOutputViewer", () => {
 
       const result = viewer.execute({ id });
 
-      expect(result).toContain("[Showing all 3 lines]");
+      expect(result).toContain("[Mode: line | Showing all 3 lines]");
       expect(result).not.toContain("truncated");
       expect(result).toContain("line 1");
       expect(result).toContain("line 2");
@@ -391,5 +393,116 @@ describe("createGadgetOutputViewer", () => {
       // Should be truncated due to size even though pattern matched all lines
       expect(result).toContain("truncated due to size limit");
     });
+
+    it("should clip the first selected line instead of returning 0 of 1 lines", () => {
+      const store = new GadgetOutputStore();
+      const content = "x".repeat(200);
+      const id = store.store("Test", content);
+      const viewer = createGadgetOutputViewer(store, 50);
+
+      const result = viewer.execute({ id });
+
+      expect(result).toContain("[Mode: line | Showing 1 partial line of 1 line");
+      expect(result).not.toContain("Showing 0 of 1 lines");
+      expect(result).toContain('mode: "character", limit: "1-200"');
+    });
+  });
+
+  describe("character mode", () => {
+    it("should browse raw content by character range", () => {
+      const store = new GadgetOutputStore();
+      const id = store.store("Test", "abcdefghij");
+      const viewer = createGadgetOutputViewer(store);
+
+      const result = viewer.execute({ id, mode: "character", limit: "3-6" });
+
+      expect(result).toContain("[Mode: character | Showing chars 3-6 of 10]");
+      expect(result).toContain("cdef");
+    });
+
+    it("should default to the first fitting character chunk when no limit is provided", () => {
+      const store = new GadgetOutputStore();
+      const id = store.store("Test", "abcdefghij");
+      const viewer = createGadgetOutputViewer(store, 4);
+
+      const result = viewer.execute({ id, mode: "character" });
+
+      expect(result).toContain(
+        "[Mode: character | Showing chars 1-4 of 10 (truncated due to viewer size limit)]",
+      );
+      expect(result).toContain('[Next chunk: mode: "character", limit: "5-10"]');
+      expect(result).toContain("abcd");
+    });
+
+    it('should reject patterns in mode "character"', () => {
+      const store = new GadgetOutputStore();
+      const id = store.store("Test", "abcdefghij");
+      const viewer = createGadgetOutputViewer(store);
+
+      const result = viewer.execute({
+        id,
+        mode: "character",
+        patterns: [{ regex: "abc", include: true, before: 0, after: 0 }],
+      });
+
+      expect(result).toContain('patterns are only supported in mode "line"');
+    });
+  });
+
+  it("should suggest character mode for dense single-line output", () => {
+    const store = new GadgetOutputStore();
+    const dense = "x".repeat(5_000);
+    const id = store.store("Test", dense);
+    const viewer = createGadgetOutputViewer(store, 20_000);
+
+    const result = viewer.execute({ id });
+
+    expect(result).toContain("[Tip: This output is dense (1 line; longest line 5,000 chars).");
+    expect(result).toContain('mode: "character", limit: "1-2000"');
+  });
+});
+
+describe("applyCharacterLimit", () => {
+  it("should return the requested character range", () => {
+    expect(applyCharacterLimit("abcdefghij", "3-6", 100)).toEqual({
+      text: "cdef",
+      start: 3,
+      end: 6,
+      total: 10,
+      truncatedBySize: false,
+      hasMoreAfter: true,
+    });
+  });
+
+  it("should respect the max output budget", () => {
+    expect(applyCharacterLimit("abcdefghij", "1-10", 4)).toEqual({
+      text: "abcd",
+      start: 1,
+      end: 4,
+      total: 10,
+      truncatedBySize: true,
+      hasMoreAfter: true,
+    });
+  });
+
+  it("should preserve last-window semantics when clipping a -N request", () => {
+    expect(applyCharacterLimit("abcdefghij", "-6", 4)).toEqual({
+      text: "ghij",
+      start: 7,
+      end: 10,
+      total: 10,
+      truncatedBySize: true,
+      hasMoreAfter: false,
+    });
+  });
+});
+
+describe("shouldSuggestCharacterMode", () => {
+  it("returns true for dense single-line output", () => {
+    expect(shouldSuggestCharacterMode({ lineCount: 1, maxLineLength: 5_000 }, 76_800)).toBe(true);
+  });
+
+  it("returns false for normal multiline output", () => {
+    expect(shouldSuggestCharacterMode({ lineCount: 10, maxLineLength: 200 }, 76_800)).toBe(false);
   });
 });

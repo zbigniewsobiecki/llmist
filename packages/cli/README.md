@@ -28,6 +28,11 @@ llmist complete "Explain TypeScript generics in one paragraph"
 # Run an agent with gadgets
 llmist agent "Search for files" --gadgets ./my-gadgets/
 
+# Run an agent with an MCP server
+llmist agent \
+  --mcp-server fs="npx -- -y @modelcontextprotocol/server-filesystem /tmp" \
+  "List files in /tmp"
+
 # Interactive chat
 llmist chat
 ```
@@ -40,6 +45,8 @@ llmist chat
 | `agent <prompt>` | Run agent with gadgets |
 | `chat` | Interactive chat session |
 | `tui` | Launch terminal UI |
+| `mcp import-claude-code` | Import MCP server config from Claude Code |
+| `mcp serve` | Publish llmist gadgets and skills as an MCP server |
 
 ## Using Gadgets
 
@@ -72,6 +79,12 @@ external = ["dhalsim/BrowseWeb"]
 [display]
 markdown = true
 colors = true
+
+[mcp.servers.fs]
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+timeout-ms = 30000
 ```
 
 Use with:
@@ -175,6 +188,8 @@ llmist tui
 Full documentation at [llmist.dev/cli](https://llmist.dev/cli/getting-started/introduction/)
 
 - [Configuration Reference](https://llmist.dev/cli/configuration/toml-reference/)
+- [MCP Quick Start](https://llmist.dev/cli/getting-started/mcp/)
+- [`llmist mcp serve`](https://llmist.dev/cli/commands/mcp-serve/)
 - [Writing Gadgets](https://llmist.dev/cli/gadgets/local-gadgets/)
 - [External Gadgets](https://llmist.dev/cli/gadgets/external-gadgets/)
 - [TUI Guide](https://llmist.dev/cli/tui/overview/)

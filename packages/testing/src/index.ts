@@ -92,6 +92,15 @@ export type {
   MockResponse,
   MockStats,
 } from "./mock-types.js";
+// Skill testing utilities
+export {
+  assertSkillContains,
+  MockSkillBuilder,
+  mockSkill,
+  testSkillActivation,
+  testSkillParse,
+  validateSkill,
+} from "./skill-testing.js";
 // Stream helpers
 export {
   collectStream,

@@ -107,6 +107,51 @@ max-iterations = 15                      # Max agent loop iterations
 [subagents]
 # default-model = "inherit"              # Default model for all subagents
 
+#──────────────────────────────────────────────────────────────────────────────
+# SKILLS CONFIGURATION
+# Agent Skills (agentskills.io) provide domain expertise through
+# prompt injection, not code execution. Skills are loaded from:
+#   - ~/.llmist/skills/          (user-level)
+#   - .llmist/skills/            (project-level)
+#   - Configured sources below   (explicit)
+#
+# Each skill is a directory with a SKILL.md file.
+# In the CLI, use /skill-name to invoke a skill explicitly.
+# Run `llmist skill list` to see available skills.
+#──────────────────────────────────────────────────────────────────────────────
+# [skills]
+# sources = [
+#   "~/custom-skills",                      # Additional local directory
+#   "./project-specific-skills",            # Project-relative directory
+# ]
+#
+# [skills.overrides.gmail-read]
+# model = "flash"                           # Override model for this skill
+# enabled = true                            # Enable/disable specific skills
+
+#──────────────────────────────────────────────────────────────────────────────
+# MODEL CONTEXT PROTOCOL (MCP)
+# Attach external MCP servers to agent runs. MCP tools become llmist gadgets,
+# and MCP prompts become slash-invocable skills.
+#
+# Stdio commands are allowlisted by default. Set trust = true only for commands
+# you have reviewed and intentionally trust.
+#──────────────────────────────────────────────────────────────────────────────
+# [mcp.servers.filesystem]
+# transport = "stdio"
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+# timeout-ms = 30000                      # Per-operation timeout; 0 disables
+# trust = false                           # Keep allowlist protection enabled
+#
+# [mcp.servers.remote]
+# transport = "http"
+# url = "https://my-mcp.example.com/mcp"
+# timeout-ms = 30000
+#
+# [mcp.servers.remote.headers]
+# Authorization = "Bearer token"
+
 [subagents.BrowseWeb]
 # model = "inherit"                      # Use parent agent's model
 # maxIterations = 15                     # Max browsing iterations
@@ -217,7 +262,8 @@ Be extremely concise. Use bullet points. No fluff.
 #──────────────────────────────────────────────────────────────────────────────
 # PROFILES (base configurations for inheritance)
 # These aren't commands themselves, but provide shared settings for commands.
-# Any section becomes a CLI command unless it's [global], [complete], or [agent].
+# Any non-reserved section becomes a CLI command. Reserved sections include
+# [global], [complete], [agent], [prompts], [skills], [subagents], and [mcp].
 #──────────────────────────────────────────────────────────────────────────────
 
 # Read-only profile with built-in filesystem gadgets
@@ -268,7 +314,7 @@ max-iterations = 5                        # Override: fewer iterations for focus
 
 #──────────────────────────────────────────────────────────────────────────────
 # CUSTOM COMMANDS
-# Any section other than [global], [complete], [agent] creates a new CLI command.
+# Any non-reserved section creates a new CLI command.
 # Custom commands appear in `llmist --help` and can be run like built-in commands.
 #──────────────────────────────────────────────────────────────────────────────
 

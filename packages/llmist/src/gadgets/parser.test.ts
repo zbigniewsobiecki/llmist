@@ -1140,4 +1140,80 @@ test`),
       expect(finalEvents[0].call.dependencies).toEqual(["dep_1", "dep_2"]);
     }
   });
+
+  // LLM resilience: colons used as dependency separators instead of commas
+  describe("colon-separated dependencies (LLM format resilience)", () => {
+    it("treats extra colon-separated parts as additional dependencies", () => {
+      const input = `${GADGET_START_PREFIX}RunCommand:create_folder:create_folder:parent_folder
+${GADGET_ARG_PREFIX}cmd
+mkdir
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "RunCommand",
+          invocationId: "create_folder",
+          dependencies: ["create_folder", "parent_folder"],
+        },
+      });
+    });
+
+    it("handles 5+ colon-separated parts as dependencies", () => {
+      const input = `${GADGET_START_PREFIX}Gadget:my_id:dep1:dep2:dep3:dep4
+${GADGET_ARG_PREFIX}x
+1
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "Gadget",
+          invocationId: "my_id",
+          dependencies: ["dep1", "dep2", "dep3", "dep4"],
+        },
+      });
+    });
+
+    it("handles mix of colons and commas in deps portion", () => {
+      const input = `${GADGET_START_PREFIX}Gadget:my_id:dep1,dep2:dep3
+${GADGET_ARG_PREFIX}x
+1
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "Gadget",
+          invocationId: "my_id",
+          dependencies: ["dep1", "dep2", "dep3"],
+        },
+      });
+    });
+
+    it("deduplicates repeated dependency IDs", () => {
+      const input = `${GADGET_START_PREFIX}Gadget:my_id:dep1:dep1:dep2
+${GADGET_ARG_PREFIX}x
+1
+${GADGET_END_PREFIX}`;
+
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(events[0]).toMatchObject({
+        type: "gadget_call",
+        call: {
+          gadgetName: "Gadget",
+          invocationId: "my_id",
+          dependencies: ["dep1", "dep2"],
+        },
+      });
+    });
+  });
 });

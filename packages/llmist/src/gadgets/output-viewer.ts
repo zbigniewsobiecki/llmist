@@ -1,12 +1,13 @@
 /**
  * GadgetOutputViewer - Browse stored outputs from gadgets that exceeded the size limit.
  *
- * When a gadget returns too much data, the output is stored and can be browsed
- * using this gadget with grep-like pattern filtering and line limiting.
+ * Supports two access patterns:
+ * - `mode: "line"`: grep-like filtering and line pagination.
+ * - `mode: "character"`: raw character windows for dense or single-line output.
  */
 
 import { z } from "zod";
-import type { GadgetOutputStore } from "../agent/gadget-output-store.js";
+import type { GadgetOutputStore, StoredOutput } from "../agent/gadget-output-store.js";
 import { createGadget } from "./create-gadget.js";
 
 /**
@@ -23,6 +24,29 @@ interface PatternFilter {
   after: number;
 }
 
+type LimitWindow =
+  | { kind: "first"; count: number }
+  | { kind: "last"; count: number }
+  | { kind: "range"; start: number; end: number };
+
+interface CharacterWindow {
+  text: string;
+  start: number;
+  end: number;
+  total: number;
+  truncatedBySize: boolean;
+  hasMoreAfter: boolean;
+}
+
+/** Default max output in characters (~19k tokens at 4 chars/token) */
+const DEFAULT_MAX_OUTPUT_CHARS = 76_800;
+const CHARACTER_HINT_WINDOW = 2_000;
+const DENSE_LINE_THRESHOLD = 4_000;
+
+function pluralize(count: number, singular: string, plural: string = `${singular}s`): string {
+  return count === 1 ? singular : plural;
+}
+
 /**
  * Apply a single pattern filter to lines.
  *
@@ -33,17 +57,13 @@ function applyPattern(lines: string[], pattern: PatternFilter): string[] {
   const regex = new RegExp(pattern.regex);
 
   if (!pattern.include) {
-    // Exclude mode: remove matching lines
     return lines.filter((line) => !regex.test(line));
   }
 
-  // Include mode: keep matching lines with context
   const matchIndices = new Set<number>();
 
-  // Find all matching line indices
   for (let i = 0; i < lines.length; i++) {
     if (regex.test(lines[i])) {
-      // Add the matching line and its context
       const start = Math.max(0, i - pattern.before);
       const end = Math.min(lines.length - 1, i + pattern.after);
       for (let j = start; j <= end; j++) {
@@ -52,7 +72,6 @@ function applyPattern(lines: string[], pattern: PatternFilter): string[] {
     }
   }
 
-  // Return lines at matching indices (preserving order)
   return lines.filter((_, index) => matchIndices.has(index));
 }
 
@@ -68,45 +87,142 @@ function applyPatterns(lines: string[], patterns: PatternFilter[]): string[] {
 }
 
 /**
- * Parse and apply a line limit string.
+ * Parse a limit string used by both line mode and character mode.
  *
  * Formats:
- * - "100-" → first 100 lines (slice 0 to 100)
- * - "-25" → last 25 lines (slice -25)
- * - "50-100" → lines 50-100 (1-indexed, so slice 49 to 100)
+ * - "100-" → first 100 units
+ * - "-25" → last 25 units
+ * - "50-100" → units 50-100 (1-indexed, inclusive)
  */
-function applyLineLimit(lines: string[], limit: string): string[] {
+function parseLimitWindow(limit: string): LimitWindow | null {
   const trimmed = limit.trim();
 
-  // Format: "100-" (first N lines)
   if (trimmed.endsWith("-") && !trimmed.startsWith("-")) {
     const n = parseInt(trimmed.slice(0, -1), 10);
-    if (!isNaN(n) && n > 0) {
-      return lines.slice(0, n);
+    if (!Number.isNaN(n) && n > 0) {
+      return { kind: "first", count: n };
     }
   }
 
-  // Format: "-25" (last N lines)
   if (trimmed.startsWith("-") && !trimmed.includes("-", 1)) {
     const n = parseInt(trimmed, 10);
-    if (!isNaN(n) && n < 0) {
-      return lines.slice(n);
+    if (!Number.isNaN(n) && n < 0) {
+      return { kind: "last", count: Math.abs(n) };
     }
   }
 
-  // Format: "50-100" (range, 1-indexed)
   const rangeMatch = trimmed.match(/^(\d+)-(\d+)$/);
   if (rangeMatch) {
     const start = parseInt(rangeMatch[1], 10);
     const end = parseInt(rangeMatch[2], 10);
-    if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
-      // Convert from 1-indexed to 0-indexed
-      return lines.slice(start - 1, end);
+    if (!Number.isNaN(start) && !Number.isNaN(end) && start > 0 && end >= start) {
+      return { kind: "range", start, end };
     }
   }
 
-  // Invalid format - return unchanged
-  return lines;
+  return null;
+}
+
+/**
+ * Apply line pagination using the parsed limit window.
+ */
+function applyLineLimit(lines: string[], limit: string): string[] {
+  const window = parseLimitWindow(limit);
+  if (!window) return lines;
+
+  switch (window.kind) {
+    case "first":
+      return lines.slice(0, window.count);
+    case "last":
+      return lines.slice(-window.count);
+    case "range":
+      return lines.slice(window.start - 1, window.end);
+  }
+}
+
+/**
+ * Apply character pagination over the raw stored string.
+ */
+function applyCharacterLimit(
+  content: string,
+  limit: string | undefined,
+  maxOutputChars: number,
+): CharacterWindow {
+  const total = content.length;
+  if (total === 0) {
+    return { text: "", start: 0, end: 0, total: 0, truncatedBySize: false, hasMoreAfter: false };
+  }
+
+  let startIndex = 0;
+  let endExclusive = total;
+  const window = limit ? parseLimitWindow(limit) : null;
+
+  if (window) {
+    switch (window.kind) {
+      case "first":
+        endExclusive = Math.min(window.count, total);
+        break;
+      case "last":
+        startIndex = Math.max(0, total - window.count);
+        break;
+      case "range":
+        startIndex = Math.min(window.start - 1, total);
+        endExclusive = Math.min(window.end, total);
+        break;
+    }
+  }
+
+  let text = content.slice(startIndex, endExclusive);
+  let truncatedBySize = false;
+  if (text.length > maxOutputChars) {
+    text = window?.kind === "last" ? text.slice(-maxOutputChars) : text.slice(0, maxOutputChars);
+    if (window?.kind === "last") {
+      startIndex = endExclusive - text.length;
+    }
+    truncatedBySize = true;
+  }
+
+  return {
+    text,
+    start: text.length === 0 ? 0 : startIndex + 1,
+    end: text.length === 0 ? 0 : startIndex + text.length,
+    total,
+    truncatedBySize,
+    hasMoreAfter: startIndex + text.length < total,
+  };
+}
+
+function buildCharacterRangeHint(start: number, total: number): string | null {
+  if (total <= 0 || start > total) return null;
+  const end = Math.min(total, start + CHARACTER_HINT_WINDOW - 1);
+  return `${start}-${end}`;
+}
+
+function buildCharacterModeSuggestion(
+  stored: Pick<StoredOutput, "charCount" | "lineCount" | "maxLineLength">,
+  opts: { removePatterns?: boolean; start?: number } = {},
+): string {
+  const hint = buildCharacterRangeHint(opts.start ?? 1, stored.charCount);
+  const action = opts.removePatterns ? "Remove patterns and then try" : "Try";
+  const lineLabel = pluralize(stored.lineCount, "line");
+
+  return (
+    `This output is dense (${stored.lineCount.toLocaleString()} ${lineLabel}; ` +
+    `longest line ${stored.maxLineLength.toLocaleString()} chars). ` +
+    `${action} mode: "character"` +
+    (hint ? `, limit: "${hint}"` : "") +
+    "."
+  );
+}
+
+function shouldSuggestCharacterMode(
+  stored: Pick<StoredOutput, "lineCount" | "maxLineLength">,
+  maxOutputChars: number = DEFAULT_MAX_OUTPUT_CHARS,
+): boolean {
+  return (
+    stored.lineCount <= 3 &&
+    (stored.maxLineLength > maxOutputChars || stored.maxLineLength >= DENSE_LINE_THRESHOLD)
+  );
 }
 
 /**
@@ -132,25 +248,12 @@ const patternSchema = z.object({
     .describe("Context lines after each match (like grep -A)"),
 });
 
-/** Default max output in characters (~19k tokens at 4 chars/token) */
-const DEFAULT_MAX_OUTPUT_CHARS = 76_800;
-
 /**
  * Create a GadgetOutputViewer gadget instance bound to a specific output store.
- *
- * This is a factory function because the gadget needs access to the output store,
- * which is created per-agent-run.
  *
  * @param store - The GadgetOutputStore to read outputs from
  * @param maxOutputChars - Maximum characters to return (default: 76,800 = ~19k tokens)
  * @returns A GadgetOutputViewer gadget instance
- *
- * @example
- * ```typescript
- * const store = new GadgetOutputStore();
- * const viewer = createGadgetOutputViewer(store, 76_800);
- * registry.register("GadgetOutputViewer", viewer);
- * ```
  */
 export function createGadgetOutputViewer(
   store: GadgetOutputStore,
@@ -160,66 +263,102 @@ export function createGadgetOutputViewer(
     name: "GadgetOutputViewer",
     description:
       "View stored output from gadgets that returned too much data. " +
-      "Use patterns to filter lines (like grep) and limit to control output size. " +
-      "Patterns are applied first in order, then the limit is applied to the result.",
+      'Use mode "line" for grep-like filtering and mode "character" for raw chunked browsing ' +
+      "when the output is dense or effectively single-line. Patterns work only in line mode.",
     schema: z.object({
       id: z.string().describe("ID of the stored output (from the truncation message)"),
+      mode: z
+        .enum(["line", "character"])
+        .default("line")
+        .describe(
+          'Browse by "line" (supports patterns) or by "character" (raw windows for dense output).',
+        ),
       patterns: z
         .array(patternSchema)
         .optional()
         .describe(
-          "Filter patterns applied in order (like piping through grep). " +
-            "Each pattern can include or exclude lines with optional before/after context.",
+          "Line-mode filter patterns applied in order (like piping through grep). " +
+            'Not supported in mode "character".',
         ),
       limit: z
         .string()
         .optional()
         .describe(
-          "Line range to return after filtering. " +
-            "Formats: '100-' (first 100), '-25' (last 25), '50-100' (lines 50-100)",
+          'Pagination window. In mode "line" it is a line range; in mode "character" it is ' +
+            `a character range. Formats: "100-" (first 100), "-25" (last 25), ` +
+            '"50-100" (inclusive range).',
         ),
     }),
     examples: [
       {
         comment: "View first 50 lines of stored output",
-        params: { id: "Search_abc12345", limit: "50-" },
+        params: { id: "Search_abc12345", mode: "line", limit: "50-" },
       },
       {
         comment: "Filter for error lines with context",
         params: {
           id: "Search_abc12345",
+          mode: "line",
           patterns: [{ regex: "error|Error|ERROR", include: true, before: 2, after: 5 }],
         },
       },
       {
-        comment: "Exclude blank lines, then show first 100",
+        comment: "Exclude blank lines, then show first 100 lines",
         params: {
           id: "Search_abc12345",
+          mode: "line",
           patterns: [{ regex: "^\\s*$", include: false, before: 0, after: 0 }],
           limit: "100-",
         },
       },
       {
-        comment: "Chain filters: find TODOs, exclude tests, limit to 50 lines",
+        comment: "Browse the raw output by character window when line mode is too dense",
         params: {
           id: "Search_abc12345",
-          patterns: [
-            { regex: "TODO", include: true, before: 1, after: 1 },
-            { regex: "test|spec", include: false, before: 0, after: 0 },
-          ],
-          limit: "50-",
+          mode: "character",
+          limit: "1-2000",
         },
       },
     ],
-    execute: ({ id, patterns, limit }) => {
+    execute: ({ id, mode, patterns, limit }) => {
       const stored = store.get(id);
       if (!stored) {
         return `Error: No stored output with id "${id}". Available IDs: ${store.getIds().join(", ") || "(none)"}`;
       }
 
+      const suggestCharacterMode = shouldSuggestCharacterMode(stored, maxOutputChars);
+
+      if (mode === "character") {
+        if (patterns && patterns.length > 0) {
+          return (
+            'Error: patterns are only supported in mode "line". ' +
+            'Remove patterns or switch back to mode: "line".'
+          );
+        }
+
+        const window = applyCharacterLimit(stored.content, limit, maxOutputChars);
+        if (window.total === 0) {
+          return "[Mode: character | Output is empty]";
+        }
+
+        const header = [
+          `[Mode: character | Showing chars ${window.start.toLocaleString()}-${window.end.toLocaleString()} of ${window.total.toLocaleString()}${
+            window.truncatedBySize ? " (truncated due to viewer size limit)" : ""
+          }]`,
+        ];
+
+        if (window.hasMoreAfter) {
+          const nextRange = buildCharacterRangeHint(window.end + 1, window.total);
+          if (nextRange) {
+            header.push(`[Next chunk: mode: "character", limit: "${nextRange}"]`);
+          }
+        }
+
+        return `${header.join("\n")}\n${window.text}`;
+      }
+
       let lines = stored.content.split("\n");
 
-      // Step 1: Apply patterns in order (like piping through grep)
       if (patterns && patterns.length > 0) {
         lines = applyPatterns(
           lines,
@@ -232,54 +371,87 @@ export function createGadgetOutputViewer(
         );
       }
 
-      // Step 2: Apply line limit AFTER all patterns
       if (limit) {
         lines = applyLineLimit(lines, limit);
       }
 
-      // Step 3: Build output string
-      let output = lines.join("\n");
       const totalLines = stored.lineCount;
+      const totalLineLabel = pluralize(totalLines, "line");
       const returnedLines = lines.length;
 
       if (returnedLines === 0) {
-        return `No lines matched the filters. Original output had ${totalLines} lines.`;
+        const base = `No lines matched the filters. Original output had ${totalLines.toLocaleString()} lines.`;
+        if (!suggestCharacterMode) return base;
+        return `${base} ${buildCharacterModeSuggestion(stored, {
+          removePatterns: Boolean(patterns && patterns.length > 0),
+        })}`;
       }
 
-      // Step 4: Apply output size limit to prevent context explosion
+      let output = lines.join("\n");
       let truncatedBySize = false;
       let linesIncluded = returnedLines;
+      let clippedFirstLine = false;
+
       if (output.length > maxOutputChars) {
         truncatedBySize = true;
         let truncatedOutput = "";
         linesIncluded = 0;
 
         for (const line of lines) {
-          if (truncatedOutput.length + line.length + 1 > maxOutputChars) break;
-          truncatedOutput += line + "\n";
+          const addition = linesIncluded === 0 ? line : `\n${line}`;
+          if (truncatedOutput.length + addition.length > maxOutputChars) break;
+          truncatedOutput += addition;
           linesIncluded++;
+        }
+
+        if (linesIncluded === 0) {
+          clippedFirstLine = true;
+          linesIncluded = 1;
+          truncatedOutput = lines[0].slice(0, maxOutputChars);
         }
 
         output = truncatedOutput;
       }
 
-      // Build header with appropriate messaging
       let header: string;
-      if (truncatedBySize) {
+      if (clippedFirstLine) {
+        header =
+          `[Mode: line | Showing 1 partial line of ${totalLines.toLocaleString()} ${totalLineLabel} ` +
+          "(the selected line exceeds the viewer size limit)]\n";
+      } else if (truncatedBySize) {
         const remainingLines = returnedLines - linesIncluded;
         header =
-          `[Showing ${linesIncluded} of ${totalLines} lines (truncated due to size limit)]\n` +
-          `[... ${remainingLines.toLocaleString()} more lines. Use limit parameter to paginate, e.g., limit: "${linesIncluded + 1}-${linesIncluded + 200}"]\n`;
+          `[Mode: line | Showing ${linesIncluded.toLocaleString()} of ${totalLines.toLocaleString()} ${totalLineLabel} ` +
+          "(truncated due to size limit)]\n" +
+          `[... ${remainingLines.toLocaleString()} more ${pluralize(remainingLines, "line")}. ` +
+          `Use limit parameter to paginate, e.g., limit: "${linesIncluded + 1}-${linesIncluded + 200}"]\n`;
       } else if (returnedLines < totalLines) {
-        header = `[Showing ${returnedLines} of ${totalLines} lines]\n`;
+        header =
+          `[Mode: line | Showing ${returnedLines.toLocaleString()} ` +
+          `of ${totalLines.toLocaleString()} ${totalLineLabel}]\n`;
       } else {
-        header = `[Showing all ${totalLines} lines]\n`;
+        header = `[Mode: line | Showing all ${totalLines.toLocaleString()} ${totalLineLabel}]\n`;
       }
 
-      return header + output;
+      const footer =
+        suggestCharacterMode || clippedFirstLine
+          ? `\n[Tip: ${buildCharacterModeSuggestion(stored, {
+              removePatterns: Boolean(patterns && patterns.length > 0),
+            })}]`
+          : "";
+
+      return header + output + footer;
     },
   });
 }
 
 // Export helpers for testing
-export { applyPattern, applyPatterns, applyLineLimit };
+export {
+  applyCharacterLimit,
+  applyLineLimit,
+  applyPattern,
+  applyPatterns,
+  buildCharacterModeSuggestion,
+  parseLimitWindow,
+  shouldSuggestCharacterMode,
+};

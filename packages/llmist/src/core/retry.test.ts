@@ -3,6 +3,7 @@ import {
   DEFAULT_RETRY_CONFIG,
   extractRetryAfterMs,
   formatLLMError,
+  isLikelyContextOverflow,
   isRetryableError,
   parseRetryAfterHeader,
   type RetryConfig,
@@ -631,6 +632,156 @@ describe("retry configuration", () => {
       expect(formatLLMError(new Error("JSON error injected into SSE stream"))).toBe(
         "Stream interrupted - the API returned corrupted or incomplete data",
       );
+    });
+  });
+
+  describe("isLikelyContextOverflow", () => {
+    // Tier 1: Explicit overflow keywords (match regardless of status code)
+
+    it("should return true for explicit context length errors", () => {
+      expect(isLikelyContextOverflow(new Error("context length exceeded"))).toBe(true);
+      expect(isLikelyContextOverflow(new Error("maximum context length"))).toBe(true);
+    });
+
+    it("should return true for payload too large errors", () => {
+      expect(isLikelyContextOverflow(new Error("payload too large"))).toBe(true);
+      expect(isLikelyContextOverflow(new Error("request entity too large"))).toBe(true);
+      expect(isLikelyContextOverflow(new Error("request too large"))).toBe(true);
+    });
+
+    it("should return true for token limit errors", () => {
+      expect(isLikelyContextOverflow(new Error("token limit exceeded"))).toBe(true);
+      expect(isLikelyContextOverflow(new Error("exceeds maximum token limit"))).toBe(true);
+    });
+
+    it("should return true for content size exceeded errors", () => {
+      expect(isLikelyContextOverflow(new Error("content size exceeded"))).toBe(true);
+      expect(isLikelyContextOverflow(new Error("content too large"))).toBe(true);
+    });
+
+    it("should return true for explicit overflow keywords even with non-400 status", () => {
+      const error = new Error("context length exceeded") as Error & { status: number };
+      error.status = 422;
+      expect(isLikelyContextOverflow(error)).toBe(true);
+    });
+
+    // Tier 2: Generic 400 errors (assumed overflow when no exclusion keyword matches)
+
+    it("should return true for generic 400 with numeric status code", () => {
+      const error = new Error("Provider returned error") as Error & { status: number };
+      error.status = 400;
+      expect(isLikelyContextOverflow(error)).toBe(true);
+    });
+
+    it("should return true for generic 400 via string code property", () => {
+      const error = new Error("Provider returned error") as Error & { code: string };
+      error.code = "400";
+      expect(isLikelyContextOverflow(error)).toBe(true);
+    });
+
+    it("should return true for 400 in message text", () => {
+      expect(isLikelyContextOverflow(new Error("400 Bad Request"))).toBe(true);
+      expect(isLikelyContextOverflow(new Error("400 Provider returned error"))).toBe(true);
+    });
+
+    it("should return true for enhanced OpenRouter 400 message", () => {
+      // This is the message our OpenRouter enhanceError() produces
+      const enhanced = new Error(
+        "OpenRouter: Provider returned error (400). This may indicate the request exceeded " +
+          "the model's limits, or a model-specific rejection.\n" +
+          "Original error: 400 Provider returned error",
+      );
+      Object.assign(enhanced, { status: 400 });
+      expect(isLikelyContextOverflow(enhanced)).toBe(true);
+    });
+
+    // Negative: 400 errors with exclusion keywords
+
+    it("should return false for authentication errors with status 400", () => {
+      const error = new Error("authentication failed") as Error & { status: number };
+      error.status = 400;
+      expect(isLikelyContextOverflow(error)).toBe(false);
+    });
+
+    it("should return false for 400 with unauthorized message", () => {
+      expect(isLikelyContextOverflow(new Error("400 unauthorized request"))).toBe(false);
+    });
+
+    it("should return false for content policy errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 content policy violation"))).toBe(false);
+    });
+
+    it("should return false for safety filter errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 safety filter triggered"))).toBe(false);
+    });
+
+    it("should return false for invalid API key errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 invalid api key"))).toBe(false);
+    });
+
+    it("should return false for invalid model errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 invalid model specified"))).toBe(false);
+    });
+
+    it("should return false for invalid parameter errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 invalid parameter: temperature"))).toBe(false);
+    });
+
+    it("should return false for unsupported feature errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 unsupported format"))).toBe(false);
+      expect(isLikelyContextOverflow(new Error("400 feature not supported"))).toBe(false);
+    });
+
+    it("should return false for missing required field errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 missing required field: model"))).toBe(false);
+    });
+
+    it("should return false for malformed request errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 malformed request body"))).toBe(false);
+    });
+
+    it("should return false for not found errors via 400", () => {
+      expect(isLikelyContextOverflow(new Error("400 model not found"))).toBe(false);
+    });
+
+    it("should return false for permission errors", () => {
+      expect(isLikelyContextOverflow(new Error("400 permission denied"))).toBe(false);
+    });
+
+    // Negative: Non-400 errors
+
+    it("should return false for 401 errors", () => {
+      const error = new Error("Unauthorized") as Error & { status: number };
+      error.status = 401;
+      expect(isLikelyContextOverflow(error)).toBe(false);
+    });
+
+    it("should return false for 403 errors", () => {
+      const error = new Error("Forbidden") as Error & { status: number };
+      error.status = 403;
+      expect(isLikelyContextOverflow(error)).toBe(false);
+    });
+
+    it("should return false for 429 errors", () => {
+      const error = new Error("Rate limited") as Error & { status: number };
+      error.status = 429;
+      expect(isLikelyContextOverflow(error)).toBe(false);
+    });
+
+    it("should return false for 500 errors", () => {
+      const error = new Error("Internal server error") as Error & { status: number };
+      error.status = 500;
+      expect(isLikelyContextOverflow(error)).toBe(false);
+    });
+
+    it("should return false for errors without any 400 indicator", () => {
+      expect(isLikelyContextOverflow(new Error("Some random error"))).toBe(false);
+      expect(isLikelyContextOverflow(new Error("Unexpected issue"))).toBe(false);
+    });
+
+    it("should return false for bare message '400' with no other text", () => {
+      // Edge case: just "400" with no provider details — still a generic 400
+      expect(isLikelyContextOverflow(new Error("400"))).toBe(true);
     });
   });
 });

@@ -88,6 +88,31 @@ describe("config", () => {
       expect(result.agent?.["builtin-interaction"]).toBe(false);
     });
 
+    it("should validate mcp section", () => {
+      const raw = {
+        mcp: {
+          servers: {
+            fs: {
+              transport: "stdio",
+              command: "node",
+              args: ["server.js"],
+              "timeout-ms": 30000,
+            },
+            api: {
+              transport: "http",
+              url: "https://example.com/mcp",
+              headers: { Authorization: "Bearer xyz" },
+            },
+          },
+        },
+      };
+
+      const result = validateConfig(raw);
+
+      expect(result.mcp?.servers?.fs?.transport).toBe("stdio");
+      expect(result.mcp?.servers?.api?.transport).toBe("http");
+    });
+
     it("should validate custom command section with type=agent", () => {
       const raw = {
         "code-review": {
@@ -196,6 +221,21 @@ describe("config", () => {
 
         expect(() => validateConfig(raw)).toThrow(ConfigError);
         expect(() => validateConfig(raw)).toThrow("[my-command].unknown-key is not a valid option");
+      });
+
+      it("should reject invalid mcp section", () => {
+        const raw = {
+          mcp: {
+            servers: {
+              fs: {
+                transport: "stdio",
+              },
+            },
+          },
+        };
+
+        expect(() => validateConfig(raw)).toThrow(ConfigError);
+        expect(() => validateConfig(raw)).toThrow("[mcp.servers.fs].command must be a string");
       });
 
       it("should reject invalid model type", () => {
@@ -1204,6 +1244,41 @@ describe("config", () => {
       expect(result).not.toContain("prompts");
       expect(result).not.toContain("complete");
       expect(result).not.toContain("agent");
+    });
+  });
+
+  describe("getCustomCommandNames (additional coverage)", () => {
+    it("filters out all reserved section names", () => {
+      const config: CLIConfig = {
+        global: { "log-level": "debug" },
+        complete: { model: "test" },
+        agent: { model: "test" },
+        image: { model: "test" },
+        speech: { model: "test" },
+        prompts: { greeting: "Hello" },
+        subagents: {},
+        "rate-limits": {},
+        retry: {},
+        mcp: { servers: {} },
+        "my-custom-cmd": { model: "test" },
+      };
+
+      const result = getCustomCommandNames(config);
+      expect(result).toEqual(["my-custom-cmd"]);
+    });
+
+    it("returns names of all custom commands when no reserved keys present", () => {
+      const config: CLIConfig = {
+        "cmd-one": { model: "test" },
+        "cmd-two": { model: "other" },
+        "cmd-three": { model: "third" },
+      };
+
+      const result = getCustomCommandNames(config);
+      expect(result).toHaveLength(3);
+      expect(result).toContain("cmd-one");
+      expect(result).toContain("cmd-two");
+      expect(result).toContain("cmd-three");
     });
   });
 

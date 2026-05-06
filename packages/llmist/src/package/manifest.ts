@@ -141,6 +141,13 @@ export interface LLMistPackageManifest {
    * Session factory metadata.
    */
   session?: SessionManifestEntry;
+
+  /**
+   * Skills directory relative to package root.
+   * Contains subdirectories with SKILL.md files.
+   * @example "./skills"
+   */
+  skills?: string;
 }
 
 /**

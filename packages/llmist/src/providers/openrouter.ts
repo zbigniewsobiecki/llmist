@@ -126,8 +126,10 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
   }
 
   /**
-   * Override buildApiRequest to inject reasoning parameters.
-   * OpenRouter normalizes reasoning into the standard OpenAI format.
+   * Override buildApiRequest to inject reasoning parameters and cache_control breakpoints.
+   * OpenRouter normalizes reasoning into the standard OpenAI format,
+   * and supports cache_control on message content blocks for both
+   * Anthropic Claude and Google Gemini models.
    */
   protected buildApiRequest(
     options: LLMGenerationOptions,
@@ -145,7 +147,65 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
       };
     }
 
+    // Inject cache_control breakpoints when caching is enabled (default: enabled).
+    // OpenRouter supports cache_control on message content blocks for both
+    // Anthropic Claude and Google Gemini models, using the same format.
+    const cachingEnabled = options.caching?.enabled !== false;
+    if (cachingEnabled) {
+      this.injectCacheBreakpoints(request);
+    }
+
     return request;
+  }
+
+  /** Minimal shape for messages in the already-built OpenAI-compatible request. */
+  private static readonly CACHE_CONTROL = { type: "ephemeral" as const };
+
+  /**
+   * Add cache_control breakpoints to the last system message and last user message.
+   * This enables OpenRouter's prompt caching for supported providers (Anthropic, Gemini).
+   *
+   * Operates on the already-built request object. We cast through `unknown` because
+   * OpenAI's `ChatCompletionMessageParam` union is too narrow to assign content arrays
+   * with the non-standard `cache_control` property.
+   */
+  private injectCacheBreakpoints(
+    request: Parameters<OpenAI["chat"]["completions"]["create"]>[0],
+  ): void {
+    type RequestMessage = { role: string; content: string | Array<Record<string, unknown>> };
+    const msgs = request.messages as unknown as RequestMessage[];
+
+    let lastSystemIdx = -1;
+    let lastUserIdx = -1;
+    for (let i = 0; i < msgs.length; i++) {
+      if (msgs[i].role === "system") lastSystemIdx = i;
+      if (msgs[i].role === "user") lastUserIdx = i;
+    }
+
+    if (lastSystemIdx >= 0) {
+      msgs[lastSystemIdx].content = this.withCacheControl(msgs[lastSystemIdx].content);
+    }
+    if (lastUserIdx >= 0) {
+      msgs[lastUserIdx].content = this.withCacheControl(msgs[lastUserIdx].content);
+    }
+  }
+
+  /**
+   * Return a new content array with cache_control on the last block.
+   * String content is promoted to a single-element text block array.
+   */
+  private withCacheControl(
+    content: string | Array<Record<string, unknown>>,
+  ): Array<Record<string, unknown>> {
+    if (typeof content === "string") {
+      return [{ type: "text", text: content, cache_control: OpenRouterProvider.CACHE_CONTROL }];
+    }
+
+    return content.map((block, i) =>
+      i === content.length - 1
+        ? { ...block, cache_control: OpenRouterProvider.CACHE_CONTROL }
+        : block,
+    );
   }
 
   /**
@@ -239,11 +299,30 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
       );
     }
 
+    // 400: Bad request (may indicate context overflow, model rejection, or invalid params).
+    // Must be checked BEFORE 401 — the 401 handler's broad "invalid" check would
+    // otherwise intercept 400 errors like "400 invalid request payload".
+    if (message.includes("400") || message.includes("bad request")) {
+      const enhanced = new Error(
+        `OpenRouter: Provider returned error (400). This may indicate the request exceeded ` +
+          `the model's limits, or a model-specific rejection.\n` +
+          `Original error: ${error.message}`,
+      );
+      // Preserve status code for downstream detection (e.g., isLikelyContextOverflow)
+      const originalStatus = (error as unknown as { status?: number }).status;
+      Object.assign(enhanced, {
+        status: typeof originalStatus === "number" ? originalStatus : 400,
+      });
+      return enhanced;
+    }
+
     // 401: Authentication failed
     if (
       message.includes("401") ||
       message.includes("unauthorized") ||
-      message.includes("invalid")
+      message.includes("invalid api key") ||
+      message.includes("invalid key") ||
+      message.includes("invalid_api_key")
     ) {
       return new Error(
         `OpenRouter: Authentication failed. Check that OPENROUTER_API_KEY is set correctly.\n` +

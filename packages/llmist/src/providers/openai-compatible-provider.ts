@@ -30,6 +30,7 @@ import type {
   ChatCompletionContentPart,
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
+import { get_encoding } from "tiktoken";
 import type { ContentPart, ImageContentPart } from "../core/input-content.js";
 import type { LLMMessage, MessageContent } from "../core/messages.js";
 import { extractMessageText, normalizeMessageContent } from "../core/messages.js";
@@ -327,8 +328,9 @@ export abstract class OpenAICompatibleProvider<
       const finishReason = chunk.choices.find((choice) => choice.finish_reason)?.finish_reason;
 
       // Extract token usage if available (typically in the final chunk)
-      // Also extract reasoning tokens from completion_tokens_details if present
+      // Includes cached input tokens and reasoning tokens from nested details
       type CompatUsageDetails = {
+        prompt_tokens_details?: { cached_tokens?: number };
         completion_tokens_details?: { reasoning_tokens?: number };
       };
       const usageDetails = chunk.usage as (typeof chunk.usage & CompatUsageDetails) | undefined;
@@ -337,7 +339,7 @@ export abstract class OpenAICompatibleProvider<
             inputTokens: chunk.usage.prompt_tokens,
             outputTokens: chunk.usage.completion_tokens,
             totalTokens: chunk.usage.total_tokens,
-            cachedInputTokens: 0,
+            cachedInputTokens: usageDetails?.prompt_tokens_details?.cached_tokens ?? 0,
             reasoningTokens: usageDetails?.completion_tokens_details?.reasoning_tokens,
           }
         : undefined;
@@ -349,15 +351,43 @@ export abstract class OpenAICompatibleProvider<
   }
 
   /**
-   * Count tokens using character-based fallback estimation.
-   * Most meta-providers don't have a native token counting API.
+   * Count tokens using tiktoken o200k_base encoding.
+   *
+   * While o200k_base isn't model-exact for non-OpenAI models routed through
+   * meta-providers like OpenRouter, BPE tokenizers with 200K vocab produce
+   * counts within 10-20% of true values — far better than the character-based
+   * fallback which can be off by 250% for JSON/code-heavy content.
+   *
+   * Falls back to character-based estimation if tiktoken fails.
    */
   async countTokens(
     messages: LLMMessage[],
     descriptor: ModelDescriptor,
     _spec?: ModelSpec,
   ): Promise<number> {
+    if (!messages || messages.length === 0) return 0;
+
     try {
+      const encoding = get_encoding("o200k_base");
+      try {
+        let tokenCount = 0;
+        for (const msg of messages) {
+          const parts = normalizeMessageContent(msg.content);
+          for (const part of parts) {
+            if (part.type === "text") {
+              tokenCount += encoding.encode(part.text).length;
+            }
+          }
+        }
+        return tokenCount;
+      } finally {
+        encoding.free();
+      }
+    } catch (error) {
+      console.warn(
+        `Token counting with tiktoken failed for ${descriptor.name}, using fallback estimation:`,
+        error,
+      );
       let totalChars = 0;
       for (const msg of messages) {
         const parts = normalizeMessageContent(msg.content);
@@ -367,11 +397,7 @@ export abstract class OpenAICompatibleProvider<
           }
         }
       }
-
       return Math.ceil(totalChars / FALLBACK_CHARS_PER_TOKEN);
-    } catch (error) {
-      console.warn(`Token counting failed for ${descriptor.name}, using zero estimate:`, error);
-      return 0;
     }
   }
 }

@@ -14,6 +14,7 @@ import { Box, type ScrollableBox } from "@unblessed/node";
 import type { ExecutionTree } from "llmist";
 import {
   formatBlockContent,
+  formatForBlock,
   formatGadgetAsText,
   isNodeVisibleInFilterMode,
   shouldRenderAsText,
@@ -590,7 +591,7 @@ export class BlockRenderer {
     if (!block || !node) return;
 
     const isSelected = this.selectableIds[this.selectedIndex] === nodeId;
-    const content = formatBlockContent(node, isSelected, block.expanded);
+    const content = formatForBlock(node, this.contentFilterMode, isSelected, block.expanded);
 
     const oldHeight = getBlockHeight(block);
     block.box.setContent(content);
@@ -614,7 +615,12 @@ export class BlockRenderer {
       const block = this.blocks.get(id);
       if (block) {
         const isSelected = this.selectableIds[this.selectedIndex] === id;
-        const content = formatBlockContent(block.node, isSelected, block.expanded);
+        const content = formatForBlock(
+          block.node,
+          this.contentFilterMode,
+          isSelected,
+          block.expanded,
+        );
         block.box.setContent(content);
       }
     }

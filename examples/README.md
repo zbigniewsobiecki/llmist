@@ -49,6 +49,11 @@ npx tsx examples/01-basic-usage.ts
 | [23-session-manager.ts](./23-session-manager.ts) | Session management |
 | [24-huggingface-test.ts](./24-huggingface-test.ts) | HuggingFace provider with streaming and provider selection |
 | [25-reasoning-models.ts](./25-reasoning-models.ts) | Reasoning models with thinking/extended thinking |
+| [26-budget-limits.ts](./26-budget-limits.ts) | Budget and cost limiting configuration |
+| [27-skills.ts](./27-skills.ts) | Agent Skills (SKILL.md) integration and usage |
+| [28-mcp-consume.ts](./28-mcp-consume.ts) | Consume an MCP server (Filesystem via npx) from an agent |
+| [29-mcp-expose.ts](./29-mcp-expose.ts) | Expose llmist gadgets as an MCP server (programmatic, stdio) |
+| [30-mcp-roundtrip.ts](./30-mcp-roundtrip.ts) | Roundtrip: llmist agent consumes its own published MCP server |
 | [cli.example.toml](./cli.example.toml) | CLI configuration file example |
 
 ## Quick Reference

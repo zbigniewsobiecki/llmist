@@ -255,6 +255,108 @@ export const OPENROUTER_MODELS: ModelSpec[] = [
   },
 
   // ============================================================
+  // Google Gemini 3.1 Models (via OpenRouter)
+  // ============================================================
+  {
+    provider: "openrouter",
+    modelId: "google/gemini-3.1-pro-preview",
+    displayName: "Gemini 3.1 Pro Preview (OpenRouter)",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    pricing: {
+      input: 2.0,
+      output: 12.0,
+    },
+    knowledgeCutoff: "2025-01",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "Gemini 3.1",
+      releaseDate: "2026-03",
+      notes:
+        "Gemini 3.1 Pro Preview via OpenRouter. Frontier reasoning with enhanced software engineering performance.",
+    },
+  },
+  {
+    provider: "openrouter",
+    modelId: "google/gemini-3.1-pro-preview-customtools",
+    displayName: "Gemini 3.1 Pro Preview Custom Tools (OpenRouter)",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    pricing: {
+      input: 2.0,
+      output: 12.0,
+    },
+    knowledgeCutoff: "2025-01",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "Gemini 3.1",
+      releaseDate: "2026-03",
+      notes:
+        "Gemini 3.1 Pro Preview Custom Tools via OpenRouter. Improved tool selection to prevent overuse of general tools in agent workflows.",
+    },
+  },
+  {
+    provider: "openrouter",
+    modelId: "google/gemini-3.1-flash-lite-preview",
+    displayName: "Gemini 3.1 Flash Lite Preview (OpenRouter)",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    pricing: {
+      input: 0.25,
+      output: 1.5,
+    },
+    knowledgeCutoff: "2025-01",
+    features: {
+      streaming: true,
+      functionCalling: true,
+      vision: true,
+      reasoning: true,
+      structuredOutputs: true,
+    },
+    metadata: {
+      family: "Gemini 3.1",
+      releaseDate: "2026-03",
+      notes:
+        "Gemini 3.1 Flash Lite Preview via OpenRouter. High-efficiency model with full thinking levels for cost/performance trade-offs.",
+    },
+  },
+  {
+    provider: "openrouter",
+    modelId: "google/gemini-3.1-flash-image-preview",
+    displayName: "Gemini 3.1 Flash Image Preview (OpenRouter)",
+    contextWindow: 65_536,
+    maxOutputTokens: 65_536,
+    pricing: {
+      input: 0.5,
+      output: 3.0,
+    },
+    knowledgeCutoff: "2025-01",
+    features: {
+      streaming: true,
+      functionCalling: false,
+      vision: true,
+    },
+    metadata: {
+      family: "Gemini 3.1",
+      releaseDate: "2026-03",
+      notes:
+        "Gemini 3.1 Flash Image Preview via OpenRouter. Pro-level image generation and editing at Flash speed.",
+    },
+  },
+
+  // ============================================================
   // Meta Llama Models (via OpenRouter)
   // ============================================================
   {

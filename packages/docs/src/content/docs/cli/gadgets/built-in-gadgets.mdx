@@ -48,7 +48,7 @@ for await (const event of agent.run()) {
 
 | Gadget | Description |
 |--------|-------------|
-| `RunCommand` | Execute a command with arguments and return output |
+| `RunCommand` | Execute a shell command and return output |
 
 <Aside type="caution">
   All filesystem gadgets validate that paths are within the current working directory. Attempts to access files outside this boundary will throw a `PathSandboxException`.
@@ -104,12 +104,12 @@ import { EditFile } from '@llmist/cli/gadgets';
 
 ### RunCommand
 
-Executes system commands with arguments (bypasses shell interpretation).
+Executes shell commands with full support for pipes, redirects, and chaining.
 
 ```typescript
 import { RunCommand } from '@llmist/cli/gadgets';
 
-// Schema: { argv: string[], cwd?: string, timeout?: number }
+// Schema: { command: string, cwd?: string, timeout?: number }
 ```
 
 ## Utilities

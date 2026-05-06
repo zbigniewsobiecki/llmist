@@ -81,7 +81,7 @@ for await (const chunk of client.streamText('Hello')) {
 
 ```typescript
 interface TextGenerationOptions {
-  model?: string;        // Model name or alias (default: 'gpt-5-mini')
+  model?: string;        // Model name or alias (default: 'gpt-5-nano')
   temperature?: number;  // 0-1 (default: provider default)
   systemPrompt?: string; // System prompt (default: none)
   maxTokens?: number;    // Max tokens (default: provider default)

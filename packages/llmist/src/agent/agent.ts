@@ -17,12 +17,11 @@ import type { PromptTemplateConfig } from "../core/prompt-config.js";
 import type { RateLimitConfig } from "../core/rate-limit.js";
 import { RateLimitTracker, resolveRateLimitConfig } from "../core/rate-limit.js";
 import type { ResolvedRetryConfig, RetryConfig } from "../core/retry.js";
-import { resolveRetryConfig } from "../core/retry.js";
+import { isLikelyContextOverflow, resolveRetryConfig } from "../core/retry.js";
 import { BudgetPricingUnavailableError } from "../gadgets/exceptions.js";
 import { MediaStore } from "../gadgets/media-store.js";
 import type { GadgetRegistry } from "../gadgets/registry.js";
 import type {
-  AgentContextConfig,
   GadgetExecutionMode,
   StreamCompletionEvent,
   StreamEvent,
@@ -51,6 +50,14 @@ import { safeObserve } from "./safe-observe.js";
 import type { StreamProcessor } from "./stream-processor.js";
 import { StreamProcessorFactory } from "./stream-processor-factory.js";
 import { bridgeTreeToHooks, getSubagentContextForNode } from "./tree-hook-bridge.js";
+
+/**
+ * Minimum number of history messages required before attempting context overflow
+ * recovery via compaction. This ensures there's meaningful content to compact
+ * (at least 2 conversation turns: user+assistant pairs). If history is smaller,
+ * compaction can't reduce context enough to help and the error should propagate.
+ */
+const OVERFLOW_RECOVERY_MIN_HISTORY = 4;
 
 /**
  * Configuration for the execution tree context (shared tree model with subagents).
@@ -222,6 +229,19 @@ export interface AgentOptions {
    * settings instead of creating its own.
    */
   sharedRetryConfig?: ResolvedRetryConfig;
+
+  /**
+   * MCP server specs to attach to the agent.
+   *
+   * When non-empty, the agent connects to each server lazily at the start of
+   * `run()`, lists their tools, wraps them as native gadgets, and registers
+   * them on the registry alongside any explicitly-provided gadgets. The
+   * lifecycle teardown happens in the agent's `finally` block.
+   *
+   * When empty or omitted, the MCP module is never imported — agents that
+   * don't use MCP pay zero overhead at load time.
+   */
+  mcpSpecs?: import("../mcp/types.js").McpServerSpec[];
 }
 
 /**
@@ -290,6 +310,11 @@ export class Agent {
 
   // LLM call lifecycle helper (encapsulates prepareLLMCall, completeLLMCall, notifyLLMError)
   private readonly llmCallLifecycle: LLMCallLifecycle;
+
+  // MCP integration — populated only when mcpSpecs were provided.
+  private readonly mcpSpecs: import("../mcp/types.js").McpServerSpec[];
+  private mcpLifecycle: { closeAll(): Promise<void> } | null = null;
+  private readonly mcpDiscoveredPrompts: import("../mcp/prompt-adapter.js").McpPromptSkill[] = [];
 
   /**
    * Creates a new Agent instance.
@@ -380,11 +405,16 @@ export class Agent {
         this.client,
         this.model,
         options.compactionConfig,
+        this.logger,
       );
     }
 
     // Store abort signal for cancellation
     this.signal = options.signal;
+
+    // Capture MCP server specs (only honored when non-empty — zero-overhead
+    // when no MCP servers were configured).
+    this.mcpSpecs = options.mcpSpecs ?? [];
 
     // Store reasoning configuration
     this.reasoning = options.reasoning;
@@ -675,6 +705,25 @@ export class Agent {
     // This is the single source of truth - tree events trigger hooks with proper subagentContext.
     const unsubscribeBridge = bridgeTreeToHooks(this.tree, this.hooks, this.logger);
 
+    // Lazy MCP setup — only runs when at least one MCP server was attached.
+    // Connects each server, registers tools as adapter gadgets, and rebuilds
+    // the conversation system prompt so the LLM sees the full gadget catalog.
+    if (this.mcpSpecs.length > 0) {
+      const { setupMcpServers } = await import("../mcp/runtime.js");
+      this.mcpLifecycle = await setupMcpServers({
+        specs: this.mcpSpecs,
+        registry: this.registry,
+        conversation: this.conversation,
+        prefixConfig: this.prefixConfig,
+        systemPrompt:
+          this.conversation.getBaseMessages()[0]?.role === "system"
+            ? (this.conversation.getBaseMessages()[0]!.content as string)
+            : undefined,
+        logger: this.logger,
+        onPromptDiscovered: (skill) => this.mcpDiscoveredPrompts.push(skill),
+      });
+    }
+
     let currentIteration = 0;
 
     this.logger.info("Starting agent loop", {
@@ -687,6 +736,10 @@ export class Agent {
     // for safety net completion of in-flight LLM calls
     let currentLLMNodeId: string | undefined;
     let llmOptions: LLMGenerationOptions | undefined;
+
+    // Track whether we've already attempted context overflow recovery (max 1 per agent run).
+    // This prevents infinite compaction→retry→fail loops.
+    let hasAttemptedOverflowRecovery = false;
 
     try {
       while (currentIteration < this.maxIterations) {
@@ -799,6 +852,27 @@ export class Agent {
             break;
           }
 
+          // Reactive compaction: use API-reported input tokens (ground truth) to check
+          // if we've crossed the compaction threshold. This catches cases where the
+          // proactive char-based estimate (at iteration start) underestimates token usage.
+          // Placed after break checks so we don't compact on the final iteration.
+          if (this.compactionManager && result.usage?.inputTokens) {
+            this.compactionManager.updateUsage(result.usage.inputTokens);
+            if (this.compactionManager.shouldCompactFromUsage()) {
+              this.logger.info("Reactive compaction triggered from API-reported usage", {
+                inputTokens: result.usage.inputTokens,
+                iteration: currentIteration,
+              });
+              const reactiveCompaction = await this.compactionManager.compact(
+                this.conversation,
+                currentIteration,
+              );
+              if (reactiveCompaction) {
+                yield await this.emitCompactionEvent(reactiveCompaction, currentIteration);
+              }
+            }
+          }
+
           // Check if budget limit has been reached
           if (this.budget !== undefined) {
             const totalCost = this.tree.getTotalCost();
@@ -812,6 +886,48 @@ export class Agent {
             }
           }
         } catch (error) {
+          // Attempt context overflow recovery: if the error looks like context overflow
+          // and we haven't already tried recovery, force compaction and retry the iteration.
+          // Minimum history of 4 messages (2 conversation turns) ensures there's meaningful
+          // content to compact — otherwise compaction can't reduce the context enough to help.
+          const historyLength = this.conversation.getHistoryMessages().length;
+          if (
+            this.compactionManager &&
+            !hasAttemptedOverflowRecovery &&
+            isLikelyContextOverflow(error as Error) &&
+            historyLength >= OVERFLOW_RECOVERY_MIN_HISTORY
+          ) {
+            hasAttemptedOverflowRecovery = true;
+            this.logger.warn("Possible context overflow detected, attempting compaction recovery", {
+              error: (error as Error).message,
+              iteration: currentIteration,
+              historyMessages: historyLength,
+            });
+
+            try {
+              const compactionEvent = await this.compactionManager.compact(
+                this.conversation,
+                currentIteration,
+              );
+
+              if (compactionEvent) {
+                const event = await this.emitCompactionEvent(compactionEvent, currentIteration);
+                yield event;
+                // Re-iterate with compacted context (continue skips currentIteration++,
+                // so we retry the same iteration number with a smaller context)
+                continue;
+              }
+              this.logger.warn("Compaction returned no result, cannot recover from overflow");
+            } catch (compactionError) {
+              this.logger.warn(
+                "Compaction failed during overflow recovery, propagating original error",
+                {
+                  compactionError: (compactionError as Error).message,
+                },
+              );
+            }
+          }
+
           // Delegate error handling and observer notification to lifecycle helper
           const action = await this.llmCallLifecycle.notifyLLMError(
             currentIteration,
@@ -879,6 +995,16 @@ export class Agent {
 
       // Always clean up the bridge subscription
       unsubscribeBridge();
+
+      // Tear down MCP servers (no-op when none were attached).
+      if (this.mcpLifecycle) {
+        try {
+          await this.mcpLifecycle.closeAll();
+        } catch (err) {
+          this.logger.debug("MCP lifecycle teardown error (suppressed):", err);
+        }
+        this.mcpLifecycle = null;
+      }
     }
   }
 
@@ -1060,13 +1186,24 @@ export class Agent {
 
     if (!compactionEvent) return null;
 
+    return this.emitCompactionEvent(compactionEvent, iteration);
+  }
+
+  /**
+   * Log compaction, notify observers, and return a StreamEvent.
+   * Shared by proactive compaction (checkAndPerformCompaction) and
+   * reactive overflow recovery (catch block).
+   */
+  private async emitCompactionEvent(
+    compactionEvent: CompactionEvent,
+    iteration: number,
+  ): Promise<StreamEvent> {
     this.logger.info("Context compacted", {
       strategy: compactionEvent.strategy,
       tokensBefore: compactionEvent.tokensBefore,
       tokensAfter: compactionEvent.tokensAfter,
     });
 
-    // Observer: Compaction occurred
     await safeObserve(async () => {
       if (this.hooks.observers?.onCompaction) {
         await this.hooks.observers.onCompaction({

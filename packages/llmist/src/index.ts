@@ -36,6 +36,7 @@ export type {
   AgentOptions,
   BeforeGadgetExecutionAction,
   BeforeLLMCallAction,
+  BeforeSkillActivationAction,
   // Interceptor contexts
   ChunkInterceptorContext,
   // Context compaction
@@ -70,12 +71,16 @@ export type {
   ObserveRateLimitThrottleContext,
   ObserveRetryAttemptContext,
   Observers,
+  // Skill hook contexts
+  ObserveSkillActivatedContext,
   // Gadget output limit configuration
   OutputLimitConfig,
   ParallelGadgetHintOptions,
   // Gadget prefix configuration
   PrefixConfig,
   ResolvedCompactionConfig,
+  SkillActivationControllerContext,
+  SkillInstructionInterceptorContext,
   // Gadget output limiting
   StoredOutput,
   StreamProcessingResult,
@@ -271,6 +276,7 @@ export {
   DEFAULT_RETRY_CONFIG,
   extractRetryAfterMs,
   formatLLMError,
+  isLikelyContextOverflow,
   isRetryableError,
   parseRetryAfterHeader,
   resolveRetryConfig,
@@ -339,6 +345,40 @@ export type {
   TextOnlyHandler,
   TextOnlyStrategy,
 } from "./gadgets/types.js";
+// ============================================================================
+// Model Context Protocol (MCP) integration
+// ============================================================================
+export {
+  assertCommandAllowed,
+  type CreateMcpServerOptions,
+  createMcpServer,
+  DEFAULT_MCP_COMMAND_ALLOWLIST,
+  gadgetResultToMcpContent,
+  gadgetToMcpTool,
+  type HttpMcpServerSpec,
+  type JSONSchemaLike,
+  JsonSchemaConversionError,
+  jsonSchemaToZod,
+  McpClient,
+  type McpClientOptions,
+  McpConnectError,
+  type McpContentBlock,
+  McpError,
+  McpLifecycle,
+  type McpServerCapabilities,
+  type McpServerHandle,
+  type McpServerSpec,
+  type McpToolAdapterOptions,
+  McpToolCallError,
+  type McpToolDescriptor,
+  type McpToolResult,
+  McpUntrustedCommandError,
+  mcpToolToGadget,
+  renderSkillForMcpPrompt,
+  runGadgetForMcp,
+  type StdioMcpServerSpec,
+  skillToMcpPrompt,
+} from "./mcp/index.js";
 // Provider constants (for token estimation)
 export { FALLBACK_CHARS_PER_TOKEN } from "./providers/constants.js";
 
@@ -452,6 +492,34 @@ export type { ProviderAdapter } from "./providers/provider.js";
 // ============================================================================
 export type { ISessionManager } from "./session/index.js";
 export { BaseSessionManager, SimpleSessionManager } from "./session/index.js";
+// ============================================================================
+// Skills System (Agent Skills Open Standard)
+// ============================================================================
+export type {
+  ParsedSkill,
+  SkillActivation,
+  SkillActivationOptions,
+  SkillMetadata,
+  SkillResource,
+  SkillSource,
+} from "./skills/index.js";
+export {
+  createLoadSkillGadget,
+  discoverSkills,
+  LOAD_SKILL_GADGET_NAME,
+  loadSkillsFromDirectory,
+  parseFrontmatter,
+  parseMetadata,
+  parseSkillContent,
+  parseSkillFile,
+  resolveInstructions,
+  Skill,
+  SkillRegistry,
+  scanResources,
+  substituteArguments,
+  substituteVariables,
+  validateMetadata,
+} from "./skills/index.js";
 // Utility functions for subagent gadgets
 export type { ResolveValueOptions } from "./utils/config-resolver.js";
 export {

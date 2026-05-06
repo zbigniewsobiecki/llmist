@@ -93,6 +93,8 @@ interface DispatcherConfig {
   gadgetExecutionMode?: "parallel" | "sequential";
   maxGadgetsPerResponse?: number;
   gadgets?: Array<{ name: string; maxConcurrent?: number; exclusive?: boolean }>;
+  inFlightTimeoutMs?: number;
+  lifecycle?: GadgetHookLifecycle & { executeCallCount: number };
 }
 
 function createDispatcher(opts: DispatcherConfig = {}): {
@@ -102,7 +104,7 @@ function createDispatcher(opts: DispatcherConfig = {}): {
   queue: StreamEvent[];
 } {
   const resolver = new GadgetDependencyResolver();
-  const lifecycle = createMockLifecycle();
+  const lifecycle = opts.lifecycle ?? createMockLifecycle();
   const registry = createRegistry(opts.gadgets ?? [{ name: "TestGadget" }]);
   const concurrencyManager = new GadgetConcurrencyManager({ registry });
   const limitGuard = new GadgetLimitGuard({
@@ -125,6 +127,7 @@ function createDispatcher(opts: DispatcherConfig = {}): {
       queue.length = 0;
       return evts;
     },
+    inFlightTimeoutMs: opts.inFlightTimeoutMs,
   });
 
   return { dispatcher, lifecycle, resolver, queue };
@@ -331,6 +334,86 @@ describe("GadgetDispatcher", () => {
         failedDependency: "self-ref",
       });
     });
+
+    it("filters self-ref dep but keeps valid deps and executes gadget", async () => {
+      const { dispatcher, lifecycle, resolver } = createDispatcher({
+        gadgetExecutionMode: "sequential",
+      });
+
+      // Pre-complete the real dependency
+      resolver.markComplete({
+        gadgetName: "TestGadget",
+        invocationId: "real_dep",
+        parameters: {},
+        result: "ok",
+        executionTimeMs: 1,
+      });
+
+      // Dispatch with self-ref + valid dep
+      const events = await collectDispatch(
+        dispatcher,
+        makeCall("g1", "TestGadget", ["g1", "real_dep"]),
+      );
+
+      // Should execute (not skip) since real_dep is satisfied
+      expect(lifecycle.executeCallCount).toBe(1);
+      expect(events.some((e) => e.type === "gadget_result")).toBe(true);
+      expect(events.some((e) => e.type === "gadget_skipped")).toBe(false);
+    });
+
+    it("queues gadget when self-ref is filtered but remaining deps unsatisfied", async () => {
+      const { dispatcher, lifecycle, resolver } = createDispatcher({
+        gadgetExecutionMode: "sequential",
+      });
+
+      // Dispatch with self-ref + unsatisfied dep
+      const events = await collectDispatch(
+        dispatcher,
+        makeCall("g1", "TestGadget", ["g1", "pending_dep"]),
+      );
+
+      // Should be queued (pending), not skipped or executed
+      expect(lifecycle.executeCallCount).toBe(0);
+      expect(events.some((e) => e.type === "gadget_skipped")).toBe(false);
+      expect(events.some((e) => e.type === "gadget_result")).toBe(false);
+      expect(resolver.pendingCount).toBe(1);
+    });
+
+    it("skips gadget only when ALL deps are self-referential", async () => {
+      const { dispatcher, lifecycle } = createDispatcher({
+        gadgetExecutionMode: "sequential",
+      });
+
+      const events = await collectDispatch(dispatcher, makeCall("g1", "TestGadget", ["g1"]));
+
+      expect(lifecycle.executeCallCount).toBe(0);
+      expect(events.some((e) => e.type === "gadget_skipped")).toBe(true);
+    });
+
+    it("filters all duplicate self-refs and keeps valid deps", async () => {
+      const { dispatcher, lifecycle, resolver } = createDispatcher({
+        gadgetExecutionMode: "sequential",
+      });
+
+      // Pre-complete the real dependency
+      resolver.markComplete({
+        gadgetName: "TestGadget",
+        invocationId: "real_dep",
+        parameters: {},
+        result: "ok",
+        executionTimeMs: 1,
+      });
+
+      // Multiple duplicate self-refs alongside a valid dep
+      const events = await collectDispatch(
+        dispatcher,
+        makeCall("g1", "TestGadget", ["g1", "g1", "real_dep"]),
+      );
+
+      expect(lifecycle.executeCallCount).toBe(1);
+      expect(events.some((e) => e.type === "gadget_result")).toBe(true);
+      expect(events.some((e) => e.type === "gadget_skipped")).toBe(false);
+    });
   });
 
   // =========================================================================
@@ -495,6 +578,131 @@ describe("GadgetDispatcher", () => {
 
       // g2 should be marked as failed so g3 is skipped
       expect(resolver.isFailed("g2")).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // waitForInFlightExecutions: timeout
+  // =========================================================================
+
+  describe("waitForInFlightExecutions: timeout", () => {
+    /**
+     * Creates a lifecycle mock that never resolves (simulates a hanging gadget).
+     * Used by timeout tests to trigger the in-flight timeout.
+     */
+    function createHangingLifecycle(): GadgetHookLifecycle & { executeCallCount: number } {
+      const lifecycle = {
+        executeCallCount: 0,
+        async *execute(_call: ParsedGadgetCall): AsyncGenerator<StreamEvent> {
+          lifecycle.executeCallCount++;
+          await new Promise<void>(() => {}); // Never resolves
+        },
+      };
+      return lifecycle as unknown as GadgetHookLifecycle & { executeCallCount: number };
+    }
+
+    it("completes normally when no gadgets are in-flight", async () => {
+      const { dispatcher } = createDispatcher({ gadgetExecutionMode: "parallel" });
+
+      const events: StreamEvent[] = [];
+      for await (const evt of dispatcher.waitForInFlightExecutions()) {
+        events.push(evt);
+      }
+
+      expect(events).toHaveLength(0);
+    });
+
+    it("emits gadget_skipped events for timed-out gadgets", async () => {
+      vi.useFakeTimers();
+      try {
+        const { dispatcher, resolver } = createDispatcher({
+          gadgetExecutionMode: "parallel",
+          inFlightTimeoutMs: 500,
+          lifecycle: createHangingLifecycle(),
+        });
+
+        // Dispatch a gadget that will hang
+        await collectDispatch(dispatcher, makeCall("hanging", "TestGadget"));
+
+        // Start waiting for in-flight
+        const events: StreamEvent[] = [];
+        const waitPromise = (async () => {
+          for await (const evt of dispatcher.waitForInFlightExecutions()) {
+            events.push(evt);
+          }
+        })();
+
+        // Advance time past the timeout
+        await vi.advanceTimersByTimeAsync(600);
+        await waitPromise;
+
+        // Should emit a gadget_skipped event for the timed-out gadget
+        const skipEvents = events.filter((e) => e.type === "gadget_skipped");
+        expect(skipEvents).toHaveLength(1);
+        expect(skipEvents[0]).toMatchObject({
+          type: "gadget_skipped",
+          invocationId: "hanging",
+          gadgetName: "TestGadget",
+        });
+
+        // The timed-out gadget should be marked as failed in the resolver
+        expect(resolver.isFailed("hanging")).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("completes normally when gadgets finish before timeout", async () => {
+      const { dispatcher, queue } = createDispatcher({
+        gadgetExecutionMode: "parallel",
+        inFlightTimeoutMs: 5000,
+      });
+
+      // Dispatch a fast gadget (default mock resolves immediately)
+      await collectDispatch(dispatcher, makeCall("fast", "TestGadget"));
+
+      const events: StreamEvent[] = [];
+      for await (const evt of dispatcher.waitForInFlightExecutions()) {
+        events.push(evt);
+      }
+
+      // Should get the result from the queue — no skip events
+      const skipEvents = events.filter((e) => e.type === "gadget_skipped");
+      expect(skipEvents).toHaveLength(0);
+    });
+
+    it("uses default timeout of 300s when inFlightTimeoutMs not specified", async () => {
+      vi.useFakeTimers();
+      try {
+        const { dispatcher } = createDispatcher({
+          gadgetExecutionMode: "parallel",
+          lifecycle: createHangingLifecycle(),
+          // inFlightTimeoutMs NOT set — should use 300_000ms default
+        });
+
+        await collectDispatch(dispatcher, makeCall("hanging", "TestGadget"));
+
+        const events: StreamEvent[] = [];
+        const waitPromise = (async () => {
+          for await (const evt of dispatcher.waitForInFlightExecutions()) {
+            events.push(evt);
+          }
+        })();
+
+        // Advance to just before the default timeout — should NOT have resolved
+        await vi.advanceTimersByTimeAsync(299_000);
+        // Still hanging — no skip events yet
+        expect(events).toHaveLength(0);
+
+        // Advance past the default timeout
+        await vi.advanceTimersByTimeAsync(2_000);
+        await waitPromise;
+
+        // Now should have timed out and emitted skip
+        expect(events.some((e) => e.type === "gadget_skipped")).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

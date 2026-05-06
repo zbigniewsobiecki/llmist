@@ -1,0 +1,67 @@
+---
+title: MCP Security — STDIO allowlist
+description: Why llmist gates MCP stdio commands by default
+---
+
+This page documents the security posture for llmist's MCP consume side.
+
+## The threat model
+
+The Model Context Protocol's stdio transport works by spawning the MCP server as a child process. The user (or the user's config) supplies the command. If a hostile actor can influence that command (config injection, malicious "MCP server" docs, social engineering), they get arbitrary code execution in the user's environment.
+
+[CVE-2026-30623](https://docs.litellm.ai/blog/mcp-stdio-command-injection-april-2026) is a published instance of this family — across all four official MCP SDKs (TypeScript, Python, Java, Rust), an attacker who reaches the stdio transport's command surface can execute commands without authentication or sanitization. The [Vulnerable MCP project](https://vulnerablemcp.info/) catalogs more.
+
+## What llmist does
+
+llmist refuses to spawn an MCP stdio server unless one of:
+
+1. The basename of the command is in `DEFAULT_MCP_COMMAND_ALLOWLIST` (currently `npx`, `node`, `uvx`, `uv`, `python`, `python3`, `deno`, `bun`)
+2. The server spec carries `trust: true`
+
+In addition, the gate refuses any command string that contains whitespace or shell metacharacters (`;`, `|`, `&`, backticks, redirects). This forces callers to pass arguments separately via the `args` field — preventing the `npx -c "evil"` style of attack.
+
+## Opt in
+
+If you trust a command and need to bypass the allowlist:
+
+```typescript
+.withMcpServer({
+  name: "my-server",
+  transport: "stdio",
+  command: "/Users/me/bin/my-mcp",
+  args: ["--port", "1234"],
+  trust: true,
+})
+```
+
+CLI:
+
+```bash
+llmist agent \
+  --mcp-server custom="/Users/me/bin/my-mcp -- --port 1234" \
+  --mcp-trust custom \
+  "your prompt"
+```
+
+## What's NOT covered
+
+The allowlist is a *necessary* mitigation, not a sufficient one. It does not:
+
+- **Sandbox** the spawned process. An allowed `npx` can still install and run malicious code if you point it at a typosquatted package name.
+- **Enforce content** policies on tools the MCP server exposes. Once registered, the LLM can call them, and they execute on your machine.
+- **Verify** the server's identity. We do not validate signatures or registries.
+
+Additional best practices:
+
+- Install MCP servers only from trusted sources. Verify the npm package name carefully.
+- Run inside a container or VM when consuming third-party MCP servers, especially for filesystem / shell access.
+- Apply the existing llmist gadget permission policy (`approval-required`) to MCP-backed gadgets that touch the filesystem, network, or process. MCP-backed tools are registered as native gadgets, so the same policy machinery applies.
+
+## Follow-up hardening
+
+The allowlist blocks the highest-impact class of issues before any server is spawned. Follow-up hardening areas include:
+
+- Richer origin metadata so logs and the TUI can show which MCP server backed every gadget call.
+- More granular policy presets for common third-party MCP servers.
+
+The exposer side (`llmist mcp serve`) does not spawn arbitrary third-party commands. Its primary security boundary is the set of gadgets and skills you choose to publish.

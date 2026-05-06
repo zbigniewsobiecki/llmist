@@ -1,0 +1,199 @@
+---
+id: 001
+slug: mcp-bidirectional
+level: spec
+title: Bidirectional Model Context Protocol Support
+created: 2026-05-06
+status: done
+---
+
+# 001: Bidirectional Model Context Protocol Support
+
+## Problem & Motivation
+
+The Model Context Protocol (MCP) has become the de facto interop layer for tool calling in the LLM agent ecosystem. As of mid-2026 there are **20K+ MCP servers** indexed across registries (glama.ai, mcp.so, PulseMCP, Smithery, the official Anthropic registry), every major agent framework ships an MCP adapter (OpenAI Agents SDK, LangChain, Cline, Cursor, Claude Code), and high-traffic services (Slack, GitHub, Postgres, Playwright, Filesystem, Context7) publish first-party MCP servers. **llmist currently has zero MCP support**, which has two consequences.
+
+First, **llmist agents can't reach the world's tools.** A user who builds an llmist agent and wants to use the GitHub MCP server, the Postgres MCP server, or any of the 20K others has to wrap each one as a custom gadget by hand. This is a high-friction tax on every new integration and the reason most users will reach for a different agent framework.
+
+Second, **llmist's own gadget and skill ecosystem is invisible to the rest of the world.** A developer who writes a polished gadget for llmist (say, a custom DB explorer or a domain-specific code-mod) cannot expose it to Claude Code, Cursor, ChatGPT desktop, or any other MCP client without reimplementing it. llmist's strongest differentiator — the streaming-first, dependency-aware gadget block format and the typed Zod-driven gadget API — should be usable from any MCP-aware host. We bridge in *and* bridge out, or we sit on the sidelines of the dominant interop layer.
+
+This spec adds **bidirectional** MCP support: llmist as a consumer of any MCP server, and llmist as a publisher of its own gadgets and skills as a standards-compliant MCP server.
+
+---
+
+## Goals
+
+1. **Consume any MCP server from an llmist agent.** A user can point llmist at a stdio or Streamable-HTTP MCP server and have its tools and prompts available to the agent alongside native gadgets and skills, with no code changes to the gadget executor or LLM provider layer.
+2. **Expose llmist gadgets and skills as an MCP server.** A user can run a single command to publish a chosen set of gadgets (and optionally skills) as an MCP server reachable over stdio, so that any external MCP client (Claude Code, Cursor, ChatGPT desktop, OpenAI Agents SDK, Cline) can use them.
+3. **Configure consumer-side MCP servers from the CLI's TOML.** Users add MCP servers via existing TOML config conventions and can reuse setup they already have in Claude Code / Cursor via an import helper.
+4. **Configure consumer-side MCP servers from the library.** Users building agents on the `llmist` core package can attach MCP servers fluently via the existing builder pattern.
+5. **Make consumer/exposer flow safe by default.** stdio command spawning is allowlisted; running an unrecognized binary requires explicit opt-in. Errors from MCP servers are isolated and don't crash the agent.
+6. **Ship with developer ergonomics on par with existing surfaces.** Logging, error formatting, observability hooks, and TUI inspection work for MCP traffic the same way they work for gadget calls today.
+7. **Cover the high-leverage spec subset, defer the rest.** v1 covers Tools and Prompts on stdio, with Resources, Roots, OAuth, and Streamable HTTP scoped for follow-up versions.
+
+---
+
+## Non-goals
+
+- **OAuth 2.1 / dynamic client registration / authenticated remote servers.** Deferred to a follow-up spec. v1 supports stdio (no auth surface) and unauthenticated Streamable HTTP for local use only.
+- **MCP "sampling" primitive (server calls back into client's LLM).** Interesting but recursive; defer until real-world demand surfaces. v1 advertises the `sampling` capability as **not supported**.
+- **MCP "elicitation" primitive (server asks the user a question mid-call).** Needs deep human-in-the-loop hook integration; defer to follow-up.
+- **Migrating existing gadgets to MCP-only.** Native gadgets remain first-class. MCP is additive.
+- **Replacing the gadget block format with native tool calling.** Out of scope; the block format remains llmist's wire format with the LLM, MCP is purely a server-side integration layer.
+- **Exposing llmist as a remote, hosted MCP service.** v1 ships only the local stdio server. Hosted multi-tenant deployment is an entirely separate effort.
+- **Rebuilding the gadget executor or the streaming pipeline.** MCP servers must be reached *from inside* the existing executor without any rework of the streaming or hooks subsystems.
+- **MCP `roots` primitive (client tells server its filesystem boundaries).** Deferred to follow-up alongside Resources.
+
+---
+
+## Constraints
+
+- **TypeScript-first.** All work in TypeScript per project conventions.
+- **No regression in startup latency** for users who don't enable MCP. MCP code must lazy-load — agents without MCP servers configured pay zero overhead.
+- **Streaming-first compatibility.** MCP tool calls execute inside the existing block-format streaming executor; the LLM sees an MCP-backed gadget identically to a native one.
+- **Schema fidelity.** Zod schemas on native gadgets must round-trip cleanly through MCP's JSON Schema representation when llmist exposes them; MCP's JSON Schema must round-trip into Zod when llmist consumes them.
+- **Security posture is conservative by default.** stdio command spawning honors an allowlist; unknown binaries require explicit opt-in. This is a mitigation against the CVE-2026-30623 family of STDIO command-injection attacks across the official MCP SDKs.
+- **Capability negotiation is honored.** llmist reads the server's capabilities response and only exposes primitives the server advertises.
+- **Process hygiene.** stdio MCP child processes are tracked and terminated cleanly on agent shutdown, abort, or crash. No orphan processes.
+- **Compatible with the existing hooks system.** MCP tool calls flow through the same Observers / Interceptors / Controllers pipeline as native gadget calls.
+- **Compatible with the existing approval system.** MCP tool calls participate in the gadget permission policy (`allowed` / `denied` / `approval-required`) the same way native gadgets do.
+- **Compatible with the existing budget and rate-limit subsystems.** MCP tool calls are tracked in the execution tree and budget the same way native gadget calls are.
+- **Configurable per agent.** Different agents in the same process can have different MCP server sets.
+- **Cross-platform.** stdio must work on macOS, Linux, and Windows. The CLI install command must not assume Unix-only tooling.
+
+---
+
+## User stories / Requirements
+
+### As an agent author using the library
+
+1. I can attach one or more MCP servers to the existing agent builder fluently, supplying a stdio command + args or a Streamable HTTP URL.
+2. The MCP servers' tools and prompts appear in the agent's effective gadget/skill catalog and the LLM can invoke them through the standard block format.
+3. If an MCP server fails to start or returns a tool error, my agent gets a clean error message in the trailing message and continues running.
+4. I can attach multiple MCP servers to one agent and tools from each are namespaced or de-conflicted predictably.
+5. I can opt-out of MCP entirely; the runtime is unchanged for me.
+
+### As a CLI user
+
+1. I can declare MCP servers in my TOML config under named blocks and reference them per-command.
+2. I can run a command that imports MCP server configs from `~/.claude.json` (or the analogous Cursor location) so I don't have to retype them.
+3. When I run an agent that uses an MCP server, the server's tools show up in `llmist gadgets list`-style listings alongside native gadgets, with a clear indicator of their origin.
+4. I can run a command that publishes a chosen set of native gadgets (and optionally skills) as an MCP server over stdio, suitable for adding to Claude Code or Cursor.
+5. The published MCP server's tool catalog reflects the names, descriptions, and JSON Schemas of my native gadgets faithfully.
+6. When stdio command spawning is gated by the allowlist, I get a clear error explaining how to opt in for a specific server.
+
+### As an external MCP client (Claude Code, Cursor, etc.) using a published llmist server
+
+1. I can connect to an llmist-published MCP server over stdio, run the standard `initialize` handshake, and discover tools and prompts.
+2. I can call any advertised tool with arguments matching its JSON Schema and receive a structured response (`content` blocks; `isError` flag).
+3. I can list and fetch llmist-published prompts, with arguments, and use the resulting messages in my own LLM call.
+4. The server honors the `2025-06-18` MCP spec version and degrades gracefully when I send an older `protocolVersion`.
+
+### As an operator / security-conscious user
+
+1. I can audit which MCP servers are configured for a given agent and which commands they spawn.
+2. I can see, per call, whether a tool invocation went through MCP and to which server.
+3. The default install does not silently spawn arbitrary commands — there is an explicit opt-in for non-allowlisted binaries.
+
+---
+
+## Research Notes
+
+- **Spec version pin.** We target the **2025-06-18** version of the MCP spec. The newer 2025-11-25 spec exists with refinements to authorization but the broader ecosystem still standardizes on 2025-06-18 — pin there for v1 compatibility, leave headroom to bump. ([MCP Authorization 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization))
+- **Transport landscape.** stdio is overwhelmingly the most common in practice (~200K instances across the public ecosystem); Streamable HTTP is the recommended modern transport for production / remote; HTTP+SSE is deprecated as of 2025-06-18 and should not be implemented for new integrations. ([Transports 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports))
+- **Wire format.** Pure JSON-RPC 2.0 over the chosen transport. Capability negotiation happens on `initialize`. Tools are called with `tools/call` and return `content` blocks plus an `isError` flag. ([MCP message types reference](https://portkey.ai/blog/mcp-message-types-complete-json-rpc-reference-guide/))
+- **Primitive split.** Server-side: tools, resources, prompts. Client-side: sampling, elicitation, roots. Each is independently negotiated. ([MCP features overview](https://workos.com/blog/mcp-features-guide))
+- **Security — STDIO command injection (CVE-2026-30623).** A class of vulnerabilities in all official MCP SDKs (TS, Python, Java, Rust) exposed by the stdio transport's permissive command-spawning surface. Mitigations: allowlist binaries, sanitize args, refuse argument-substitution patterns like `npx -c …`, sandbox where possible. We must not blindly forward user-controlled command strings. ([CVE-2026-30623 advisory](https://docs.litellm.ai/blog/mcp-stdio-command-injection-april-2026), [Vulnerable MCP project](https://vulnerablemcp.info/))
+- **Auth landscape.** OAuth 2.1 with mandatory PRM (RFC9728), ASM (RFC8414), dynamic client registration (RFC7591), and resource indicators (RFC8707). Cleanly specified but a substantial implementation surface — defer to a follow-up spec. ([Stack Overflow — MCP auth in practice](https://stackoverflow.blog/2026/01/21/is-that-allowed-authentication-and-authorization-in-model-context-protocol/))
+- **Adapter pattern is universal.** Every framework that integrates MCP uses the same core idiom: connect → `listTools` → wrap each tool as a native callable; for serving the inverse: register a callable, advertise it as an MCP tool. LangChain, OpenAI Agents SDK, Vercel AI SDK, Cline all follow this. We should follow it too — there's no insight to be gained from departing from the consensus shape. ([LangChain MCP adapters](https://github.com/langchain-ai/langchain-mcp-adapters), [OpenAI Agents SDK — MCP guide](https://openai.github.io/openai-agents-js/guides/mcp/))
+- **Standard Schema is supported by the official TS SDK.** Zod v4, Valibot, ArkType all work. llmist already standardizes on Zod, so schema interop is essentially free.
+- **Registry discovery is fragmented.** The "official" MCP registry exists but most users find servers via glama.ai, mcp.so, or vendor docs. v1 doesn't need to ship registry-aware discovery — users will paste in commands. ([Best MCP registries 2026](https://www.truefoundry.com/blog/best-mcp-registries))
+- **Existing user setup is overwhelmingly in Claude Code / Cursor.** Most prospective llmist users already maintain MCP server configs in `~/.claude.json` or Cursor's settings. An import helper is high-leverage for adoption.
+
+---
+
+## Open Source Decisions
+
+| Tool | Solves | Decision | Reason |
+|------|--------|----------|--------|
+| [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) | MCP client + server protocol implementation, transports, capability negotiation, schema handling | **Use** | Official, accepts security patches for STDIO RCE family, peer-deps on Zod (already a llmist dep), supports Streamable HTTP and stdio out of the box, used by every other major TS framework — zero benefit to hand-rolling JSON-RPC |
+| [`@modelcontextprotocol/inspector`](https://github.com/modelcontextprotocol/inspector) | Browser UI for testing MCP servers manually | **Skip** (recommend in docs) | Useful for users debugging the published llmist MCP server but not a runtime dependency. Mention it in docs as a debugging aid |
+| [`@langchain/mcp-adapters`](https://www.npmjs.com/package/@langchain/mcp-adapters) | Reference implementation of the adapter pattern | **Skip** | LangChain-specific. Useful as a reference design while we implement, but bringing in LangChain's abstractions to llmist would be heavyweight and against the project's lean philosophy |
+| [`mcp-proxy`](https://github.com/sparfenyuk/mcp-proxy) family | Bridges between transports (e.g. stdio ↔ HTTP) | **Skip** | Out of v1 scope. If users need transport bridging, they can run a third-party proxy alongside |
+| Existing **llmist Zod ↔ JSON Schema converter** (`schemaToJSONSchema`) | Converts our Zod gadget schemas to JSON Schema | **Reuse** | Already battle-tested, used in provider adapters; reuse for MCP tool schema export |
+
+---
+
+## Strategic decisions
+
+1. **Bidirectional v1.** We ship both consumer and exposer in the first release. Reason: half-shipping makes llmist a second-class citizen in either direction, and the implementation work is ~symmetric — both sides reuse the same wire-protocol and adapter machinery.
+2. **Adopt the official `@modelcontextprotocol/sdk`** rather than hand-rolling JSON-RPC. Reason: security patches flow downstream, the ecosystem converges on its types, and Zod compatibility means schema work is minimal.
+3. **Transports for v1: stdio + Streamable HTTP. Skip legacy HTTP+SSE entirely.** Reason: SSE is deprecated; supporting it adds attack surface and code with no future. stdio dominates real-world usage; Streamable HTTP covers modern remote.
+4. **Primitive coverage tiers.** v1: Tools and Prompts (server side, consumed and exposed). v1.5: Resources (consumed and exposed) and Roots (advertised on consume). v2: Sampling, Elicitation. Reason: Tools and Prompts are the 95th-percentile use case; deferring the rest avoids a long beta.
+5. **Defer OAuth to a follow-up spec.** Reason: a full OAuth 2.1 + PRM + ASM + dynamic-client-registration implementation is multiple weeks of careful security work and would block the initial release. v1 = stdio (no auth surface) plus optional unauthenticated Streamable HTTP for local use; remote authenticated use waits for the auth spec.
+6. **Library API in core llmist; CLI is a thin wrapper.** Reason: library users (people building agents on the core package) need MCP too. Putting the API on the existing agent builder keeps a single source of truth; the CLI just translates TOML config into builder calls.
+7. **TOML config + Claude Code import helper.** Reason: most prospective users already have MCP servers configured in `~/.claude.json`; making them retype that config is the kind of friction that kills adoption. TOML stays the source of truth in llmist; the importer is a one-shot copier.
+8. **STDIO security posture: command allowlist by default + per-server opt-in.** Reason: CVE-2026-30623 and the wider STDIO RCE family are real, ongoing, and trivial to fall into. Default-safe with a clear escape hatch is the responsible posture. Trusted commands ship in the allowlist; unknown commands require explicit `trust = true` in TOML or a CLI flag.
+9. **`llmist mcp serve` exposes stdio at v1; HTTP at v1.5.** Reason: stdio "just works" — parent processes spawn us, no port management or auth. HTTP brings deployment, auth, and CORS questions that aren't worth solving until we see demand.
+10. **Mapping shape:**
+    - Native gadget → MCP tool (1:1, lossless via existing Zod-to-JSON-Schema converter).
+    - Skill (frontmatter + body + arguments) → MCP prompt (body becomes prompt template, frontmatter args map to MCP prompt args).
+    - Skill resources → MCP resources (deferred to v1.5).
+    - Inverse: MCP tool → wrapped as a native gadget at agent build time; MCP prompt → loadable through the existing skill-loading meta-gadget pattern.
+    Reason: these are the natural one-to-one mappings; deviating buys us nothing and costs everyone clarity.
+11. **Sampling and Elicitation are explicit non-goals at v1.** Reason: both have deep design implications (sampling = our agent's LLM becomes a server's compute; elicitation = mid-call user prompts) and zero current demand. Park them.
+
+---
+
+## Acceptance Criteria (outcome-level)
+
+1. A user can attach an MCP server (stdio command or Streamable HTTP URL) to a library agent and the agent uses the server's tools end-to-end, including parameter validation, error propagation, and budget tracking.
+2. A user can attach multiple MCP servers to a single agent; tool name conflicts are resolved deterministically with a clear naming convention; the user understands which tool came from which server in logs and traces.
+3. A CLI user can declare MCP servers in their TOML config (with name, transport, command/url, optional trust flag) and reference them from any command that supports gadgets.
+4. A CLI user can run an `import` command that reads `~/.claude.json` (or the equivalent Cursor location) and emits TOML config blocks they can paste into their llmist config.
+5. A user can run a command that starts an MCP server over stdio publishing a chosen set of native gadgets, completes the standard `initialize` handshake with any compliant MCP client, and serves at least one successful `tools/call`.
+6. A user can run that same command with a `--skills` option and the published server additionally serves their skills as MCP prompts, supporting `prompts/list` and `prompts/get`.
+7. The published MCP server passes [`@modelcontextprotocol/inspector`](https://github.com/modelcontextprotocol/inspector) sanity checks: tools list, schemas validate against arguments, prompts list and render.
+8. The published MCP server can be installed in Claude Code (added to its MCP config) and Claude Code successfully calls one of the published gadgets end-to-end.
+9. By default, attempting to spawn a non-allowlisted stdio command fails with an actionable error explaining how to opt in. With opt-in, the same command spawns successfully.
+10. Tool calls into and out of MCP appear in the existing TUI execution tree and in standard llmist logs, with an explicit indicator that the call traversed MCP and the originating server's name.
+11. MCP tool calls participate in the existing gadget permission policy: a server tagged `approval-required` triggers the same UX as a native gadget tagged the same.
+12. Disabling MCP entirely (no servers configured, no `mcp serve` command in flight) results in zero MCP-related code on the hot path of agent execution and no startup-time regression measurable beyond noise.
+13. An MCP server crash, network error, or tool-call exception does not crash the agent — the failure is surfaced as a tool-error trailing message and the agent continues.
+14. stdio child processes are terminated when the parent agent terminates (clean shutdown, abort, or crash), with no orphan processes.
+15. When the connected MCP server advertises a primitive llmist hasn't implemented yet (e.g. resources at v1, or sampling at v1.5), capability negotiation downgrades cleanly without erroring.
+16. Documentation walks a user from zero to a working agent that uses a real public MCP server (e.g. Filesystem) in under five minutes, and from zero to publishing their gadget collection as an MCP server consumed by Claude Code in under ten minutes.
+17. End-to-end tests cover: consume-only path, expose-only path, round-trip (llmist consumes its own published server), and adversarial inputs (malformed JSON-RPC, schema mismatches, server timeouts).
+
+---
+
+## Documentation Impact (high-level)
+
+- **`README.md`** — add a top-level capability bullet for MCP, with a one-line example for both directions.
+- **`CHANGELOG.md`** — entry for the MCP minor-version release.
+- **`README.md`** (already noted above) — capability bullet + one-line example for both directions.
+- **`CHANGELOG.md`** (already noted above) — minor-version entry.
+- **CLI documentation** — new section covering MCP server configuration in TOML, the Claude-Code import helper, the publish command, and the security / allowlist posture.
+- **Library documentation** — new guide for the library-side MCP API, including the multi-server case, error handling, and capability negotiation.
+- **API reference** — new entries for any new public types and surfaces introduced.
+- **Runnable examples** — new examples covering: consume a public MCP server, expose gadgets as an MCP server, and the round-trip case.
+- **Configuration reference** — new TOML schema documented alongside existing config blocks.
+- **Security documentation** — disclosure of the stdio allowlist posture, CVE-2026-30623 context, and guidance for users who need to opt in.
+- **`CLAUDE.md`** — add MCP-related commands and expectations to the standard task list.
+
+---
+
+## Out of Scope
+
+- OAuth 2.1, dynamic client registration, RFC9728 PRM, RFC8414 ASM, RFC8707 resource indicators (full authorization stack — separate spec).
+- MCP "sampling" primitive (server-initiated client LLM calls) — separate spec when demand arrives.
+- MCP "elicitation" primitive (mid-call user prompts) — separate spec when demand arrives.
+- MCP "roots" primitive — deferred to v1.5 alongside Resources.
+- HTTP+SSE legacy transport — explicit deprecation; will not be implemented.
+- Hosted, multi-tenant llmist-as-a-remote-MCP-service — out of scope; v1 is local stdio only.
+- Bidirectional bridge / proxy mode (translate stdio ↔ HTTP transparently) — third-party tools cover this.
+- Replacing native gadgets or the gadget block format with native LLM tool calling — orthogonal to MCP.
+- Support for unofficial MCP forks or transport variants (WebSockets, IPC sockets, custom binary).
+- A first-party llmist registry of MCP servers — leave registry hosting to glama.ai, mcp.so, the official registry, etc.
+- Sandboxing primitives beyond the allowlist (chroot, seccomp, container isolation) — defer to operator setup.
+- An MCP server browser / GUI inside the TUI — defer until the surface stabilizes.

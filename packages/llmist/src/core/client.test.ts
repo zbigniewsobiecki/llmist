@@ -1,9 +1,34 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as discoveryModule from "../providers/discovery.js";
 import type { ProviderAdapter } from "../providers/provider.js";
 import { LLMist } from "./client.js";
 import type { LLMMessage } from "./messages.js";
 import type { ModelSpec } from "./model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "./options.js";
+
+// Hoisted mock functions for tiktoken — must be declared before vi.mock("tiktoken")
+const { mockGetEncoding } = vi.hoisted(() => {
+  const mockEncode = vi.fn((text: string) => {
+    if (!text?.trim()) return [];
+    // One token per whitespace-separated word — matches real tiktoken results for
+    // the simple single-word strings used in the existing test assertions.
+    const words = text
+      .trim()
+      .split(/\s+/)
+      .filter((w: string) => w.length > 0);
+    return new Array(words.length).fill(0);
+  });
+
+  const mockGetEncoding = vi.fn(() => ({
+    encode: mockEncode,
+    free: vi.fn(),
+  }));
+
+  return { mockGetEncoding };
+});
+
+// Replace the real tiktoken module so every test runs without a native binary
+vi.mock("tiktoken", () => ({ get_encoding: mockGetEncoding }));
 
 describe("LLMist Client", () => {
   // Mock provider adapters
@@ -267,7 +292,7 @@ describe("LLMist Client", () => {
       expect(adapter.countTokens).toHaveBeenCalledTimes(1);
     });
 
-    it("should fallback to character estimation when provider lacks token counting", async () => {
+    it("should fallback to tiktoken when provider lacks token counting", async () => {
       const adapter = createMockAdapter("test", false, [mockModelSpec]);
       const client = new LLMist({
         adapters: [adapter],
@@ -282,9 +307,8 @@ describe("LLMist Client", () => {
 
       const count = await client.countTokens("test:test-model", messages);
 
-      // Fallback: chars / 4, rounded up
-      const totalChars = "Hello".length + "World".length; // 10 chars
-      expect(count).toBe(Math.ceil(totalChars / 4)); // 3 tokens
+      // Fallback uses tiktoken o200k_base: "Hello" = 1 token, "World" = 1 token
+      expect(count).toBe(2);
     });
 
     it("should handle messages with no content", async () => {
@@ -302,8 +326,8 @@ describe("LLMist Client", () => {
 
       const count = await client.countTokens("test:test-model", messages);
 
-      // Only counts "Hello" = 5 chars
-      expect(count).toBe(Math.ceil(5 / 4)); // 2 tokens
+      // tiktoken o200k_base: "Hello" = 1 token, undefined content = 0 tokens
+      expect(count).toBe(1);
     });
 
     it("should handle empty messages array", async () => {
@@ -332,6 +356,82 @@ describe("LLMist Client", () => {
       const count = await client.countTokens("test-model", messages);
 
       expect(count).toBe("Hello".length * 2); // 10 tokens
+    });
+
+    it("should count tokens for array content (text parts) via tiktoken fallback", async () => {
+      const adapter = createMockAdapter("test", false, [mockModelSpec]);
+      const client = new LLMist({
+        adapters: [adapter],
+        defaultProvider: "test",
+        autoDiscoverProviders: false,
+      });
+
+      // Message with array content including a text part and a non-text part
+      const messages: LLMMessage[] = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Hello" },
+            // image_url parts should be skipped — no text to count
+            { type: "image_url", url: "https://example.com/img.png" } as never,
+          ],
+        },
+      ];
+
+      const count = await client.countTokens("test:test-model", messages);
+
+      // Only the text part "Hello" contributes: 1 token via mock
+      expect(count).toBe(1);
+      expect(mockGetEncoding).toHaveBeenCalled();
+    });
+
+    it("should fall back to character-based estimation when tiktoken is unavailable", async () => {
+      // Force tiktoken to throw so the char-based branch is exercised
+      mockGetEncoding.mockImplementationOnce(() => {
+        throw new Error("tiktoken not available");
+      });
+
+      const adapter = createMockAdapter("test", false, [mockModelSpec]);
+      const client = new LLMist({
+        adapters: [adapter],
+        defaultProvider: "test",
+        autoDiscoverProviders: false,
+      });
+
+      // CHARS_PER_TOKEN = 2, so 10 chars → Math.ceil(10 / 2) = 5
+      const messages: LLMMessage[] = [{ role: "user", content: "HelloWorld" }];
+
+      const count = await client.countTokens("test:test-model", messages);
+
+      expect(count).toBe(5);
+    });
+
+    it("should fall back to char-based estimation for array content when tiktoken is unavailable", async () => {
+      mockGetEncoding.mockImplementationOnce(() => {
+        throw new Error("tiktoken not available");
+      });
+
+      const adapter = createMockAdapter("test", false, [mockModelSpec]);
+      const client = new LLMist({
+        adapters: [adapter],
+        defaultProvider: "test",
+        autoDiscoverProviders: false,
+      });
+
+      // "Hi" (2 chars) + "ok" (2 chars) = 4 chars → Math.ceil(4 / 2) = 2
+      const messages: LLMMessage[] = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Hi" },
+            { type: "text", text: "ok" },
+          ],
+        },
+      ];
+
+      const count = await client.countTokens("test:test-model", messages);
+
+      expect(count).toBe(2);
     });
   });
 
@@ -472,6 +572,73 @@ describe("LLMist Client", () => {
       expect(typeof instanceBuilder.withModel).toBe("function");
       expect(typeof staticBuilder.withSystem).toBe("function");
       expect(typeof instanceBuilder.withSystem).toBe("function");
+    });
+  });
+
+  describe("Static Methods", () => {
+    let mockAdapter: ProviderAdapter;
+
+    beforeEach(() => {
+      mockAdapter = createMockAdapter("test", false, [mockModelSpec]);
+      // Route auto-discovery to our controllable mock adapter
+      vi.spyOn(discoveryModule, "discoverProviderAdapters").mockReturnValue([mockAdapter]);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("LLMist.complete() should create a client via auto-discovery and return text", async () => {
+      const result = await LLMist.complete("Hello", { model: "test:test-model" });
+
+      // The mock adapter yields { type: "content_delta", text: "Hello" }
+      // completeHelper trims the accumulated string
+      expect(result).toBe("Hello");
+      expect(mockAdapter.stream).toHaveBeenCalledTimes(1);
+    });
+
+    it("LLMist.complete() should pass system prompt through to the adapter", async () => {
+      await LLMist.complete("Hello", {
+        model: "test:test-model",
+        systemPrompt: "You are helpful",
+      });
+
+      expect(mockAdapter.stream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ role: "system", content: "You are helpful" }),
+          ]),
+        }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("LLMist.stream() should create a client via auto-discovery and yield text chunks", async () => {
+      const chunks: string[] = [];
+      for await (const chunk of LLMist.stream("Hello", { model: "test:test-model" })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]).toBe("Hello");
+      expect(mockAdapter.stream).toHaveBeenCalledTimes(1);
+    });
+
+    it("LLMist.stream() should delegate temperature option to the adapter", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of LLMist.stream("Hello", {
+        model: "test:test-model",
+        temperature: 0.8,
+      })) {
+        // consume stream
+      }
+
+      expect(mockAdapter.stream).toHaveBeenCalledWith(
+        expect.objectContaining({ temperature: 0.8 }),
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 

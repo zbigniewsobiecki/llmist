@@ -25,7 +25,7 @@ export interface ConversationManagerOptions {
  * Manages conversation history by building on top of base messages (system prompt, gadget instructions).
  */
 export class ConversationManager implements IConversationManager {
-  private readonly baseMessages: LLMMessage[];
+  private baseMessages: LLMMessage[];
   private readonly initialMessages: LLMMessage[];
   private historyBuilder: LLMMessageBuilder;
   private readonly startPrefix?: string;
@@ -90,6 +90,17 @@ export class ConversationManager implements IConversationManager {
 
   getBaseMessages(): LLMMessage[] {
     return [...this.baseMessages, ...this.initialMessages];
+  }
+
+  /**
+   * Replace the base (system + gadget catalog) messages.
+   *
+   * Used when async setup (e.g. MCP server connect-and-list) discovers
+   * additional gadgets after the agent was constructed. Conversation history
+   * is preserved; only the leading system block is swapped.
+   */
+  replaceBaseMessages(newBase: LLMMessage[]): void {
+    this.baseMessages = newBase;
   }
 
   replaceHistory(newHistory: LLMMessage[]): void {

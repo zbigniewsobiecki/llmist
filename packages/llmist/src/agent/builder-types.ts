@@ -43,6 +43,11 @@ export interface CoreState {
   cachingConfig?: CachingConfig;
 }
 
+export interface McpState {
+  /** MCP server specs to attach to the agent. */
+  servers: import("../mcp/types.js").McpServerSpec[];
+}
+
 export interface GadgetState {
   gadgets: GadgetOrClass[];
   gadgetStartPrefix?: string;
@@ -90,4 +95,10 @@ export interface SubagentState {
 
 export interface PolicyState {
   compactionConfig?: CompactionConfig;
+}
+
+export interface SkillState {
+  registry?: import("../skills/registry.js").SkillRegistry;
+  preActivated: Array<{ name: string; args?: string }>;
+  skillDirs: string[];
 }

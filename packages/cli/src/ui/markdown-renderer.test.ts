@@ -1,14 +1,27 @@
 import chalk from "chalk";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   formatUserMessage,
   renderMarkdown,
   renderMarkdownWithSeparators,
 } from "./markdown-renderer.js";
 
+let originalNoColor: string | undefined;
+
 // Force chalk to output colors in non-TTY test environments
 beforeAll(() => {
+  originalNoColor = process.env.NO_COLOR;
+  delete process.env.NO_COLOR;
   chalk.level = 3;
+});
+
+afterAll(() => {
+  if (originalNoColor === undefined) {
+    delete process.env.NO_COLOR;
+    return;
+  }
+
+  process.env.NO_COLOR = originalNoColor;
 });
 
 describe("renderMarkdown", () => {

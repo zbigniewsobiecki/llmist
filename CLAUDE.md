@@ -91,6 +91,7 @@ packages/
 │       ├── agent/       # Agent, builder, stream processor, hooks, compaction
 │       ├── core/        # LLMist client, messages, execution tree, models
 │       ├── gadgets/     # Parser, executor, registry, helpers, exceptions
+│       ├── skills/      # Agent Skills standard (SKILL.md parser, registry, activation)
 │       ├── providers/   # Anthropic, OpenAI, Gemini adapters
 │       ├── utils/       # Formatting, timing, config resolution
 │       ├── logging/     # tslog-based logging
@@ -101,6 +102,7 @@ packages/
 │       ├── agent-command.ts    # Main agent command
 │       ├── complete-command.ts # Completion command
 │       ├── config.ts           # TOML config parsing
+│       ├── skills/             # Skill CLI commands, config, slash handler
 │       └── tui/                # Terminal UI
 ├── testing/             # Testing utilities
 │   └── src/
@@ -115,7 +117,7 @@ packages/
         ├── testing/     # Testing docs
         └── reference/   # API reference
 
-examples/                # Runnable examples (01-23)
+examples/                # Runnable examples (01-27)
 └── gadgets/             # Example gadgets (calculator, filesystem, etc.)
 ```
 
@@ -139,6 +141,45 @@ const myGadget = createGadget({
   execute: (params) => { ... },
 });
 ```
+
+### Skills
+Markdown-based instruction packages following the [Agent Skills open standard](https://agentskills.io). Skills extend agent capabilities through prompt injection and context management, not code execution. Three-tier progressive disclosure manages context budget:
+- **Tier 1** (~100 tokens) - Name + description, always loaded
+- **Tier 2** (<5K tokens) - Full SKILL.md body, loaded on activation
+- **Tier 3** (unlimited) - Scripts, references, assets, loaded on demand
+
+```typescript
+// Load skills from standard locations
+const registry = discoverSkills({ projectDir: process.cwd() });
+
+// Or create programmatically
+const skill = Skill.fromContent(`---
+name: code-review
+description: Review code for bugs and best practices
+---
+When reviewing code, check for...`, '/path/SKILL.md');
+
+// Add to agent
+const agent = new AgentBuilder()
+  .withModel('sonnet')
+  .withSkills(registry)
+  .ask('Review this PR');
+```
+
+Skills compose with gadgets via the auto-registered `LoadSkill` meta-gadget. CLI supports `/skill-name` invocation and `llmist skill list/info` commands.
+
+### MCP (Model Context Protocol)
+Bidirectional MCP support — see `docs/specs/001-mcp-bidirectional.md`. Plan 1 ships the consume foundation: `AgentBuilder.withMcpServer({ name, transport: "stdio", command, args, trust? })` connects to a stdio MCP server and merges its tools into the agent's gadget catalog. STDIO commands are gated by the allowlist in `packages/llmist/src/mcp/allowlist.ts` — non-allowlisted binaries require explicit `trust: true` (mitigation for CVE-2026-30623). Zero-overhead when no servers are attached: the SDK is dynamic-imported only when needed.
+
+CLI flag (plan 1):
+```
+llmist agent --mcp-server fs="npx -- -y @modelcontextprotocol/server-filesystem /tmp" "list files"
+llmist agent --mcp-server custom="my-bin --port 1234" --mcp-trust custom "..."
+```
+
+**Plan 2** added: multi-server with deterministic `<server>__<tool>` prefixing on collision, Streamable HTTP transport (`transport: "http"`), MCP prompts loaded as skills, capability negotiation downgrade, signal handling, full TOML `[mcp.servers.<name>]` schema, and `llmist mcp import-claude-code` to lift existing setup from `~/.claude.json`.
+
+**Plan 3** added the exposer: `llmist mcp serve --gadgets <spec> [--skills <dir>]` runs llmist as a stdio MCP server other clients can call. Programmatic equivalent: `createMcpServer({ gadgets, skills })`. Native gadgets → MCP tools (1:1 via `schemaToJSONSchema`); skills → MCP prompts. Round-trip example in `examples/30-mcp-roundtrip.ts`.
 
 ### Hooks System
 Three-tier architecture:
@@ -205,7 +246,7 @@ In `packages/llmist/src/e2e/`. Use mocks by default (no API calls in CI).
 
 ### Mocking LLM Responses
 ```typescript
-import { mockLLM, createMockClient, resetMocks } from '@llmist/testing';
+import { mockLLM, createMockClient, getMockManager } from '@llmist/testing';
 
 mockLLM()
   .whenMessageContains('hello')
@@ -215,6 +256,9 @@ mockLLM()
 const agent = LLMist.createAgent()
   .withClient(createMockClient())
   .ask('hello');
+
+// Clear mocks between tests
+getMockManager().clear();
 ```
 
 ### Testing Gadgets
@@ -256,6 +300,8 @@ Triggered on push to main:
 | `packages/llmist/src/agent/builder.ts` | Fluent API builder (~1200 lines) |
 | `packages/llmist/src/gadgets/parser.ts` | Block format parser |
 | `packages/llmist/src/gadgets/executor.ts` | Gadget execution |
+| `packages/llmist/src/skills/skill.ts` | Skill class (Agent Skills standard) |
+| `packages/llmist/src/skills/registry.ts` | SkillRegistry |
 | `packages/llmist/src/core/client.ts` | LLMist client class |
 | `packages/cli/src/config.ts` | TOML config parsing (~37K) |
 | `turbo.json` | Turborepo task configuration |
@@ -263,10 +309,11 @@ Triggered on push to main:
 
 ## Examples
 
-23 runnable examples in `examples/`:
+27 runnable examples in `examples/`:
 ```bash
 npx tsx examples/01-basic-usage.ts
 npx tsx examples/12-error-handling.ts
+npx tsx examples/27-skills.ts
 ```
 
 Key examples:
@@ -276,6 +323,7 @@ Key examples:
 - `12-error-handling.ts` - Error handling and recovery
 - `19-multimodal-input.ts` - Vision/audio input
 - `20-external-gadgets.ts` - Loading gadgets from npm/git
+- `27-skills.ts` - Agent Skills (SKILL.md) integration
 
 ## Provider Setup
 

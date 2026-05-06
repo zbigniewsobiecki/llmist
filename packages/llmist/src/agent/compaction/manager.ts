@@ -5,9 +5,11 @@
  * conversation context within model limits.
  */
 
+import type { ILogObj, Logger } from "tslog";
 import type { LLMist } from "../../core/client.js";
 import type { LLMMessage } from "../../core/messages.js";
 import type { ModelLimits } from "../../core/model-catalog.js";
+import { createLogger } from "../../logging/logger.js";
 import type { IConversationManager } from "../interfaces.js";
 import {
   type CompactionConfig,
@@ -65,17 +67,26 @@ export class CompactionManager {
   private readonly model: string;
   private readonly config: ResolvedCompactionConfig;
   private readonly strategy: CompactionStrategy;
+  private readonly logger: Logger<ILogObj>;
   private modelLimits?: ModelLimits;
+  private hasWarnedModelNotFound = false;
+  private hasWarnedNoTokenCounting = false;
 
   // Statistics
   private totalCompactions = 0;
   private totalTokensSaved = 0;
   private lastTokenCount = 0;
 
-  constructor(client: LLMist, model: string, config: CompactionConfig = {}) {
+  constructor(
+    client: LLMist,
+    model: string,
+    config: CompactionConfig = {},
+    logger?: Logger<ILogObj>,
+  ) {
     this.client = client;
     this.model = model;
     this.config = resolveCompactionConfig(config);
+    this.logger = logger ?? createLogger({ name: "llmist:compaction" });
 
     // Create strategy instance (support both string name and custom instance)
     if (typeof config.strategy === "object" && "compact" in config.strategy) {
@@ -101,25 +112,26 @@ export class CompactionManager {
     }
 
     // Get model limits (cached after first call)
-    if (!this.modelLimits) {
-      this.modelLimits = this.client.modelRegistry.getModelLimits(this.model);
-      if (!this.modelLimits) {
-        // Model not found in registry, skip compaction silently
-        // This is not an error - it just means we can't determine context limits
-        return null;
-      }
+    if (!this.resolveModelLimits()) {
+      return null;
     }
 
     // Count current tokens (skip if client doesn't support token counting)
     if (!this.client.countTokens) {
+      if (!this.hasWarnedNoTokenCounting) {
+        this.hasWarnedNoTokenCounting = true;
+        this.logger.warn("Compaction skipped: client does not support token counting", {
+          model: this.model,
+        });
+      }
       return null;
     }
     const messages = conversation.getMessages();
     const currentTokens = await this.client.countTokens(this.model, messages);
     this.lastTokenCount = currentTokens;
 
-    // Calculate usage percentage
-    const usagePercent = (currentTokens / this.modelLimits.contextWindow) * 100;
+    // Calculate usage percentage (modelLimits guaranteed by resolveModelLimits above)
+    const usagePercent = (currentTokens / this.modelLimits!.contextWindow) * 100;
 
     // Check if we need to compact
     if (usagePercent < this.config.triggerThresholdPercent) {
@@ -154,11 +166,8 @@ export class CompactionManager {
     iteration: number,
     precomputed?: PrecomputedTokens,
   ): Promise<CompactionEvent | null> {
-    if (!this.modelLimits) {
-      this.modelLimits = this.client.modelRegistry.getModelLimits(this.model);
-      if (!this.modelLimits) {
-        return null;
-      }
+    if (!this.resolveModelLimits()) {
+      return null;
     }
 
     // Use precomputed values if available, otherwise compute them
@@ -171,8 +180,9 @@ export class CompactionManager {
     const currentTokens = precomputed?.currentTokens ?? historyTokens + baseTokens;
 
     // Calculate target tokens for history (leaving room for base messages and output)
+    // modelLimits guaranteed by resolveModelLimits above
     const targetTotalTokens = Math.floor(
-      (this.modelLimits.contextWindow * this.config.targetPercent) / 100,
+      (this.modelLimits!.contextWindow * this.config.targetPercent) / 100,
     );
     const targetHistoryTokens = Math.max(0, targetTotalTokens - baseTokens);
 
@@ -180,7 +190,7 @@ export class CompactionManager {
     const result = await this.strategy.compact(historyMessages, this.config, {
       currentTokens: historyTokens,
       targetTokens: targetHistoryTokens,
-      modelLimits: this.modelLimits,
+      modelLimits: this.modelLimits!,
       client: this.client,
       model: this.config.summarizationModel ?? this.model,
     });
@@ -218,6 +228,47 @@ export class CompactionManager {
     }
 
     return event;
+  }
+
+  /**
+   * Feed API-reported input token count for reactive threshold checking.
+   * Call this after each LLM response with the actual inputTokens from usage.
+   */
+  updateUsage(inputTokens: number): void {
+    this.lastTokenCount = inputTokens;
+  }
+
+  /**
+   * Check if compaction should trigger based on API-reported usage.
+   * Unlike checkAndCompact() which uses estimated token counts,
+   * this uses the ground-truth token count from the last LLM response.
+   */
+  shouldCompactFromUsage(): boolean {
+    if (!this.config.enabled) return false;
+    if (!this.resolveModelLimits()) return false;
+
+    const usagePercent = (this.lastTokenCount / this.modelLimits!.contextWindow) * 100;
+    return usagePercent >= this.config.triggerThresholdPercent;
+  }
+
+  /**
+   * Resolve and cache model limits from registry. Warns once if not found.
+   * @returns true if limits are available, false otherwise
+   */
+  private resolveModelLimits(): boolean {
+    if (this.modelLimits) return true;
+
+    this.modelLimits = this.client.modelRegistry.getModelLimits(this.model);
+    if (!this.modelLimits) {
+      if (!this.hasWarnedModelNotFound) {
+        this.hasWarnedModelNotFound = true;
+        this.logger.warn("Compaction skipped: model not found in registry", {
+          model: this.model,
+        });
+      }
+      return false;
+    }
+    return true;
   }
 
   /**

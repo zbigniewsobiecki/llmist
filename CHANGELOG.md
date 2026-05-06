@@ -1,3 +1,93 @@
+## [17.4.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.3.0...v17.4.0) (2026-05-06)
+
+### Features
+
+* **mcp:** bidirectional Model Context Protocol support ([4189ae9](https://github.com/zbigniewsobiecki/llmist/commit/4189ae9de4372d865bb66ac02f4613dfd390fd31))
+
+## [17.3.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.2.1...v17.3.0) (2026-05-04)
+
+### Features
+
+* add character mode to GadgetOutputViewer ([#592](https://github.com/zbigniewsobiecki/llmist/issues/592)) ([ca29faf](https://github.com/zbigniewsobiecki/llmist/commit/ca29fafb2fe8f791ff889ff197a4c8f0ef445b66))
+
+### Bug Fixes
+
+* **docs:** fix broken internal doc links ([#583](https://github.com/zbigniewsobiecki/llmist/issues/583)) ([47c5149](https://github.com/zbigniewsobiecki/llmist/commit/47c51494acdeba3cafde55f8f331f8ceed217e64))
+* **docs:** replace .throwsError() with .throws() and update mock import pattern ([#582](https://github.com/zbigniewsobiecki/llmist/issues/582)) ([08f2654](https://github.com/zbigniewsobiecki/llmist/commit/08f2654cda9350aa01d6808e31ddc2113b7401ed))
+* **docs:** sync model alias documentation with model-shortcuts.ts source ([#584](https://github.com/zbigniewsobiecki/llmist/issues/584)) ([a34f32e](https://github.com/zbigniewsobiecki/llmist/commit/a34f32e47acb61ed842e2b09d971823034d20067))
+
+## [17.2.1](https://github.com/zbigniewsobiecki/llmist/compare/v17.2.0...v17.2.1) (2026-04-15)
+
+### Bug Fixes
+
+* **cli:** render Finish/TellUser/AskUser updates in focused TUI mode ([#564](https://github.com/zbigniewsobiecki/llmist/issues/564)) ([348abee](https://github.com/zbigniewsobiecki/llmist/commit/348abeebde887d01e5c0bb70a2ec305b2a47b1c5))
+
+## [17.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.1.0...v17.2.0) (2026-04-03)
+
+### Features
+
+* **providers:** add prompt caching support for OpenRouter ([#561](https://github.com/zbigniewsobiecki/llmist/issues/561)) ([c16655f](https://github.com/zbigniewsobiecki/llmist/commit/c16655f6a1336ae4696464ad9c84e1403b6bd224))
+
+## [17.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.0.0...v17.1.0) (2026-04-03)
+
+### Features
+
+* **providers:** add Gemini 3.1 preview family to OpenRouter models ([#559](https://github.com/zbigniewsobiecki/llmist/issues/559)) ([3656821](https://github.com/zbigniewsobiecki/llmist/commit/365682150c9889f0abf7fe3a8fa2ffb678463d96))
+
+## [17.0.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.5...v17.0.0) (2026-04-03)
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** RunCommand schema changed from { argv: string[] } to
+{ command: string }. Callers constructing params programmatically must
+update from { argv: ["ls", "-la"] } to { command: "ls -la" }.
+
+Co-authored-by: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+### Bug Fixes
+
+* **cli:** add JSON flag-value example to RunCommand gadget ([#556](https://github.com/zbigniewsobiecki/llmist/issues/556)) ([7da0161](https://github.com/zbigniewsobiecki/llmist/commit/7da01618e5a5a9cb325e17d8c47eb71bd760ea48))
+
+### Code Refactoring
+
+* **cli:** replace RunCommand argv array with shell command string ([#557](https://github.com/zbigniewsobiecki/llmist/issues/557)) ([2122252](https://github.com/zbigniewsobiecki/llmist/commit/212225247f4fb4fcde2bcc8686f3b177c55ab456))
+
+## [16.2.5](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.4...v16.2.5) (2026-04-03)
+
+### Bug Fixes
+
+* **agent:** accurate token counting for OpenRouter and reactive compaction safety net ([#554](https://github.com/zbigniewsobiecki/llmist/issues/554)) ([49decef](https://github.com/zbigniewsobiecki/llmist/commit/49deceff2e49491be4a51a845632772a8ac0ddf9))
+
+## [16.2.4](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.3...v16.2.4) (2026-04-02)
+
+## [16.2.3](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.2...v16.2.3) (2026-04-02)
+
+### Bug Fixes
+
+* **agent:** recover from context overflow 400 errors via forced compaction ([#549](https://github.com/zbigniewsobiecki/llmist/issues/549)) ([69dfbc7](https://github.com/zbigniewsobiecki/llmist/commit/69dfbc7ef83b3a436d7d5c90bb86569afa121c94))
+
+## [16.2.2](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.1...v16.2.2) (2026-04-02)
+
+### Bug Fixes
+
+* **cli:** add message parameter to Finish gadget for focused mode display ([#547](https://github.com/zbigniewsobiecki/llmist/issues/547)) ([23be25d](https://github.com/zbigniewsobiecki/llmist/commit/23be25d2d07c628bd6f58dfd21f42c4e4834a3cf))
+
+## [16.2.1](https://github.com/zbigniewsobiecki/llmist/compare/v16.2.0...v16.2.1) (2026-04-02)
+
+### Bug Fixes
+
+* **agent:** prevent session freeze from malformed gadget dependency headers ([#545](https://github.com/zbigniewsobiecki/llmist/issues/545)) ([4a73f98](https://github.com/zbigniewsobiecki/llmist/commit/4a73f9812d58034c1158dee91913b5e2c34e8ed8))
+
+## [16.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.1.0...v16.2.0) (2026-04-01)
+
+### Features
+
+* **skills:** add Agent Skills open standard (SKILL.md) support across all packages ([#543](https://github.com/zbigniewsobiecki/llmist/issues/543)) ([72b498f](https://github.com/zbigniewsobiecki/llmist/commit/72b498f8501a37045eabf9c67c937cb2485476f2))
+
+### Bug Fixes
+
+* **cli:** align --no-rate-limit and --no-retry flags with Commander.js naming ([#541](https://github.com/zbigniewsobiecki/llmist/issues/541)) ([60d6d7c](https://github.com/zbigniewsobiecki/llmist/commit/60d6d7ccb09f42ba18aec4aae4aeb20775555d47))
+
 ## [16.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v16.0.4...v16.1.0) (2026-04-01)
 
 ### Features

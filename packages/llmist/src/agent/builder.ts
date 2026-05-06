@@ -18,14 +18,21 @@ import type {
   SubagentConfigMap,
   TextOnlyHandler,
 } from "../gadgets/types.js";
+import { resolveInstructions } from "../skills/activation.js";
+import { createLoadSkillGadget } from "../skills/load-skill-gadget.js";
+import { loadSkillsFromDirectory } from "../skills/loader.js";
+import { parseFrontmatter } from "../skills/parser.js";
+import type { SkillRegistry } from "../skills/registry.js";
 import { Agent, type AgentOptions } from "./agent.js";
 import { AGENT_INTERNAL_KEY } from "./agent-internal-key.js";
 import type {
   CoreState,
   GadgetState,
   HistoryMessage,
+  McpState,
   PolicyState,
   RetryState,
+  SkillState,
   SubagentState,
 } from "./builder-types.js";
 import {
@@ -53,6 +60,8 @@ export class AgentBuilder {
   private retry: RetryState;
   private subagents: SubagentState;
   private policies: PolicyState;
+  private skills: SkillState;
+  private mcp: McpState;
 
   constructor(client?: LLMist) {
     this.core = { client, initialMessages: [] };
@@ -60,6 +69,8 @@ export class AgentBuilder {
     this.retry = {};
     this.subagents = {};
     this.policies = {};
+    this.skills = { preActivated: [], skillDirs: [] };
+    this.mcp = { servers: [] };
   }
 
   /** Set the model to use. Supports aliases like "sonnet", "flash". */
@@ -114,6 +125,47 @@ export class AgentBuilder {
   withGadgets(...gadgets: GadgetOrClass[]): this {
     this.gadgets.gadgets.push(...gadgets);
     return this;
+  }
+
+  /**
+   * Attach a Model Context Protocol (MCP) server.
+   *
+   * The agent connects to the server lazily at the start of `run()`,
+   * discovers its tools, and registers them as native gadgets so the LLM
+   * can call them through the standard streaming block format.
+   *
+   * Calling this multiple times accumulates servers. Tools across servers
+   * are merged into a single registry; in plan 1, conflicting tool names
+   * raise a registration warning. Plan 2 introduces deterministic
+   * `<server>__<tool>` prefixing for collisions.
+   *
+   * STDIO commands are gated by an allowlist (see allowlist.ts) — pass
+   * `trust: true` on the spec to opt in for non-allowlisted binaries.
+   *
+   * Zero-overhead invariant: if you never call this method, the MCP
+   * runtime module is never loaded. Agents without MCP pay nothing.
+   *
+   * @example
+   * ```typescript
+   * const agent = LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withMcpServer({
+   *     name: "filesystem",
+   *     transport: "stdio",
+   *     command: "npx",
+   *     args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+   *   })
+   *   .ask("list files in /tmp");
+   * ```
+   */
+  withMcpServer(spec: import("../mcp/types.js").McpServerSpec): this {
+    this.mcp.servers.push(spec);
+    return this;
+  }
+
+  /** Inspect the configured MCP server specs. Useful for tests. */
+  getMcpServerSpecs(): readonly import("../mcp/types.js").McpServerSpec[] {
+    return this.mcp.servers;
   }
 
   /** Add conversation history messages. */
@@ -227,6 +279,44 @@ export class AgentBuilder {
     return this;
   }
 
+  // ─── Skills ──────────────────────────────────────────────────────────────────
+
+  /** Register a skill registry for this agent. */
+  withSkills(registry: SkillRegistry): this {
+    this.skills.registry = registry;
+    return this;
+  }
+
+  /**
+   * Pre-activate a specific skill before the agent starts.
+   * Instructions are injected into the system prompt.
+   *
+   * Note: each call replaces (not appends) the pre-activated skill for that name.
+   * This is safe for REPL loops where the same builder is reused.
+   */
+  withSkill(name: string, args?: string): this {
+    // Deduplicate: replace existing entry for same skill name
+    const existing = this.skills.preActivated.findIndex((s) => s.name === name);
+    if (existing !== -1) {
+      this.skills.preActivated[existing] = { name, args };
+    } else {
+      this.skills.preActivated.push({ name, args });
+    }
+    return this;
+  }
+
+  /** Clear all pre-activated skills. Call between REPL iterations. */
+  clearPreActivatedSkills(): this {
+    this.skills.preActivated = [];
+    return this;
+  }
+
+  /** Add a directory to scan for skills. */
+  withSkillsFrom(dir: string): this {
+    this.skills.skillDirs.push(dir);
+    return this;
+  }
+
   /** Configure retry behavior for LLM API calls. */
   withRetry(config: RetryConfig): this {
     this.retry.retryConfig = { ...config, enabled: config.enabled ?? true };
@@ -337,6 +427,55 @@ export class AgentBuilder {
     return HookComposer.compose(this.core.hooks, this.core.trailingMessage);
   }
 
+  private resolveSkillRegistry(): SkillRegistry | undefined {
+    if (this.skills.registry) {
+      if (this.skills.skillDirs.length > 0) {
+        for (const dir of this.skills.skillDirs) {
+          const skills = loadSkillsFromDirectory(dir, { type: "directory", path: dir });
+          this.skills.registry.registerMany(skills);
+        }
+      }
+      return this.skills.registry;
+    }
+
+    if (this.skills.skillDirs.length > 0) {
+      const { SkillRegistry: SR } = require("../skills/registry.js");
+      const reg = new SR();
+      for (const dir of this.skills.skillDirs) {
+        const skills = loadSkillsFromDirectory(dir, { type: "directory", path: dir });
+        reg.registerMany(skills);
+      }
+      return reg;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Resolve pre-activated skill instructions synchronously.
+   * Reads SKILL.md from disk via readFileSync (skills are local files).
+   */
+  private resolvePreActivatedInstructions(skillRegistry: SkillRegistry): string | undefined {
+    if (this.skills.preActivated.length === 0) return undefined;
+
+    const fs = require("node:fs");
+    const blocks: string[] = [];
+    for (const { name, args } of this.skills.preActivated) {
+      const skill = skillRegistry.get(name);
+      if (!skill) continue;
+      const content = fs.readFileSync(skill.sourcePath, "utf-8");
+      const { body } = parseFrontmatter(content);
+      const resolved = resolveInstructions(body, {
+        arguments: args,
+        variables: { SKILL_DIR: skill.sourceDir, CLAUDE_SKILL_DIR: skill.sourceDir },
+        cwd: skill.sourceDir,
+        shell: skill.metadata.shell,
+      });
+      blocks.push(`## Skill: ${name}\n\n${resolved}`);
+    }
+    return blocks.length > 0 ? blocks.join("\n\n---\n\n") : undefined;
+  }
+
   private buildAgentOptions(userPrompt?: string | ContentPart[]): AgentOptions {
     if (!this.core.client) {
       const { LLMist: LLMistClass } = require("../core/client.js");
@@ -345,10 +484,25 @@ export class AgentBuilder {
 
     const registry = GadgetRegistry.from(this.gadgets.gadgets);
 
+    // ─── Skills integration ────────────────────────────────────────────────
+    let systemPrompt = this.core.systemPrompt;
+    const skillRegistry = this.resolveSkillRegistry();
+
+    if (skillRegistry && skillRegistry.size > 0) {
+      if (skillRegistry.getModelInvocable().length > 0) {
+        registry.registerByClass(createLoadSkillGadget(skillRegistry));
+      }
+
+      const preActivatedBlock = this.resolvePreActivatedInstructions(skillRegistry);
+      if (preActivatedBlock) {
+        systemPrompt = systemPrompt ? `${systemPrompt}\n\n${preActivatedBlock}` : preActivatedBlock;
+      }
+    }
+
     return {
       client: this.core.client as LLMist,
       model: this.core.model ?? "openai:gpt-5-nano",
-      systemPrompt: this.core.systemPrompt,
+      systemPrompt,
       userPrompt,
       registry,
       maxIterations: this.core.maxIterations,
@@ -388,6 +542,7 @@ export class AgentBuilder {
       },
       sharedRateLimitTracker: this.subagents.sharedRateLimitTracker,
       sharedRetryConfig: this.retry.sharedRetryConfig,
+      mcpSpecs: this.mcp.servers.length > 0 ? [...this.mcp.servers] : undefined,
     };
   }
 

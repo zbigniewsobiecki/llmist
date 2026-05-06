@@ -3,7 +3,7 @@ import type { Agent, AgentHooks, ContentPart, ReasoningEffort, TokenUsage } from
 import { AgentBuilder, GadgetRegistry, HookPresets, isAbortError, text } from "llmist";
 import type { ApprovalConfig } from "./approval/index.js";
 import { getBuiltinGadgets } from "./builtin-gadgets.js";
-import type { AgentConfig, GlobalSubagentConfig } from "./config.js";
+import type { AgentConfig, CLIConfig, GlobalSubagentConfig } from "./config.js";
 import { getCustomCommandNames, loadConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
@@ -11,9 +11,24 @@ import { readAudioFile, readImageFile, readSystemPromptFile } from "./file-utils
 import { loadGadgets } from "./gadgets.js";
 import { addAgentOptions, type CLIAgentOptions } from "./option-helpers.js";
 import { resolveRateLimitConfig, resolveRetryConfig } from "./rate-limit-resolver.js";
+import { CLISkillManager } from "./skills/skill-manager.js";
+import { parseSlashCommand } from "./skills/slash-handler.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
-import { StatusBar, TUIApp } from "./tui/index.js";
+import { TUIApp } from "./tui/index.js";
+import { createTUIHooks } from "./tui/tui-hooks.js";
 import { executeAction, isInteractive, resolvePrompt } from "./utils.js";
+
+/**
+ * Safely loads the CLI config, returning null if loading fails (e.g., no config file present).
+ * Use this instead of calling loadConfig() directly when config is optional.
+ */
+function loadConfigSafe(): CLIConfig | null {
+  try {
+    return loadConfig();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Executes the agent command.
@@ -59,18 +74,14 @@ export async function executeAgent(
     prompt = await resolvePrompt(promptArg, env);
   }
 
+  // Load config once at the top — all config values are derived from this single result.
+  // loadConfigSafe() returns null if no config file exists or loading fails.
+  const fullConfig = loadConfigSafe();
+  const speechConfig = fullConfig?.speech;
+  const skillsConfig = fullConfig?.skills;
+
   // SHOWCASE: llmist's GadgetRegistry for dynamic tool loading
   const registry = new GadgetRegistry();
-
-  // Load config for speech settings (used by TextToSpeech gadget)
-  // Note: loadConfig() is safe to call multiple times and caches the result
-  let speechConfig: import("./config.js").SpeechConfig | undefined;
-  try {
-    const fullConfig = loadConfig();
-    speechConfig = fullConfig.speech;
-  } catch {
-    // Config loading may fail (e.g., no config file) - use defaults
-  }
 
   // Register built-in gadgets for basic agent interaction
   // AskUser is auto-excluded when stdin/stdout is not interactive (piped input/output)
@@ -100,6 +111,10 @@ export async function executeAgent(
     }
   }
 
+  // Load skills from config sources and standard locations
+  const skillManager = new CLISkillManager();
+  const skillRegistry = await skillManager.loadAll(skillsConfig);
+
   // Create TUI app if in TUI mode
   let tui: TUIApp | null = null;
   if (useTUI) {
@@ -112,16 +127,11 @@ export async function executeAgent(
 
     // Load available profiles for Ctrl+P cycling
     // Profiles allow users to switch between agent configurations between sessions
-    try {
-      const fullConfig = loadConfig();
-      const customProfiles = getCustomCommandNames(fullConfig);
-      // "agent" is the default profile, custom profiles come from cli.toml sections
-      const profiles = ["agent", ...customProfiles];
-      // Set initial profile to match the command being run
-      tui.setProfiles(profiles, commandName ?? "agent");
-    } catch {
-      // Config loading may fail (e.g., no config file) - profiles are optional
-    }
+    const customProfiles = fullConfig ? getCustomCommandNames(fullConfig) : [];
+    // "agent" is the default profile, custom profiles come from cli.toml sections
+    const profiles = ["agent", ...customProfiles];
+    // Set initial profile to match the command being run
+    tui.setProfiles(profiles, commandName ?? "agent");
 
     // If no initial prompt, start waiting for input early
     // This puts the REPL in "waiting" mode immediately, enabling Ctrl+P profile cycling
@@ -185,8 +195,8 @@ export async function executeAgent(
   // - TUI mode: TUI's modal dialogs (in beforeGadgetExecution controller)
   // - Piped mode: auto-deny gadgets requiring approval (can't prompt)
 
-  let _usage: TokenUsage | undefined;
-  let iterations = 0;
+  const usageRef: { value: TokenUsage | undefined } = { value: undefined };
+  const iterationsRef: { value: number } = { value: 0 };
 
   // LLM request logging: use session directory if enabled
   const llmLogsEnabled = options.logLlmRequests === true;
@@ -211,178 +221,14 @@ export async function executeAgent(
   );
 
   // Build TUI-specific hooks for progress tracking and UI updates
-  const tuiHooks: AgentHooks = {
-    observers: {
-      // onLLMCallStart: Track iteration for status bar label formatting
-      onLLMCallStart: async (context: any) => {
-        if (context.subagentContext) return;
-
-        if (tui) {
-          // Only track iteration - tree subscription handles block creation
-          tui.showLLMCallStart(iterations + 1);
-        }
-      },
-
-      // onStreamChunk: Update status bar with real-time output token estimate
-      onStreamChunk: async (context: any) => {
-        if (context.subagentContext) return;
-        if (!tui) return;
-
-        // Use accumulated text from context to estimate output tokens
-        const estimatedOutputTokens = StatusBar.estimateTokens(context.accumulatedText);
-        tui.updateStreamingTokens(estimatedOutputTokens);
-      },
-
-      // onLLMCallComplete: Capture metadata for final summary
-      onLLMCallComplete: async (context: any) => {
-        if (context.subagentContext) return;
-
-        // Capture completion metadata for final summary
-        _usage = context.usage;
-        iterations = Math.max(iterations, context.iteration + 1);
-
-        // Clear retry indicator on successful LLM call completion
-        if (tui) {
-          tui.clearRetry();
-        }
-      },
-
-      // onRateLimitThrottle: Show throttling delay in status bar and conversation
-      onRateLimitThrottle: async (context: any) => {
-        if (context.subagentContext) return; // Only main agent
-
-        if (tui) {
-          const seconds = Math.ceil(context.delayMs / 1000);
-          const { triggeredBy } = context.stats;
-
-          // Status bar indicator (will auto-clear after delay via timer below)
-          tui.showThrottling(context.delayMs, triggeredBy);
-
-          // Format conversation message based on which limit triggered
-          let message: string;
-          if (triggeredBy?.daily) {
-            // Daily limit: show token counts and wait until midnight
-            const current = Math.round(triggeredBy.daily.current / 1000);
-            const limit = Math.round(triggeredBy.daily.limit / 1000);
-            message = `Daily token limit reached (${current}K/${limit}K), waiting until midnight UTC...`;
-          } else {
-            // RPM/TPM: show current stats and countdown
-            const statsMsg: string[] = [];
-            if (context.stats.rpm > 0) statsMsg.push(`${context.stats.rpm} RPM`);
-            if (context.stats.tpm > 0)
-              statsMsg.push(`${Math.round(context.stats.tpm / 1000)}K TPM`);
-            const statsStr = statsMsg.length > 0 ? ` (${statsMsg.join(", ")})` : "";
-            message = `Rate limit approaching${statsStr}, waiting ${seconds}s...`;
-          }
-
-          tui.addSystemMessage(message, "throttle");
-
-          // Auto-clear status bar indicator after delay
-          setTimeout(() => tui.clearThrottling(), context.delayMs);
-        }
-      },
-
-      // onRetryAttempt: Show retry attempt in status bar and conversation
-      onRetryAttempt: async (context: any) => {
-        if (context.subagentContext) return; // Only main agent
-
-        if (tui) {
-          const totalAttempts = context.attemptNumber + context.retriesLeft;
-
-          // Status bar indicator (cleared on next successful LLM call or final failure)
-          tui.showRetry(context.attemptNumber, context.retriesLeft);
-
-          // Conversation log entry with retry details
-          const retryAfterInfo = context.retryAfterMs
-            ? ` (server requested ${Math.ceil(context.retryAfterMs / 1000)}s wait)`
-            : "";
-
-          tui.addSystemMessage(
-            `Request failed (attempt ${context.attemptNumber}/${totalAttempts}), retrying...${retryAfterInfo}`,
-            "retry",
-          );
-        }
-      },
-    },
-
-    // SHOWCASE: Controller-based approval gating for gadgets
-    //
-    // This demonstrates how to add safety layers WITHOUT modifying gadgets.
-    // The ApprovalManager handles approval flows externally via beforeGadgetExecution.
-    // Approval modes are configurable via cli.toml:
-    //   - "allowed": auto-proceed
-    //   - "denied": auto-reject, return message to LLM
-    //   - "approval-required": prompt user interactively
-    //
-    // Default: RunCommand, WriteFile, EditFile require approval unless overridden.
-    controllers: {
-      beforeGadgetExecution: async (ctx: any) => {
-        // Get approval mode from config
-        const normalizedGadgetName = ctx.gadgetName.toLowerCase();
-        const configuredMode = Object.entries(gadgetApprovals).find(
-          ([key]) => key.toLowerCase() === normalizedGadgetName,
-        )?.[1];
-        const mode = configuredMode ?? approvalConfig.defaultMode;
-
-        // Fast path: allowed gadgets proceed immediately
-        if (mode === "allowed") {
-          return { action: "proceed" };
-        }
-
-        // Check if we can prompt (interactive mode required for approval-required)
-        const stdinTTY = isInteractive(env.stdin);
-        const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-        const canPrompt = stdinTTY && stderrTTY;
-
-        // Non-interactive mode handling
-        if (!canPrompt) {
-          if (mode === "approval-required") {
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Run in a terminal to approve.`,
-            };
-          }
-          if (mode === "denied") {
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\n${ctx.gadgetName} is denied by configuration.`,
-            };
-          }
-          return { action: "proceed" };
-        }
-
-        // TUI mode: use TUI's modal approval dialog
-        if (tui) {
-          const response = await tui.showApproval({
-            gadgetName: ctx.gadgetName,
-            parameters: ctx.parameters,
-          });
-
-          // Persist "always" and "deny" responses for future calls in this session
-          if (response === "always") {
-            gadgetApprovals[ctx.gadgetName] = "allowed";
-          } else if (response === "deny") {
-            gadgetApprovals[ctx.gadgetName] = "denied";
-          }
-
-          if (response === "yes" || response === "always") {
-            return { action: "proceed" };
-          }
-          return {
-            action: "skip",
-            syntheticResult: `status=denied\n\nDenied by user`,
-          };
-        }
-
-        // Piped mode with terminal available but TUI disabled (e.g., stdout redirected)
-        // Suggest adjusting config or enabling full interactive mode
-        return {
-          action: "skip",
-          syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Enable TUI mode or adjust 'gadget-approval' in your config to allow this gadget.`,
-        };
-      },
-    },
-  };
+  const tuiHooks: AgentHooks = createTUIHooks({
+    tui,
+    env,
+    gadgetApprovals,
+    approvalConfig,
+    iterationsRef,
+    usageRef,
+  });
 
   // Combine TUI hooks with file logging (if enabled via --log-llm-requests flag)
   const finalHooks = llmLogDir
@@ -441,6 +287,11 @@ export async function executeAgent(
     builder.withTemperature(options.temperature);
   }
 
+  // Register skills (if any were discovered)
+  if (skillRegistry.size > 0) {
+    builder.withSkills(skillRegistry);
+  }
+
   // Reasoning configuration
   // Precedence: --no-reasoning > --reasoning/--reasoning-budget > config > auto-detect
   if (options.reasoning === false) {
@@ -480,6 +331,33 @@ export async function executeAgent(
   const gadgets = registry.getAll();
   if (gadgets.length > 0) {
     builder.withGadgets(...gadgets);
+  }
+
+  // MCP servers: TOML-defined first, then ad-hoc CLI flags (CLI flags can
+  // override TOML by providing the same name, but we warn on collision).
+  const mcpFromToml = (await import("./mcp-toml.js")).mcpServersTomlToSpecs(fullConfig?.mcp);
+  const mcpFromFlags =
+    options.mcpServer && options.mcpServer.length > 0
+      ? (await import("./mcp-options.js")).parseMcpServerFlags(
+          options.mcpServer,
+          options.mcpTrust ?? [],
+        )
+      : [];
+
+  if (mcpFromToml.length > 0 || mcpFromFlags.length > 0) {
+    const seen = new Set<string>();
+    for (const spec of mcpFromToml) {
+      builder.withMcpServer(spec);
+      seen.add(spec.name);
+    }
+    for (const spec of mcpFromFlags) {
+      if (seen.has(spec.name)) {
+        env.stderr.write(
+          `[mcp] --mcp-server "${spec.name}" overrides TOML mcp.servers.${spec.name}\n`,
+        );
+      }
+      builder.withMcpServer(spec);
+    }
   }
 
   // Set custom gadget markers if configured, otherwise use library defaults
@@ -547,6 +425,33 @@ export async function executeAgent(
 
   // Helper to create and run an agent with a given prompt
   const runAgentWithPrompt = async (userPrompt: string) => {
+    // Clear per-iteration skill state to prevent accumulation across REPL sessions
+    builder.clearPreActivatedSkills();
+
+    // Handle /skill-name slash commands
+    if (skillRegistry.size > 0 && userPrompt.startsWith("/")) {
+      const slashResult = parseSlashCommand(userPrompt, skillRegistry);
+      if (slashResult.isSkillInvocation) {
+        if (slashResult.isListCommand) {
+          // Show available skills inline instead of running the agent
+          const skills = skillRegistry.getUserInvocable();
+          const lines = skills.map((s) => `  /${s.name} — ${s.description}`);
+          const msg =
+            skills.length > 0 ? `Available skills:\n${lines.join("\n")}` : "No skills available.";
+          if (tui) {
+            tui.showUserMessage(`/skills`);
+            tui.showUserMessage(msg);
+          } else {
+            env.stdout.write(`${msg}\n`);
+          }
+          return;
+        }
+        if (slashResult.skillName) {
+          builder.withSkill(slashResult.skillName, slashResult.arguments);
+        }
+      }
+    }
+
     // Reset abort controller for new iteration (TUI mode)
     if (tui) {
       tui.resetAbort();

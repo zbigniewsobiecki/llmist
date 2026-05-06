@@ -321,6 +321,69 @@ export function isRetryableError(error: Error): boolean {
 }
 
 /**
+ * Heuristically detects whether an error is likely caused by context overflow
+ * (request too large for the provider/model), as opposed to other 400 errors
+ * like authentication failures or content policy violations.
+ *
+ * Used by the agent's main loop to decide whether forced compaction + retry
+ * is a viable recovery strategy.
+ *
+ * @param error - The error to classify
+ * @returns true if the error is likely a context overflow
+ */
+export function isLikelyContextOverflow(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  const statusCode = getErrorStatusCode(error);
+
+  // Explicit overflow keywords — match regardless of status code.
+  // These are unambiguous signals from providers that the request is too large.
+  if (
+    message.includes("context length") ||
+    message.includes("token limit") ||
+    message.includes("payload too large") ||
+    message.includes("request too large") ||
+    message.includes("request entity too large") ||
+    message.includes("maximum context") ||
+    message.includes("content size exceeded") ||
+    message.includes("content too large")
+  ) {
+    return true;
+  }
+
+  // Must be a 400-class error (by status code or message) to continue
+  const is400 = statusCode === 400 || (statusCode === undefined && message.includes("400"));
+  if (!is400) {
+    return false;
+  }
+
+  // Exclude 400 errors that are clearly not context overflow.
+  // This list must be broader than the auth-only check — many 400 reasons
+  // indicate bad parameters, not an oversized request.
+  if (
+    message.includes("authentication") ||
+    message.includes("unauthorized") ||
+    message.includes("invalid api key") ||
+    message.includes("invalid key") ||
+    message.includes("invalid model") ||
+    message.includes("invalid parameter") ||
+    message.includes("content policy") ||
+    message.includes("safety") ||
+    message.includes("permission") ||
+    message.includes("unsupported") ||
+    message.includes("not supported") ||
+    message.includes("missing required") ||
+    message.includes("malformed") ||
+    message.includes("not found")
+  ) {
+    return false;
+  }
+
+  // Generic 400 — could be context overflow from a provider that returns
+  // opaque error messages (e.g., OpenRouter's "400 Provider returned error")
+  return true;
+}
+
+/**
  * Context for enhanced error formatting.
  */
 export interface FormatLLMErrorContext {

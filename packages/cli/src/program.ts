@@ -25,8 +25,10 @@ import { createDefaultEnvironment } from "./environment.js";
 import { registerGadgetCommand } from "./gadget-command.js";
 import { registerImageCommand } from "./image-command.js";
 import { registerInitCommand } from "./init-command.js";
+import { registerMcpCommand } from "./mcp-command.js";
 import { registerModelsCommand } from "./models-command.js";
 import { initSession } from "./session.js";
+import { registerSkillCommand } from "./skills/skill-command.js";
 import { registerSpeechCommand } from "./speech-command.js";
 import { registerVisionCommand } from "./vision-command.js";
 
@@ -83,8 +85,10 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
   registerVisionCommand(program, env);
   registerModelsCommand(program, env);
   registerGadgetCommand(program, env);
+  registerSkillCommand(program, env);
   registerInitCommand(program, env);
   registerConfigCommand(program, env, config);
+  registerMcpCommand(program);
 
   // Register custom commands from config
   if (config) {

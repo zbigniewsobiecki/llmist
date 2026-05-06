@@ -97,15 +97,21 @@ export const tellUser = createGadget({
 export const finish = createGadget({
   name: "Finish",
   description: "Signal that you have completed your task. Call this when your work is done.",
-  schema: z.object({}),
+  schema: z.object({
+    message: z.string().optional().describe("A summary of what was accomplished"),
+  }),
   examples: [
     {
-      comment: "Signal task completion",
+      comment: "Signal task completion with a summary",
+      params: { message: "All requested changes have been applied and tests pass." },
+    },
+    {
+      comment: "Signal task completion without a message",
       params: {},
     },
   ],
-  execute: () => {
-    throw new TaskCompletionSignal("Task completed");
+  execute: ({ message }) => {
+    throw new TaskCompletionSignal(message || "Task completed");
   },
 });
 

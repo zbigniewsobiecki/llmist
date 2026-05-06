@@ -17,10 +17,14 @@ export interface StoredOutput {
   gadgetName: string;
   /** Full output content */
   content: string;
+  /** Total character count of the stored content */
+  charCount: number;
   /** Size in bytes */
   byteSize: number;
   /** Number of lines */
   lineCount: number;
+  /** Length of the longest line in characters */
+  maxLineLength: number;
   /** When the output was stored */
   timestamp: Date;
 }
@@ -54,13 +58,16 @@ export class GadgetOutputStore {
   store(gadgetName: string, content: string): string {
     const id = this.generateId(gadgetName);
     const encoder = new TextEncoder();
+    const lines = content.split("\n");
 
     const stored: StoredOutput = {
       id,
       gadgetName,
       content,
+      charCount: content.length,
       byteSize: encoder.encode(content).length,
-      lineCount: content.split("\n").length,
+      lineCount: lines.length,
+      maxLineLength: lines.reduce((max, line) => Math.max(max, line.length), 0),
       timestamp: new Date(),
     };
 

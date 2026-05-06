@@ -84,8 +84,9 @@ export class GadgetCallParser {
    * - `GadgetName` - Auto-generate ID, no dependencies
    * - `GadgetName:my_id` - Explicit ID, no dependencies
    * - `GadgetName:my_id:dep1,dep2` - Explicit ID with dependencies
+   * - `GadgetName:my_id:dep1:dep2:dep3` - Colons treated as dep separators (LLM resilience)
    *
-   * Dependencies must be comma-separated invocation IDs.
+   * Dependencies can be comma-separated or colon-separated invocation IDs.
    */
   private parseInvocationMetadata(headerLine: string): {
     gadgetName: string;
@@ -110,10 +111,16 @@ export class GadgetCallParser {
       };
     } else {
       // Name + ID + deps: GadgetName:calc_1:dep1,dep2
-      const deps = parts[2]
-        .split(",")
-        .map((d) => d.trim())
-        .filter((d) => d.length > 0);
+      // Also handles LLM using colons instead of commas: GadgetName:id:dep1:dep2
+      const depsRaw = parts.slice(2).join(",");
+      const deps = [
+        ...new Set(
+          depsRaw
+            .split(",")
+            .map((d) => d.trim())
+            .filter((d) => d.length > 0),
+        ),
+      ];
       return {
         gadgetName: parts[0],
         invocationId: parts[1].trim(),

@@ -630,8 +630,8 @@ describe("AnthropicMessagesProvider", () => {
         { provider: "anthropic", name: "claude-3-5-sonnet-20241022" },
       );
 
-      // Fallback: 11 chars / 4 = 2.75, ceil = 3
-      expect(count).toBe(3);
+      // Fallback: 11 chars / 2 = 5.5, ceil = 6
+      expect(count).toBe(6);
     });
 
     it("handles empty content with defensive checks", async () => {
@@ -1335,6 +1335,114 @@ describe("AnthropicMessagesProvider", () => {
     });
   });
 
+  describe("message_delta with cached token usage", () => {
+    it("includes cached input tokens from message_start in message_delta usage", async () => {
+      const mockStream = (async function* () {
+        yield {
+          type: "message_start",
+          message: {
+            usage: {
+              input_tokens: 100,
+              cache_read_input_tokens: 50,
+              cache_creation_input_tokens: 25,
+            },
+          },
+        };
+        yield {
+          type: "message_delta",
+          delta: { stop_reason: "end_turn" },
+          usage: { output_tokens: 200 },
+        };
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks = [];
+      for await (const chunk of provider.stream(
+        { model: "claude-3", messages: [{ role: "user" as const, content: "Hello" }] },
+        { provider: "anthropic", name: "claude-3" },
+      )) {
+        chunks.push(chunk);
+      }
+
+      // The message_start chunk should contain initial usage
+      const startChunk = chunks.find(
+        (c) => c.usage?.inputTokens === 175 && c.usage?.outputTokens === 0,
+      );
+      expect(startChunk).toBeDefined();
+      expect(startChunk?.usage).toEqual({
+        inputTokens: 175, // 100 + 50 + 25
+        outputTokens: 0,
+        totalTokens: 175,
+        cachedInputTokens: 50,
+        cacheCreationInputTokens: 25,
+      });
+
+      // The message_delta chunk should carry cached token data forward
+      const deltaChunk = chunks.find((c) => c.finishReason === "end_turn");
+      expect(deltaChunk).toBeDefined();
+      expect(deltaChunk?.usage).toEqual({
+        inputTokens: 175, // persisted from message_start
+        outputTokens: 200,
+        totalTokens: 375,
+        cachedInputTokens: 50,
+        cacheCreationInputTokens: 25,
+      });
+    });
+
+    it("yields message_delta usage chunk when no stop_reason but usage is present", async () => {
+      const mockStream = (async function* () {
+        yield {
+          type: "message_start",
+          message: {
+            usage: {
+              input_tokens: 80,
+              cache_read_input_tokens: 40,
+              cache_creation_input_tokens: 0,
+            },
+          },
+        };
+        yield {
+          type: "message_delta",
+          delta: { stop_reason: null },
+          usage: { output_tokens: 60 },
+        };
+      })();
+
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockReturnValue(mockStream),
+        },
+      } as unknown as Anthropic;
+
+      const provider = new AnthropicMessagesProvider(mockClient);
+
+      const chunks = [];
+      for await (const chunk of provider.stream(
+        { model: "claude-3", messages: [{ role: "user" as const, content: "Hi" }] },
+        { provider: "anthropic", name: "claude-3" },
+      )) {
+        chunks.push(chunk);
+      }
+
+      // message_delta with no stop_reason but with usage should still yield a usage chunk
+      const usageChunks = chunks.filter((c) => c.usage?.outputTokens === 60);
+      expect(usageChunks.length).toBeGreaterThan(0);
+      expect(usageChunks[0].usage).toMatchObject({
+        inputTokens: 120, // 80 + 40
+        outputTokens: 60,
+        cachedInputTokens: 40,
+        cacheCreationInputTokens: 0,
+      });
+    });
+  });
+
   describe("countTokens - additional edge cases", () => {
     it("returns correct token count from SDK mock response", async () => {
       const mockCountTokens = vi.fn().mockResolvedValue({ input_tokens: 42 });
@@ -1384,8 +1492,8 @@ describe("AnthropicMessagesProvider", () => {
         { provider: "anthropic", name: "claude-3-5-sonnet-20241022" },
       );
 
-      // "What is in this image?" = 22 chars => ceil(22/4) = 6 text tokens + 1000 image tokens
-      expect(count).toBe(1006);
+      // "What is in this image?" = 22 chars => ceil(22/2) = 11 text tokens + 1000 image tokens
+      expect(count).toBe(1011);
     });
   });
 });

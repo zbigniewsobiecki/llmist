@@ -1,0 +1,53 @@
+---
+title: "llmist mcp import-claude-code"
+description: Lift MCP server configuration from ~/.claude.json into llmist
+---
+
+Reads `~/.claude.json` (or `$CLAUDE_CONFIG_HOME`) and emits TOML `[mcp.servers.<name>]` blocks you can paste — or `--write` directly — into your llmist config.
+
+## Why
+
+Most users running llmist already have MCP servers configured in Claude Code, Cursor, or Cline (which all share the `~/.claude.json` shape). Retyping that config is friction; this command copies it.
+
+## Usage
+
+```bash
+llmist mcp import-claude-code              # print blocks to stdout
+llmist mcp import-claude-code >> ~/.llmist/config.toml
+llmist mcp import-claude-code --write      # append directly to ~/.llmist/config.toml
+llmist mcp import-claude-code --write /path/to/llmist.toml
+llmist mcp import-claude-code --source /custom/claude.json
+```
+
+## What gets imported
+
+The command recognizes both top-level `mcpServers` and per-project `projects[*].mcpServers` shapes that Claude Code uses.
+
+For each entry it emits the matching llmist TOML block:
+
+| Claude Code shape | llmist block |
+|---|---|
+| `{ command, args?, env? }` | `[mcp.servers.<n>] transport = "stdio" command = ... args = ... env = ...` |
+| `{ type: "http" \| "streamable-http" \| "sse", url, headers? }` | `[mcp.servers.<n>] transport = "http" url = ... headers = ...` |
+| anything else | skipped with a stderr warning |
+
+## What does NOT get imported
+
+- Claude-Code-specific keys outside the MCP slot (chat profiles, hooks).
+- Auth tokens stored in OS keychains rather than the JSON file.
+- Server entries with `enabled = false` — these aren't represented in Claude Code's shape; you can disable per-block via `enabled = false` after import.
+
+## Review before keeping
+
+The output is prefixed with a banner reminding you to review. The recommended workflow:
+
+```bash
+llmist mcp import-claude-code > /tmp/imported.toml
+# Inspect, prune, edit
+cat /tmp/imported.toml >> ~/.llmist/config.toml
+```
+
+## Related
+
+- [TOML configuration — `[mcp.servers.<name>]` reference](/cli/configuration/toml-reference/#mcp-servers-mcpserversname)
+- [MCP security — STDIO allowlist](/library/advanced/mcp-security/)

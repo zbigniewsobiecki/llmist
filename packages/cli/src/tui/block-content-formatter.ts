@@ -242,6 +242,24 @@ export function shouldRenderAsText(node: BlockNode, contentFilterMode: ContentFi
 }
 
 /**
+ * Mode-aware dispatcher: picks the right formatter for the block based on
+ * the current content filter mode. Use this from both create and update paths
+ * so they cannot drift (an earlier asymmetry hid Finish output in focused mode
+ * until the user toggled the mode).
+ */
+export function formatForBlock(
+  node: BlockNode,
+  contentFilterMode: ContentFilterMode,
+  selected: boolean,
+  expanded: boolean,
+): string {
+  if (shouldRenderAsText(node, contentFilterMode)) {
+    return formatGadgetAsText(node as GadgetNode);
+  }
+  return formatBlockContent(node, selected, expanded);
+}
+
+/**
  * Format a gadget as plain text (for focused mode: TellUser/AskUser/Finish).
  * Returns the formatted content string, or empty string if nothing to show.
  */
