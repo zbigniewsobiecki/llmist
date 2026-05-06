@@ -4,7 +4,8 @@
  * Connects to the public Filesystem MCP server (spawned via npx) and lets
  * the agent use its tools (`list_directory`, `read_file`, etc.) alongside
  * any native gadgets. This is the consume side of llmist's bidirectional
- * MCP support shipped in spec 001 / plan 1 (foundation).
+ * Demonstrates the MCP consume path. See examples/29-mcp-expose.ts and
+ * examples/30-mcp-roundtrip.ts for the publish side.
  *
  * Prereqs:
  *   - Node.js >= 22

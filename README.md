@@ -69,7 +69,8 @@ Use cases: observability, flow control, benchmarking, [human-in-the-loop](https:
 
 llmist consumes and exposes MCP servers, the de-facto interop layer for LLM tools.
 
-- **Consume any MCP server** — `withMcpServer({ name, transport: "stdio", command, args })` connects to any MCP server (e.g. Filesystem, GitHub, Postgres) and merges its tools into the agent's gadget catalog
+- **Consume any MCP server** — `withMcpServer({ name, transport: "stdio", command, args })` or `transport: "http"` connects to MCP servers (e.g. Filesystem, GitHub, Postgres) and merges their tools into the agent's gadget catalog
+- **Prompts and config** — MCP prompts become slash-invocable skills, and CLI users can persist servers in strict `[mcp.servers.<name>]` TOML blocks
 - **Default-safe** — STDIO commands run through a runtime allowlist that mitigates [CVE-2026-30623](https://docs.litellm.ai/blog/mcp-stdio-command-injection-april-2026); opt in per server with `trust: true`
 - **Zero overhead when unused** — the SDK is dynamic-imported only when at least one MCP server is configured
 
