@@ -1,3 +1,9 @@
+## [17.4.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.3.0...v17.4.0) (2026-05-06)
+
+### Features
+
+* **mcp:** bidirectional Model Context Protocol support ([4189ae9](https://github.com/zbigniewsobiecki/llmist/commit/4189ae9de4372d865bb66ac02f4613dfd390fd31))
+
 ## [17.3.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.2.1...v17.3.0) (2026-05-04)
 
 ### Features
