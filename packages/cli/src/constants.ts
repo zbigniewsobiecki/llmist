@@ -67,6 +67,9 @@ export const OPTION_FLAGS = {
   reasoning: "--reasoning [effort]",
   noReasoning: "--no-reasoning",
   reasoningBudget: "--reasoning-budget <tokens>",
+  // MCP options (plan 1: ad-hoc single-server flag; plan 2 adds full TOML schema)
+  mcpServer: "--mcp-server <spec...>",
+  mcpTrust: "--mcp-trust <name...>",
 } as const;
 
 /** Human-readable descriptions for command-line options */
@@ -115,6 +118,11 @@ export const OPTION_DESCRIPTIONS = {
   noReasoning: "Disable auto-enabled reasoning for reasoning-capable models.",
   reasoningBudget:
     "Explicit reasoning token budget (Anthropic/Gemini 2.5). Overrides effort level.",
+  // MCP descriptions
+  mcpServer:
+    "Attach an MCP stdio server. Format: '<name>=<command>' optionally followed by args after '--'. Repeat for multiple. Args belong to the most recent --mcp-server until the next --mcp-server.",
+  mcpTrust:
+    "Skip the stdio command allowlist for the named MCP server. Repeat for multiple servers. See https://llmist.dev/library/advanced/mcp-security/ (CVE-2026-30623).",
 } as const;
 
 /** Prefix for summary output written to stderr */

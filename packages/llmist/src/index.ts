@@ -345,6 +345,40 @@ export type {
   TextOnlyHandler,
   TextOnlyStrategy,
 } from "./gadgets/types.js";
+// ============================================================================
+// Model Context Protocol (MCP) integration
+// ============================================================================
+export {
+  assertCommandAllowed,
+  createMcpServer,
+  type CreateMcpServerOptions,
+  DEFAULT_MCP_COMMAND_ALLOWLIST,
+  gadgetResultToMcpContent,
+  gadgetToMcpTool,
+  type HttpMcpServerSpec,
+  JsonSchemaConversionError,
+  type JSONSchemaLike,
+  jsonSchemaToZod,
+  McpClient,
+  type McpClientOptions,
+  McpConnectError,
+  type McpContentBlock,
+  McpError,
+  McpLifecycle,
+  type McpServerCapabilities,
+  type McpServerHandle,
+  type McpServerSpec,
+  type McpToolAdapterOptions,
+  type McpToolDescriptor,
+  mcpToolToGadget,
+  type McpToolResult,
+  McpToolCallError,
+  McpUntrustedCommandError,
+  renderSkillForMcpPrompt,
+  runGadgetForMcp,
+  skillToMcpPrompt,
+  type StdioMcpServerSpec,
+} from "./mcp/index.js";
 // Provider constants (for token estimation)
 export { FALLBACK_CHARS_PER_TOKEN } from "./providers/constants.js";
 

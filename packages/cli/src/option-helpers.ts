@@ -112,6 +112,11 @@ export interface CLIAgentOptions {
   // TUI options
   /** Show keyboard shortcuts hints bar (default: true) */
   showHints?: boolean;
+  // MCP options (plan 1: ad-hoc single-server). Plan 2 adds full TOML schema.
+  /** `--mcp-server <name=command [-- args...]>` (repeated). */
+  mcpServer?: string[];
+  /** `--mcp-trust <name>` (repeated). */
+  mcpTrust?: string[];
 }
 
 /**
@@ -201,6 +206,9 @@ export function addCompleteOptions(cmd: Command, defaults?: CompleteConfig): Com
         OPTION_DESCRIPTIONS.reasoningBudget,
         createNumericParser({ label: "Reasoning budget", integer: true, min: 1 }),
       )
+      // MCP options (plan 1: ad-hoc single-server). Plan 2 adds full TOML schema.
+      .option(OPTION_FLAGS.mcpServer, OPTION_DESCRIPTIONS.mcpServer)
+      .option(OPTION_FLAGS.mcpTrust, OPTION_DESCRIPTIONS.mcpTrust)
   );
 }
 
@@ -313,6 +321,9 @@ export function addAgentOptions(cmd: Command, defaults?: AgentConfig): Command {
         OPTION_DESCRIPTIONS.reasoningBudget,
         createNumericParser({ label: "Reasoning budget", integer: true, min: 1 }),
       )
+      // MCP options (plan 1: ad-hoc single-server). Plan 2 adds full TOML schema.
+      .option(OPTION_FLAGS.mcpServer, OPTION_DESCRIPTIONS.mcpServer)
+      .option(OPTION_FLAGS.mcpTrust, OPTION_DESCRIPTIONS.mcpTrust)
   );
 }
 

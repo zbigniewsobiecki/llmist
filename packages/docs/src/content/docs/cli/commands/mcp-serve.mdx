@@ -1,0 +1,92 @@
+---
+title: "llmist mcp serve"
+description: Publish llmist gadgets and skills as a stdio MCP server
+---
+
+Run llmist as a Model Context Protocol stdio server. Other MCP clients (Claude Code, Cursor, ChatGPT desktop, OpenAI Agents SDK, Cline, the MCP Inspector) can then connect, discover the published tools and prompts, and invoke them.
+
+## Quick start
+
+```bash
+# Expose a local gadget module as an MCP server
+llmist mcp serve --gadgets ./my-gadgets/
+
+# Expose a published npm gadget package + a skills directory as prompts
+llmist mcp serve \
+  --gadgets dhalsim:minimal \
+  --skills ./skills/
+```
+
+The server speaks JSON-RPC on stdio — wire it into your MCP client's config rather than running it directly in a terminal (where stdout is reserved for the protocol).
+
+## Add to Claude Code
+
+Add to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "llmist": {
+      "command": "llmist",
+      "args": [
+        "mcp", "serve",
+        "--gadgets", "/abs/path/to/my-gadgets/"
+      ]
+    }
+  }
+}
+```
+
+After saving, restart Claude Code. Your llmist gadgets appear as tools the model can call.
+
+## Add to Cursor
+
+Cursor reads MCP config from its settings (the schema mirrors Claude Code's). Add the same `mcpServers.llmist` block.
+
+## Smoke-test with the official Inspector
+
+```bash
+npx @modelcontextprotocol/inspector llmist mcp serve --gadgets ./my-gadgets/
+```
+
+The Inspector UI lets you browse tools and prompts and invoke them with arbitrary JSON arguments — useful for verifying schemas and content before installing into a real client.
+
+## Flags
+
+| Flag | Description |
+|---|---|
+| `-g`, `--gadgets <spec...>` | Gadget specifier — local path, npm package, git URL. Repeat for multiple. |
+| `--skills <dir>` | Directory of SKILL.md files to expose as MCP prompts. |
+| `--protocol-version <ver>` | MCP protocol version. Default: `2025-06-18`. |
+
+## What gets advertised
+
+| llmist concept | MCP primitive | When advertised |
+|---|---|---|
+| Native gadget | tool | Always (when `--gadgets` produced at least one) |
+| llmist skill | prompt | When `--skills <dir>` is passed and produced at least one |
+
+The server does **not** advertise resources, sampling, or elicitation — those are scoped for follow-up specs.
+
+## Schema fidelity
+
+Each gadget's `parameterSchema` (Zod) is converted to JSON Schema using the same converter llmist uses internally for provider tool calls. What the LLM sees on the consumer side matches the gadget's actual contract on the publisher side; there's no extra mapping layer to drift.
+
+## Lifecycle
+
+- The server runs until stdin closes, SIGTERM, or SIGINT.
+- All paths exit cleanly with code 0 on shutdown.
+
+## Library API
+
+`createMcpServer({ gadgets, skills })` is also exported from `llmist`. See [MCP — expose (library)](/library/advanced/mcp-expose/).
+
+## Roundtrip
+
+You can verify the published server works end-to-end without leaving llmist:
+
+```bash
+npx tsx examples/30-mcp-roundtrip.ts
+```
+
+This spawns `llmist mcp serve` as a subprocess and connects an llmist agent to it via `withMcpServer`. Useful as both a smoke test and a template for embedding a published MCP server inside another agent.

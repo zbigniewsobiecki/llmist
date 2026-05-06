@@ -229,6 +229,19 @@ export interface AgentOptions {
    * settings instead of creating its own.
    */
   sharedRetryConfig?: ResolvedRetryConfig;
+
+  /**
+   * MCP server specs to attach to the agent.
+   *
+   * When non-empty, the agent connects to each server lazily at the start of
+   * `run()`, lists their tools, wraps them as native gadgets, and registers
+   * them on the registry alongside any explicitly-provided gadgets. The
+   * lifecycle teardown happens in the agent's `finally` block.
+   *
+   * When empty or omitted, the MCP module is never imported — agents that
+   * don't use MCP pay zero overhead at load time.
+   */
+  mcpSpecs?: import("../mcp/types.js").McpServerSpec[];
 }
 
 /**
@@ -297,6 +310,11 @@ export class Agent {
 
   // LLM call lifecycle helper (encapsulates prepareLLMCall, completeLLMCall, notifyLLMError)
   private readonly llmCallLifecycle: LLMCallLifecycle;
+
+  // MCP integration — populated only when mcpSpecs were provided.
+  private readonly mcpSpecs: import("../mcp/types.js").McpServerSpec[];
+  private mcpLifecycle: { closeAll(): Promise<void> } | null = null;
+  private readonly mcpDiscoveredPrompts: import("../mcp/prompt-adapter.js").McpPromptSkill[] = [];
 
   /**
    * Creates a new Agent instance.
@@ -393,6 +411,10 @@ export class Agent {
 
     // Store abort signal for cancellation
     this.signal = options.signal;
+
+    // Capture MCP server specs (only honored when non-empty — zero-overhead
+    // when no MCP servers were configured).
+    this.mcpSpecs = options.mcpSpecs ?? [];
 
     // Store reasoning configuration
     this.reasoning = options.reasoning;
@@ -683,6 +705,24 @@ export class Agent {
     // This is the single source of truth - tree events trigger hooks with proper subagentContext.
     const unsubscribeBridge = bridgeTreeToHooks(this.tree, this.hooks, this.logger);
 
+    // Lazy MCP setup — only runs when at least one MCP server was attached.
+    // Connects each server, registers tools as adapter gadgets, and rebuilds
+    // the conversation system prompt so the LLM sees the full gadget catalog.
+    if (this.mcpSpecs.length > 0) {
+      const { setupMcpServers } = await import("../mcp/runtime.js");
+      this.mcpLifecycle = await setupMcpServers({
+        specs: this.mcpSpecs,
+        registry: this.registry,
+        conversation: this.conversation,
+        prefixConfig: this.prefixConfig,
+        systemPrompt: this.conversation.getBaseMessages()[0]?.role === "system"
+          ? (this.conversation.getBaseMessages()[0]!.content as string)
+          : undefined,
+        logger: this.logger,
+        onPromptDiscovered: (skill) => this.mcpDiscoveredPrompts.push(skill),
+      });
+    }
+
     let currentIteration = 0;
 
     this.logger.info("Starting agent loop", {
@@ -954,6 +994,16 @@ export class Agent {
 
       // Always clean up the bridge subscription
       unsubscribeBridge();
+
+      // Tear down MCP servers (no-op when none were attached).
+      if (this.mcpLifecycle) {
+        try {
+          await this.mcpLifecycle.closeAll();
+        } catch (err) {
+          this.logger.debug("MCP lifecycle teardown error (suppressed):", err);
+        }
+        this.mcpLifecycle = null;
+      }
     }
   }
 

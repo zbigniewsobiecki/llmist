@@ -1,0 +1,86 @@
+---
+title: MCP — Quick start (consume)
+description: Use any MCP server's tools from llmist's CLI
+---
+
+llmist's CLI can connect to any [Model Context Protocol](https://modelcontextprotocol.io) stdio server and merge its tools into the agent's gadget catalog. This page covers the consume side shipped in plan 1; the exposer (`llmist mcp serve`) and full TOML configuration arrive in plans 2 and 3.
+
+## 5-minute walkthrough
+
+1. **Set an API key** (any one of these):
+
+   ```bash
+   export OPENAI_API_KEY="sk-..."
+   # or ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY
+   ```
+
+2. **Run an agent with the public Filesystem MCP server**:
+
+   ```bash
+   llmist agent \
+     --mcp-server fs="npx -- -y @modelcontextprotocol/server-filesystem /tmp" \
+     "list files in /tmp and tell me how many there are"
+   ```
+
+The agent connects, discovers `list_directory`, `read_file`, etc., picks the right tool, and returns the count. The MCP child process is terminated when the agent exits.
+
+## The `--mcp-server` flag
+
+```
+--mcp-server <name>=<command> [-- <args>...]
+```
+
+Format details:
+
+- `<name>` — a stable identifier for this server. Surfaced in logs.
+- `<command>` — the executable. Its basename must be in the default allowlist (`npx`, `node`, `uvx`, `python`, `python3`, `deno`, `bun`) — or the server must be marked trusted via `--mcp-trust <name>`.
+- `<args>` — anything after `--` is passed as arguments to the executable. (No `--` and a multi-token tail also works; the first token is the command, the rest are args.)
+
+Repeat `--mcp-server` to attach multiple servers (full multi-server with name-conflict resolution arrives in plan 2).
+
+```bash
+llmist agent \
+  --mcp-server fs="npx -- -y @modelcontextprotocol/server-filesystem /tmp" \
+  --mcp-server git="npx -- -y @modelcontextprotocol/server-git" \
+  "show me the most recently modified file in /tmp and its git history"
+```
+
+## The `--mcp-trust` flag
+
+If your server's command isn't in the default allowlist:
+
+```bash
+llmist agent \
+  --mcp-server custom="/Users/me/bin/my-mcp -- --port 1234" \
+  --mcp-trust custom \
+  "use the custom server to do X"
+```
+
+This bypasses the runtime allowlist for that one server. Read [MCP security](/library/advanced/mcp-security/) before you reach for it.
+
+## What's not yet covered
+
+- **Persistent TOML config** — for now, configure servers via flags. Plan 2 adds `[mcp.servers.<name>]` blocks in `llmist` config files plus an `llmist mcp import-claude-code` helper that copies your existing MCP setup from `~/.claude.json`.
+- **Streamable HTTP transport** — plan 2.
+- **MCP prompts** — plan 2 (loaded via the existing `/skill-name` slash handler).
+- **Tool name conflicts across servers** — plan 1 logs a warning and skips the duplicate; plan 2 adds deterministic `<server>__<tool>` prefixing.
+
+## Library API
+
+The same machinery is available in code:
+
+```typescript
+import { LLMist } from "llmist";
+
+const answer = await LLMist.createAgent()
+  .withModel("sonnet")
+  .withMcpServer({
+    name: "filesystem",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  })
+  .askAndCollect("list files in /tmp");
+```
+
+See [MCP library reference](/library/advanced/mcp/) for the full type surface.

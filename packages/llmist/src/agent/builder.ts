@@ -29,6 +29,7 @@ import type {
   CoreState,
   GadgetState,
   HistoryMessage,
+  McpState,
   PolicyState,
   RetryState,
   SkillState,
@@ -60,6 +61,7 @@ export class AgentBuilder {
   private subagents: SubagentState;
   private policies: PolicyState;
   private skills: SkillState;
+  private mcp: McpState;
 
   constructor(client?: LLMist) {
     this.core = { client, initialMessages: [] };
@@ -68,6 +70,7 @@ export class AgentBuilder {
     this.subagents = {};
     this.policies = {};
     this.skills = { preActivated: [], skillDirs: [] };
+    this.mcp = { servers: [] };
   }
 
   /** Set the model to use. Supports aliases like "sonnet", "flash". */
@@ -122,6 +125,47 @@ export class AgentBuilder {
   withGadgets(...gadgets: GadgetOrClass[]): this {
     this.gadgets.gadgets.push(...gadgets);
     return this;
+  }
+
+  /**
+   * Attach a Model Context Protocol (MCP) server.
+   *
+   * The agent connects to the server lazily at the start of `run()`,
+   * discovers its tools, and registers them as native gadgets so the LLM
+   * can call them through the standard streaming block format.
+   *
+   * Calling this multiple times accumulates servers. Tools across servers
+   * are merged into a single registry; in plan 1, conflicting tool names
+   * raise a registration warning. Plan 2 introduces deterministic
+   * `<server>__<tool>` prefixing for collisions.
+   *
+   * STDIO commands are gated by an allowlist (see allowlist.ts) — pass
+   * `trust: true` on the spec to opt in for non-allowlisted binaries.
+   *
+   * Zero-overhead invariant: if you never call this method, the MCP
+   * runtime module is never loaded. Agents without MCP pay nothing.
+   *
+   * @example
+   * ```typescript
+   * const agent = LLMist.createAgent()
+   *   .withModel("sonnet")
+   *   .withMcpServer({
+   *     name: "filesystem",
+   *     transport: "stdio",
+   *     command: "npx",
+   *     args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+   *   })
+   *   .ask("list files in /tmp");
+   * ```
+   */
+  withMcpServer(spec: import("../mcp/types.js").McpServerSpec): this {
+    this.mcp.servers.push(spec);
+    return this;
+  }
+
+  /** Inspect the configured MCP server specs. Useful for tests. */
+  getMcpServerSpecs(): readonly import("../mcp/types.js").McpServerSpec[] {
+    return this.mcp.servers;
   }
 
   /** Add conversation history messages. */
@@ -498,6 +542,7 @@ export class AgentBuilder {
       },
       sharedRateLimitTracker: this.subagents.sharedRateLimitTracker,
       sharedRetryConfig: this.retry.sharedRetryConfig,
+      mcpSpecs: this.mcp.servers.length > 0 ? [...this.mcp.servers] : undefined,
     };
   }
 

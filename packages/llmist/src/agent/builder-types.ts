@@ -43,6 +43,11 @@ export interface CoreState {
   cachingConfig?: CachingConfig;
 }
 
+export interface McpState {
+  /** MCP server specs to attach to the agent. */
+  servers: import("../mcp/types.js").McpServerSpec[];
+}
+
 export interface GadgetState {
   gadgets: GadgetOrClass[];
   gadgetStartPrefix?: string;
