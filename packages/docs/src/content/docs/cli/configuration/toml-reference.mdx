@@ -361,6 +361,8 @@ These flags work with any command:
 
 Configure Model Context Protocol servers that the agent should attach to. Each server is its own table.
 
+The MCP config schema is strict: `[mcp]`, `[mcp.servers]`, each server block, and nested `env` / `headers` blocks must have the expected shape. Unknown keys and invalid values fail config validation with a path-specific error instead of silently dropping a server.
+
 ### Stdio server
 
 ```toml
@@ -398,7 +400,7 @@ Authorization = "Bearer xyz"
 | `headers` | optional | — | Fixed HTTP headers (e.g. Authorization) |
 | `trust` | optional | `false` | Bypass the stdio command allowlist for this server |
 | `enabled` | optional | `true` | Set `false` to skip the block at startup |
-| `timeout-ms` | optional | none | Per-call timeout in milliseconds |
+| `timeout-ms` | optional | none | Per-operation timeout in milliseconds; must be a non-negative integer, and `0` disables the timeout |
 
 ### Importing from Claude Code
 

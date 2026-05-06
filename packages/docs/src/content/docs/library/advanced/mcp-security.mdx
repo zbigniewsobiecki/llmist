@@ -55,14 +55,13 @@ Additional best practices:
 
 - Install MCP servers only from trusted sources. Verify the npm package name carefully.
 - Run inside a container or VM when consuming third-party MCP servers, especially for filesystem / shell access.
-- Apply the existing llmist gadget permission policy (`approval-required`) to MCP-backed gadgets that touch the filesystem, network, or process — full integration arrives in plan 2.
+- Apply the existing llmist gadget permission policy (`approval-required`) to MCP-backed gadgets that touch the filesystem, network, or process. MCP-backed tools are registered as native gadgets, so the same policy machinery applies.
 
-## What's next
+## Follow-up hardening
 
-Plan 2 adds:
+The allowlist blocks the highest-impact class of issues before any server is spawned. Follow-up hardening areas include:
 
-- The TOML config schema with a `trust = true` field per server
-- Origin metadata so logs and the TUI show which MCP server backed every gadget call
-- Permission policy integration so `[gadgets.permissions]` rules apply to MCP-backed tools the same as native ones
+- Richer origin metadata so logs and the TUI can show which MCP server backed every gadget call.
+- More granular policy presets for common third-party MCP servers.
 
-Plan 3 covers the exposer side (`llmist mcp serve`) — its security guidance is published with that plan.
+The exposer side (`llmist mcp serve`) does not spawn arbitrary third-party commands. Its primary security boundary is the set of gadgets and skills you choose to publish.
