@@ -28,7 +28,6 @@
 
 import type {
   AgentHooks,
-  GadgetExecutionControllerContext,
   ObserveChunkContext,
   ObserveLLMCallContext,
   ObserveLLMCompleteContext,
@@ -36,9 +35,9 @@ import type {
   ObserveRetryAttemptContext,
   TokenUsage,
 } from "llmist";
+import { createApprovalController } from "../approval/approval-controller.js";
 import type { ApprovalConfig } from "../approval/index.js";
 import type { CLIEnvironment } from "../environment.js";
-import { isInteractive } from "../utils.js";
 import type { TUIApp } from "./index.js";
 import { StatusBar } from "./status-bar.js";
 
@@ -197,71 +196,12 @@ export function createTUIHooks(options: TUIHooksOptions): AgentHooks {
     //
     // Default: RunCommand, WriteFile, EditFile require approval unless overridden.
     controllers: {
-      beforeGadgetExecution: async (ctx: GadgetExecutionControllerContext) => {
-        // Get approval mode from config
-        const normalizedGadgetName = ctx.gadgetName.toLowerCase();
-        const configuredMode = Object.entries(gadgetApprovals).find(
-          ([key]) => key.toLowerCase() === normalizedGadgetName,
-        )?.[1];
-        const mode = configuredMode ?? approvalConfig.defaultMode;
-
-        // Fast path: allowed gadgets proceed immediately
-        if (mode === "allowed") {
-          return { action: "proceed" } as const;
-        }
-
-        // Check if we can prompt (interactive mode required for approval-required)
-        const stdinTTY = isInteractive(env.stdin);
-        const stderrTTY = (env.stderr as NodeJS.WriteStream).isTTY === true;
-        const canPrompt = stdinTTY && stderrTTY;
-
-        // Non-interactive mode handling
-        if (!canPrompt) {
-          if (mode === "approval-required") {
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Run in a terminal to approve.`,
-            } as const;
-          }
-          if (mode === "denied") {
-            return {
-              action: "skip",
-              syntheticResult: `status=denied\n\n${ctx.gadgetName} is denied by configuration.`,
-            } as const;
-          }
-          return { action: "proceed" } as const;
-        }
-
-        // TUI mode: use TUI's modal approval dialog
-        if (tui) {
-          const response = await tui.showApproval({
-            gadgetName: ctx.gadgetName,
-            parameters: ctx.parameters,
-          });
-
-          // Persist "always" and "deny" responses for future calls in this session
-          if (response === "always") {
-            gadgetApprovals[ctx.gadgetName] = "allowed";
-          } else if (response === "deny") {
-            gadgetApprovals[ctx.gadgetName] = "denied";
-          }
-
-          if (response === "yes" || response === "always") {
-            return { action: "proceed" } as const;
-          }
-          return {
-            action: "skip",
-            syntheticResult: "status=denied\n\nDenied by user",
-          } as const;
-        }
-
-        // Piped mode with terminal available but TUI disabled (e.g., stdout redirected)
-        // Suggest adjusting config or enabling full interactive mode
-        return {
-          action: "skip",
-          syntheticResult: `status=denied\n\n${ctx.gadgetName} requires interactive approval. Enable TUI mode or adjust 'gadget-approval' in your config to allow this gadget.`,
-        } as const;
-      },
+      beforeGadgetExecution: createApprovalController({
+        gadgetApprovals,
+        approvalConfig,
+        tui,
+        env,
+      }),
     },
   };
 }
