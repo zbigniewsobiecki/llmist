@@ -357,8 +357,67 @@ These flags work with any command:
 | `--version` | Show version number |
 | `--help` | Show help |
 
+## MCP servers (`[mcp.servers.<name>]`)
+
+Configure Model Context Protocol servers that the agent should attach to. Each server is its own table.
+
+The MCP config schema is strict: `[mcp]`, `[mcp.servers]`, each server block, and nested `env` / `headers` blocks must have the expected shape. Unknown keys and invalid values fail config validation with a path-specific error instead of silently dropping a server.
+
+### Stdio server
+
+```toml
+[mcp.servers.fs]
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+# Optional:
+# trust = true                  # bypass the runtime allowlist for this server
+# enabled = false               # temporarily disable without removing the block
+# timeout-ms = 30000            # per-call timeout
+# env = { TZ = "UTC" }
+```
+
+### Streamable HTTP server
+
+```toml
+[mcp.servers.remote]
+transport = "http"
+url = "https://my-mcp.example.com/mcp"
+
+[mcp.servers.remote.headers]
+Authorization = "Bearer xyz"
+```
+
+### Field reference
+
+| Field | Required | Default | Notes |
+|---|---|---|---|
+| `transport` | yes | — | `"stdio"` or `"http"` (legacy SSE not supported) |
+| `command` | stdio only | — | Executable; basename gated by allowlist unless `trust = true` |
+| `args` | optional | `[]` | Arguments to the executable |
+| `env` | optional | parent env | Environment overrides for the spawned child |
+| `url` | http only | — | Must include `http://` or `https://` |
+| `headers` | optional | — | Fixed HTTP headers (e.g. Authorization) |
+| `trust` | optional | `false` | Bypass the stdio command allowlist for this server |
+| `enabled` | optional | `true` | Set `false` to skip the block at startup |
+| `timeout-ms` | optional | none | Per-operation timeout in milliseconds; must be a non-negative integer, and `0` disables the timeout |
+
+### Importing from Claude Code
+
+If you already have MCP servers configured in `~/.claude.json` (Claude Code, Cursor, Cline), pull them into your llmist config:
+
+```bash
+llmist mcp import-claude-code                  # emit blocks to stdout
+llmist mcp import-claude-code >> ~/.llmist/config.toml
+llmist mcp import-claude-code --write          # append directly to ~/.llmist/config.toml
+```
+
+Set `CLAUDE_CONFIG_HOME` to override the source path.
+
 ## See Also
 
+- [MCP — library guide](/library/advanced/mcp/)
+- [MCP security — STDIO allowlist](/library/advanced/mcp-security/)
 - [CLI Reference](/cli/commands/overview/) - All CLI commands
 - [CLI Gadgets](/cli/gadgets/local-gadgets/) - Writing gadgets for CLI
 - [Logging](/library/reference/logging/) - Detailed logging configuration

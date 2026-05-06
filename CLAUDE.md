@@ -168,6 +168,19 @@ const agent = new AgentBuilder()
 
 Skills compose with gadgets via the auto-registered `LoadSkill` meta-gadget. CLI supports `/skill-name` invocation and `llmist skill list/info` commands.
 
+### MCP (Model Context Protocol)
+Bidirectional MCP support — see `docs/specs/001-mcp-bidirectional.md`. Plan 1 ships the consume foundation: `AgentBuilder.withMcpServer({ name, transport: "stdio", command, args, trust? })` connects to a stdio MCP server and merges its tools into the agent's gadget catalog. STDIO commands are gated by the allowlist in `packages/llmist/src/mcp/allowlist.ts` — non-allowlisted binaries require explicit `trust: true` (mitigation for CVE-2026-30623). Zero-overhead when no servers are attached: the SDK is dynamic-imported only when needed.
+
+CLI flag (plan 1):
+```
+llmist agent --mcp-server fs="npx -- -y @modelcontextprotocol/server-filesystem /tmp" "list files"
+llmist agent --mcp-server custom="my-bin --port 1234" --mcp-trust custom "..."
+```
+
+**Plan 2** added: multi-server with deterministic `<server>__<tool>` prefixing on collision, Streamable HTTP transport (`transport: "http"`), MCP prompts loaded as skills, capability negotiation downgrade, signal handling, full TOML `[mcp.servers.<name>]` schema, and `llmist mcp import-claude-code` to lift existing setup from `~/.claude.json`.
+
+**Plan 3** added the exposer: `llmist mcp serve --gadgets <spec> [--skills <dir>]` runs llmist as a stdio MCP server other clients can call. Programmatic equivalent: `createMcpServer({ gadgets, skills })`. Native gadgets → MCP tools (1:1 via `schemaToJSONSchema`); skills → MCP prompts. Round-trip example in `examples/30-mcp-roundtrip.ts`.
+
 ### Hooks System
 Three-tier architecture:
 - **Controllers** - Modify execution flow (beforeLLMCall, afterLLMError, etc.)

@@ -65,6 +65,29 @@ Three-layer architecture for deep integration with agent execution. [Learn more 
 
 Use cases: observability, flow control, benchmarking, [human-in-the-loop](https://llmist.dev/library/guides/human-in-loop/), deep app/UI integration.
 
+### MCP (Model Context Protocol) — Bidirectional
+
+llmist consumes and exposes MCP servers, the de-facto interop layer for LLM tools.
+
+- **Consume any MCP server** — `withMcpServer({ name, transport: "stdio", command, args })` or `transport: "http"` connects to MCP servers (e.g. Filesystem, GitHub, Postgres) and merges their tools into the agent's gadget catalog
+- **Prompts and config** — MCP prompts become slash-invocable skills, and CLI users can persist servers in strict `[mcp.servers.<name>]` TOML blocks
+- **Default-safe** — STDIO commands run through a runtime allowlist that mitigates [CVE-2026-30623](https://docs.litellm.ai/blog/mcp-stdio-command-injection-april-2026); opt in per server with `trust: true`
+- **Zero overhead when unused** — the SDK is dynamic-imported only when at least one MCP server is configured
+
+```typescript
+const answer = await LLMist.createAgent()
+  .withModel("sonnet")
+  .withMcpServer({
+    name: "filesystem",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  })
+  .askAndCollect("list files in /tmp");
+```
+
+- **Expose** — `llmist mcp serve --gadgets <spec>` publishes your gadgets (and optional skills as prompts) as a stdio MCP server that Claude Code, Cursor, ChatGPT desktop, OpenAI Agents SDK, Cline, and the MCP Inspector can use directly
+
 ### Multi-Provider Support
 
 First-class support for multiple LLM providers with unified API. [Learn more →](https://llmist.dev/library/providers/overview/)
