@@ -1,3 +1,14 @@
+## [17.5.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.4.0...v17.5.0) (2026-05-06)
+
+### Features
+
+* **cli:** extract approval controller into dedicated module ([#604](https://github.com/zbigniewsobiecki/llmist/issues/604)) ([26a4adb](https://github.com/zbigniewsobiecki/llmist/commit/26a4adb14ce9ff7b21fc80ce96f9bc83364f8f63))
+* **cli:** extract TUI hooks into typed createTUIHooks factory ([#591](https://github.com/zbigniewsobiecki/llmist/issues/591)) ([1a06ef5](https://github.com/zbigniewsobiecki/llmist/commit/1a06ef5ab7004d95a642f169ebc21347747dafa0))
+
+### Bug Fixes
+
+* **tui:** disable mouse by default to allow native text selection, add Ctrl+Y toggle ([#542](https://github.com/zbigniewsobiecki/llmist/issues/542)) ([cb6d445](https://github.com/zbigniewsobiecki/llmist/commit/cb6d445dc1b7e7d658079f68c8c98e27eb49952b))
+
 ## [17.4.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.3.0...v17.4.0) (2026-05-06)
 
 ### Features
