@@ -1,3 +1,9 @@
+## [17.5.1](https://github.com/zbigniewsobiecki/llmist/compare/v17.5.0...v17.5.1) (2026-05-07)
+
+### Bug Fixes
+
+* **agent:** yield stream_complete events to consumers ([#609](https://github.com/zbigniewsobiecki/llmist/issues/609)) ([4953cb5](https://github.com/zbigniewsobiecki/llmist/commit/4953cb52030067db4599afaa22b128ffa832dc1d))
+
 ## [17.5.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.4.0...v17.5.0) (2026-05-06)
 
 ### Features
