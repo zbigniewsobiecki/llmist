@@ -1,16 +1,16 @@
 import type { Command } from "commander";
-import type { Agent, AgentHooks, ContentPart, ReasoningEffort, TokenUsage } from "llmist";
+import type { Agent, AgentHooks, ContentPart, TokenUsage } from "llmist";
 import { AgentBuilder, GadgetRegistry, HookPresets, isAbortError, text } from "llmist";
+import { configureAgentBuilder } from "./agent-builder-config.js";
 import type { ApprovalConfig } from "./approval/index.js";
 import { getBuiltinGadgets } from "./builtin-gadgets.js";
 import type { AgentConfig, CLIConfig, GlobalSubagentConfig } from "./config.js";
 import { getCustomCommandNames, loadConfig } from "./config.js";
 import { COMMANDS } from "./constants.js";
 import type { CLIEnvironment } from "./environment.js";
-import { readAudioFile, readImageFile, readSystemPromptFile } from "./file-utils.js";
+import { readAudioFile, readImageFile } from "./file-utils.js";
 import { loadGadgets } from "./gadgets.js";
 import { addAgentOptions, type CLIAgentOptions } from "./option-helpers.js";
-import { resolveRateLimitConfig, resolveRetryConfig } from "./rate-limit-resolver.js";
 import { CLISkillManager } from "./skills/skill-manager.js";
 import { parseSlashCommand } from "./skills/slash-handler.js";
 import { buildSubagentConfigMap } from "./subagent-config.js";
@@ -235,190 +235,23 @@ export async function executeAgent(
     ? HookPresets.merge(HookPresets.fileLogging({ directory: llmLogDir }), tuiHooks)
     : tuiHooks;
 
-  const builder = new AgentBuilder(client)
-    .withModel(options.model)
-    .withSubagentConfig(resolvedSubagentConfig)
-    .withLogger(env.createLogger("llmist:cli:agent"))
-    .withHooks(finalHooks);
+  const builder = new AgentBuilder(client);
 
-  // Resolve rate limiting configuration
-  // Precedence: CLI flags > Profile config > Global config > Provider defaults
-  const rateLimitConfig = resolveRateLimitConfig(
-    options,
-    options.globalRateLimits,
-    options.profileRateLimits,
-    options.model,
-  );
-
-  // Resolve retry configuration
-  // Precedence: CLI flags > Profile config > Global config > Defaults
-  const retryConfig = resolveRetryConfig(options, options.globalRetry, options.profileRetry);
-
-  // Apply rate limiting if configured
-  if (rateLimitConfig) {
-    builder.withRateLimits(rateLimitConfig);
-  }
-
-  // Apply retry configuration
-  if (retryConfig) {
-    builder.withRetry(retryConfig);
-  }
-
-  // Resolve system prompt (inline or from file)
-  let systemPrompt = options.system;
-  if (options.systemFile) {
-    if (options.system) {
-      throw new Error("Cannot use both --system and --system-file options");
-    }
-    systemPrompt = await readSystemPromptFile(options.systemFile);
-  }
-
-  // Add optional configurations
-  if (systemPrompt) {
-    builder.withSystem(systemPrompt);
-  }
-  if (options.maxIterations !== undefined) {
-    builder.withMaxIterations(options.maxIterations);
-  }
-  if (options.budget !== undefined) {
-    builder.withBudget(options.budget);
-  }
-  if (options.temperature !== undefined) {
-    builder.withTemperature(options.temperature);
-  }
-
-  // Register skills (if any were discovered)
-  if (skillRegistry.size > 0) {
-    builder.withSkills(skillRegistry);
-  }
-
-  // Reasoning configuration
-  // Precedence: --no-reasoning > --reasoning/--reasoning-budget > config > auto-detect
-  if (options.reasoning === false) {
-    builder.withoutReasoning();
-  } else if (options.reasoning !== undefined || options.reasoningBudget !== undefined) {
-    const effort = typeof options.reasoning === "string" ? options.reasoning : undefined;
-    builder.withReasoning({
-      enabled: true,
-      ...(effort && { effort: effort as ReasoningEffort }),
-      ...(options.reasoningBudget && { budgetTokens: options.reasoningBudget }),
-    });
-  } else if (options.profileReasoning) {
-    const cfg = options.profileReasoning;
-    if (cfg.enabled === false) {
-      builder.withoutReasoning();
-    } else {
-      builder.withReasoning({
-        enabled: true,
-        ...(cfg.effort && { effort: cfg.effort as ReasoningEffort }),
-        ...(cfg["budget-tokens"] && { budgetTokens: cfg["budget-tokens"] }),
-      });
-    }
-  }
-
-  // Set up human input handler (TUI mode only)
-  // In piped mode, AskUser gadget is excluded (see gadget registration above)
-  if (tui) {
-    builder.onHumanInput(async (question: string) => {
-      return tui.waitForInput(question, "AskUser");
-    });
-  }
-
-  // Pass abort signal for ESC key cancellation
-  builder.withSignal(abortController.signal);
-
-  // Add gadgets from the registry
-  const gadgets = registry.getAll();
-  if (gadgets.length > 0) {
-    builder.withGadgets(...gadgets);
-  }
-
-  // MCP servers: TOML-defined first, then ad-hoc CLI flags (CLI flags can
-  // override TOML by providing the same name, but we warn on collision).
-  const mcpFromToml = (await import("./mcp-toml.js")).mcpServersTomlToSpecs(fullConfig?.mcp);
-  const mcpFromFlags =
-    options.mcpServer && options.mcpServer.length > 0
-      ? (await import("./mcp-options.js")).parseMcpServerFlags(
-          options.mcpServer,
-          options.mcpTrust ?? [],
-        )
-      : [];
-
-  if (mcpFromToml.length > 0 || mcpFromFlags.length > 0) {
-    const seen = new Set<string>();
-    for (const spec of mcpFromToml) {
-      builder.withMcpServer(spec);
-      seen.add(spec.name);
-    }
-    for (const spec of mcpFromFlags) {
-      if (seen.has(spec.name)) {
-        env.stderr.write(
-          `[mcp] --mcp-server "${spec.name}" overrides TOML mcp.servers.${spec.name}\n`,
-        );
-      }
-      builder.withMcpServer(spec);
-    }
-  }
-
-  // Set custom gadget markers if configured, otherwise use library defaults
-  if (options.gadgetStartPrefix) {
-    builder.withGadgetStartPrefix(options.gadgetStartPrefix);
-  }
-  if (options.gadgetEndPrefix) {
-    builder.withGadgetEndPrefix(options.gadgetEndPrefix);
-  }
-  if (options.gadgetArgPrefix) {
-    builder.withGadgetArgPrefix(options.gadgetArgPrefix);
-  }
-
-  // Inject synthetic heredoc example for in-context learning
-  // This teaches the LLM to use heredoc syntax (<<<EOF...EOF) for multiline strings
-  // by showing what "past self" did correctly. LLMs mimic patterns in conversation history.
-  builder.withSyntheticGadgetCall(
-    "TellUser",
-    {
-      message: "👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
-      done: false,
-      type: "info",
-    },
-    "ℹ️  👋 Hello! I'm ready to help.\n\nWhat would you like me to work on?",
-    "gc_init_1",
-  );
-
-  // Apply initial gadgets from config (pre-seeded context)
-  // These appear as if the agent already called these gadgets and received results
-  if (options.initialGadgets) {
-    for (let i = 0; i < options.initialGadgets.length; i++) {
-      const ig = options.initialGadgets[i];
-      builder.withSyntheticGadgetCall(
-        ig.gadget,
-        ig.parameters,
-        ig.result,
-        `gc_init_${i + 2}`, // Start at 2 since gc_init_1 is TellUser greeting
-      );
-    }
-  }
-
-  // Continue looping when LLM responds with just text (no gadget calls)
-  // This allows multi-turn conversations where the LLM may explain before acting
-  builder.withTextOnlyHandler("acknowledge");
-
-  // Wrap text that accompanies gadget calls as TellUser gadget calls
-  // This keeps conversation history consistent and gadget-oriented
-  builder.withTextWithGadgetsHandler({
-    gadgetName: "TellUser",
-    parameterMapping: (text) => ({ message: text, done: false, type: "info" }),
-    resultMapping: (text) => `ℹ️  ${text}`,
+  // Configure the builder with all settings via the extracted helper.
+  // This covers: model, subagent config, logger, hooks, rate limits, retry,
+  // system prompt, iterations, budget, temperature, reasoning, skills,
+  // human-input handler, abort signal, gadgets, MCP servers, gadget markers,
+  // synthetic gadget calls, text handlers, and trailing message.
+  await configureAgentBuilder(builder, options, {
+    resolvedSubagentConfig,
+    finalHooks,
+    skillRegistry,
+    gadgetRegistry: registry,
+    tui,
+    abortController,
+    fullConfig,
+    env,
   });
-
-  // Inject ephemeral trailing message to encourage parallel gadget invocations
-  // This message is appended to each LLM request but NOT persisted in history
-  builder.withTrailingMessage((ctx) =>
-    [
-      `[Iteration ${ctx.iteration + 1}/${ctx.maxIterations}${ctx.budget ? ` | Budget: $${ctx.totalCost.toFixed(4)}/$${ctx.budget}` : ""}]`,
-      "Think carefully in two steps: 1. what gadget invocations we should be making next? 2. how do they depend on one another so we can run all of them in the right order? Then respond with all the gadget invocations you are able to do now.",
-    ].join(" "),
-  );
 
   // Track current agent for REPL session continuity and mid-session injection
   let currentAgent: Agent | null = null;
