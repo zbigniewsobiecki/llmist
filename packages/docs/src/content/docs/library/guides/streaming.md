@@ -77,7 +77,8 @@ for await (const event of agent.run()) {
 | `gadget_skipped` | `gadgetName, invocationId, parameters, failedDependency, failedDependencyError` | Gadget skipped due to a failed dependency |
 | `thinking` | `content: string, thinkingType: "thinking" \| "redacted"` | Reasoning model thinking content |
 | `human_input_required` | `question, gadgetName, invocationId` | User input needed |
-| `llm_call_complete` | `response, usage?, finishReason?, cost?, thinkingContent?` | LLM call completed (after all gadgets finish) |
+| `llm_response_end` | `finishReason, usage?` | LLM finished generating tokens (fires BEFORE gadget bodies finish — useful for separating "thinking time" from "tool work time") |
+| `stream_complete` | `finishReason, usage?, rawResponse, finalMessage, didExecuteGadgets, shouldBreakLoop, thinkingContent?` | Iteration boundary — fires AFTER every in-flight gadget body has resolved. Use this when you need to know "this iteration is fully done" (e.g., to advance an iteration counter or flush per-iteration buffers). |
 | `compaction` | `event: { tokensBefore, tokensAfter, strategy, messagesRemoved }` | Context compaction occurred |
 
 ## Helper Functions
@@ -159,6 +160,15 @@ for await (const chunk of client.streamText('Tell me a story')) {
 
 :::note[Reasoning Models]
 For models with reasoning/thinking enabled, the `run()` loop also emits `thinking` events with internal reasoning content. For full details, see the [Reasoning Models](/library/guides/reasoning-models/) guide.
+:::
+
+:::note[Iteration boundary: `llm_response_end` vs `stream_complete`]
+Two events fire near the end of each agent iteration:
+
+- **`llm_response_end`** — emitted as soon as the LLM finishes generating tokens, BEFORE any in-flight gadget bodies complete. Use it to separate "LLM thinking time" from "tool work time".
+- **`stream_complete`** — emitted AFTER `waitForInFlightExecutions` has drained every gadget body for the iteration. This is the canonical "iteration is fully done" signal. Use it to advance per-iteration counters, flush per-iteration buffers, or release per-iteration locks.
+
+Both events are part of the public `StreamEvent` union and are yielded to consumers of `agent.run()`.
 :::
 
 ## See Also
