@@ -11,7 +11,7 @@
  * @module mcp/json-schema-to-zod
  */
 
-import { z, type ZodTypeAny } from "zod";
+import { type ZodTypeAny, z } from "zod";
 import { JsonSchemaConversionError } from "./errors.js";
 
 export interface JSONSchemaLike {
@@ -43,10 +43,7 @@ export function jsonSchemaToZod(schema: JSONSchemaLike | undefined): ZodTypeAny 
   }
 
   if (schema.$ref) {
-    throw new JsonSchemaConversionError(
-      "$ref is not supported in MCP tool schemas",
-      schema,
-    );
+    throw new JsonSchemaConversionError("$ref is not supported in MCP tool schemas", schema);
   }
   if (schema.allOf) {
     throw new JsonSchemaConversionError(
@@ -60,16 +57,10 @@ export function jsonSchemaToZod(schema: JSONSchemaLike | undefined): ZodTypeAny 
   const union = schema.oneOf ?? schema.anyOf;
   if (union) {
     if (!Array.isArray(union) || union.length < 2) {
-      throw new JsonSchemaConversionError(
-        "oneOf/anyOf must have at least two members",
-        schema,
-      );
+      throw new JsonSchemaConversionError("oneOf/anyOf must have at least two members", schema);
     }
     const branches = union.map((m) => jsonSchemaToZod(m));
-    return applyDecorators(
-      z.union(branches as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]),
-      schema,
-    );
+    return applyDecorators(z.union(branches as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]), schema);
   }
 
   const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
@@ -108,10 +99,7 @@ export function jsonSchemaToZod(schema: JSONSchemaLike | undefined): ZodTypeAny 
     case "array": {
       const items = schema.items;
       if (Array.isArray(items)) {
-        throw new JsonSchemaConversionError(
-          "tuple-style items arrays are not supported",
-          schema,
-        );
+        throw new JsonSchemaConversionError("tuple-style items arrays are not supported", schema);
       }
       const inner = items ? jsonSchemaToZod(items) : z.unknown();
       return applyDecorators(z.array(inner), schema);
@@ -134,10 +122,7 @@ export function jsonSchemaToZod(schema: JSONSchemaLike | undefined): ZodTypeAny 
     }
 
     default:
-      throw new JsonSchemaConversionError(
-        `unknown JSON Schema type "${type}"`,
-        schema,
-      );
+      throw new JsonSchemaConversionError(`unknown JSON Schema type "${type}"`, schema);
   }
 }
 

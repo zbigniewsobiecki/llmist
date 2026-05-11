@@ -189,9 +189,18 @@ export class RetryOrchestrator {
         // The final event is a StreamCompletionEvent containing metadata.
         for await (const event of processor.process(stream)) {
           if (event.type === "stream_complete") {
-            // Completion event — extract metadata, don't yield to consumer
+            // Capture the completion metadata for the orchestrator's return
+            // value. Falls through to the bottom-of-loop `yield event` so
+            // consumers also see the event — symmetrical with how
+            // `llm_response_end` is captured (into the tree) AND yielded.
+            //
+            // Yielding `stream_complete` is load-bearing for any consumer
+            // that needs the post-`waitForInFlightExecutions` boundary
+            // (after every in-flight gadget body has completed). The
+            // earlier `llm_response_end` event fires before gadgets
+            // complete, so it can't be used as a "this iteration is fully
+            // done" signal — that's exactly what `stream_complete` is for.
             streamMetadata = event;
-            continue;
           }
 
           if (event.type === "llm_response_end") {

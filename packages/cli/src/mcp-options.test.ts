@@ -13,9 +13,7 @@ describe("parseMcpServerFlags", () => {
 
   it("parses a single name=command flag", () => {
     const specs = parseMcpServerFlags(["fs=node"], []);
-    expect(specs).toEqual([
-      { name: "fs", transport: "stdio", command: "node", args: [] },
-    ]);
+    expect(specs).toEqual([{ name: "fs", transport: "stdio", command: "node", args: [] }]);
   });
 
   it("supports multiple --mcp-server flags accumulating", () => {
@@ -48,9 +46,7 @@ describe("parseMcpServerFlags", () => {
   });
 
   it("rejects duplicate server names", () => {
-    expect(() => parseMcpServerFlags(["fs=node", "fs=python"], [])).toThrow(
-      /duplicate/i,
-    );
+    expect(() => parseMcpServerFlags(["fs=node", "fs=python"], [])).toThrow(/duplicate/i);
   });
 
   it("applies --mcp-trust to the matching server", () => {

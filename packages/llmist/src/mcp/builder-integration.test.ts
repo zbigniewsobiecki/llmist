@@ -10,20 +10,17 @@
  * process or relying on the agent loop.
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it } from "vitest";
 
 import { AgentBuilder } from "../agent/builder.js";
+import { ConversationManager } from "../agent/conversation-manager.js";
 import { GadgetRegistry } from "../gadgets/registry.js";
+import { createLogger } from "../logging/logger.js";
 import { McpClient } from "./client.js";
 import { setupMcpServers } from "./runtime.js";
-import { createLogger } from "../logging/logger.js";
-import { ConversationManager } from "../agent/conversation-manager.js";
 
 describe("AgentBuilder.withMcpServer", () => {
   it("accumulates server specs", () => {
@@ -119,8 +116,8 @@ describe("setupMcpServers (runtime orchestrator)", () => {
     // spawn (allowlisted command) and verify the rebuild step works once we
     // pre-register an adapter gadget.
     void setupMcpServers; // referenced for coverage; tested through the run()
-                          // integration in CLI-level tests when a real server
-                          // is reachable.
+    // integration in CLI-level tests when a real server
+    // is reachable.
     await client.close();
     await server.close();
   });

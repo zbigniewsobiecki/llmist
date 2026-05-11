@@ -87,9 +87,7 @@ describe("resolveToolNames", () => {
   });
 
   it("handles a single server with unique tools (no prefix)", () => {
-    const out = resolveToolNames([
-      { server: stdio("solo"), tools: [tool("a"), tool("b")] },
-    ]);
+    const out = resolveToolNames([{ server: stdio("solo"), tools: [tool("a"), tool("b")] }]);
     expect(out[0]?.prefix).toBeUndefined();
   });
 });

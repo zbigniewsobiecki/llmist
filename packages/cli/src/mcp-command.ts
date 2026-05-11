@@ -12,20 +12,19 @@
  */
 
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Command } from "commander";
-
-import { GadgetRegistry, SkillRegistry, createMcpServer, loadSkillsFromDirectory } from "llmist";
 import type { AbstractGadget } from "llmist";
+import { createMcpServer, GadgetRegistry, loadSkillsFromDirectory, SkillRegistry } from "llmist";
+import { isExternalPackageSpecifier, loadExternalGadgets } from "./external-gadgets.js";
+import { createTypeScriptImporter, extractGadgetsFromModule, isTypeScriptFile } from "./gadgets.js";
 import {
   claudeCodeJsonToTomlBlocks,
   defaultClaudeConfigPath,
   readClaudeCodeMcpConfig,
 } from "./import-claude-code.js";
-import { isExternalPackageSpecifier, loadExternalGadgets } from "./external-gadgets.js";
-import { extractGadgetsFromModule, isTypeScriptFile, createTypeScriptImporter } from "./gadgets.js";
-import { pathToFileURL } from "node:url";
 
 async function loadGadgetsFromSpec(spec: string): Promise<AbstractGadget[]> {
   if (isExternalPackageSpecifier(spec)) {
@@ -44,9 +43,7 @@ async function loadGadgetsFromSpec(spec: string): Promise<AbstractGadget[]> {
 }
 
 export function registerMcpCommand(program: Command): void {
-  const mcp = program
-    .command("mcp")
-    .description("Model Context Protocol commands");
+  const mcp = program.command("mcp").description("Model Context Protocol commands");
 
   mcp
     .command("import-claude-code")
@@ -117,66 +114,58 @@ export function registerMcpCommand(program: Command): void {
     )
     .option("--skills <dir>", "Directory of SKILL.md files to expose as MCP prompts.")
     .option("--protocol-version <ver>", "MCP protocol version", "2025-06-18")
-    .action(
-      async (opts: {
-        gadgets?: string[];
-        skills?: string;
-        protocolVersion?: string;
-      }) => {
-        try {
-          const registry = new GadgetRegistry();
-          for (const spec of opts.gadgets ?? []) {
-            const gadgets = await loadGadgetsFromSpec(spec);
-            for (const g of gadgets) {
-              registry.registerByClass(g);
-            }
+    .action(async (opts: { gadgets?: string[]; skills?: string; protocolVersion?: string }) => {
+      try {
+        const registry = new GadgetRegistry();
+        for (const spec of opts.gadgets ?? []) {
+          const gadgets = await loadGadgetsFromSpec(spec);
+          for (const g of gadgets) {
+            registry.registerByClass(g);
           }
-
-          let skills: SkillRegistry | undefined;
-          if (opts.skills) {
-            const dir = path.isAbsolute(opts.skills)
-              ? opts.skills
-              : path.resolve(process.cwd(), opts.skills);
-            const loaded = loadSkillsFromDirectory(dir, {
-              type: "directory",
-              path: dir,
-            });
-            const sr = new SkillRegistry();
-            for (const s of loaded) sr.register(s);
-            if (sr.size > 0) skills = sr;
-          }
-
-          if (registry.getAll().length === 0 && (!skills || skills.size === 0)) {
-            process.stderr.write(
-              "mcp serve: no gadgets or skills to expose. Pass --gadgets <spec> and/or --skills <dir>.\n",
-            );
-            process.exit(2);
-          }
-
-          const handle = createMcpServer({
-            gadgets: registry,
-            skills,
-            protocolVersion: opts.protocolVersion,
-          });
-
-          const { StdioServerTransport } = await import(
-            "@modelcontextprotocol/sdk/server/stdio.js"
-          );
-          const transport = new StdioServerTransport();
-          await handle.connect(transport);
-
-          // Stay alive until stdin closes (parent disconnect) or signal.
-          const stop = async () => {
-            await handle.stop();
-            process.exit(0);
-          };
-          process.on("SIGTERM", stop);
-          process.on("SIGINT", stop);
-          process.stdin.on("end", stop);
-        } catch (err) {
-          process.stderr.write(`mcp serve failed: ${(err as Error).message}\n`);
-          process.exit(1);
         }
-      },
-    );
+
+        let skills: SkillRegistry | undefined;
+        if (opts.skills) {
+          const dir = path.isAbsolute(opts.skills)
+            ? opts.skills
+            : path.resolve(process.cwd(), opts.skills);
+          const loaded = loadSkillsFromDirectory(dir, {
+            type: "directory",
+            path: dir,
+          });
+          const sr = new SkillRegistry();
+          for (const s of loaded) sr.register(s);
+          if (sr.size > 0) skills = sr;
+        }
+
+        if (registry.getAll().length === 0 && (!skills || skills.size === 0)) {
+          process.stderr.write(
+            "mcp serve: no gadgets or skills to expose. Pass --gadgets <spec> and/or --skills <dir>.\n",
+          );
+          process.exit(2);
+        }
+
+        const handle = createMcpServer({
+          gadgets: registry,
+          skills,
+          protocolVersion: opts.protocolVersion,
+        });
+
+        const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
+        const transport = new StdioServerTransport();
+        await handle.connect(transport);
+
+        // Stay alive until stdin closes (parent disconnect) or signal.
+        const stop = async () => {
+          await handle.stop();
+          process.exit(0);
+        };
+        process.on("SIGTERM", stop);
+        process.on("SIGINT", stop);
+        process.stdin.on("end", stop);
+      } catch (err) {
+        process.stderr.write(`mcp serve failed: ${(err as Error).message}\n`);
+        process.exit(1);
+      }
+    });
 }

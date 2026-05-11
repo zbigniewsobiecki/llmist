@@ -189,10 +189,13 @@ describe("RetryOrchestrator", () => {
         () => processor,
       );
 
-      // Should yield the text event (but NOT the stream_complete event)
-      expect(events).toEqual([textEvent]);
+      // Should yield the text event AND the stream_complete event.
+      // The boundary event is yielded so consumers needing the
+      // post-waitForInFlightExecutions iteration boundary can react.
+      expect(events).toEqual([textEvent, completionEvent]);
 
-      // Should return a RetryResult
+      // Should return a RetryResult — metadata is also captured
+      // separately for callers that consume the return value.
       expect(result).not.toBeNull();
       expect(result?.streamMetadata).toBe(completionEvent);
       expect(result?.textOutputs).toEqual(["hello"]);
@@ -228,12 +231,18 @@ describe("RetryOrchestrator", () => {
         () => processor,
       );
 
-      expect(events).toEqual([gadgetResult]);
+      expect(events).toEqual([gadgetResult, completionEvent]);
       expect(result?.gadgetCallCount).toBe(1);
       expect(result?.gadgetResults).toEqual([gadgetResult]);
     });
 
-    it("should not yield stream_complete events to consumer", async () => {
+    it("yields stream_complete events to consumer (post-waitForInFlight iteration boundary)", async () => {
+      // Consumers that need a "this iteration is fully done" signal
+      // (post-waitForInFlightExecutions, after every gadget body has
+      // completed) rely on `stream_complete` — `llm_response_end` fires
+      // BEFORE gadget bodies complete and can't serve that purpose. The
+      // orchestrator captures the event's metadata into its return value
+      // AND yields it so downstream consumers can use it as the boundary.
       const completionEvent = makeMockStreamCompletionEvent();
       const processor = createMockProcessor([], completionEvent);
 
@@ -245,14 +254,20 @@ describe("RetryOrchestrator", () => {
         sleep: vi.fn(),
       });
 
-      const { events } = await collectOrchestrate(
+      const { events, result } = await collectOrchestrate(
         orchestrator,
         createMockCreateStream(),
         () => processor,
       );
 
-      // stream_complete event should NOT be yielded
-      expect(events.find((e) => e.type === "stream_complete")).toBeUndefined();
+      // stream_complete IS yielded to the consumer.
+      const yieldedCompletion = events.find((e) => e.type === "stream_complete");
+      expect(yieldedCompletion).toBeDefined();
+
+      // AND the metadata is still captured into the orchestrator's return
+      // value (so callers that consume the return value continue to work
+      // unchanged). Same source-of-truth event — yielded by reference.
+      expect(result?.streamMetadata).toBe(yieldedCompletion);
     });
 
     it("should call tree.endLLMResponse when llm_response_end event received", async () => {

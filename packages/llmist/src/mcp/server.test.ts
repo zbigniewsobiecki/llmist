@@ -115,9 +115,7 @@ describe("McpServer", () => {
       arguments: { a: 2, b: 3 },
     });
     expect(result.isError).toBeFalsy();
-    expect((result.content as Array<{ type: string; text?: string }>)[0]?.text).toBe(
-      "5",
-    );
+    expect((result.content as Array<{ type: string; text?: string }>)[0]?.text).toBe("5");
     await stop();
   });
 
@@ -151,9 +149,9 @@ describe("McpServer", () => {
     const result = await client.getPrompt({ name: "explain" });
     expect(result.messages).toHaveLength(1);
     expect(result.messages[0]?.role).toBe("user");
-    expect(
-      (result.messages[0]?.content as { type: "text"; text: string }).text,
-    ).toContain("plain language");
+    expect((result.messages[0]?.content as { type: "text"; text: string }).text).toContain(
+      "plain language",
+    );
     await stop();
   });
 

@@ -7,10 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  claudeCodeJsonToTomlBlocks,
-  parseClaudeCodeMcp,
-} from "./import-claude-code.js";
+import { claudeCodeJsonToTomlBlocks, parseClaudeCodeMcp } from "./import-claude-code.js";
 
 describe("parseClaudeCodeMcp", () => {
   it("extracts mcpServers from a top-level claude.json object", () => {

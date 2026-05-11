@@ -421,5 +421,37 @@ describe("KeyboardManager", () => {
 
       expect(onAction).toHaveBeenCalledWith({ type: "toggle_content_filter" });
     });
+
+    test("handleForwardedKey C-y dispatches toggle_mouse", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      const manager = createKeyboardManager(screen, onAction);
+
+      manager.handleForwardedKey("C-y");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "toggle_mouse" });
+    });
+  });
+
+  describe("mouse toggle", () => {
+    test("Ctrl+Y dispatches toggle_mouse in browse mode", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      createKeyboardManager(screen, onAction, { focusMode: "browse" });
+
+      screen.simulateKey("C-y");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "toggle_mouse" });
+    });
+
+    test("Ctrl+Y dispatches toggle_mouse in input mode", () => {
+      const onAction = vi.fn(() => {});
+      const screen = createMockScreen();
+      createKeyboardManager(screen, onAction, { focusMode: "input" });
+
+      screen.simulateKey("C-y");
+
+      expect(onAction).toHaveBeenCalledWith({ type: "toggle_mouse" });
+    });
   });
 });

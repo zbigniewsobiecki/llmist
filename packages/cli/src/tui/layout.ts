@@ -44,7 +44,7 @@ export function createBlockLayout(screen: Screen, showHints = true): TUIBlockLay
     // Scrolling configuration
     scrollable: true,
     alwaysScroll: true,
-    mouse: true,
+    mouse: false, // Default off — allows native text selection. Toggle with Ctrl+Y.
     keys: false, // We handle keys ourselves for block selection
     scrollbar: {
       ch: " ",
@@ -86,7 +86,7 @@ export function createBlockLayout(screen: Screen, showHints = true): TUIBlockLay
     width: "100%-2",
     height: 1,
     keys: true,
-    mouse: true,
+    mouse: false, // Default off — allows native text selection. Toggle with Ctrl+Y.
     style: {
       fg: "white",
       bg: "black",

@@ -11,7 +11,7 @@ import type { AbstractGadget } from "../gadgets/gadget.js";
 import { resultWithImage } from "../gadgets/helpers.js";
 import type { GadgetExecuteReturn } from "../gadgets/types.js";
 import type { McpClient } from "./client.js";
-import { jsonSchemaToZod, type JSONSchemaLike } from "./json-schema-to-zod.js";
+import { type JSONSchemaLike, jsonSchemaToZod } from "./json-schema-to-zod.js";
 import type { McpContentBlock, McpToolDescriptor, McpToolResult } from "./types.js";
 
 export interface McpToolAdapterOptions {
@@ -67,10 +67,7 @@ function buildSchema(inputSchema: JSONSchemaLike | undefined) {
  * - Unknown content kinds: round-tripped as JSON in the text result.
  * - isError: throws so the gadget executor surfaces it as a tool error.
  */
-function mcpResultToGadgetReturn(
-  result: McpToolResult,
-  toolName: string,
-): GadgetExecuteReturn {
+function mcpResultToGadgetReturn(result: McpToolResult, toolName: string): GadgetExecuteReturn {
   const blocks = result.content ?? [];
   const textParts: string[] = [];
   const media: Array<{ kind: "image" | "audio"; data: string; mimeType: string }> = [];

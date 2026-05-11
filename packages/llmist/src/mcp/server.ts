@@ -98,9 +98,7 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServerHandle {
       }));
       server.setRequestHandler(
         typesMod.GetPromptRequestSchema,
-        async (req: {
-          params: { name: string; arguments?: Record<string, unknown> };
-        }) => {
+        async (req: { params: { name: string; arguments?: Record<string, unknown> } }) => {
           const skill = skills.get(req.params.name);
           if (!skill) {
             throw new Error(`Unknown prompt "${req.params.name}"`);

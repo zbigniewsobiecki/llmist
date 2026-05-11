@@ -241,6 +241,73 @@ describe("HintsBar", () => {
     });
   });
 
+  describe("setMouseEnabled()", () => {
+    it("triggers re-render when value changes", () => {
+      const bar = new HintsBar(box, renderCallback);
+      setContent.mockClear();
+      renderCallback.mockClear();
+
+      bar.setMouseEnabled(true);
+
+      expect(setContent).toHaveBeenCalledOnce();
+      expect(renderCallback).toHaveBeenCalledOnce();
+    });
+
+    it("does NOT re-render when value is the same", () => {
+      const bar = new HintsBar(box, renderCallback);
+      // Default mouseEnabled is false
+      setContent.mockClear();
+      renderCallback.mockClear();
+
+      bar.setMouseEnabled(false);
+
+      expect(setContent).not.toHaveBeenCalled();
+      expect(renderCallback).not.toHaveBeenCalled();
+    });
+
+    it("shows '^Y mouse' hint when mouse is disabled (default)", () => {
+      new HintsBar(box, renderCallback);
+      // Default mouseEnabled is false
+
+      const content = setContent.mock.lastCall?.[0] as string;
+      expect(content).toContain("^Y mouse");
+      expect(content).not.toContain("^Y select");
+    });
+
+    it("shows '^Y select' hint when mouse is enabled", () => {
+      const bar = new HintsBar(box, renderCallback);
+      bar.setMouseEnabled(true);
+
+      const content = setContent.mock.lastCall?.[0] as string;
+      expect(content).toContain("^Y select");
+      expect(content).not.toContain("^Y mouse");
+    });
+
+    it("mouse hint appears in browse mode", () => {
+      new HintsBar(box, renderCallback);
+      // Default focusMode is "browse", mouseEnabled is false
+
+      const content = setContent.mock.lastCall?.[0] as string;
+      expect(content).toContain("^Y mouse");
+    });
+
+    it("mouse hint appears in input mode", () => {
+      const bar = new HintsBar(box, renderCallback);
+      bar.setFocusMode("input");
+
+      const content = setContent.mock.lastCall?.[0] as string;
+      expect(content).toContain("^Y mouse");
+    });
+
+    it("mouse hint appears in focused content mode", () => {
+      const bar = new HintsBar(box, renderCallback);
+      bar.setContentFilterMode("focused");
+
+      const content = setContent.mock.lastCall?.[0] as string;
+      expect(content).toContain("^Y mouse");
+    });
+  });
+
   describe("getFocusMode() / getContentFilterMode()", () => {
     it("returns current focus mode", () => {
       const bar = new HintsBar(box, renderCallback);
