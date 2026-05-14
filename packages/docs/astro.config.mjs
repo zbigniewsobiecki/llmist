@@ -43,29 +43,29 @@ export default defineConfig({
         {
           label: "Library",
           items: [
-            { label: "Getting Started", autogenerate: { directory: "library/getting-started" } },
-            { label: "Core Concepts", autogenerate: { directory: "library/guides" } },
-            { label: "Providers", autogenerate: { directory: "library/providers" } },
-            { label: "Advanced", collapsed: true, autogenerate: { directory: "library/advanced" } },
+            { label: "Getting Started", items: [{ autogenerate: { directory: "library/getting-started" } }] },
+            { label: "Core Concepts", items: [{ autogenerate: { directory: "library/guides" } }] },
+            { label: "Providers", items: [{ autogenerate: { directory: "library/providers" } }] },
+            { label: "Advanced", collapsed: true, items: [{ autogenerate: { directory: "library/advanced" } }] },
           ],
         },
         {
           label: "CLI",
           items: [
-            { label: "Getting Started", autogenerate: { directory: "cli/getting-started" } },
-            { label: "Commands", autogenerate: { directory: "cli/commands" } },
-            { label: "Configuration", autogenerate: { directory: "cli/configuration" } },
-            { label: "Writing Gadgets", autogenerate: { directory: "cli/gadgets" } },
-            { label: "TUI & Interactivity", autogenerate: { directory: "cli/tui" } },
+            { label: "Getting Started", items: [{ autogenerate: { directory: "cli/getting-started" } }] },
+            { label: "Commands", items: [{ autogenerate: { directory: "cli/commands" } }] },
+            { label: "Configuration", items: [{ autogenerate: { directory: "cli/configuration" } }] },
+            { label: "Writing Gadgets", items: [{ autogenerate: { directory: "cli/gadgets" } }] },
+            { label: "TUI & Interactivity", items: [{ autogenerate: { directory: "cli/tui" } }] },
           ],
         },
         {
           label: "Testing",
           items: [
-            { label: "Getting Started", autogenerate: { directory: "testing/getting-started" } },
-            { label: "Mocking", autogenerate: { directory: "testing/mocking" } },
-            { label: "Testing Gadgets", autogenerate: { directory: "testing/gadgets" } },
-            { label: "Testing Agents", autogenerate: { directory: "testing/agents" } },
+            { label: "Getting Started", items: [{ autogenerate: { directory: "testing/getting-started" } }] },
+            { label: "Mocking", items: [{ autogenerate: { directory: "testing/mocking" } }] },
+            { label: "Testing Gadgets", items: [{ autogenerate: { directory: "testing/gadgets" } }] },
+            { label: "Testing Agents", items: [{ autogenerate: { directory: "testing/agents" } }] },
           ],
         },
         {
@@ -78,7 +78,7 @@ export default defineConfig({
             { label: "Error Types", link: "/reference/errors/" },
           ],
         },
-        { label: "Cookbook", autogenerate: { directory: "cookbook" } },
+        { label: "Cookbook", items: [{ autogenerate: { directory: "cookbook" } }] },
         { label: "Examples", link: "/examples/" },
       ],
       head: [
