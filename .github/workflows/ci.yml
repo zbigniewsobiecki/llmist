@@ -52,7 +52,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+        # Bumped from @v4 → @v5: the cached SHA GH had resolved for @v4
+        # (b9fd7d16…) was orphaned when codecov force-pushed the tag,
+        # causing every CI run to fail instantly at setup with
+        # "An action could not be found at the URI …". v5 has the same
+        # `with:` interface.
+        uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
