@@ -10,6 +10,9 @@ describe("createLogger", () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
+    // Reset module-level file logging singleton so tests are fully isolated
+    // even when LLMIST_LOG_FILE is set in the outer environment (e.g. cascade-tools)
+    _resetFileLoggingState();
     // Clean up environment variables before each test
     delete process.env.LLMIST_LOG_LEVEL;
     delete process.env.LLMIST_LOG_FILE;

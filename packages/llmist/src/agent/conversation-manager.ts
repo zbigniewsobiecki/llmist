@@ -68,6 +68,7 @@ export class ConversationManager implements IConversationManager {
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
     storedMedia?: StoredMedia[],
+    metadata?: Record<string, unknown>,
   ): void {
     this.historyBuilder.addGadgetCallResult(
       gadgetName,
@@ -77,6 +78,7 @@ export class ConversationManager implements IConversationManager {
       media,
       mediaIds,
       storedMedia,
+      metadata,
     );
   }
 

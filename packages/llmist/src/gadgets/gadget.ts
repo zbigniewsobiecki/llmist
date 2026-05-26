@@ -264,6 +264,23 @@ export abstract class AbstractGadget {
   exclusive?: boolean;
 
   /**
+   * If true, results produced by this gadget are marked sticky on the
+   * conversation (`message.metadata.sticky === true`). Compaction strategies
+   * preserve sticky messages past the truncation point, so the agent retains
+   * the gadget's output for the rest of the conversation rather than having
+   * it dropped on the next compaction pass.
+   *
+   * Use for gadgets whose output is *reference material* the agent will keep
+   * consulting — `LoadSkill` is the canonical example: a multi-KB skill body
+   * the agent needs to remember across iterations. Don't use for routine
+   * gadget outputs (file reads, computation results) — those should churn
+   * normally with the conversation.
+   *
+   * Has no effect on agents that don't enable compaction.
+   */
+  stickyResult?: boolean;
+
+  /**
    * Execute the gadget with the given parameters.
    * Can be synchronous or asynchronous.
    *

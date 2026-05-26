@@ -28,6 +28,15 @@ export interface GadgetExecutionResult {
   mediaIds?: string[];
   /** Stored media with paths (for CLI display) */
   storedMedia?: StoredMedia[];
+  /**
+   * If true, the message persisting this gadget result is marked sticky
+   * (`metadata.sticky = true`) so compaction strategies preserve it
+   * indefinitely. Use for gadgets whose output the agent needs to remember
+   * for the rest of the conversation (e.g. `LoadSkill` whose body is the
+   * canonical reference the agent will keep consulting). Copied from
+   * `AbstractGadget.stickyResult` by the executor.
+   */
+  stickyResult?: boolean;
 }
 
 /**

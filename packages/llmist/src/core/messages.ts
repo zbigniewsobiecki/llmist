@@ -510,6 +510,11 @@ Produces: { "items": ["first", "second"] }`);
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
     storedMedia?: StoredMedia[],
+    // Optional metadata attached to the result `user` message. The compaction
+    // layer consults `metadata.sticky === true` to preserve specific tool
+    // results past truncation. Other keys are passthrough — providers and
+    // history serializers ignore `LLMMessage.metadata` by design.
+    metadata?: Record<string, unknown>,
   ) {
     const paramStr = this.formatBlockParameters(parameters, "");
 
@@ -543,12 +548,13 @@ Produces: { "items": ["first", "second"] }`);
         // Note: video and file types are stored but not included in LLM context
         // as most providers don't support them yet
       }
-      this.messages.push({ role: "user", content: parts });
+      this.messages.push({ role: "user", content: parts, metadata });
     } else {
       // Simple text result
       this.messages.push({
         role: "user",
         content: `Result (${invocationId}): ${result}`,
+        metadata,
       });
     }
 

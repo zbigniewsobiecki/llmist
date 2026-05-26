@@ -196,6 +196,7 @@ describe("ConversationUpdater", () => {
         undefined,
         undefined,
         undefined,
+        undefined, // metadata — non-sticky gadget result
       );
       expect(conversation.addAssistantMessage).not.toHaveBeenCalled();
     });
@@ -220,6 +221,7 @@ describe("ConversationUpdater", () => {
         undefined,
         undefined,
         undefined,
+        undefined, // metadata — error path is non-sticky regardless of gadget flag
       );
     });
 
@@ -274,6 +276,7 @@ describe("ConversationUpdater", () => {
         undefined,
         undefined,
         undefined,
+        undefined, // metadata — non-sticky gadget result
       );
     });
 
@@ -300,6 +303,68 @@ describe("ConversationUpdater", () => {
         expect.any(Object),
         "result-value",
         "inv-001",
+        undefined,
+        undefined,
+        undefined,
+        undefined, // metadata — non-sticky gadget result
+      );
+    });
+
+    it("propagates `stickyResult: true` from the gadget execution result as `metadata.sticky` on success", () => {
+      const conversation = createMockConversation();
+      const updater = new ConversationUpdater(
+        conversation,
+        "terminate",
+        undefined,
+        createMockLogger(),
+      );
+
+      // Successful sticky gadget execution → metadata.sticky === true
+      const stickyEvent = createGadgetResultEvent({
+        gadgetName: "LoadSkill",
+        invocationId: "inv-sticky",
+        stickyResult: true,
+      });
+      updater.updateWithResults([], [stickyEvent], "");
+
+      expect(conversation.addGadgetCallResult).toHaveBeenCalledWith(
+        "LoadSkill",
+        { input: "test" },
+        "result-value",
+        "inv-sticky",
+        undefined,
+        undefined,
+        undefined,
+        { sticky: true },
+      );
+    });
+
+    it("does NOT mark sticky when the sticky gadget's execution returned an error", () => {
+      const conversation = createMockConversation();
+      const updater = new ConversationUpdater(
+        conversation,
+        "terminate",
+        undefined,
+        createMockLogger(),
+      );
+
+      // Sticky-flagged gadget but error path → metadata stays undefined so
+      // a failed LoadSkill doesn't pin its error message in context.
+      const stickyFailedEvent = createGadgetResultEvent({
+        gadgetName: "LoadSkill",
+        invocationId: "inv-failed",
+        result: undefined,
+        error: "Skill not found",
+        stickyResult: true,
+      });
+      updater.updateWithResults([], [stickyFailedEvent], "");
+
+      expect(conversation.addGadgetCallResult).toHaveBeenCalledWith(
+        "LoadSkill",
+        { input: "test" },
+        "Skill not found",
+        "inv-failed",
+        undefined,
         undefined,
         undefined,
         undefined,

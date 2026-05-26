@@ -62,6 +62,22 @@ export class SlidingWindowStrategy implements CompactionStrategy {
     const turnsToKeep = turns.slice(-preserveCount);
     const turnsRemoved = turns.length - preserveCount;
 
+    // Sticky-preservation contract: messages carrying `metadata.sticky === true`
+    // survive compaction regardless of how old they are, so multi-KB tool
+    // outputs the agent needs to remember (loaded skill bodies, retrieved
+    // documents, etc.) stay in context for the rest of the conversation.
+    //
+    // We compute the set of stickies from the OLDER half (turns we're about to
+    // drop) only — stickies inside `turnsToKeep` are already in the preserved
+    // window and re-inserting them between the marker and `turnsToKeep` would
+    // duplicate them. Strict `=== true` comparison avoids accidentally
+    // promoting messages whose `metadata.sticky` is something truthy but
+    // unintended (`"true"`, `1`, etc.).
+    const keptMessageRefs = new Set(turnsToKeep.flatMap((turn) => turn.messages));
+    const stickyToPreserve = messages.filter(
+      (msg) => msg.metadata?.sticky === true && !keptMessageRefs.has(msg),
+    );
+
     // Create truncation marker
     const truncationMarker: LLMMessage = {
       role: "user",
@@ -69,7 +85,11 @@ export class SlidingWindowStrategy implements CompactionStrategy {
     };
 
     // Build compacted message list
-    const compactedMessages: LLMMessage[] = [truncationMarker, ...flattenTurns(turnsToKeep)];
+    const compactedMessages: LLMMessage[] = [
+      truncationMarker,
+      ...stickyToPreserve,
+      ...flattenTurns(turnsToKeep),
+    ];
 
     // Estimate new token count
     const tokensAfter = Math.ceil(

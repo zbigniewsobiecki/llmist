@@ -1,19 +1,27 @@
 name: Release
 
 on:
-  # Trigger after CI passes on main branch (only way to release)
+  # Trigger after CI passes on main branch (normal path)
   workflow_run:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
+  # Manual fallback for when CI's event routing is stuck. Still gated on the
+  # main branch via the job-level `if:` so accidental dispatches from feature
+  # branches don't publish.
+  workflow_dispatch:
 
 jobs:
   release:
     name: Semantic Release
     runs-on: ubuntu-latest
     environment: CI
-    # Only run if CI succeeded
-    if: github.event.workflow_run.conclusion == 'success'
+    # Run on (a) the normal workflow_run path after CI passes on main, or
+    # (b) an explicit manual dispatch — but only when dispatched FROM main,
+    # so an accidental "Run workflow" from a feature branch can't publish.
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     permissions:
       contents: write
       issues: write
