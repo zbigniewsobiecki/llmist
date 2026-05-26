@@ -139,6 +139,15 @@ export class ConversationUpdater {
       for (const output of gadgetResults) {
         if (output.type === "gadget_result") {
           const gadgetResult = output.result;
+          // Sticky-result wiring: if the gadget definition opted in via
+          // `stickyResult: true` AND the execution succeeded (no error), mark
+          // the persisted user-message sticky so the compaction layer keeps
+          // it past truncation. Failed runs stay non-sticky so a bad LoadSkill
+          // doesn't pin itself in context.
+          const metadata =
+            gadgetResult.stickyResult === true && gadgetResult.error === undefined
+              ? { sticky: true }
+              : undefined;
           this.conversation.addGadgetCallResult(
             gadgetResult.gadgetName,
             gadgetResult.parameters,
@@ -147,6 +156,7 @@ export class ConversationUpdater {
             gadgetResult.media,
             gadgetResult.mediaIds,
             gadgetResult.storedMedia,
+            metadata,
           );
         }
       }

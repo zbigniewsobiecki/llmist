@@ -164,4 +164,122 @@ describe("SlidingWindowStrategy", () => {
       expect(keptMessages[1].content).toBe("Second answer with\nmultiline\ncontent");
     });
   });
+
+  // Sticky-preservation contract: messages carrying `metadata.sticky === true`
+  // survive compaction regardless of how old they are. The use case is
+  // multi-KB tool outputs that the agent needs to remember for the rest of
+  // the conversation (e.g. LoadSkill bodies — host apps mark them sticky on
+  // the way out). Without this, those outputs get dropped on the next
+  // compaction pass and the agent either re-loads (wasted tokens / round
+  // trips) or falls back to stale training knowledge.
+  describe("compact (sticky preservation)", () => {
+    it("preserves a sticky message that would otherwise have been dropped", async () => {
+      // 5 turns total, preserve 2. The sticky user message lives in turn 1
+      // (the oldest), which would normally be cut.
+      const messages: LLMMessage[] = [
+        { role: "user", content: "Sticky payload", metadata: { sticky: true } },
+        { role: "assistant", content: "Acknowledged sticky" },
+        { role: "user", content: "Turn 2 user" },
+        { role: "assistant", content: "Turn 2 assistant" },
+        { role: "user", content: "Turn 3 user" },
+        { role: "assistant", content: "Turn 3 assistant" },
+        { role: "user", content: "Turn 4 user" },
+        { role: "assistant", content: "Turn 4 assistant" },
+        { role: "user", content: "Turn 5 user" },
+        { role: "assistant", content: "Turn 5 assistant" },
+      ];
+      const config = createConfig({ preserveRecentTurns: 2 });
+      const context = createContext();
+
+      const result = await strategy.compact(messages, config, context);
+
+      // Expected shape: marker + sticky message + last 2 turns (4 msgs).
+      expect(result.messages).toHaveLength(6);
+      expect(result.messages[0].content).toContain("truncated");
+      expect(result.messages[1].content).toBe("Sticky payload");
+      expect(result.messages[1].metadata?.sticky).toBe(true);
+      expect(result.messages[2].content).toBe("Turn 4 user");
+      expect(result.messages[result.messages.length - 1].content).toBe("Turn 5 assistant");
+    });
+
+    it("preserves multiple sticky messages in original input order", async () => {
+      const messages: LLMMessage[] = [
+        { role: "user", content: "Sticky A", metadata: { sticky: true } },
+        { role: "assistant", content: "Turn 1 assistant" },
+        { role: "user", content: "Turn 2 user" },
+        { role: "assistant", content: "Sticky B", metadata: { sticky: true } },
+        { role: "user", content: "Turn 3 user" },
+        { role: "assistant", content: "Turn 3 assistant" },
+        { role: "user", content: "Turn 4 user" },
+        { role: "assistant", content: "Turn 4 assistant" },
+      ];
+      const config = createConfig({ preserveRecentTurns: 1 });
+      const context = createContext();
+
+      const result = await strategy.compact(messages, config, context);
+
+      // marker + 2 sticky messages + last 1 turn (2 msgs) = 5
+      expect(result.messages).toHaveLength(5);
+      expect(result.messages[0].content).toContain("truncated");
+      // Sticky messages appear after marker, BEFORE the recent turns,
+      // in their original input order.
+      expect(result.messages[1].content).toBe("Sticky A");
+      expect(result.messages[2].content).toBe("Sticky B");
+      expect(result.messages[3].content).toBe("Turn 4 user");
+      expect(result.messages[4].content).toBe("Turn 4 assistant");
+    });
+
+    it("does not duplicate a sticky message that already lives in the recent-turns window", async () => {
+      // The sticky message is in the LAST turn (Turn 3). It must appear
+      // exactly once in the result — at its natural position inside the
+      // preserved recent turns — and NOT be re-inserted between the marker
+      // and the recent turns.
+      const messages: LLMMessage[] = [
+        { role: "user", content: "Turn 1 user" },
+        { role: "assistant", content: "Turn 1 assistant" },
+        { role: "user", content: "Turn 2 user" },
+        { role: "assistant", content: "Turn 2 assistant" },
+        { role: "user", content: "Turn 3 user (sticky)", metadata: { sticky: true } },
+        { role: "assistant", content: "Turn 3 assistant" },
+      ];
+      const config = createConfig({ preserveRecentTurns: 1 });
+      const context = createContext();
+
+      const result = await strategy.compact(messages, config, context);
+
+      // marker + 1 turn (2 msgs) = 3, NOT 4 (no duplicate of the sticky)
+      expect(result.messages).toHaveLength(3);
+      const stickyHits = result.messages.filter(
+        (m) => m.metadata?.sticky === true && m.content === "Turn 3 user (sticky)",
+      );
+      expect(stickyHits).toHaveLength(1);
+      // And the surviving sticky sits at its natural position (right after marker).
+      expect(result.messages[1].content).toBe("Turn 3 user (sticky)");
+    });
+
+    it("treats only `metadata.sticky === true` as sticky, not truthy values like 'true' or 1", async () => {
+      // Strict equality matters — if we accidentally use loose truthiness,
+      // unrelated metadata fields could promote messages and bloat history.
+      const messages: LLMMessage[] = [
+        // These should NOT be preserved (sticky is not exactly === true)
+        { role: "user", content: "Falsy 1", metadata: { sticky: "true" } },
+        { role: "assistant", content: "Falsy 2", metadata: { sticky: 1 } },
+        { role: "user", content: "Turn 2 user" },
+        { role: "assistant", content: "Turn 2 assistant" },
+        { role: "user", content: "Turn 3 user" },
+        { role: "assistant", content: "Turn 3 assistant" },
+        { role: "user", content: "Turn 4 user" },
+        { role: "assistant", content: "Turn 4 assistant" },
+      ];
+      const config = createConfig({ preserveRecentTurns: 1 });
+      const context = createContext();
+
+      const result = await strategy.compact(messages, config, context);
+
+      // marker + 1 turn = 3; the falsy-sticky messages must be dropped.
+      expect(result.messages).toHaveLength(3);
+      expect(result.messages.find((m) => m.content === "Falsy 1")).toBeUndefined();
+      expect(result.messages.find((m) => m.content === "Falsy 2")).toBeUndefined();
+    });
+  });
 });

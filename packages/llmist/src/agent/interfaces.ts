@@ -36,6 +36,7 @@ export interface IConversationManager {
     media?: GadgetMediaOutput[],
     mediaIds?: string[],
     storedMedia?: StoredMedia[],
+    metadata?: Record<string, unknown>,
   ): void;
 
   /**
