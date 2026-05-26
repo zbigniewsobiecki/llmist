@@ -7,6 +7,9 @@ on:
       - dev
   pull_request:
     # Run on all PRs, regardless of target branch
+  workflow_dispatch:
+    # Manual fire — useful when GH's event routing has gotten stuck and
+    # push/pull_request events aren't auto-scheduling the workflow.
 
 jobs:
   lint-and-test:
