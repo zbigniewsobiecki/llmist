@@ -256,4 +256,117 @@ describe("SummarizationStrategy", () => {
       expect(capturedPrompt).toContain("Custom summarization prompt:");
     });
   });
+
+  // Sticky-preservation contract — mirrors the sliding-window suite. Messages
+  // carrying `metadata.sticky === true` survive compaction so multi-KB tool
+  // outputs (loaded skill bodies, retrieved documents) stay in the LLM's
+  // context past the summary boundary. Sticky messages are NOT included in
+  // the summarization prompt because we'd be asking the LLM to re-state
+  // content the agent will see verbatim in the next message anyway.
+  describe("compact (sticky preservation)", () => {
+    it("preserves a sticky message from the OLDER half past the summary boundary", async () => {
+      mockLLM().forAnyModel().returns("Summary").register();
+
+      const messages: LLMMessage[] = [
+        { role: "user", content: "Sticky payload", metadata: { sticky: true } },
+        { role: "assistant", content: "Acknowledged sticky" },
+        { role: "user", content: "Turn 2 user" },
+        { role: "assistant", content: "Turn 2 assistant" },
+        { role: "user", content: "Turn 3 user" },
+        { role: "assistant", content: "Turn 3 assistant" },
+        { role: "user", content: "Turn 4 user" },
+        { role: "assistant", content: "Turn 4 assistant" },
+        { role: "user", content: "Turn 5 user" },
+        { role: "assistant", content: "Turn 5 assistant" },
+      ];
+      const config = createConfig({ preserveRecentTurns: 2 });
+      const client = createMockClient();
+      const context: CompactionContext = {
+        currentTokens: 1000,
+        targetTokens: 500,
+        modelLimits: { contextWindow: 2000, maxOutputTokens: 1000 },
+        client,
+        model: "mock:test",
+      };
+
+      const result = await strategy.compact(messages, config, context);
+
+      // summary message + sticky + 2 turns (4 msgs) = 6
+      expect(result.messages).toHaveLength(6);
+      expect(result.messages[0].content).toContain("Previous conversation summary");
+      expect(result.messages[1].content).toBe("Sticky payload");
+      expect(result.messages[1].metadata?.sticky).toBe(true);
+      expect(result.messages[2].content).toBe("Turn 4 user");
+      expect(result.messages[result.messages.length - 1].content).toBe("Turn 5 assistant");
+    });
+
+    it("does NOT include sticky-message content in the summarization prompt sent to the LLM", async () => {
+      let capturedPrompt = "";
+      mockLLM()
+        .forAnyModel()
+        .withResponse((ctx) => {
+          capturedPrompt = ctx.messages.map((m) => m.content).join("");
+          return { text: "Summary" };
+        })
+        .register();
+
+      const messages: LLMMessage[] = [
+        { role: "user", content: "STICKY_DO_NOT_SUMMARIZE", metadata: { sticky: true } },
+        { role: "assistant", content: "Ack" },
+        { role: "user", content: "OLD_NORMAL_USER" },
+        { role: "assistant", content: "OLD_NORMAL_ASSISTANT" },
+        { role: "user", content: "RECENT_USER" },
+        { role: "assistant", content: "RECENT_ASSISTANT" },
+      ];
+      const config = createConfig({ preserveRecentTurns: 1 });
+      const client = createMockClient();
+      const context: CompactionContext = {
+        currentTokens: 1000,
+        targetTokens: 500,
+        modelLimits: { contextWindow: 2000, maxOutputTokens: 1000 },
+        client,
+        model: "mock:test",
+      };
+
+      await strategy.compact(messages, config, context);
+
+      // The sticky message text MUST NOT appear in the summarization prompt
+      // — the agent will see it verbatim in the next message, no need to
+      // re-summarize it.
+      expect(capturedPrompt).not.toContain("STICKY_DO_NOT_SUMMARIZE");
+      // But the other older content WAS summarized.
+      expect(capturedPrompt).toContain("OLD_NORMAL_USER");
+    });
+
+    it("does not duplicate a sticky message that already lives in the recent-turns window", async () => {
+      mockLLM().forAnyModel().returns("Summary").register();
+
+      const messages: LLMMessage[] = [
+        { role: "user", content: "Turn 1 user" },
+        { role: "assistant", content: "Turn 1 assistant" },
+        { role: "user", content: "Turn 2 user" },
+        { role: "assistant", content: "Turn 2 assistant" },
+        { role: "user", content: "Turn 3 user (sticky)", metadata: { sticky: true } },
+        { role: "assistant", content: "Turn 3 assistant" },
+      ];
+      const config = createConfig({ preserveRecentTurns: 1 });
+      const client = createMockClient();
+      const context: CompactionContext = {
+        currentTokens: 1000,
+        targetTokens: 500,
+        modelLimits: { contextWindow: 2000, maxOutputTokens: 1000 },
+        client,
+        model: "mock:test",
+      };
+
+      const result = await strategy.compact(messages, config, context);
+
+      // summary + 1 turn (2 msgs) = 3, NOT 4 (no duplicate of the sticky)
+      expect(result.messages).toHaveLength(3);
+      const stickyHits = result.messages.filter(
+        (m) => m.metadata?.sticky === true && m.content === "Turn 3 user (sticky)",
+      );
+      expect(stickyHits).toHaveLength(1);
+    });
+  });
 });

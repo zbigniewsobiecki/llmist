@@ -66,6 +66,12 @@ export interface CreateGadgetConfig<TSchema extends ZodType> {
    * - `N > 1` = At most N concurrent
    */
   maxConcurrent?: number;
+
+  /**
+   * If true, this gadget's results are marked sticky and survive compaction.
+   * See `AbstractGadget.stickyResult` for the full contract.
+   */
+  stickyResult?: boolean;
 }
 
 /**
@@ -138,6 +144,7 @@ export function createGadget<TSchema extends ZodType>(
     timeoutMs = config.timeoutMs;
     examples = config.examples;
     maxConcurrent = config.maxConcurrent;
+    stickyResult = config.stickyResult;
 
     execute(
       params: Record<string, unknown>,

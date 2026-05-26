@@ -455,6 +455,12 @@ export class GadgetExecutor {
         media,
         mediaIds,
         storedMedia,
+        // Copy the gadget's sticky flag into the result envelope so the
+        // conversation-updater can mark the persisted message sticky for
+        // the compaction layer. Only set on success — errors and other
+        // unsuccessful exits skip this so failed loads don't pin themselves
+        // in context.
+        stickyResult: gadget.stickyResult,
       };
     } catch (error) {
       // Check if this is a TaskCompletionSignal using duck typing

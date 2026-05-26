@@ -56,8 +56,25 @@ export class SummarizationStrategy implements CompactionStrategy {
     const turnsToSummarize = turns.slice(0, -preserveCount);
     const turnsToKeep = turns.slice(-preserveCount);
 
-    // Build conversation text to summarize
-    const conversationToSummarize = this.formatTurnsForSummary(flattenTurns(turnsToSummarize));
+    // Sticky-preservation contract (mirror of sliding-window): messages
+    // carrying `metadata.sticky === true` survive compaction so multi-KB tool
+    // outputs the agent needs to remember (loaded skill bodies, retrieved
+    // documents, etc.) stay in context for the rest of the conversation.
+    // Compute from the OLDER half only — stickies inside `turnsToKeep` are
+    // already preserved naturally. Use strict `=== true` so unrelated truthy
+    // metadata values don't accidentally promote messages.
+    const keptMessageRefs = new Set(turnsToKeep.flatMap((turn) => turn.messages));
+    const stickyToPreserve = messages.filter(
+      (msg) => msg.metadata?.sticky === true && !keptMessageRefs.has(msg),
+    );
+
+    // Build conversation text to summarize. Exclude the sticky messages so
+    // we don't ask the LLM to re-state the same content immediately under a
+    // "Previous conversation summary" header (the agent will see both).
+    const turnsToSummarizeMessages = flattenTurns(turnsToSummarize).filter(
+      (msg) => msg.metadata?.sticky !== true,
+    );
+    const conversationToSummarize = this.formatTurnsForSummary(turnsToSummarizeMessages);
 
     // Generate summary using LLM
     const summary = await this.generateSummary(conversationToSummarize, config, context);
@@ -68,8 +85,13 @@ export class SummarizationStrategy implements CompactionStrategy {
       content: `[Previous conversation summary]\n${summary}\n[End of summary - conversation continues below]`,
     };
 
-    // Build compacted message list
-    const compactedMessages: LLMMessage[] = [summaryMessage, ...flattenTurns(turnsToKeep)];
+    // Build compacted message list — sticky messages sit between the summary
+    // and the preserved recent turns, in their original input order.
+    const compactedMessages: LLMMessage[] = [
+      summaryMessage,
+      ...stickyToPreserve,
+      ...flattenTurns(turnsToKeep),
+    ];
 
     // Estimate new token count
     const tokensAfter = Math.ceil(

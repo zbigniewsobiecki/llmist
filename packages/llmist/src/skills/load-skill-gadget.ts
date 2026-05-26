@@ -44,6 +44,12 @@ export function createLoadSkillGadget(registry: SkillRegistry): AbstractGadget {
         .optional()
         .describe("Arguments for the skill (e.g., a filename, issue number, or search query)"),
     }),
+    // LoadSkill exists specifically so the agent can keep a skill body in
+    // context for the rest of the task — marking its results sticky lets the
+    // compaction layer preserve them past truncation. Without this the agent
+    // gets the skill body once, compaction drops it, and the next iteration
+    // falls back to stale training knowledge of whatever the skill covered.
+    stickyResult: true,
     execute: async ({ skill: skillName, arguments: args }) => {
       const skill = registry.get(skillName);
       if (!skill) {
