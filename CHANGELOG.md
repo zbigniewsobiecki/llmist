@@ -1,3 +1,15 @@
+## [17.6.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.5.1...v17.6.0) (2026-05-26)
+
+### Features
+
+* **cli:** extract builder configuration into configureAgentBuilder helper ([#608](https://github.com/zbigniewsobiecki/llmist/issues/608)) ([787b989](https://github.com/zbigniewsobiecki/llmist/commit/787b989480aed81175cdbee4feaedcf597acb1f7))
+* **cli:** extract REPL loop into agent-runner module ([#612](https://github.com/zbigniewsobiecki/llmist/issues/612)) ([60b22de](https://github.com/zbigniewsobiecki/llmist/commit/60b22de645b7d6297173b8f7748f2bd68ef9384f))
+* **compaction:** preserve sticky tool results past truncation ([#618](https://github.com/zbigniewsobiecki/llmist/issues/618)) ([3015709](https://github.com/zbigniewsobiecki/llmist/commit/3015709d1ce919637330ea54d4e74ba164fdd5ac))
+
+### Bug Fixes
+
+* **ci:** add workflow_dispatch trigger to ci + release workflows ([#619](https://github.com/zbigniewsobiecki/llmist/issues/619)) ([e5ee6cd](https://github.com/zbigniewsobiecki/llmist/commit/e5ee6cda02b2488b3f496eda3f7bfc132a80d748))
+
 ## [17.5.1](https://github.com/zbigniewsobiecki/llmist/compare/v17.5.0...v17.5.1) (2026-05-07)
 
 ### Bug Fixes
