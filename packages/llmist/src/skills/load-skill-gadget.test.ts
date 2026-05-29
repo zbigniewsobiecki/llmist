@@ -126,6 +126,42 @@ describe("createLoadSkillGadget", () => {
     expect(result.toLowerCase()).toContain('unknown skill: "also-fake"');
   });
 
+  it("emits concrete usage examples (single + multi) referencing real skill names", () => {
+    // V-Y7-2 (2026-05-29) prod test: the LLM emitted
+    // `LoadSkill({"skills": "[\"ucho:time\", \"ucho:projects\"]"})` — a
+    // JSON-encoded STRING of an array instead of an array. The empty
+    // result confused the agent into retrying. A concrete `params` example
+    // on the gadget shape disambiguates: AgentBuilder renders examples in
+    // the gadget's `getInstruction()` block so the LLM sees a literal
+    // `{skills: ["alpha"]}` (real array) before issuing its first call.
+    const registry = SkillRegistry.from([
+      makeSkill("alpha", "First skill", "Body."),
+      makeSkill("beta", "Second skill", "Body."),
+    ]);
+    const gadget = createLoadSkillGadget(registry);
+    const examples = (
+      gadget as unknown as { examples?: ReadonlyArray<{ params: Record<string, unknown> }> }
+    ).examples;
+    expect(examples).toBeDefined();
+    expect(examples?.length ?? 0).toBeGreaterThanOrEqual(2);
+    // First example: single-skill array form.
+    const single = examples?.[0];
+    expect(single?.params).toEqual(expect.objectContaining({ skills: ["alpha"] }));
+    // Second example: multi-skill — both skill names from the registry.
+    const multi = examples?.[1];
+    expect(multi?.params).toEqual(expect.objectContaining({ skills: ["alpha", "beta"] }));
+  });
+
+  it("description explicitly warns against passing a JSON-encoded string of an array", () => {
+    // V-Y7-2 surface again: the LLM tried `{"skills": "[\"alpha\"]"}` (a
+    // string!) twice before getting the shape right. The description must
+    // mention this anti-pattern explicitly.
+    const registry = SkillRegistry.from([makeSkill("alpha", "first", "body")]);
+    const gadget = createLoadSkillGadget(registry);
+    expect(gadget.description.toLowerCase()).toMatch(/json\s+array/);
+    expect(gadget.description.toLowerCase()).toMatch(/not\s+(?:a string|an? string)/);
+  });
+
   it("excludes non-model-invocable skills from the array enum", () => {
     const hidden = Skill.fromContent(
       "---\nname: hidden\ndescription: Hidden\ndisable-model-invocation: true\n---\nBody.",
