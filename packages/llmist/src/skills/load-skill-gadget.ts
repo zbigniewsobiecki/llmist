@@ -56,15 +56,40 @@ export function createLoadSkillGadget(registry: SkillRegistry): AbstractGadget {
   const skillNames = registry.getModelInvocable().map((s) => s.name);
 
   const description = [
-    "Load one or more skill bodies into context. Pass an array even for a",
-    'single skill: `{skills: ["some-skill"]}`. **This gadget is an iteration',
-    "barrier — no other gadgets in the same tool batch will execute, so load",
-    "every skill you know you'll need in one shot.** The loaded bodies are",
-    "sticky and survive context compaction.",
+    "Load one or more skill bodies into context. Pass `skills` as a JSON",
+    "array of skill-name strings — NOT a string of a JSON-encoded array.",
+    'Right: `{"skills": ["alpha"]}` or `{"skills": ["alpha", "beta"]}`.',
+    'Wrong: `{"skills": "[\\"alpha\\"]"}` (the value is a string, not an array).',
+    "**This gadget is an iteration barrier — no other gadgets in the same",
+    "tool batch will execute, so load every skill you know you'll need in",
+    "one shot.** The loaded bodies are sticky and survive context compaction.",
     "",
     "Available skills:",
     summaries,
   ].join("\n");
+
+  // Concrete usage examples rendered alongside the schema in
+  // `getInstruction()`. Reference real skill names from the registry so the
+  // LLM sees a literal `{skills: ["<actual name>"]}` shape and doesn't
+  // hallucinate a stringified form. Always include the single-skill case;
+  // include the multi-skill case only when the registry has 2+ invocable
+  // skills (so the second example doesn't repeat the first verbatim).
+  const examples: Array<{
+    params: { skills: string[]; arguments?: string };
+    comment: string;
+  }> = [];
+  if (skillNames.length >= 1) {
+    examples.push({
+      params: { skills: [skillNames[0]] },
+      comment: "Single-skill call — `skills` is still an array of length 1.",
+    });
+  }
+  if (skillNames.length >= 2) {
+    examples.push({
+      params: { skills: [skillNames[0], skillNames[1]] },
+      comment: "Multi-skill call — load several skills in one shot to avoid round-trips.",
+    });
+  }
 
   return createGadget({
     name: LOAD_SKILL_GADGET_NAME,
@@ -89,6 +114,7 @@ export function createLoadSkillGadget(registry: SkillRegistry): AbstractGadget {
     }),
     stickyResult: true,
     iterationBarrier: true,
+    examples,
     execute: async ({ skills: skillNamesArg, arguments: args }) => {
       const sections: Array<{ name: string; body: string }> = [];
       for (const skillName of skillNamesArg) {
