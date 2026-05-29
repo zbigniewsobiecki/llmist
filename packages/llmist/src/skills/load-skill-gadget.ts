@@ -57,7 +57,7 @@ export function createLoadSkillGadget(registry: SkillRegistry): AbstractGadget {
 
   const description = [
     "Load one or more skill bodies into context. Pass an array even for a",
-    "single skill: `{skills: ['some-skill']}`. **This gadget is an iteration",
+    'single skill: `{skills: ["some-skill"]}`. **This gadget is an iteration',
     "barrier — no other gadgets in the same tool batch will execute, so load",
     "every skill you know you'll need in one shot.** The loaded bodies are",
     "sticky and survive context compaction.",
