@@ -53,9 +53,9 @@ describe("createLoadSkillGadget", () => {
     // wires the actual gate (see ucho's skillLoadGate / IterationBarrierGate).
     const registry = SkillRegistry.from([makeSkill("test", "desc", "body")]);
     const gadget = createLoadSkillGadget(registry);
-    expect((gadget as unknown as { iterationBarrier?: boolean }).iterationBarrier).toBe(true);
+    expect(gadget.iterationBarrier).toBe(true);
     // Keeps the previous-session stickyResult flag too — orthogonal concerns.
-    expect((gadget as unknown as { stickyResult?: boolean }).stickyResult).toBe(true);
+    expect(gadget.stickyResult).toBe(true);
   });
 
   it("returns skill instructions when given a single-element array", async () => {

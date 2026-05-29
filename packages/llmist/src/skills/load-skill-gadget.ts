@@ -82,8 +82,8 @@ export function createLoadSkillGadget(registry: SkillRegistry): AbstractGadget {
         .string()
         .optional()
         .describe(
-          "Optional argument string substituted into each skill's $ARGUMENTS / " +
-            "{{args}} placeholders. Applies to every skill in the batch. To pass " +
+          "Optional argument string substituted into each skill's $ARGUMENTS " +
+            "placeholders. Applies to every skill in the batch. To pass " +
             "different arguments to different skills, issue separate LoadSkill calls.",
         ),
     }),
