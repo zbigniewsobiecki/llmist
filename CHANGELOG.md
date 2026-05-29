@@ -1,3 +1,9 @@
+## [18.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.0.0...v18.1.0) (2026-05-29)
+
+### Features
+
+* **skills:** LoadSkill examples + JSON-array vs stringified-array warning ([#626](https://github.com/zbigniewsobiecki/llmist/issues/626)) ([f5f7df0](https://github.com/zbigniewsobiecki/llmist/commit/f5f7df006a41f020ba7a6c5cdc743b641830eca2))
+
 ## [18.0.0](https://github.com/zbigniewsobiecki/llmist/compare/v17.6.0...v18.0.0) (2026-05-29)
 
 ### ⚠ BREAKING CHANGES
