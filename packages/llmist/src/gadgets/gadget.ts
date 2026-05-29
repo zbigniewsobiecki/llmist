@@ -281,6 +281,28 @@ export abstract class AbstractGadget {
   stickyResult?: boolean;
 
   /**
+   * Hints to the consuming agent loop that when this gadget appears in an
+   * LLM iteration's tool batch, no other gadget in the same batch should
+   * execute. Sibling tool calls in the same iteration are expected to be
+   * skipped (not executed) with a synthetic result; the next LLM iteration
+   * gets only this gadget's output back, and must re-plan from there.
+   *
+   * llmist exposes this as declarative metadata only — enforcement is the
+   * consuming agent loop's responsibility (the loop already owns the
+   * stream-event consumption and the `beforeGadgetExecution` controller, so
+   * it can buffer per-iteration calls, decide barrier-status at
+   * `llm_response_end`, and skip non-barrier siblings via the standard
+   * skip-with-synthetic-result mechanism). See `LoadSkill` for the canonical
+   * use case: the agent loop should freeze sibling tool execution so the
+   * LLM sees only the loaded skill body before issuing dependent work.
+   *
+   * Orthogonal to `stickyResult` (which affects compaction) and `exclusive`
+   * (which queues the marked gadget alone, AFTER others — opposite of this
+   * flag's "freeze the others" semantic).
+   */
+  iterationBarrier?: boolean;
+
+  /**
    * Execute the gadget with the given parameters.
    * Can be synchronous or asynchronous.
    *
