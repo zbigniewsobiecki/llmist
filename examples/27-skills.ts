@@ -90,7 +90,7 @@ console.log(`Description includes skills: ${loadSkillGadget.description.includes
 
 // Execute the gadget (simulating what the LLM would do)
 const result = await loadSkillGadget.execute({
-  skill: "code-review",
+  skills: ["code-review"],
   arguments: "const x = eval(userInput);",
 });
 console.log(`\nGadget result preview: ${String(result).slice(0, 200)}...`);

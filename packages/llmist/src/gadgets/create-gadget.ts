@@ -72,6 +72,14 @@ export interface CreateGadgetConfig<TSchema extends ZodType> {
    * See `AbstractGadget.stickyResult` for the full contract.
    */
   stickyResult?: boolean;
+
+  /**
+   * If true, the consuming agent loop should treat this gadget as a per-
+   * iteration barrier — when it appears in a tool batch, no sibling gadgets
+   * in the same batch execute. See `AbstractGadget.iterationBarrier` for the
+   * full contract (enforcement is consumer-side; this flag is declarative).
+   */
+  iterationBarrier?: boolean;
 }
 
 /**
@@ -145,6 +153,7 @@ export function createGadget<TSchema extends ZodType>(
     examples = config.examples;
     maxConcurrent = config.maxConcurrent;
     stickyResult = config.stickyResult;
+    iterationBarrier = config.iterationBarrier;
 
     execute(
       params: Record<string, unknown>,
