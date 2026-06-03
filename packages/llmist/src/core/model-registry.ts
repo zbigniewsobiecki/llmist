@@ -20,7 +20,7 @@ export class ModelRegistry {
    * Register a provider and collect its model specifications
    */
   registerProvider(provider: ProviderAdapter): void {
-    const specs = provider.getModelSpecs?.() ?? [];
+    const specs = [...(provider.getModelSpecs?.() ?? [])];
 
     if (specs.length > 0) {
       this.modelSpecs.push(...specs);
@@ -132,7 +132,7 @@ export class ModelRegistry {
       return [...this.modelSpecs];
     }
 
-    return this.providerMap.get(providerId) ?? [];
+    return [...(this.providerMap.get(providerId) ?? [])];
   }
 
   /**
