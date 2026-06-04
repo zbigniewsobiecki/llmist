@@ -822,4 +822,65 @@ describe("ModelRegistry", () => {
       expect(visionModels[0].modelId).toBe("custom-vision");
     });
   });
+
+  describe("Catalog isolation (defensive copy)", () => {
+    it("should not mutate the original provider specs array when registerModel() overwrites an entry", () => {
+      const originalSpecs = [
+        createModelSpec("gpt-4", "openai"),
+        createModelSpec("gpt-3.5-turbo", "openai"),
+      ];
+      const provider = createMockProvider("openai", originalSpecs);
+
+      registry.registerProvider(provider);
+
+      // Overwrite an existing entry — this calls splice() on internal providerMap array
+      const updatedModel = createModelSpec("gpt-4", "openai", 999_000, 32_768, 1.0, 2.0);
+      const originalWarn = console.warn;
+      console.warn = () => {};
+      registry.registerModel(updatedModel);
+      console.warn = originalWarn;
+
+      // The original array returned by the provider must be unchanged
+      expect(originalSpecs).toHaveLength(2);
+      expect(originalSpecs[0].modelId).toBe("gpt-4");
+      expect(originalSpecs[0].contextWindow).not.toBe(999_000);
+    });
+
+    it("should not leak mutations between two registries sharing the same provider", () => {
+      const specs = [createModelSpec("shared-model", "openai")];
+      const provider = createMockProvider("openai", specs);
+
+      const registry1 = new ModelRegistry();
+      const registry2 = new ModelRegistry();
+      registry1.registerProvider(provider);
+      registry2.registerProvider(provider);
+
+      // Overwrite the model on registry1 only
+      const replacement = createModelSpec("shared-model", "openai", 777_000, 16_384, 5.0, 10.0);
+      const originalWarn = console.warn;
+      console.warn = () => {};
+      registry1.registerModel(replacement);
+      console.warn = originalWarn;
+
+      // registry2 must still have the original spec
+      const spec2 = registry2.getModelSpec("shared-model");
+      expect(spec2?.contextWindow).not.toBe(777_000);
+      expect(spec2?.contextWindow).toBe(8192);
+    });
+
+    it("should return a copy from listModels(providerId) that callers cannot mutate", () => {
+      const spec = createModelSpec("gpt-4", "openai");
+      const provider = createMockProvider("openai", [spec]);
+      registry.registerProvider(provider);
+
+      // Push a fake item into the returned array
+      const firstCall = registry.listModels("openai");
+      expect(firstCall).toHaveLength(1);
+      firstCall.push(createModelSpec("injected", "openai"));
+
+      // The registry must be unaffected
+      const secondCall = registry.listModels("openai");
+      expect(secondCall).toHaveLength(1);
+    });
+  });
 });
