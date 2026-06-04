@@ -116,7 +116,7 @@ export {
   GADGET_START_PREFIX,
 } from "./core/constants.js";
 // Error utilities
-export { isAbortError } from "./core/errors.js";
+export { EmptyCompletionError, isAbortError } from "./core/errors.js";
 // Unified execution events with tree context
 export type {
   BaseExecutionEvent,

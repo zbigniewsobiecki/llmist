@@ -16,12 +16,13 @@
 
 import type { ILogObj, Logger } from "tslog";
 import { describe, expect, it, vi } from "vitest";
+import { EmptyCompletionError } from "../core/errors.js";
 import { ExecutionTree } from "../core/execution-tree.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 import type { ResolvedRetryConfig } from "../core/retry.js";
 import type { StreamCompletionEvent, StreamEvent } from "../gadgets/types.js";
 import type { AgentHooks } from "./hooks.js";
-import { RetryOrchestrator, type RetryResult } from "./retry-orchestrator.js";
+import { isEmptyCompletion, RetryOrchestrator, type RetryResult } from "./retry-orchestrator.js";
 import type { StreamProcessor } from "./stream-processor.js";
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,7 @@ function createRetryConfig(overrides: Partial<ResolvedRetryConfig> = {}): Resolv
     randomize: false,
     respectRetryAfter: true,
     maxRetryAfterMs: 5000,
+    retryOnEmpty: true,
     ...overrides,
   };
 }
@@ -934,6 +936,216 @@ describe("RetryOrchestrator", () => {
       ).rejects.toThrow("429");
 
       expect(sleep).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // Empty completion handling
+  // =========================================================================
+
+  describe("isEmptyCompletion predicate", () => {
+    it("is true when there is no text, no gadgets, and no thinking", () => {
+      const meta = makeMockStreamCompletionEvent({
+        rawResponse: "",
+        finalMessage: "",
+        didExecuteGadgets: false,
+        thinkingContent: undefined,
+      });
+      expect(isEmptyCompletion(meta)).toBe(true);
+    });
+
+    it("is true when text is only whitespace", () => {
+      const meta = makeMockStreamCompletionEvent({
+        rawResponse: "   \n  ",
+        finalMessage: "   ",
+        didExecuteGadgets: false,
+      });
+      expect(isEmptyCompletion(meta)).toBe(true);
+    });
+
+    it("is false when the model produced text", () => {
+      const meta = makeMockStreamCompletionEvent({ rawResponse: "hi", finalMessage: "hi" });
+      expect(isEmptyCompletion(meta)).toBe(false);
+    });
+
+    it("is false when a gadget executed even with empty text (tool-call turn)", () => {
+      const meta = makeMockStreamCompletionEvent({
+        rawResponse: "",
+        finalMessage: "",
+        didExecuteGadgets: true,
+      });
+      expect(isEmptyCompletion(meta)).toBe(false);
+    });
+
+    it("is false when only thinking content was produced", () => {
+      const meta = makeMockStreamCompletionEvent({
+        rawResponse: "",
+        finalMessage: "",
+        didExecuteGadgets: false,
+        thinkingContent: "let me reason about this",
+      });
+      expect(isEmptyCompletion(meta)).toBe(false);
+    });
+  });
+
+  describe("empty completion retry", () => {
+    // A dropped response: empty body AND no finish reason (the provider
+    // returned nothing). This is the signature of the real bug.
+    const emptyCompletion = () =>
+      makeMockStreamCompletionEvent({ rawResponse: "", finalMessage: "", finishReason: null });
+
+    it("retries a dropped (empty, no finish reason) completion and succeeds on the next attempt", async () => {
+      const sleep = vi.fn(async () => {});
+      let attempt = 0;
+
+      const orchestrator = new RetryOrchestrator({
+        retryConfig: createRetryConfig({ retries: 2, randomize: false }),
+        logger: createMockLogger(),
+        hooks: {},
+        tree: new ExecutionTree(),
+        sleep,
+      });
+
+      const goodCompletion = makeMockStreamCompletionEvent({
+        rawResponse: "real answer",
+        finalMessage: "real answer",
+      });
+
+      const { events, result } = await collectOrchestrate(
+        orchestrator,
+        createMockCreateStream(),
+        () =>
+          ++attempt === 1
+            ? createMockProcessor([], emptyCompletion())
+            : createMockProcessor([{ type: "text", content: "real answer" }], goodCompletion),
+      );
+
+      // Backoff happened once before the successful retry.
+      expect(sleep).toHaveBeenCalledOnce();
+
+      // The successful (non-empty) attempt is what the caller receives.
+      expect(result?.streamMetadata).toBe(goodCompletion);
+      expect(result?.textOutputs).toEqual(["real answer"]);
+
+      // The consumer must NOT see the discarded empty attempt's
+      // stream_complete — exactly one terminal event reaches it.
+      const completions = events.filter((e) => e.type === "stream_complete");
+      expect(completions).toEqual([goodCompletion]);
+    });
+
+    it("fires onRetryAttempt for an empty completion", async () => {
+      const onRetryAttempt = vi.fn(async () => {});
+      let attempt = 0;
+
+      const orchestrator = new RetryOrchestrator({
+        retryConfig: createRetryConfig({ retries: 2, randomize: false }),
+        logger: createMockLogger(),
+        hooks: { observers: { onRetryAttempt } },
+        tree: new ExecutionTree(),
+        sleep: vi.fn(async () => {}),
+      });
+
+      await collectOrchestrate(orchestrator, createMockCreateStream(), () =>
+        ++attempt === 1
+          ? createMockProcessor([], emptyCompletion())
+          : createMockProcessor([], makeMockStreamCompletionEvent()),
+      );
+
+      expect(onRetryAttempt).toHaveBeenCalledOnce();
+      const ctx = onRetryAttempt.mock.calls[0][0];
+      expect(ctx.attemptNumber).toBe(1);
+      expect(ctx.error).toBeInstanceOf(EmptyCompletionError);
+    });
+
+    it("throws EmptyCompletionError when every attempt is empty", async () => {
+      const onRetriesExhausted = vi.fn();
+      const orchestrator = new RetryOrchestrator({
+        retryConfig: createRetryConfig({ retries: 2, randomize: false, onRetriesExhausted }),
+        logger: createMockLogger(),
+        hooks: {},
+        tree: new ExecutionTree(),
+        sleep: vi.fn(async () => {}),
+      });
+
+      await expect(
+        collectOrchestrate(orchestrator, createMockCreateStream(), () =>
+          createMockProcessor([], emptyCompletion()),
+        ),
+      ).rejects.toBeInstanceOf(EmptyCompletionError);
+
+      // 1 initial + 2 retries = 3 attempts.
+      expect(onRetriesExhausted).toHaveBeenCalledWith(expect.any(EmptyCompletionError), 3);
+    });
+
+    it("does NOT retry an empty completion when retryOnEmpty is false", async () => {
+      const sleep = vi.fn(async () => {});
+      const empty = emptyCompletion();
+
+      const orchestrator = new RetryOrchestrator({
+        retryConfig: createRetryConfig({ retries: 2, retryOnEmpty: false }),
+        logger: createMockLogger(),
+        hooks: {},
+        tree: new ExecutionTree(),
+        sleep,
+      });
+
+      const { result } = await collectOrchestrate(orchestrator, createMockCreateStream(), () =>
+        createMockProcessor([], empty),
+      );
+
+      // Old behavior preserved: empty result passes through, no retry.
+      expect(sleep).not.toHaveBeenCalled();
+      expect(result?.streamMetadata).toBe(empty);
+    });
+
+    it("does NOT retry a deliberately empty turn that carries a finish reason", async () => {
+      // The model chose to say nothing and reported why it stopped (e.g.
+      // after a prior tool call). This is legitimate, not a dropped response.
+      const sleep = vi.fn(async () => {});
+      const deliberateEmpty = makeMockStreamCompletionEvent({
+        rawResponse: "",
+        finalMessage: "",
+        finishReason: "stop",
+      });
+
+      const orchestrator = new RetryOrchestrator({
+        retryConfig: createRetryConfig({ retries: 2 }),
+        logger: createMockLogger(),
+        hooks: {},
+        tree: new ExecutionTree(),
+        sleep,
+      });
+
+      const { result } = await collectOrchestrate(orchestrator, createMockCreateStream(), () =>
+        createMockProcessor([], deliberateEmpty),
+      );
+
+      expect(sleep).not.toHaveBeenCalled();
+      expect(result?.streamMetadata).toBe(deliberateEmpty);
+    });
+
+    it("does NOT retry when a gadget executed even with empty text", async () => {
+      const sleep = vi.fn(async () => {});
+      const toolTurn = makeMockStreamCompletionEvent({
+        rawResponse: "",
+        finalMessage: "",
+        didExecuteGadgets: true,
+      });
+
+      const orchestrator = new RetryOrchestrator({
+        retryConfig: createRetryConfig({ retries: 2 }),
+        logger: createMockLogger(),
+        hooks: {},
+        tree: new ExecutionTree(),
+        sleep,
+      });
+
+      const { result } = await collectOrchestrate(orchestrator, createMockCreateStream(), () =>
+        createMockProcessor([], toolTurn),
+      );
+
+      expect(sleep).not.toHaveBeenCalled();
+      expect(result?.streamMetadata).toBe(toolTurn);
     });
   });
 });

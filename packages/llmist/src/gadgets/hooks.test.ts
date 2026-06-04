@@ -107,7 +107,17 @@ class MockAdapter implements ProviderAdapter {
   async *stream(options: LLMGenerationOptions) {
     this.receivedCalls.push(options);
     const responseIndex = this.receivedCalls.length - 1;
-    const chunks = this.responses[responseIndex] ?? [];
+    const chunks = this.responses[responseIndex];
+
+    if (chunks === undefined) {
+      // Script exhausted: emit a clean terminal stop rather than a bare empty
+      // stream. An exhausted mock means "the model has nothing more to say and
+      // stops", not a dropped response — without an explicit finish reason the
+      // agent's dropped-completion guard would (correctly) treat a null-reason
+      // empty turn as a provider glitch and retry it.
+      yield { text: "", finishReason: "stop" };
+      return;
+    }
 
     for (const chunk of chunks) {
       yield chunk;
