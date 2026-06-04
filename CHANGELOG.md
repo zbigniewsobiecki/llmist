@@ -1,3 +1,13 @@
+## [18.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.1.0...v18.2.0) (2026-06-04)
+
+### Features
+
+* **agent:** retry dropped (empty, no-finish-reason) LLM completions ([#630](https://github.com/zbigniewsobiecki/llmist/issues/630)) ([c33f760](https://github.com/zbigniewsobiecki/llmist/commit/c33f760e613b7a164dfbb33870c23faf715ca675))
+
+### Bug Fixes
+
+* **core:** defensive copy in ModelRegistry to prevent shared catalog mutation ([#629](https://github.com/zbigniewsobiecki/llmist/issues/629)) ([9c48114](https://github.com/zbigniewsobiecki/llmist/commit/9c481143af64f26dd61d0530a3047f699f983656))
+
 ## [18.1.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.0.0...v18.1.0) (2026-05-29)
 
 ### Features
