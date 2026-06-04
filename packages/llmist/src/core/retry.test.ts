@@ -22,6 +22,9 @@ describe("retry configuration", () => {
         randomize: true,
         respectRetryAfter: true,
         maxRetryAfterMs: 120000,
+        // Empty completions (200-OK with no text and no tool calls) are
+        // treated as a transient failure and retried by default.
+        retryOnEmpty: true,
       });
     });
   });
@@ -85,6 +88,15 @@ describe("retry configuration", () => {
     it("should allow disabling retry", () => {
       const resolved = resolveRetryConfig({ enabled: false });
       expect(resolved.enabled).toBe(false);
+    });
+
+    it("should default retryOnEmpty to true", () => {
+      expect(resolveRetryConfig().retryOnEmpty).toBe(true);
+      expect(resolveRetryConfig({}).retryOnEmpty).toBe(true);
+    });
+
+    it("should allow disabling retryOnEmpty", () => {
+      expect(resolveRetryConfig({ retryOnEmpty: false }).retryOnEmpty).toBe(false);
     });
   });
 

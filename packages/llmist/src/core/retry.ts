@@ -91,6 +91,16 @@ export interface RetryConfig {
    * @default 120000 (2 minutes)
    */
   maxRetryAfterMs?: number;
+
+  /**
+   * Whether to treat an empty completion (a 200-OK response with no text,
+   * no tool calls, and no reasoning) as a transient failure and retry it.
+   * When all attempts come back empty, an `EmptyCompletionError` is thrown
+   * rather than committing a silent blank turn. Only takes effect when
+   * `enabled` is true.
+   * @default true
+   */
+  retryOnEmpty?: boolean;
 }
 
 /**
@@ -108,6 +118,7 @@ export interface ResolvedRetryConfig {
   shouldRetry?: (error: Error) => boolean;
   respectRetryAfter: boolean;
   maxRetryAfterMs: number;
+  retryOnEmpty: boolean;
 }
 
 /**
@@ -126,6 +137,7 @@ export const DEFAULT_RETRY_CONFIG: Omit<
   randomize: true,
   respectRetryAfter: true,
   maxRetryAfterMs: 120000, // 2 minutes cap
+  retryOnEmpty: true,
 };
 
 /**
@@ -151,6 +163,7 @@ export function resolveRetryConfig(config?: RetryConfig): ResolvedRetryConfig {
     shouldRetry: config.shouldRetry,
     respectRetryAfter: config.respectRetryAfter ?? DEFAULT_RETRY_CONFIG.respectRetryAfter,
     maxRetryAfterMs: config.maxRetryAfterMs ?? DEFAULT_RETRY_CONFIG.maxRetryAfterMs,
+    retryOnEmpty: config.retryOnEmpty ?? DEFAULT_RETRY_CONFIG.retryOnEmpty,
   };
 }
 

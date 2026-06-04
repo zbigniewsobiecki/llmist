@@ -10,6 +10,7 @@
  */
 
 import type { ILogObj, Logger } from "tslog";
+import { EmptyCompletionError } from "../core/errors.js";
 import type { ExecutionTree } from "../core/execution-tree.js";
 import type { LLMGenerationOptions } from "../core/options.js";
 import type { ResolvedRetryConfig } from "../core/retry.js";
@@ -19,6 +20,22 @@ import type { AgentHooks, ObserveRetryAttemptContext } from "./hooks.js";
 import { safeObserve } from "./safe-observe.js";
 import type { StreamProcessor } from "./stream-processor.js";
 import { getSubagentContextForNode } from "./tree-hook-bridge.js";
+
+/**
+ * Determines whether a stream completion carried no usable output at all —
+ * no text, no executed gadgets, and no reasoning content.
+ *
+ * This is the signature of a provider glitch (e.g. a 200-OK response with an
+ * empty body): the call "succeeded" but produced nothing. A turn with empty
+ * text but an executed gadget is NOT empty — the tool call is the output — so
+ * `didExecuteGadgets` short-circuits to `false`.
+ */
+export function isEmptyCompletion(meta: StreamCompletionEvent): boolean {
+  if (meta.didExecuteGadgets) return false;
+  if (meta.rawResponse?.trim() || meta.finalMessage?.trim()) return false;
+  if (meta.thinkingContent?.trim()) return false;
+  return true;
+}
 
 /**
  * The final result returned by a successful `orchestrate()` call.
@@ -174,6 +191,9 @@ export class RetryOrchestrator {
     let gadgetCallCount = 0;
     const textOutputs: string[] = [];
     const gadgetResults: StreamEvent[] = [];
+    // Set when every attempt returned an empty completion; thrown after the
+    // loop so it never falls into the generic error-retry catch below.
+    let emptyFailure: EmptyCompletionError | null = null;
 
     while (streamAttempt < maxStreamAttempts) {
       streamAttempt++;
@@ -189,10 +209,12 @@ export class RetryOrchestrator {
         // The final event is a StreamCompletionEvent containing metadata.
         for await (const event of processor.process(stream)) {
           if (event.type === "stream_complete") {
-            // Capture the completion metadata for the orchestrator's return
-            // value. Falls through to the bottom-of-loop `yield event` so
-            // consumers also see the event — symmetrical with how
-            // `llm_response_end` is captured (into the tree) AND yielded.
+            // Capture the completion metadata but DEFER yielding it until
+            // after the empty-completion check below. `stream_complete` is
+            // always the final event from the processor, so deferring its
+            // yield preserves event order for the success path while
+            // ensuring a retried (discarded) empty attempt's terminal event
+            // never reaches the consumer.
             //
             // Yielding `stream_complete` is load-bearing for any consumer
             // that needs the post-`waitForInFlightExecutions` boundary
@@ -201,6 +223,7 @@ export class RetryOrchestrator {
             // complete, so it can't be used as a "this iteration is fully
             // done" signal — that's exactly what `stream_complete` is for.
             streamMetadata = event;
+            continue;
           }
 
           if (event.type === "llm_response_end") {
@@ -233,7 +256,55 @@ export class RetryOrchestrator {
           this.failedInvocationIds.add(id);
         }
 
-        // Stream completed successfully — break retry loop
+        // Dropped-completion guard: a 200-OK response with no text, no tool
+        // calls, and no reasoning AND no finish reason is a provider glitch
+        // (the response was dropped), not a real turn. A deliberately empty
+        // turn carries an explicit finish reason (e.g. "stop") — the model
+        // chose to say nothing, often after a prior tool call — and must NOT
+        // be retried. Route only genuine drops through the same backoff
+        // machinery as thrown errors so a blank reply is retried instead of
+        // silently committed.
+        if (
+          this.retryConfig.enabled &&
+          this.retryConfig.retryOnEmpty &&
+          streamMetadata !== null &&
+          !streamMetadata.finishReason &&
+          isEmptyCompletion(streamMetadata)
+        ) {
+          const emptyError = new EmptyCompletionError({
+            iteration,
+            finishReason: streamMetadata.finishReason,
+          });
+
+          if (streamAttempt < maxStreamAttempts) {
+            await this.backoffBeforeRetry(
+              emptyError,
+              streamAttempt,
+              maxStreamAttempts,
+              iteration,
+              llmNodeId,
+            );
+
+            // Reset state for retry attempt (discard the empty attempt)
+            streamMetadata = null;
+            gadgetCallCount = 0;
+            textOutputs.length = 0;
+            gadgetResults.length = 0;
+
+            continue;
+          }
+
+          // Every attempt came back empty. Record the failure and break; it
+          // is thrown after the loop so it cannot re-enter the catch below.
+          emptyFailure = emptyError;
+          break;
+        }
+
+        // Stream completed successfully — emit the deferred terminal event
+        // and break the retry loop.
+        if (streamMetadata !== null) {
+          yield streamMetadata;
+        }
         break;
       } catch (streamError) {
         // Check if this is a retryable error and we have attempts remaining
@@ -244,55 +315,13 @@ export class RetryOrchestrator {
           : isRetryableError(error);
 
         if (canRetry && shouldRetryError) {
-          // Extract Retry-After hint if present
-          const retryAfterMs = this.retryConfig.respectRetryAfter
-            ? extractRetryAfterMs(error)
-            : null;
-
-          // Calculate delay: use Retry-After if available, otherwise exponential backoff
-          const baseDelay =
-            this.retryConfig.minTimeout * this.retryConfig.factor ** (streamAttempt - 1);
-          const cappedBaseDelay = Math.min(baseDelay, this.retryConfig.maxTimeout);
-          const delay =
-            retryAfterMs !== null
-              ? Math.min(retryAfterMs, this.retryConfig.maxRetryAfterMs)
-              : cappedBaseDelay;
-
-          // Add jitter if randomize is enabled
-          const finalDelay = this.retryConfig.randomize ? delay * (0.5 + Math.random()) : delay;
-
-          this.logger.warn(
-            `Stream iteration failed (attempt ${streamAttempt}/${maxStreamAttempts}), retrying...`,
-            {
-              error: error.message,
-              retriesLeft: maxStreamAttempts - streamAttempt,
-              delayMs: Math.round(finalDelay),
-              retryAfterMs,
-            },
+          await this.backoffBeforeRetry(
+            error,
+            streamAttempt,
+            maxStreamAttempts,
+            iteration,
+            llmNodeId,
           );
-
-          // Call retry callback
-          this.retryConfig.onRetry?.(error, streamAttempt);
-
-          // Emit observer hook for retry attempt
-          await safeObserve(async () => {
-            if (this.hooks.observers?.onRetryAttempt) {
-              const subagentContext = getSubagentContextForNode(this.tree, llmNodeId);
-              const hookContext: ObserveRetryAttemptContext = {
-                iteration,
-                attemptNumber: streamAttempt,
-                retriesLeft: maxStreamAttempts - streamAttempt,
-                error,
-                retryAfterMs: retryAfterMs ?? undefined,
-                logger: this.logger,
-                subagentContext,
-              };
-              await this.hooks.observers.onRetryAttempt(hookContext);
-            }
-          }, this.logger);
-
-          // Wait before retrying
-          await this.sleep(finalDelay);
 
           // Reset state for retry attempt (clear any partial results from failed attempt)
           streamMetadata = null;
@@ -316,8 +345,79 @@ export class RetryOrchestrator {
       }
     }
 
+    // Surface an all-empty run as a hard failure rather than a silent blank.
+    if (emptyFailure !== null) {
+      this.logger.error(`LLM returned empty completions on all ${streamAttempt} attempts`, {
+        iteration,
+      });
+      this.retryConfig.onRetriesExhausted?.(emptyFailure, streamAttempt);
+      throw emptyFailure;
+    }
+
     return streamMetadata !== null
       ? { streamMetadata, textOutputs, gadgetResults, gadgetCallCount }
       : null;
+  }
+
+  /**
+   * Apply the configured backoff before a retry attempt: compute the delay
+   * (Retry-After hint or exponential backoff, with optional jitter), emit the
+   * retry log, fire the `onRetry` callback and `onRetryAttempt` observer, then
+   * sleep. Shared by the error-retry and empty-completion-retry paths so both
+   * honour identical backoff and observer semantics.
+   */
+  private async backoffBeforeRetry(
+    error: Error,
+    streamAttempt: number,
+    maxStreamAttempts: number,
+    iteration: number,
+    llmNodeId: string,
+  ): Promise<void> {
+    // Extract Retry-After hint if present
+    const retryAfterMs = this.retryConfig.respectRetryAfter ? extractRetryAfterMs(error) : null;
+
+    // Calculate delay: use Retry-After if available, otherwise exponential backoff
+    const baseDelay = this.retryConfig.minTimeout * this.retryConfig.factor ** (streamAttempt - 1);
+    const cappedBaseDelay = Math.min(baseDelay, this.retryConfig.maxTimeout);
+    const delay =
+      retryAfterMs !== null
+        ? Math.min(retryAfterMs, this.retryConfig.maxRetryAfterMs)
+        : cappedBaseDelay;
+
+    // Add jitter if randomize is enabled
+    const finalDelay = this.retryConfig.randomize ? delay * (0.5 + Math.random()) : delay;
+
+    this.logger.warn(
+      `Stream iteration failed (attempt ${streamAttempt}/${maxStreamAttempts}), retrying...`,
+      {
+        error: error.message,
+        retriesLeft: maxStreamAttempts - streamAttempt,
+        delayMs: Math.round(finalDelay),
+        retryAfterMs,
+      },
+    );
+
+    // Call retry callback
+    this.retryConfig.onRetry?.(error, streamAttempt);
+
+    // Emit observer hook for retry attempt
+    await safeObserve(async () => {
+      if (this.hooks.observers?.onRetryAttempt) {
+        const subagentContext = getSubagentContextForNode(this.tree, llmNodeId);
+        const hookContext: ObserveRetryAttemptContext = {
+          iteration,
+          attemptNumber: streamAttempt,
+          retriesLeft: maxStreamAttempts - streamAttempt,
+          error,
+          retryAfterMs: retryAfterMs ?? undefined,
+          logger: this.logger,
+          subagentContext,
+        };
+        await this.hooks.observers.onRetryAttempt(hookContext);
+      }
+    }, this.logger);
+
+    // Wait before retrying
+    await this.sleep(finalDelay);
   }
 }

@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { isAbortError } from "./errors.js";
+import { EmptyCompletionError, isAbortError } from "./errors.js";
+
+describe("EmptyCompletionError", () => {
+  it("is an Error with a recognizable name", () => {
+    const error = new EmptyCompletionError({ iteration: 0, finishReason: null });
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("EmptyCompletionError");
+  });
+
+  it("carries the iteration and finishReason for diagnostics", () => {
+    const error = new EmptyCompletionError({ iteration: 3, finishReason: "stop" });
+    expect(error.iteration).toBe(3);
+    expect(error.finishReason).toBe("stop");
+  });
+
+  it("has a message describing the empty completion", () => {
+    const error = new EmptyCompletionError({ iteration: 0, finishReason: null });
+    expect(error.message.toLowerCase()).toContain("empty");
+  });
+});
 
 describe("isAbortError", () => {
   describe("returns false for non-Error values", () => {
