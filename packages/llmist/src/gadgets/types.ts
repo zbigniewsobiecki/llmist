@@ -39,6 +39,7 @@ export type {
   StoredMedia,
 } from "./media-types.js";
 export type {
+  GadgetArgsPartialEvent,
   GadgetSkippedEvent,
   StreamCompletionEvent,
   StreamEvent,

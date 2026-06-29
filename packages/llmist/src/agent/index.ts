@@ -61,6 +61,7 @@ export type {
   MessageInterceptorContext,
   ObserveChunkContext,
   ObserveCompactionContext,
+  ObserveGadgetArgsPartialContext,
   ObserveGadgetCompleteContext,
   // Gadget skip observer
   ObserveGadgetSkippedContext,
