@@ -1,3 +1,9 @@
+## [18.3.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.2.0...v18.3.0) (2026-06-29)
+
+### Features
+
+* **agent:** progressive gadget argument streaming ([#640](https://github.com/zbigniewsobiecki/llmist/issues/640)) ([1209679](https://github.com/zbigniewsobiecki/llmist/commit/1209679d1890519ed3690b71afe04a852e864d3f))
+
 ## [18.2.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.1.0...v18.2.0) (2026-06-04)
 
 ### Features
