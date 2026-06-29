@@ -12,8 +12,10 @@
  */
 
 import type { ILogObj, Logger } from "tslog";
-import type { ExecutionTree } from "../core/execution-tree.js";
+import type { ExecutionTree, NodeId } from "../core/execution-tree.js";
+import type { GadgetArgsPartialEvent } from "../gadgets/types.js";
 import type {
+  ObserveGadgetArgsPartialContext,
   ObserveGadgetCompleteContext,
   ObserveGadgetSkippedContext,
   ObserveGadgetStartContext,
@@ -56,6 +58,16 @@ export interface NotifyGadgetStartContext extends NotifyBaseContext {
   gadgetName: string;
   invocationId: string;
   parameters: Record<string, unknown>;
+}
+
+/** Data specific to the onGadgetArgsPartial notification */
+export interface NotifyGadgetArgsPartialContext extends NotifyBaseContext {
+  /**
+   * The LLM-call node these gadgets hang off (StreamProcessor's parentNodeId).
+   * Used to derive subagentContext — the gadget's own node does not exist yet.
+   */
+  parentNodeId: NodeId | null | undefined;
+  event: GadgetArgsPartialEvent;
 }
 
 /** Data specific to the onGadgetExecutionComplete notification */
@@ -135,6 +147,46 @@ export async function notifyGadgetStart(ctx: NotifyGadgetStartContext): Promise<
 
   if (ctx.parentObservers?.onGadgetExecutionStart) {
     const hookFn = ctx.parentObservers.onGadgetExecutionStart;
+    await safeObserve(() => hookFn(context), ctx.logger);
+  }
+}
+
+/**
+ * Notify observers of a progressive gadget-argument partial.
+ *
+ * Unlike start/complete, the gadget's ExecutionTree node does not exist yet (it is
+ * created at gadget_call dispatch), so subagentContext is derived from the spawning
+ * LLM-call node (`parentNodeId`) — the same approach agent.ts uses for LLM hooks.
+ *
+ * Awaited so per-field deltas are observed in emission order.
+ */
+export async function notifyGadgetArgsPartial(ctx: NotifyGadgetArgsPartialContext): Promise<void> {
+  if (!ctx.hooks?.onGadgetArgsPartial && !ctx.parentObservers?.onGadgetArgsPartial) return;
+
+  const subagentContext =
+    ctx.tree && ctx.parentNodeId
+      ? getSubagentContextForNode(ctx.tree, ctx.parentNodeId)
+      : undefined;
+
+  const context: ObserveGadgetArgsPartialContext = {
+    iteration: ctx.iteration,
+    invocationId: ctx.event.invocationId,
+    gadgetName: ctx.event.gadgetName,
+    fieldPath: ctx.event.fieldPath,
+    value: ctx.event.value,
+    delta: ctx.event.delta,
+    isFieldComplete: ctx.event.isFieldComplete,
+    logger: ctx.logger,
+    subagentContext,
+  };
+
+  if (ctx.hooks?.onGadgetArgsPartial) {
+    const hookFn = ctx.hooks.onGadgetArgsPartial;
+    await safeObserve(() => hookFn(context), ctx.logger);
+  }
+
+  if (ctx.parentObservers?.onGadgetArgsPartial) {
+    const hookFn = ctx.parentObservers.onGadgetArgsPartial;
     await safeObserve(() => hookFn(context), ctx.logger);
   }
 }

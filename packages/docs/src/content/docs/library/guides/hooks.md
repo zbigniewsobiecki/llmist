@@ -218,6 +218,7 @@ observers: {
 Observer hooks receive consistent context derived from the [ExecutionTree](/library/advanced/execution-tree/):
 
 - **Gadget hooks** (`onGadgetExecutionStart`, `onGadgetExecutionComplete`, `onGadgetSkipped`) are called with await to ensure proper ordering of commands
+- **Progressive args** (`onGadgetArgsPartial`) fires repeatedly while a gadget call streams — before its execution-tree node exists — and is awaited so per-field deltas arrive in order. Values are raw/uncoerced; pairs with the `gadget_args_partial` stream event
 - **LLM hooks** (`onLLMCallStart`, `onLLMCallComplete`, `onLLMCallError`) are bridged for subagent visibility
 
 This ensures:
@@ -260,6 +261,7 @@ const myHooks = HookPresets.merge(
 | `onLLMCallComplete` | `iteration`, `options`, `finishReason`, `usage`, `rawResponse`, `finalMessage`, `thinkingContent?`, `logger`, `subagentContext?` |
 | `onLLMCallError` | `iteration`, `options`, `error`, `recovered`, `logger`, `subagentContext?` |
 | `onGadgetExecutionStart` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `logger`, `subagentContext?` |
+| `onGadgetArgsPartial` | `iteration`, `invocationId`, `gadgetName`, `fieldPath`, `value`, `delta`, `isFieldComplete`, `logger`, `subagentContext?` |
 | `onGadgetExecutionComplete` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `finalResult`, `error`, `executionTimeMs`, `cost?`, `logger`, `subagentContext?` |
 | `onGadgetSkipped` | `iteration`, `gadgetName`, `invocationId`, `parameters`, `failedDependency`, `failedDependencyError`, `logger`, `subagentContext?` |
 | `onStreamChunk` | `iteration`, `rawChunk`, `accumulatedText`, `usage?`, `logger`, `subagentContext?` |

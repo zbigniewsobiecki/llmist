@@ -1,13 +1,16 @@
 import type { ILogObj, Logger } from "tslog";
 import { describe, expect, it, vi } from "vitest";
-import { ExecutionTree } from "../core/execution-tree.js";
+import { ExecutionTree, type NodeId } from "../core/execution-tree.js";
+import type { GadgetArgsPartialEvent } from "../gadgets/types.js";
 import type {
+  ObserveGadgetArgsPartialContext,
   ObserveGadgetCompleteContext,
   ObserveGadgetSkippedContext,
   ObserveGadgetStartContext,
   Observers,
 } from "./hooks.js";
 import {
+  notifyGadgetArgsPartial,
   notifyGadgetComplete,
   notifyGadgetSkipped,
   notifyGadgetStart,
@@ -46,6 +49,48 @@ function buildTreeWithGadget(invocationId: string): {
     parentId: llmNode.id,
   });
   return { tree, invocationId };
+}
+
+/**
+ * Build a tree shaped like a subagent execution:
+ *   root LLM → spawning gadget → subagent LLM
+ * The subagent's LLM node is the partial's `parentNodeId`; because it has a
+ * parent gadget in its ancestry, `getSubagentContextForNode` resolves a real
+ * (non-undefined) SubagentContext from it.
+ */
+function buildTreeWithSubagentLLM(): {
+  tree: ExecutionTree;
+  subagentLLMNodeId: NodeId;
+  spawnInvocationId: string;
+} {
+  const tree = new ExecutionTree();
+  const rootLLM = tree.addLLMCall({ iteration: 1, model: "test-model" });
+  const spawn = tree.addGadget({
+    invocationId: "spawn_1",
+    name: "Subagent",
+    parameters: {},
+    parentId: rootLLM.id,
+  });
+  const subagentLLM = tree.addLLMCall({
+    iteration: 1,
+    model: "test-model",
+    parentId: spawn.id,
+  });
+  return { tree, subagentLLMNodeId: subagentLLM.id, spawnInvocationId: "spawn_1" };
+}
+
+/** Build a gadget_args_partial event with sensible defaults. */
+function makePartialEvent(overrides: Partial<GadgetArgsPartialEvent> = {}): GadgetArgsPartialEvent {
+  return {
+    type: "gadget_args_partial",
+    invocationId: "gadget_1",
+    gadgetName: "FillForm",
+    fieldPath: "title",
+    value: "Hello",
+    delta: "lo",
+    isFieldComplete: false,
+    ...overrides,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -719,6 +764,289 @@ describe("notifyGadgetComplete", () => {
         error: undefined,
         executionTimeMs: 10,
         cost: undefined,
+      });
+
+      expect(parentCalled).toEqual([true]);
+      expect(logger.error).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: notifyGadgetArgsPartial
+// ---------------------------------------------------------------------------
+
+describe("notifyGadgetArgsPartial", () => {
+  describe("observer calling", () => {
+    it("should call hooks.observers.onGadgetArgsPartial with the partial context", async () => {
+      const logger = createMockLogger();
+      const captured: ObserveGadgetArgsPartialContext[] = [];
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: (ctx) => {
+          captured.push(ctx);
+        },
+      };
+
+      await notifyGadgetArgsPartial({
+        tree: undefined,
+        hooks,
+        parentObservers: undefined,
+        logger,
+        iteration: 1,
+        parentNodeId: null,
+        event: makePartialEvent({
+          fieldPath: "title",
+          value: "Hello",
+          delta: "lo",
+          isFieldComplete: false,
+        }),
+      });
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0]).toMatchObject({
+        iteration: 1,
+        invocationId: "gadget_1",
+        gadgetName: "FillForm",
+        fieldPath: "title",
+        value: "Hello",
+        delta: "lo",
+        isFieldComplete: false,
+      });
+    });
+
+    it("should call parentObservers.onGadgetArgsPartial when defined", async () => {
+      const logger = createMockLogger();
+      const captured: ObserveGadgetArgsPartialContext[] = [];
+
+      const parentObservers: Observers = {
+        onGadgetArgsPartial: (ctx) => {
+          captured.push(ctx);
+        },
+      };
+
+      await notifyGadgetArgsPartial({
+        tree: undefined,
+        hooks: undefined,
+        parentObservers,
+        logger,
+        iteration: 4,
+        parentNodeId: undefined,
+        event: makePartialEvent(),
+      });
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0].iteration).toBe(4);
+    });
+
+    it("should call hooks before parentObservers (sequential await)", async () => {
+      const logger = createMockLogger();
+      const order: string[] = [];
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: async () => {
+          await Promise.resolve();
+          order.push("hooks");
+        },
+      };
+
+      const parentObservers: Observers = {
+        onGadgetArgsPartial: async () => {
+          await Promise.resolve();
+          order.push("parentObservers");
+        },
+      };
+
+      await notifyGadgetArgsPartial({
+        tree: undefined,
+        hooks,
+        parentObservers,
+        logger,
+        iteration: 1,
+        parentNodeId: undefined,
+        event: makePartialEvent(),
+      });
+
+      expect(order).toEqual(["hooks", "parentObservers"]);
+    });
+
+    it("should do nothing when neither hooks nor parentObservers are defined", async () => {
+      const logger = createMockLogger();
+
+      await expect(
+        notifyGadgetArgsPartial({
+          tree: undefined,
+          hooks: undefined,
+          parentObservers: undefined,
+          logger,
+          iteration: 1,
+          parentNodeId: undefined,
+          event: makePartialEvent(),
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it("should do nothing when observers objects have no onGadgetArgsPartial", async () => {
+      const logger = createMockLogger();
+
+      await notifyGadgetArgsPartial({
+        tree: undefined,
+        hooks: {},
+        parentObservers: {},
+        logger,
+        iteration: 1,
+        parentNodeId: undefined,
+        event: makePartialEvent(),
+      });
+
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("subagentContext resolution", () => {
+    it("should pass undefined subagentContext when tree is undefined", async () => {
+      const logger = createMockLogger();
+      const captured: ObserveGadgetArgsPartialContext[] = [];
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: (ctx) => captured.push(ctx),
+      };
+
+      await notifyGadgetArgsPartial({
+        tree: undefined,
+        hooks,
+        parentObservers: undefined,
+        logger,
+        iteration: 1,
+        parentNodeId: "some-node" as NodeId,
+        event: makePartialEvent(),
+      });
+
+      expect(captured[0].subagentContext).toBeUndefined();
+    });
+
+    it("should pass undefined subagentContext for a root-level LLM parentNodeId", async () => {
+      const logger = createMockLogger();
+      const tree = new ExecutionTree();
+      const rootLLM = tree.addLLMCall({ iteration: 1, model: "test-model" });
+      const captured: ObserveGadgetArgsPartialContext[] = [];
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: (ctx) => captured.push(ctx),
+      };
+
+      await notifyGadgetArgsPartial({
+        tree,
+        hooks,
+        parentObservers: undefined,
+        logger,
+        iteration: 1,
+        parentNodeId: rootLLM.id,
+        event: makePartialEvent(),
+      });
+
+      // No parent gadget in the LLM node's ancestry → not a subagent.
+      expect(captured[0].subagentContext).toBeUndefined();
+    });
+
+    it("should derive subagentContext from a nested subagent LLM parentNodeId", async () => {
+      const logger = createMockLogger();
+      const { tree, subagentLLMNodeId, spawnInvocationId } = buildTreeWithSubagentLLM();
+      const captured: ObserveGadgetArgsPartialContext[] = [];
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: (ctx) => captured.push(ctx),
+      };
+
+      await notifyGadgetArgsPartial({
+        tree,
+        hooks,
+        parentObservers: undefined,
+        logger,
+        iteration: 1,
+        parentNodeId: subagentLLMNodeId,
+        event: makePartialEvent(),
+      });
+
+      expect(captured[0].subagentContext).toEqual({
+        parentGadgetInvocationId: spawnInvocationId,
+        depth: tree.getNode(subagentLLMNodeId)?.depth,
+      });
+    });
+
+    it("should include logger in observer context", async () => {
+      const logger = createMockLogger();
+      const captured: ObserveGadgetArgsPartialContext[] = [];
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: (ctx) => captured.push(ctx),
+      };
+
+      await notifyGadgetArgsPartial({
+        tree: undefined,
+        hooks,
+        parentObservers: undefined,
+        logger,
+        iteration: 1,
+        parentNodeId: undefined,
+        event: makePartialEvent(),
+      });
+
+      expect(captured[0].logger).toBe(logger);
+    });
+  });
+
+  describe("error isolation", () => {
+    it("should not throw when hooks observer throws an error", async () => {
+      const logger = createMockLogger();
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: () => {
+          throw new Error("observer error");
+        },
+      };
+
+      await expect(
+        notifyGadgetArgsPartial({
+          tree: undefined,
+          hooks,
+          parentObservers: undefined,
+          logger,
+          iteration: 1,
+          parentNodeId: undefined,
+          event: makePartialEvent(),
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(logger.error).toHaveBeenCalledTimes(1);
+    });
+
+    it("should still call parentObservers even if hooks observer throws", async () => {
+      const logger = createMockLogger();
+      const parentCalled: boolean[] = [];
+
+      const hooks: Observers = {
+        onGadgetArgsPartial: () => {
+          throw new Error("hooks error");
+        },
+      };
+
+      const parentObservers: Observers = {
+        onGadgetArgsPartial: () => {
+          parentCalled.push(true);
+        },
+      };
+
+      await notifyGadgetArgsPartial({
+        tree: undefined,
+        hooks,
+        parentObservers,
+        logger,
+        iteration: 1,
+        parentNodeId: undefined,
+        event: makePartialEvent(),
       });
 
       expect(parentCalled).toEqual([true]);

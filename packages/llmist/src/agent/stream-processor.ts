@@ -47,6 +47,7 @@ import type {
   ObserveChunkContext,
   Observers,
 } from "./hooks.js";
+import { notifyGadgetArgsPartial } from "./observer-notifier.js";
 import { safeObserve } from "./safe-observe.js";
 // NOTE: Gadget observer hooks (onGadgetExecutionStart, onGadgetExecutionComplete,
 // onGadgetSkipped) are called DIRECTLY here (awaited) to ensure proper ordering.
@@ -211,6 +212,10 @@ export class StreamProcessor {
 
   // Execution Tree context
   private readonly tree?: ExecutionTree;
+  /** LLM-call node these gadgets hang off; used to derive subagentContext for partials. */
+  private readonly parentNodeId?: NodeId | null;
+  /** Parent agent observers (subagent visibility) — also notified for arg partials. */
+  private readonly parentObservers?: Observers;
 
   private responseText = "";
 
@@ -231,6 +236,8 @@ export class StreamProcessor {
 
     // Initialize tree context
     this.tree = options.tree;
+    this.parentNodeId = options.parentNodeId;
+    this.parentObservers = options.parentObservers;
 
     // Initialize dependency resolver with cross-iteration state
     this.dependencyResolver = new GadgetDependencyResolver({
@@ -497,6 +504,19 @@ export class StreamProcessor {
       for await (const e of this.dispatcher.dispatch(event.call)) {
         yield e;
       }
+    } else if (event.type === "gadget_args_partial") {
+      // Fire the observer (errors isolated) before yielding the partial downstream.
+      // No tree node exists yet, so subagentContext is derived from parentNodeId.
+      await notifyGadgetArgsPartial({
+        tree: this.tree,
+        hooks: this.hooks.observers,
+        parentObservers: this.parentObservers,
+        logger: this.logger,
+        iteration: this.iteration,
+        parentNodeId: this.parentNodeId,
+        event,
+      });
+      yield event;
     } else {
       yield event;
     }

@@ -31,6 +31,20 @@ export interface EventHandlers {
     dependencies: string[];
   }) => void | Promise<void>;
 
+  /**
+   * Called for each progressive argument partial while a gadget call is still
+   * streaming (before `onGadgetCall`). Values are RAW/uncoerced; prefer `value`
+   * (replace) over `delta` (append). Great for live form-fill UIs.
+   */
+  onGadgetArgsPartial?: (partial: {
+    gadgetName: string;
+    invocationId: string;
+    fieldPath: string;
+    value: string;
+    delta: string;
+    isFieldComplete: boolean;
+  }) => void | Promise<void>;
+
   /** Called when a gadget execution completes */
   onGadgetResult?: (result: {
     gadgetName: string;
@@ -81,6 +95,19 @@ export async function runWithHandlers(
             parameters: event.call.parameters,
             parametersRaw: event.call.parametersRaw,
             dependencies: event.call.dependencies,
+          });
+        }
+        break;
+
+      case "gadget_args_partial":
+        if (handlers.onGadgetArgsPartial) {
+          await handlers.onGadgetArgsPartial({
+            gadgetName: event.gadgetName,
+            invocationId: event.invocationId,
+            fieldPath: event.fieldPath,
+            value: event.value,
+            delta: event.delta,
+            isFieldComplete: event.isFieldComplete,
           });
         }
         break;
