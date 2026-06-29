@@ -73,6 +73,7 @@ for await (const event of agent.run()) {
 |------|------------|-------------|
 | `text` | `content: string` | Text chunk from LLM |
 | `gadget_call` | `call: { gadgetName, parameters }` | Gadget about to execute |
+| `gadget_args_partial` | `invocationId, gadgetName, fieldPath, value, delta, isFieldComplete` | A gadget argument field's RAW value **as it streams**, before the gadget block completes. All partials for an invocation precede its `gadget_call`; values are uncoerced. Prefer `value` (replace) over `delta` (append). |
 | `gadget_result` | `result: { gadgetName, result?, error?, parameters }` | Gadget completed |
 | `gadget_skipped` | `gadgetName, invocationId, parameters, failedDependency, failedDependencyError` | Gadget skipped due to a failed dependency |
 | `thinking` | `content: string, thinkingType: "thinking" \| "redacted"` | Reasoning model thinking content |
@@ -80,6 +81,20 @@ for await (const event of agent.run()) {
 | `llm_response_end` | `finishReason, usage?` | LLM finished generating tokens (fires BEFORE gadget bodies finish — useful for separating "thinking time" from "tool work time") |
 | `stream_complete` | `finishReason, usage?, rawResponse, finalMessage, didExecuteGadgets, shouldBreakLoop, thinkingContent?` | Iteration boundary — fires AFTER every in-flight gadget body has resolved. Use this when you need to know "this iteration is fully done" (e.g., to advance an iteration counter or flush per-iteration buffers). |
 | `compaction` | `event: { tokensBefore, tokensAfter, strategy, messagesRemoved }` | Context compaction occurred |
+
+:::note[Progressive argument streaming]
+`gadget_args_partial` lets you render a gadget's arguments **as they stream** — e.g. a form field that fills in live while the model writes a long value. Correlate each partial with the final `gadget_call` (and any `gadget_result`) via `invocationId`.
+
+```typescript
+for await (const event of agent.run()) {
+  if (event.type === 'gadget_args_partial') {
+    form.setField(event.fieldPath, event.value); // replace; value is the full accumulation
+  }
+}
+```
+
+Because partial values are raw/uncoerced and a partial does **not** guarantee execution (the gadget may still be skipped by `maxGadgetsPerResponse` or fail validation), treat `gadget_call` as the source of truth and partials as a live preview. The same data is also available via the `onGadgetArgsPartial` observer and the `onGadgetArgsPartial` handler for `runWith`.
+:::
 
 ## Helper Functions
 

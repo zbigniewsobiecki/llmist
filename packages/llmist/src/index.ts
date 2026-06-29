@@ -62,6 +62,7 @@ export type {
   MessageTurn,
   ObserveChunkContext,
   ObserveCompactionContext,
+  ObserveGadgetArgsPartialContext,
   ObserveGadgetCompleteContext,
   ObserveGadgetStartContext,
   // Observer contexts
@@ -320,6 +321,7 @@ export { Gadget } from "./gadgets/typed-gadget.js";
 export type {
   CostReportingLLMist,
   ExecutionContext,
+  GadgetArgsPartialEvent,
   GadgetExample,
   GadgetExecuteResult,
   GadgetExecuteResultWithMedia,

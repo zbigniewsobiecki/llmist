@@ -41,7 +41,8 @@
       "!**/dist",
       "!**/node_modules",
       "!**/coverage",
-      "!**/.turbo"
+      "!**/.turbo",
+      "!**/.claude"
     ]
   }
 }

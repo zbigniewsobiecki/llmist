@@ -60,6 +60,35 @@ describe("Event Handlers", () => {
       });
     });
 
+    it("calls onGadgetArgsPartial handler for gadget_args_partial events", async () => {
+      const events: StreamEvent[] = [
+        {
+          type: "gadget_args_partial",
+          invocationId: "gadget_1",
+          gadgetName: "FillForm",
+          fieldPath: "title",
+          value: "Hello",
+          delta: "lo",
+          isFieldComplete: false,
+        },
+      ];
+
+      const onGadgetArgsPartial = vi.fn();
+      const handlers: EventHandlers = { onGadgetArgsPartial };
+
+      await runWithHandlers(createMockGenerator(events), handlers);
+
+      expect(onGadgetArgsPartial).toHaveBeenCalledTimes(1);
+      expect(onGadgetArgsPartial).toHaveBeenCalledWith({
+        gadgetName: "FillForm",
+        invocationId: "gadget_1",
+        fieldPath: "title",
+        value: "Hello",
+        delta: "lo",
+        isFieldComplete: false,
+      });
+    });
+
     it("calls onGadgetResult handler for gadget_result events", async () => {
       const events: StreamEvent[] = [
         {

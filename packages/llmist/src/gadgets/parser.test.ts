@@ -304,13 +304,15 @@ ${GADGET_ARG_PREFIX}message
 incomplete`),
       );
 
-      expect(events1).toEqual([]); // Nothing yielded yet
+      // The gadget_call is not yielded until the block completes (partials may stream).
+      expect(events1.filter((e) => e.type === "gadget_call")).toEqual([]);
 
       // Complete the gadget
       const events2 = collectSyncEvents(parser.feed(`\n${GADGET_END_PREFIX}`));
 
-      expect(events2).toHaveLength(1);
-      expect(events2[0]).toMatchObject({
+      const calls2 = events2.filter((e) => e.type === "gadget_call");
+      expect(calls2).toHaveLength(1);
+      expect(calls2[0]).toMatchObject({
         type: "gadget_call",
         call: {
           gadgetName: "TestGadget",
@@ -509,13 +511,14 @@ ${GADGET_ARG_PREFIX}key
 value
 `),
       );
-      // During feed(), no events yet since we're waiting for more data
-      expect(events).toEqual([]);
+      // During feed(), no gadget_call yet — only progressive partials.
+      expect(events.filter((e) => e.type === "gadget_call")).toEqual([]);
 
       // On finalize, the incomplete gadget should be parsed
       const finalEvents = collectSyncEvents(parser.finalize());
-      expect(finalEvents).toHaveLength(1);
-      expect(finalEvents[0]).toMatchObject({
+      const finalCalls = finalEvents.filter((e) => e.type === "gadget_call");
+      expect(finalCalls).toHaveLength(1);
+      expect(finalCalls[0]).toMatchObject({
         type: "gadget_call",
         call: {
           gadgetName: "Test",
@@ -562,14 +565,15 @@ ${GADGET_START_PREFIX}Test
 ${GADGET_ARG_PREFIX}key
 value`),
       );
-      // During feed(), only the text is yielded
-      expect(events).toHaveLength(1);
+      // During feed(), the text is yielded first (progressive partials may follow).
       expect(events[0]).toEqual({ type: "text", content: "Some text\n" });
+      expect(events.filter((e) => e.type === "gadget_call")).toEqual([]);
 
       // On finalize, the incomplete gadget should be parsed
       const finalEvents = collectSyncEvents(parser.finalize());
-      expect(finalEvents).toHaveLength(1);
-      expect(finalEvents[0]).toMatchObject({
+      const finalCalls = finalEvents.filter((e) => e.type === "gadget_call");
+      expect(finalCalls).toHaveLength(1);
+      expect(finalCalls[0]).toMatchObject({
         type: "gadget_call",
         call: {
           gadgetName: "Test",
@@ -594,21 +598,23 @@ ${GADGET_ARG_PREFIX}c
         ),
       );
 
-      // First two should be parsed (each ends when next starts)
-      expect(events).toHaveLength(2);
-      expect(events[0]).toMatchObject({
+      // First two should be parsed (each ends when next starts); Third streams partials.
+      const calls = events.filter((e) => e.type === "gadget_call");
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toMatchObject({
         type: "gadget_call",
         call: { gadgetName: "First", parameters: { a: 1 } },
       });
-      expect(events[1]).toMatchObject({
+      expect(calls[1]).toMatchObject({
         type: "gadget_call",
         call: { gadgetName: "Second", parameters: { b: 2 } },
       });
 
       // Third gadget parsed on finalize
       const finalEvents = collectSyncEvents(parser.finalize());
-      expect(finalEvents).toHaveLength(1);
-      expect(finalEvents[0]).toMatchObject({
+      const finalCalls = finalEvents.filter((e) => e.type === "gadget_call");
+      expect(finalCalls).toHaveLength(1);
+      expect(finalCalls[0]).toMatchObject({
         type: "gadget_call",
         call: { gadgetName: "Third", parameters: { c: 3 } },
       });
@@ -1128,16 +1134,17 @@ ${GADGET_ARG_PREFIX}data
 test`),
     );
 
-    // No events yet (gadget incomplete)
-    expect(events).toHaveLength(0);
+    // No gadget_call yet (gadget incomplete) — progressive partials may stream.
+    expect(events.filter((e) => e.type === "gadget_call")).toHaveLength(0);
 
     // Finalize should complete the gadget
     const finalEvents = collectSyncEvents(parser.finalize());
+    const finalCalls = finalEvents.filter((e) => e.type === "gadget_call");
 
-    expect(finalEvents).toHaveLength(1);
-    if (finalEvents[0]?.type === "gadget_call") {
-      expect(finalEvents[0].call.invocationId).toBe("proc_1");
-      expect(finalEvents[0].call.dependencies).toEqual(["dep_1", "dep_2"]);
+    expect(finalCalls).toHaveLength(1);
+    if (finalCalls[0]?.type === "gadget_call") {
+      expect(finalCalls[0].call.invocationId).toBe("proc_1");
+      expect(finalCalls[0].call.dependencies).toEqual(["dep_1", "dep_2"]);
     }
   });
 
@@ -1214,6 +1221,350 @@ ${GADGET_END_PREFIX}`;
           dependencies: ["dep1", "dep2"],
         },
       });
+    });
+  });
+
+  describe("progressive arg streaming", () => {
+    type PartialEvent = Extract<StreamEvent, { type: "gadget_args_partial" }>;
+    const partialsOf = (events: StreamEvent[]): PartialEvent[] =>
+      events.filter((e): e is PartialEvent => e.type === "gadget_args_partial");
+    const callsOf = (events: StreamEvent[]) =>
+      events.filter(
+        (e): e is Extract<StreamEvent, { type: "gadget_call" }> => e.type === "gadget_call",
+      );
+    // Backticks are literal inside a double-quoted string (no escaping needed).
+    const FENCE = "```toml";
+
+    it("emits no partials when a complete gadget arrives in a single feed", () => {
+      const input = `${GADGET_START_PREFIX}FillForm
+${GADGET_ARG_PREFIX}title
+Hello
+${GADGET_END_PREFIX}`;
+      const events = collectSyncEvents(parser.feed(input));
+
+      expect(partialsOf(events)).toEqual([]);
+      expect(callsOf(events)).toHaveLength(1);
+    });
+
+    it("emits a growing partial value as a field streams across feeds", () => {
+      const e1 = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHel`),
+      );
+      const e2 = collectSyncEvents(parser.feed("lo Wor"));
+      const e3 = collectSyncEvents(parser.feed("ld"));
+
+      expect(partialsOf(e1)).toEqual([
+        {
+          type: "gadget_args_partial",
+          invocationId: "gadget_1",
+          gadgetName: "FillForm",
+          fieldPath: "title",
+          value: "Hel",
+          delta: "Hel",
+          isFieldComplete: false,
+        },
+      ]);
+      expect(partialsOf(e2)[0]).toMatchObject({
+        fieldPath: "title",
+        value: "Hello Wor",
+        delta: "lo Wor",
+        isFieldComplete: false,
+      });
+      expect(partialsOf(e3)[0]).toMatchObject({
+        fieldPath: "title",
+        value: "Hello World",
+        delta: "ld",
+        isFieldComplete: false,
+      });
+    });
+
+    it("marks an earlier field complete once a following !!!ARG: arrives", () => {
+      collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHi`),
+      );
+      const e2 = collectSyncEvents(parser.feed(`\n${GADGET_ARG_PREFIX}body\nLine`));
+      const partials = partialsOf(e2);
+
+      const title = partials.find((p) => p.fieldPath === "title");
+      const body = partials.find((p) => p.fieldPath === "body");
+      expect(title).toMatchObject({ value: "Hi", isFieldComplete: true });
+      expect(body).toMatchObject({ value: "Line", isFieldComplete: false });
+    });
+
+    it("uses a stable auto invocationId across all partials and the final gadget_call", () => {
+      const e1 = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHel`),
+      );
+      const e2 = collectSyncEvents(parser.feed("lo"));
+      const e3 = collectSyncEvents(parser.feed(`\n${GADGET_END_PREFIX}`));
+
+      const ids = new Set<string>();
+      for (const p of [...partialsOf(e1), ...partialsOf(e2), ...partialsOf(e3)])
+        ids.add(p.invocationId);
+      for (const c of callsOf(e3)) ids.add(c.call.invocationId);
+      expect([...ids]).toEqual(["gadget_1"]);
+    });
+
+    it("does not skip auto invocationId numbers across a multi-feed gadget", () => {
+      collectSyncEvents(parser.feed(`${GADGET_START_PREFIX}G1\n${GADGET_ARG_PREFIX}a\nx`));
+      const e2 = collectSyncEvents(
+        parser.feed(
+          `\n${GADGET_END_PREFIX}\n${GADGET_START_PREFIX}G2\n${GADGET_ARG_PREFIX}b\ny\n${GADGET_END_PREFIX}`,
+        ),
+      );
+      const calls = callsOf(e2);
+
+      expect(calls[0].call.invocationId).toBe("gadget_1");
+      expect(calls[1].call.invocationId).toBe("gadget_2");
+    });
+
+    it("reuses an explicit invocationId and dependencies across partials and the call", () => {
+      const e1 = collectSyncEvents(
+        parser.feed(
+          `${GADGET_START_PREFIX}FillForm:my_id:dep1,dep2\n${GADGET_ARG_PREFIX}title\nHe`,
+        ),
+      );
+      const e2 = collectSyncEvents(parser.feed(`llo\n${GADGET_END_PREFIX}`));
+
+      expect(partialsOf(e1)[0].invocationId).toBe("my_id");
+      expect(callsOf(e2)[0]).toMatchObject({
+        call: { invocationId: "my_id", dependencies: ["dep1", "dep2"] },
+      });
+    });
+
+    it("emits no partial until the header line is complete", () => {
+      const events = collectSyncEvents(parser.feed(`${GADGET_START_PREFIX}FillForm`));
+      expect(events).toEqual([]);
+    });
+
+    it("does not re-emit a partial when the field has not grown", () => {
+      collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHi`),
+      );
+      const again = collectSyncEvents(parser.feed(""));
+      expect(partialsOf(again)).toEqual([]);
+    });
+
+    it("tolerates an unterminated opening code fence in partial content", () => {
+      const e1 = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${FENCE}\n${GADGET_ARG_PREFIX}title\nHi`),
+      );
+      expect(partialsOf(e1)[0]).toMatchObject({ fieldPath: "title", value: "Hi" });
+    });
+
+    it("reports nested pointer and array index paths verbatim as fieldPath", () => {
+      collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}G\n${GADGET_ARG_PREFIX}config/timeout\n30`),
+      );
+      const e2 = collectSyncEvents(parser.feed(`\n${GADGET_ARG_PREFIX}items/0\nfirst`));
+      const paths = partialsOf(e2).map((p) => p.fieldPath);
+
+      expect(paths).toContain("config/timeout");
+      expect(paths).toContain("items/0");
+    });
+
+    it("strips exactly one trailing newline from a streamed value", () => {
+      const e1 = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}G\n${GADGET_ARG_PREFIX}body\nLine1\n`),
+      );
+      expect(partialsOf(e1).at(-1)?.value).toBe("Line1");
+    });
+
+    it("does not leak a partial !!!ARG: marker into the tail field value", () => {
+      // The final 5 chars are the start of the NEXT marker ("!!!AR"); they must be held back.
+      const e1 = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}G\n${GADGET_ARG_PREFIX}title\nHello\n!!!AR`),
+      );
+      expect(partialsOf(e1).at(-1)?.value).toBe("Hello");
+    });
+
+    it("finalize flushes a trailing incomplete gadget as partials then a gadget_call", () => {
+      collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHe`),
+      );
+      const fin = collectSyncEvents(parser.finalize());
+
+      expect(partialsOf(fin).at(-1)).toMatchObject({
+        fieldPath: "title",
+        value: "He",
+        isFieldComplete: true,
+      });
+      const calls = callsOf(fin);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].call.invocationId).toBe("gadget_1");
+    });
+
+    it("reset() clears in-progress partial state", () => {
+      collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHe`),
+      );
+      parser.reset();
+      const e = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}Other\n${GADGET_ARG_PREFIX}name\nAl`),
+      );
+
+      expect(partialsOf(e)[0]).toMatchObject({
+        gadgetName: "Other",
+        fieldPath: "name",
+        value: "Al",
+        delta: "Al",
+      });
+    });
+
+    it("flushes partials for an implicitly-terminated gadget before its gadget_call", () => {
+      collectSyncEvents(parser.feed(`${GADGET_START_PREFIX}G1\n${GADGET_ARG_PREFIX}a\nx`));
+      const e2 = collectSyncEvents(
+        parser.feed(`\n${GADGET_START_PREFIX}G2\n${GADGET_ARG_PREFIX}b\ny\n${GADGET_END_PREFIX}`),
+      );
+
+      const firstPartialIdx = e2.findIndex((ev) => ev.type === "gadget_args_partial");
+      const firstCallIdx = e2.findIndex((ev) => ev.type === "gadget_call");
+      expect(firstPartialIdx).toBeGreaterThanOrEqual(0);
+      expect(firstPartialIdx).toBeLessThan(firstCallIdx);
+      const aPartial = partialsOf(e2).find((p) => p.fieldPath === "a");
+      expect(aPartial).toMatchObject({ value: "x", isFieldComplete: true });
+    });
+
+    it("reconstructs each field value from concatenated deltas when fed char by char", () => {
+      const input = `${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHello World\n${GADGET_ARG_PREFIX}body\nLorem ipsum\n${GADGET_END_PREFIX}`;
+      const all: StreamEvent[] = [];
+      for (const ch of input) all.push(...collectSyncEvents(parser.feed(ch)));
+      all.push(...collectSyncEvents(parser.finalize()));
+
+      const deltaFor = (field: string) =>
+        partialsOf(all)
+          .filter((p) => p.fieldPath === field)
+          .map((p) => p.delta)
+          .join("");
+      expect(deltaFor("title")).toBe("Hello World");
+      expect(deltaFor("body")).toBe("Lorem ipsum");
+
+      const call = callsOf(all)[0];
+      expect(call.call.parameters).toMatchObject({ title: "Hello World", body: "Lorem ipsum" });
+      // Every partial shares the final call's invocationId.
+      for (const p of partialsOf(all)) expect(p.invocationId).toBe(call.call.invocationId);
+    });
+
+    it("reconstructs a value whose held-back marker bytes resurface across a chunk boundary", () => {
+      // `title`'s real value is "a!!!b". At the feed-2 boundary the "!!!" looks like
+      // the start of a marker, so it is held back; it must resurface in a later delta
+      // so concatenated deltas still reconstruct the exact value AND it never leaks
+      // into a value while tentative. This is the marker-hold-back + completion path
+      // the `delta` doc warns about — pinned here.
+      const e1 = collectSyncEvents(
+        parser.feed(`${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\na`),
+      );
+      const e2 = collectSyncEvents(parser.feed("!!!")); // partial marker — held back
+      const e3 = collectSyncEvents(parser.feed("b")); // "!!!" resurfaces in this delta
+      const e4 = collectSyncEvents(parser.feed(`\n${GADGET_END_PREFIX}`)); // completes title
+      const all = [...e1, ...e2, ...e3, ...e4];
+
+      const titleValue = "a!!!b";
+      const titlePartials = partialsOf(all).filter((p) => p.fieldPath === "title");
+
+      // Concatenated deltas reconstruct the exact final value.
+      expect(titlePartials.map((p) => p.delta).join("")).toBe(titleValue);
+
+      // The authoritative gadget_call agrees, and every partial shares its invocationId.
+      const call = callsOf(all)[0];
+      expect(call.call.parameters).toMatchObject({ title: titleValue });
+      for (const p of partialsOf(all)) expect(p.invocationId).toBe(call.call.invocationId);
+
+      // No held-back marker bytes ever leaked: each emitted value is a prefix of the final.
+      for (const p of titlePartials) expect(titleValue.startsWith(p.value)).toBe(true);
+      // The field is reported complete exactly once.
+      expect(titlePartials.filter((p) => p.isFieldComplete)).toHaveLength(1);
+    });
+
+    it("reconstructs multi-line field values fed one character at a time", () => {
+      // Char-by-char is the maximal chunk-boundary stress: it exercises the
+      // resume-with-overlap scan and the hold-back at every single byte. Values
+      // carry "!!!" noise and embedded newlines (the old test used single-line text).
+      const titleVal = "a!!!b";
+      const bodyVal = "line1\nline2\nline3";
+      const input =
+        `${GADGET_START_PREFIX}FillForm\n` +
+        `${GADGET_ARG_PREFIX}title\n${titleVal}\n` +
+        `${GADGET_ARG_PREFIX}body\n${bodyVal}\n` +
+        `${GADGET_END_PREFIX}`;
+
+      const all: StreamEvent[] = [];
+      for (const ch of input) all.push(...collectSyncEvents(parser.feed(ch)));
+      all.push(...collectSyncEvents(parser.finalize()));
+
+      const deltaFor = (field: string) =>
+        partialsOf(all)
+          .filter((p) => p.fieldPath === field)
+          .map((p) => p.delta)
+          .join("");
+      expect(deltaFor("title")).toBe(titleVal);
+      expect(deltaFor("body")).toBe(bodyVal);
+
+      const call = callsOf(all)[0];
+      expect(call.call.parameters).toMatchObject({ title: titleVal, body: bodyVal });
+      for (const p of partialsOf(all)) expect(p.invocationId).toBe(call.call.invocationId);
+    });
+
+    it("parses a large multi-field body fed in many chunks", () => {
+      // Scale check for the incremental scanner: a big trailing field streamed over
+      // hundreds of chunks must still reconstruct exactly, and an earlier field must
+      // complete exactly once (not be re-emitted on every chunk).
+      const big = "x".repeat(20000);
+      const input =
+        `${GADGET_START_PREFIX}FillForm\n` +
+        `${GADGET_ARG_PREFIX}title\nHello\n` +
+        `${GADGET_ARG_PREFIX}body\n${big}\n` +
+        `${GADGET_END_PREFIX}`;
+
+      const CHUNK = 50;
+      const all: StreamEvent[] = [];
+      for (let i = 0; i < input.length; i += CHUNK) {
+        all.push(...collectSyncEvents(parser.feed(input.slice(i, i + CHUNK))));
+      }
+      all.push(...collectSyncEvents(parser.finalize()));
+
+      const call = callsOf(all)[0];
+      expect(call.call.parameters).toMatchObject({ title: "Hello", body: big });
+      expect(partialsOf(all).at(-1)?.value).toBe(big);
+      expect(
+        partialsOf(all).filter((p) => p.fieldPath === "title" && p.isFieldComplete),
+      ).toHaveLength(1);
+    });
+
+    it("detects an end marker split across a chunk boundary", () => {
+      // The resume-with-overlap scan must re-examine the previous chunk's tail; an
+      // overlap that is too small would skip a marker that began in that tail.
+      const split = Math.floor(GADGET_END_PREFIX.length / 2);
+      collectSyncEvents(
+        parser.feed(
+          `${GADGET_START_PREFIX}G\n${GADGET_ARG_PREFIX}a\nval\n${GADGET_END_PREFIX.slice(0, split)}`,
+        ),
+      );
+      const e2 = collectSyncEvents(parser.feed(GADGET_END_PREFIX.slice(split)));
+
+      const calls = callsOf(e2);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].call.parameters).toMatchObject({ a: "val" });
+    });
+
+    it("detects an implicit next-start marker split across a chunk boundary", () => {
+      const split = Math.floor(GADGET_START_PREFIX.length / 2);
+      collectSyncEvents(
+        parser.feed(
+          `${GADGET_START_PREFIX}G1\n${GADGET_ARG_PREFIX}a\nx\n${GADGET_START_PREFIX.slice(0, split)}`,
+        ),
+      );
+      const e2 = collectSyncEvents(
+        parser.feed(
+          `${GADGET_START_PREFIX.slice(split)}G2\n${GADGET_ARG_PREFIX}b\ny\n${GADGET_END_PREFIX}`,
+        ),
+      );
+
+      const calls = callsOf(e2);
+      // G1 is implicitly terminated by G2's start; both parse with correct params.
+      expect(calls.map((c) => c.call.gadgetName)).toEqual(["G1", "G2"]);
+      expect(calls[0].call.parameters).toMatchObject({ a: "x" });
+      expect(calls[1].call.parameters).toMatchObject({ b: "y" });
     });
   });
 });

@@ -589,6 +589,140 @@ describe("StreamProcessor", () => {
   // NOTE: Observer tests (onGadgetExecutionStart, onGadgetExecutionComplete)
   // have been moved to tree-hook-bridge.test.ts since observers are now
   // triggered via ExecutionTree events, not directly by StreamProcessor.
+  // onGadgetArgsPartial IS tested here: it fires before any tree node exists,
+  // so it is dispatched directly by StreamProcessor (not via the tree bridge).
+
+  describe("Progressive arg streaming (gadget_args_partial)", () => {
+    type PartialEvent = Extract<StreamEvent, { type: "gadget_args_partial" }>;
+    const partialsOf = (events: StreamEvent[]): PartialEvent[] =>
+      events.filter((e): e is PartialEvent => e.type === "gadget_args_partial");
+
+    // Split a FillForm gadget so `title` is bisected across chunks (forces partials).
+    const fillFormChunks = (): LLMStreamChunk[] => [
+      { text: `${GADGET_START_PREFIX}FillForm\n${GADGET_ARG_PREFIX}title\nHel` },
+      { text: "lo Wor" },
+      { text: `ld\n${GADGET_ARG_PREFIX}body\nDone\n${GADGET_END_PREFIX}`, finishReason: "stop" },
+    ];
+
+    it("streams gadget_args_partial events to the consumer", async () => {
+      registry.registerByClass(createMockGadget({ name: "FillForm", result: "ok" }));
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      const result = await consumeStream(processor, createTestStream(fillFormChunks()));
+
+      const titleValues = partialsOf(result.outputs)
+        .filter((p) => p.fieldPath === "title")
+        .map((p) => p.value);
+      expect(titleValues).toContain("Hello World");
+    });
+
+    it("emits every partial before its gadget_call, which precedes its gadget_result", async () => {
+      registry.registerByClass(createMockGadget({ name: "FillForm", result: "ok" }));
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      const result = await consumeStream(processor, createTestStream(fillFormChunks()));
+      const types = result.outputs.map((e) => e.type);
+
+      const lastPartialIdx = types.lastIndexOf("gadget_args_partial");
+      const callIdx = types.indexOf("gadget_call");
+      const resultIdx = types.indexOf("gadget_result");
+      expect(lastPartialIdx).toBeGreaterThanOrEqual(0);
+      expect(lastPartialIdx).toBeLessThan(callIdx);
+      expect(callIdx).toBeLessThan(resultIdx);
+    });
+
+    it("invokes onGadgetArgsPartial for each partial with matching payload", async () => {
+      registry.registerByClass(createMockGadget({ name: "FillForm", result: "ok" }));
+      const seen: Array<{ fieldPath: string; value: string; complete: boolean }> = [];
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        hooks: {
+          observers: {
+            onGadgetArgsPartial: (ctx) =>
+              void seen.push({
+                fieldPath: ctx.fieldPath,
+                value: ctx.value,
+                complete: ctx.isFieldComplete,
+              }),
+          },
+        },
+      });
+
+      const result = await consumeStream(processor, createTestStream(fillFormChunks()));
+
+      expect(seen).toHaveLength(partialsOf(result.outputs).length);
+      expect(
+        seen.some((s) => s.fieldPath === "title" && s.value === "Hello World" && s.complete),
+      ).toBe(true);
+    });
+
+    it("does not abort the stream when the observer throws", async () => {
+      registry.registerByClass(createMockGadget({ name: "FillForm", result: "ok" }));
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        hooks: {
+          observers: {
+            onGadgetArgsPartial: () => {
+              throw new Error("observer boom");
+            },
+          },
+        },
+      });
+
+      const result = await consumeStream(processor, createTestStream(fillFormChunks()));
+
+      expect(result.outputs.some((e) => e.type === "gadget_call")).toBe(true);
+      expect(result.outputs.some((e) => e.type === "gadget_result")).toBe(true);
+    });
+
+    it("emits no partials and no observer calls for a single-chunk gadget", async () => {
+      registry.registerByClass(createMockGadget({ name: "FillForm", result: "ok" }));
+      const onGadgetArgsPartial = vi.fn();
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        hooks: { observers: { onGadgetArgsPartial } },
+      });
+      const stream = createTextStream(createGadgetCallString("FillForm", { title: "Hi" }));
+
+      const result = await consumeStream(processor, stream);
+
+      expect(partialsOf(result.outputs)).toHaveLength(0);
+      expect(onGadgetArgsPartial).not.toHaveBeenCalled();
+    });
+
+    it("does not count partials as gadget executions", async () => {
+      registry.registerByClass(createMockGadget({ name: "FillForm", result: "ok" }));
+      const processor = new StreamProcessor({ iteration: 1, registry });
+
+      const result = await consumeStream(processor, createTestStream(fillFormChunks()));
+
+      expect(result.didExecuteGadgets).toBe(true);
+      expect(result.outputs.filter((e) => e.type === "gadget_result")).toHaveLength(1);
+    });
+
+    it("reports undefined subagentContext for root-agent partials", async () => {
+      registry.registerByClass(createMockGadget({ name: "FillForm", result: "ok" }));
+      let sawContext: unknown = "unset";
+      const processor = new StreamProcessor({
+        iteration: 1,
+        registry,
+        hooks: {
+          observers: {
+            onGadgetArgsPartial: (ctx) => {
+              sawContext = ctx.subagentContext;
+            },
+          },
+        },
+      });
+
+      await consumeStream(processor, createTestStream(fillFormChunks()));
+
+      expect(sawContext).toBeUndefined();
+    });
+  });
 
   describe("Interceptor: interceptGadgetResult", () => {
     it("transforms result after execution", async () => {

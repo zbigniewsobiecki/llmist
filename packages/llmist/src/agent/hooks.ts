@@ -251,6 +251,28 @@ export interface ObserveGadgetStartContext {
 }
 
 /**
+ * Context for a progressive gadget-argument partial.
+ * Read-only observation point. Values are RAW/uncoerced — see `GadgetArgsPartialEvent`.
+ *
+ * Unlike `onGadgetExecutionStart`, this fires BEFORE the gadget call is complete
+ * (and before any ExecutionTree node exists for the gadget), repeatedly, as the
+ * argument value streams in. The same `invocationId` later appears on the gadget's
+ * `gadget_call` event and (if it executes) its start/complete contexts.
+ */
+export interface ObserveGadgetArgsPartialContext {
+  iteration: number;
+  invocationId: string;
+  gadgetName: string;
+  fieldPath: string;
+  value: string;
+  delta: string;
+  isFieldComplete: boolean;
+  logger: Logger<ILogObj>;
+  /** Present when event is from a subagent (undefined for top-level agent) */
+  subagentContext?: SubagentContext;
+}
+
+/**
  * Context provided when a gadget execution completes.
  * Read-only observation point.
  *
@@ -333,6 +355,13 @@ export interface Observers {
 
   /** Called when a gadget execution starts */
   onGadgetExecutionStart?: (context: ObserveGadgetStartContext) => void | Promise<void>;
+
+  /**
+   * Called for each progressive argument partial while a gadget call is still
+   * streaming (before its `gadget_call`). Read-only; awaited in emission order.
+   * Values are RAW/uncoerced and should be treated as best-effort. Keep cheap.
+   */
+  onGadgetArgsPartial?: (context: ObserveGadgetArgsPartialContext) => void | Promise<void>;
 
   /** Called when a gadget execution completes (success or error) */
   onGadgetExecutionComplete?: (context: ObserveGadgetCompleteContext) => void | Promise<void>;
