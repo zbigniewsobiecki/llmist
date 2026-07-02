@@ -183,6 +183,8 @@ describe("normalizeInteractionsStream", () => {
         totalTokens: 310_000,
         reasoningTokens: 40_000,
         cachedInputTokens: 12_000,
+        // Tallied from the single google_search_result delta — drives per-search pricing.
+        searches: 1,
       });
     }
 
@@ -192,6 +194,7 @@ describe("normalizeInteractionsStream", () => {
     if (done?.type === "done") {
       expect(done.result.status).toBe("completed");
       expect(done.result.report).toBe("");
+      expect(done.result.usage?.searches).toBe(1);
     }
 
     for (const event of events) {
@@ -252,6 +255,58 @@ describe("normalizeInteractionsStream", () => {
       ),
     );
     expect(events[0]).toMatchObject({ type: "status", status: "budget_exceeded" });
+  });
+
+  it("maps url_context_call from the SDK's plural `urls` array", async () => {
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          {
+            event_type: "content.delta",
+            event_id: "ev-u",
+            index: 0,
+            delta: { type: "url_context_call", arguments: { urls: ["https://example.com/page"] } },
+          } as unknown as InteractionSSEEvent,
+        ]),
+      ),
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "search",
+        action: "open_page",
+        status: "started",
+        url: "https://example.com/page",
+      }),
+    ]);
+  });
+
+  it("tallies completed google searches into usage.searches", async () => {
+    const searchResult = (id: string): InteractionSSEEvent =>
+      ({
+        event_type: "content.delta",
+        event_id: id,
+        index: 0,
+        delta: { type: "google_search_result", call_id: id, result: [{ url: "https://x" }] },
+      }) as unknown as InteractionSSEEvent;
+
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          searchResult("ev-r1"),
+          searchResult("ev-r2"),
+          {
+            event_type: "interaction.complete",
+            event_id: "ev-done",
+            interaction: { id: "int_abc", status: "completed", outputs: [] },
+          } as unknown as InteractionSSEEvent,
+        ]),
+      ),
+    );
+
+    const usage = events.find((e) => e.type === "usage");
+    expect(usage?.type === "usage" && usage.usage.searches).toBe(2);
+    const done = events.at(-1);
+    expect(done?.type === "done" && done.result.usage?.searches).toBe(2);
   });
 });
 

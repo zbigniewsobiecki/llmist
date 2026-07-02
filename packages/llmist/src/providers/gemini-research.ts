@@ -133,7 +133,16 @@ export function extractReportFromInteraction(interaction: Interaction): Extracte
   return { report: parts.join(""), citations };
 }
 
-export function usageFromInteraction(interaction: Interaction): ResearchUsage {
+/**
+ * Map an interaction's token usage to {@link ResearchUsage}.
+ *
+ * The SDK `Usage` has no search-count field, and `interaction.complete` carries
+ * empty `outputs`, so the completed google-search count can only be derived by
+ * tallying `google_search_result` deltas off the stream; pass that tally as
+ * `searches` so per-search pricing (`perThousandSearches`) applies. Omitted on
+ * the status-poll path where the stream — and thus the count — is unavailable.
+ */
+export function usageFromInteraction(interaction: Interaction, searches?: number): ResearchUsage {
   const usage = interaction.usage;
   return {
     inputTokens: usage?.total_input_tokens ?? 0,
@@ -141,10 +150,11 @@ export function usageFromInteraction(interaction: Interaction): ResearchUsage {
     totalTokens: usage?.total_tokens ?? 0,
     cachedInputTokens: usage?.total_cached_tokens,
     reasoningTokens: usage?.total_thought_tokens,
+    ...(searches !== undefined ? { searches } : {}),
   };
 }
 
-function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
+function doneEventFromInteraction(interaction: Interaction, searches?: number): ResearchEvent {
   const { report, citations } = extractReportFromInteraction(interaction);
   return {
     type: "done",
@@ -152,7 +162,7 @@ function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
       status: mapInteractionStatus(interaction.status),
       report,
       citations,
-      usage: usageFromInteraction(interaction),
+      usage: usageFromInteraction(interaction, searches),
       raw: interaction,
     },
   };
@@ -169,6 +179,9 @@ function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
 export async function* normalizeInteractionsStream(
   stream: AsyncIterable<InteractionSSEEvent>,
 ): AsyncGenerator<ResearchEvent> {
+  // The SDK never reports a search count, so tally completed google searches
+  // off the stream (see usageFromInteraction) to drive per-search pricing.
+  let searchCount = 0;
   for await (const event of stream) {
     const cursor = event.event_id;
 
@@ -200,6 +213,9 @@ export async function* normalizeInteractionsStream(
       }
 
       case "content.delta":
+        if ((event.delta as { type?: string }).type === "google_search_result") {
+          searchCount += 1;
+        }
         yield* normalizeDelta(event, cursor);
         break;
 
@@ -209,11 +225,11 @@ export async function* normalizeInteractionsStream(
       case "interaction.complete":
         yield {
           type: "usage",
-          usage: usageFromInteraction(event.interaction),
+          usage: usageFromInteraction(event.interaction, searchCount),
           cursor,
           rawEvent: event,
         };
-        yield { ...doneEventFromInteraction(event.interaction), cursor };
+        yield { ...doneEventFromInteraction(event.interaction, searchCount), cursor };
         break;
 
       case "error":
@@ -310,12 +326,13 @@ function* normalizeDelta(
     }
 
     case "url_context_call": {
-      const call = delta as unknown as { arguments?: { url?: string } };
+      // SDK 1.43.0: URLContextCallArguments is `{ urls?: string[] }` (plural array).
+      const call = delta as unknown as { arguments?: { urls?: string[] } };
       yield {
         type: "search",
         action: "open_page",
         status: "started",
-        url: call.arguments?.url,
+        url: call.arguments?.urls?.[0],
         cursor,
         rawEvent: event,
       };
