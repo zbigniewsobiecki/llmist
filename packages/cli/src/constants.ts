@@ -54,6 +54,7 @@ export const OPTION_FLAGS = {
   researchCancel: "--cancel <ref>",
   researchJson: "--json",
   researchTimeout: "--timeout <seconds>",
+  researchMaxToolCalls: "--max-tool-calls <count>",
   researchOutput: "-o, --output <path>",
   // Speech generation options
   voice: "--voice <name>",
@@ -112,6 +113,8 @@ export const OPTION_DESCRIPTIONS = {
   researchJson:
     "Emit newline-delimited JSON research events to stdout instead of formatted output.",
   researchTimeout: "Client-side time budget in seconds (background jobs keep running server-side).",
+  researchMaxToolCalls:
+    "Cap on server-side tool calls (cost control; supported by OpenAI research models).",
   researchOutput: "Write the report to a file instead of stdout.",
   voice: "Voice name for speech generation, e.g. 'nova', 'alloy', 'Zephyr'.",
   speechFormat: "Audio format: 'mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'.",

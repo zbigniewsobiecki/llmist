@@ -34,6 +34,7 @@ export interface ResearchCommandOptions {
   json?: boolean;
   output?: string;
   timeout?: string;
+  maxToolCalls?: string;
   quiet?: boolean;
 }
 
@@ -102,6 +103,8 @@ export async function executeResearch(
       model: options.model,
       query,
       timeoutMs,
+      maxToolCalls:
+        options.maxToolCalls !== undefined ? Number.parseInt(options.maxToolCalls, 10) : undefined,
       background: options.background ? true : undefined,
       signal: detachController?.signal,
     });
@@ -281,6 +284,7 @@ export function registerResearchCommand(
       OPTION_DESCRIPTIONS.researchTimeout,
       config?.timeout?.toString(),
     )
+    .option(OPTION_FLAGS.researchMaxToolCalls, OPTION_DESCRIPTIONS.researchMaxToolCalls)
     .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, config?.quiet ?? false)
     .action((query, options) =>
       executeAction(() => executeResearch(query, options as ResearchCommandOptions, env), env),

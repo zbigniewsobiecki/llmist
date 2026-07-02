@@ -311,6 +311,26 @@ describe("registerResearchCommand", () => {
     );
   });
 
+  it("maps --max-tool-calls to maxToolCalls", async () => {
+    const { env, research } = makeEnv(fakeJob());
+    const program = new Command();
+    program.exitOverride();
+    registerResearchCommand(program, env, undefined);
+
+    await program.parseAsync([
+      "node",
+      "llmist",
+      "deep-research",
+      "q",
+      "-m",
+      "m",
+      "--max-tool-calls",
+      "8",
+    ]);
+
+    expect(research.start).toHaveBeenCalledWith(expect.objectContaining({ maxToolCalls: 8 }));
+  });
+
   it("maps --timeout seconds to timeoutMs", async () => {
     const { env, research } = makeEnv(fakeJob());
     const program = new Command();

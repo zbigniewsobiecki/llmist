@@ -219,7 +219,24 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
             }
           },
         }
-      : undefined,
+      : defaultType === "pretty"
+        ? {
+            // Diagnostics go to stderr (POSIX convention). tslog's default
+            // pretty transport uses console.log, which pollutes stdout —
+            // breaking consumers whose stdout is content or machine-readable
+            // (piped CLI output, --json/NDJSON modes, --background job refs).
+            transportFormatted: (
+              logMetaMarkup: string,
+              logArgs: unknown[],
+              _logErrors: string[],
+            ) => {
+              const args = logArgs.map((arg) =>
+                typeof arg === "string" ? arg : JSON.stringify(arg),
+              );
+              process.stderr.write(`${logMetaMarkup}${args.join(" ")}\n`);
+            },
+          }
+        : undefined,
   });
 
   return logger;
