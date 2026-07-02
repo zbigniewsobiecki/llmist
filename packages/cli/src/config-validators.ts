@@ -695,7 +695,7 @@ export function validateSpeechConfig(raw: unknown, section: string): SpeechConfi
 }
 
 /**
- * Validates the [research] config section.
+ * Validates the [deep-research] config section.
  */
 export function validateResearchConfig(raw: unknown, section: string): ResearchConfig {
   const rawObj = validateTable(raw, section, RESEARCH_CONFIG_KEYS);

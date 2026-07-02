@@ -331,6 +331,24 @@ describe("executeResearch — input validation", () => {
   });
 });
 
+describe("executeResearch — ignored flag warnings", () => {
+  it("warns that --output is ignored in --json mode", async () => {
+    const { env, stderr } = makeEnv(fakeJob());
+    await executeResearch("q", { model: "m", json: true, output: "/tmp/report.md" }, env);
+    expect(stderr()).toContain("--output is ignored in --json mode");
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("warns that --timeout is ignored with --resume and does not forward it", async () => {
+    const { env, research, stderr } = makeEnv(fakeJob());
+    const ref = JSON.stringify({ provider: "mock", model: "fake-research", jobId: "job-7" });
+    await executeResearch(undefined, { resume: ref, timeout: "900" }, env);
+    expect(stderr()).toContain("--timeout is ignored with --resume");
+    expect(research.attach).toHaveBeenCalled();
+    expect(research.start).not.toHaveBeenCalled();
+  });
+});
+
 describe("registerResearchCommand", () => {
   it("registers the command with config defaults applied", async () => {
     const { env, research } = makeEnv(fakeJob());
