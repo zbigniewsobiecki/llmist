@@ -380,6 +380,9 @@ export async function* normalizeResponsesStream(
         const type = (event as { type: string }).type;
         if (type === "response.cancelled") {
           const response = (event as unknown as { response: Response }).response;
+          // Parity with the typed terminal branches: a cancelled run may have
+          // accrued token/search usage — cost tracking shouldn't be blind here.
+          yield { type: "usage", usage: usageFromResponse(response), cursor, rawEvent: event };
           yield { ...doneEventFromResponse(response), cursor };
         }
         // All other events (content_part boundaries, obfuscation padding,
@@ -508,11 +511,11 @@ async function* pollResponseToCompletion(
     yield { type: "status", status, rawEvent: current };
 
     if (current && isTerminalStatus(status)) {
-      const { report } = extractReportFromResponse(current);
+      const { report, citations } = extractReportFromResponse(current);
       if (report.length > 0) {
         yield { type: "text", delta: report };
       }
-      for (const citation of extractReportFromResponse(current).citations) {
+      for (const citation of citations) {
         yield { type: "citation", citation };
       }
       yield { type: "usage", usage: usageFromResponse(current) };

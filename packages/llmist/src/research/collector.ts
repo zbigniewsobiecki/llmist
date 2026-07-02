@@ -44,7 +44,10 @@ export class ResearchResultCollector {
   private firstEventAt: number | undefined;
   private terminalAt: number | undefined;
 
-  /** Terminal error info from an `error` event, for result() consumers. */
+  /**
+   * Terminal error info from an `error` event.
+   * @internal Read by tests only — not part of the public consumer contract.
+   */
   terminalError: ResearchErrorInfo | undefined;
 
   constructor(
