@@ -336,7 +336,12 @@ export async function* normalizeInteractionsStream(
         // Defensive: preview docs are inconsistent (e.g. "interaction.error").
         const type = (event as { event_type?: string }).event_type ?? "";
         if (type.endsWith("error")) {
-          const err = (event as { error?: { message?: string } }).error;
+          const err = (event as { error?: { message?: string; code?: string } }).error;
+          // Same suppression as the `error` branch: a client_closed_request
+          // marker records a PREVIOUS consumer's disconnect, never the current
+          // (provably connected) one — surfacing it under this alternate shape
+          // would fail a healthy run just the same.
+          if (err?.code === "client_closed_request") break;
           yield {
             type: "error",
             error: { message: err?.message ?? "Gemini interaction error", retryable: false },
