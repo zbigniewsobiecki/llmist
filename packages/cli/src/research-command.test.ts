@@ -200,8 +200,11 @@ describe("executeResearch — formatted mode", () => {
     await executeResearch("q", { model: "m", output: "/tmp/report.md" }, env);
     expect(writeFileSync).toHaveBeenCalledWith(
       "/tmp/report.md",
-      "Report line one. Report line two.",
+      expect.stringContaining("Report line one. Report line two."),
     );
+    const written = vi.mocked(writeFileSync).mock.calls[0]?.[1] as string;
+    expect(written).toContain("Sources:");
+    expect(written).toContain("[1] https://a.example — Source A");
     expect(stdout()).not.toContain("Report line one");
     expect(stderr()).toContain("Report saved to /tmp/report.md");
   });

@@ -150,6 +150,8 @@ describe("normalizeOpenRouterResearchStream", () => {
         totalTokens: 381_200,
         reasoningTokens: 350_000,
         searches: 32,
+        // Authoritative billed cost from OpenRouter usage accounting.
+        costUSD: 1.93,
       });
     }
 
@@ -221,6 +223,7 @@ describe("OpenRouterProvider research surface", () => {
       model: "perplexity/sonar-deep-research",
       stream: true,
       stream_options: { include_usage: true },
+      usage: { include: true },
       reasoning: { effort: "high" },
     });
     expect(requestOptions).toMatchObject({

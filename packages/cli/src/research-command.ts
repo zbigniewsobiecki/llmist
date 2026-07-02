@@ -220,19 +220,25 @@ async function runFormatted(
   if (!options.output && result.report.length > streamed.length) {
     env.stdout.write(result.report.slice(streamed.length));
   }
+  const sources =
+    result.citations.length > 0
+      ? `\nSources:\n${result.citations
+          .map((citation, index) => {
+            const title = citation.title ? ` — ${citation.title}` : "";
+            return `  [${index + 1}] ${citation.url}${title}`;
+          })
+          .join("\n")}\n`
+      : "";
+
   if (options.output) {
-    writeFileSync(options.output, result.report);
+    // Keep the sources with the report — they are part of the deliverable.
+    writeFileSync(options.output, sources ? `${result.report}\n${sources}` : result.report);
     env.stderr.write(`${SUMMARY_PREFIX} Report saved to ${options.output}\n`);
   } else {
     env.stdout.write("\n");
-  }
-
-  if (result.citations.length > 0 && !options.output) {
-    env.stdout.write("\nSources:\n");
-    result.citations.forEach((citation, index) => {
-      const title = citation.title ? ` — ${citation.title}` : "";
-      env.stdout.write(`  [${index + 1}] ${citation.url}${title}\n`);
-    });
+    if (sources) {
+      env.stdout.write(sources);
+    }
   }
 
   if (showProgress) {

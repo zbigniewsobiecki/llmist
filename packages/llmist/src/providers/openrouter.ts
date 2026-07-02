@@ -167,6 +167,9 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
       // Mandatory: multi-minute runs hit idle disconnects without streaming.
       stream: true,
       stream_options: { include_usage: true },
+      // OpenRouter usage accounting: report the authoritative billed cost
+      // (covers per-search fees that token-based estimation cannot see).
+      usage: { include: true },
     };
     if (options.reasoning?.enabled !== undefined) {
       request.reasoning = {
