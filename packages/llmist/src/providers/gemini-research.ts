@@ -133,18 +133,47 @@ export function extractReportFromInteraction(interaction: Interaction): Extracte
   return { report: parts.join(""), citations };
 }
 
-export function usageFromInteraction(interaction: Interaction): ResearchUsage {
+/**
+ * Count search queries in an interaction's outputs (poll/status path).
+ * The SDK's Usage carries no search count, so this client-side count is what
+ * makes the catalog's perThousandSearches pricing apply to Gemini runs. Each
+ * google_search_call may fan out multiple queries; count queries, not calls.
+ */
+function countSearchesInOutputs(interaction: Interaction): number {
+  let searches = 0;
+  for (const content of interaction.outputs ?? []) {
+    if (content.type === "google_search_call") {
+      searches += content.arguments?.queries?.length ?? 1;
+    }
+  }
+  return searches;
+}
+
+/**
+ * Map an interaction's usage to ResearchUsage. `streamedSearches` (query
+ * fan-out tallied off the stream) takes precedence; the poll/status paths
+ * fall back to counting from outputs, which a non-stream GET populates.
+ */
+export function usageFromInteraction(
+  interaction: Interaction,
+  streamedSearches?: number,
+): ResearchUsage {
   const usage = interaction.usage;
+  const searches = streamedSearches ?? countSearchesInOutputs(interaction);
   return {
     inputTokens: usage?.total_input_tokens ?? 0,
     outputTokens: usage?.total_output_tokens ?? 0,
     totalTokens: usage?.total_tokens ?? 0,
     cachedInputTokens: usage?.total_cached_tokens,
     reasoningTokens: usage?.total_thought_tokens,
+    ...(searches > 0 ? { searches } : {}),
   };
 }
 
-function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
+function doneEventFromInteraction(
+  interaction: Interaction,
+  streamedSearches?: number,
+): ResearchEvent {
   const { report, citations } = extractReportFromInteraction(interaction);
   return {
     type: "done",
@@ -152,7 +181,7 @@ function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
       status: mapInteractionStatus(interaction.status),
       report,
       citations,
-      usage: usageFromInteraction(interaction),
+      usage: usageFromInteraction(interaction, streamedSearches),
       raw: interaction,
     },
   };
@@ -169,6 +198,11 @@ function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
 export async function* normalizeInteractionsStream(
   stream: AsyncIterable<InteractionSSEEvent>,
 ): AsyncGenerator<ResearchEvent> {
+  // Client-side search count — the SDK's Usage has no search dimension, and
+  // interaction.complete arrives with empty outputs on streams. Counted here
+  // so perThousandSearches pricing applies (each call may fan out queries).
+  let streamedSearches = 0;
+
   for await (const event of stream) {
     const cursor = event.event_id;
 
@@ -200,21 +234,25 @@ export async function* normalizeInteractionsStream(
       }
 
       case "content.delta":
-        yield* normalizeDelta(event, cursor);
+        yield* normalizeDelta(event, cursor, (queries) => {
+          streamedSearches += queries;
+        });
         break;
 
       case "content.stop":
         break;
 
-      case "interaction.complete":
+      case "interaction.complete": {
+        const searches = streamedSearches > 0 ? streamedSearches : undefined;
         yield {
           type: "usage",
-          usage: usageFromInteraction(event.interaction),
+          usage: usageFromInteraction(event.interaction, searches),
           cursor,
           rawEvent: event,
         };
-        yield { ...doneEventFromInteraction(event.interaction), cursor };
+        yield { ...doneEventFromInteraction(event.interaction, searches), cursor };
         break;
+      }
 
       case "error":
         yield {
@@ -250,6 +288,7 @@ export async function* normalizeInteractionsStream(
 function* normalizeDelta(
   event: Extract<InteractionSSEEvent, { event_type: "content.delta" }>,
   cursor: string | undefined,
+  onSearchCall: (queries: number) => void,
 ): Generator<ResearchEvent> {
   // Widened to a plain discriminator: the preview API emits shapes the SDK
   // union doesn't know yet (e.g. docs show "thought" for "thought_summary").
@@ -285,6 +324,7 @@ function* normalizeDelta(
 
     case "google_search_call": {
       const call = delta as unknown as { arguments?: { queries?: string[] } };
+      onSearchCall(call.arguments?.queries?.length ?? 1);
       yield {
         type: "search",
         action: "search",
@@ -310,12 +350,13 @@ function* normalizeDelta(
     }
 
     case "url_context_call": {
-      const call = delta as unknown as { arguments?: { url?: string } };
+      // SDK shape: URLContextCallArguments = { urls?: string[] } (plural).
+      const call = delta as unknown as { arguments?: { urls?: string[] } };
       yield {
         type: "search",
         action: "open_page",
         status: "started",
-        url: call.arguments?.url,
+        url: call.arguments?.urls?.[0],
         cursor,
         rawEvent: event,
       };
@@ -444,6 +485,29 @@ export function resumeGeminiResearch(
   signal?: AbortSignal,
 ): AsyncIterable<ResearchEvent> {
   return (async function* () {
+    // Status-first: a job that finished while detached may have nothing left
+    // to stream (OpenAI's stream-resume hangs on terminal responses — apply
+    // the same defense here). Emit the terminal sequence from outputs instead.
+    const current = (await (client as InteractionsClient).interactions.get(
+      ref.jobId,
+      undefined,
+      requestOptions(signal),
+    )) as Interaction;
+    const status = mapInteractionStatus(current.status);
+    if (isTerminalStatus(status)) {
+      yield { type: "status", status };
+      const { report, citations } = extractReportFromInteraction(current);
+      if (report.length > 0) {
+        yield { type: "text", delta: report };
+      }
+      for (const citation of citations) {
+        yield { type: "citation", citation };
+      }
+      yield { type: "usage", usage: usageFromInteraction(current) };
+      yield doneEventFromInteraction(current);
+      return;
+    }
+
     const stream = (await (client as InteractionsClient).interactions.get(
       ref.jobId,
       { stream: true, ...(ref.cursor !== undefined ? { last_event_id: ref.cursor } : {}) },

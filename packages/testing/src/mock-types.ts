@@ -99,6 +99,15 @@ export interface MockResearchData {
 }
 
 /**
+ * A registered mock research run — lives in MockManager's shared job store so
+ * background-job refs survive across adapter/client instances.
+ */
+export interface MockResearchJobEntry {
+  events: ResearchEvent[];
+  terminalStatus: ResearchStatus;
+}
+
+/**
  * A mock response that will be returned when a matcher succeeds.
  */
 export interface MockResponse {

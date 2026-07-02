@@ -183,6 +183,8 @@ describe("normalizeInteractionsStream", () => {
         totalTokens: 310_000,
         reasoningTokens: 40_000,
         cachedInputTokens: 12_000,
+        // Tallied from the single google_search_result delta — drives per-search pricing.
+        searches: 1,
       });
     }
 
@@ -192,6 +194,7 @@ describe("normalizeInteractionsStream", () => {
     if (done?.type === "done") {
       expect(done.result.status).toBe("completed");
       expect(done.result.report).toBe("");
+      expect(done.result.usage?.searches).toBe(1);
     }
 
     for (const event of events) {
@@ -253,6 +256,67 @@ describe("normalizeInteractionsStream", () => {
     );
     expect(events[0]).toMatchObject({ type: "status", status: "budget_exceeded" });
   });
+
+  it("maps url_context_call from the SDK's plural `urls` array", async () => {
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          {
+            event_type: "content.delta",
+            event_id: "ev-u",
+            index: 0,
+            delta: { type: "url_context_call", arguments: { urls: ["https://example.com/page"] } },
+          } as unknown as InteractionSSEEvent,
+        ]),
+      ),
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "search",
+        action: "open_page",
+        status: "started",
+        url: "https://example.com/page",
+      }),
+    ]);
+  });
+
+  it("tallies search queries (incl. per-call fan-out) into usage.searches", async () => {
+    // Google bills per grounding QUERY, and one google_search_call may carry
+    // several — count queries from call deltas, not completed results.
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          {
+            event_type: "content.delta",
+            event_id: "ev-s1",
+            index: 0,
+            delta: {
+              type: "google_search_call",
+              id: "g1",
+              arguments: { queries: ["a", "b", "c"] },
+            },
+          },
+          {
+            event_type: "content.delta",
+            event_id: "ev-s2",
+            index: 1,
+            delta: { type: "google_search_call", id: "g2", arguments: { queries: ["d"] } },
+          },
+          {
+            event_type: "interaction.complete",
+            event_id: "ev-done",
+            interaction: { id: "int_abc", status: "completed", outputs: [] },
+          },
+        ] as unknown as InteractionSSEEvent[]),
+      ),
+    );
+
+    const usage = events.find((e) => e.type === "usage");
+    expect(usage?.type === "usage" && usage.usage.searches).toBe(4);
+    // The done payload's embedded usage carries the same count.
+    const done = events.at(-1);
+    expect(done?.type === "done" && done.result.usage?.searches).toBe(4);
+  });
 });
 
 describe("startGeminiResearch", () => {
@@ -276,8 +340,11 @@ describe("startGeminiResearch", () => {
 });
 
 describe("resumeGeminiResearch", () => {
-  it("resumes the stream via last_event_id", async () => {
-    const get = vi.fn().mockResolvedValue(replay(FIXTURE.slice(9)));
+  it("polls status first, then resumes the stream via last_event_id when still running", async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValueOnce({ id: "int_abc", status: "in_progress", outputs: [] })
+      .mockResolvedValueOnce(replay(FIXTURE.slice(9)));
     const client = clientWith({ get: get as Interactions["get"] });
 
     const events = await drain(
@@ -289,13 +356,49 @@ describe("resumeGeminiResearch", () => {
       }),
     );
 
-    expect(get).toHaveBeenCalledWith(
+    expect(get).toHaveBeenNthCalledWith(1, "int_abc", undefined, expect.anything());
+    expect(get).toHaveBeenNthCalledWith(
+      2,
       "int_abc",
       { stream: true, last_event_id: "ev-8" },
       expect.anything(),
     );
     expect(events[0]?.cursor).toBe("ev-9");
     expect(events.at(-1)?.type).toBe("done");
+  });
+
+  it("emits the terminal sequence without streaming when the job finished while detached", async () => {
+    const completed = {
+      id: "int_abc",
+      status: "completed",
+      outputs: [
+        { type: "google_search_call", id: "g1", arguments: { queries: ["q1"] } },
+        {
+          type: "text",
+          text: "Finished while detached.",
+          annotations: [{ source: "https://done.example", start_index: 0, end_index: 8 }],
+        },
+      ],
+      usage: { total_input_tokens: 5, total_output_tokens: 5, total_tokens: 10 },
+    };
+    const get = vi.fn().mockResolvedValue(completed);
+    const client = clientWith({ get: get as Interactions["get"] });
+
+    const events = await drain(
+      resumeGeminiResearch(client, {
+        provider: "gemini",
+        model: AGENT,
+        jobId: "int_abc",
+        cursor: "ev-2",
+      }),
+    );
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(events.map((e) => e.type)).toEqual(["status", "text", "citation", "usage", "done"]);
+    const usage = events.find((e) => e.type === "usage");
+    if (usage?.type === "usage") {
+      expect(usage.usage.searches).toBe(1);
+    }
   });
 });
 
