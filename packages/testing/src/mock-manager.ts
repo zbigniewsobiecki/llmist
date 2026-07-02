@@ -4,6 +4,7 @@ import type {
   MockMatcherContext,
   MockOptions,
   MockRegistration,
+  MockResearchJobEntry,
   MockResponse,
   MockStats,
 } from "./mock-types.js";
@@ -16,6 +17,24 @@ export class MockManager {
   private static instance: MockManager | null = null;
   private mocks: Map<string, MockRegistration> = new Map();
   private stats: Map<string, MockStats> = new Map();
+  /**
+   * Simulated server-side research job store — shared across adapter
+   * instances so background-job refs survive "process restarts" in tests.
+   * Entries are managed by MockProviderAdapter.
+   */
+  readonly researchJobs: Map<string, MockResearchJobEntry> = new Map();
+  private researchJobCounter = 0;
+
+  /**
+   * Allocate a unique research job id. Lives here (not on the adapter)
+   * because the job store is shared: per-adapter counters could mint the
+   * same id from two adapter instances and silently overwrite each other's
+   * jobs in the shared map.
+   */
+  allocateResearchJobId(): string {
+    this.researchJobCounter += 1;
+    return `mock-research-job-${this.researchJobCounter}`;
+  }
   private options: Required<MockOptions>;
   private logger: Logger<ILogObj>;
   private nextId = 1;
@@ -111,6 +130,7 @@ export class MockManager {
   clear(): void {
     this.mocks.clear();
     this.stats.clear();
+    this.researchJobs.clear();
     this.logger.debug("Cleared all mocks");
   }
 

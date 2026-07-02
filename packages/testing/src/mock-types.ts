@@ -1,4 +1,13 @@
-import type { AudioMimeType, ImageMimeType, LLMGenerationOptions, LLMMessage } from "llmist";
+import type {
+  AudioMimeType,
+  ImageMimeType,
+  LLMGenerationOptions,
+  LLMMessage,
+  ResearchCitation,
+  ResearchEvent,
+  ResearchStatus,
+  ResearchUsage,
+} from "llmist";
 
 /**
  * Context provided to matcher functions to determine if a mock should be used.
@@ -62,6 +71,43 @@ export interface MockAudioData {
 }
 
 /**
+ * Research run data in a mock response.
+ *
+ * Either provide a `report` (+ optional citations/usage) and let the mock
+ * adapter synthesize a realistic normalized event stream, or script the
+ * exact `events` yourself (cursors are auto-assigned from the event index
+ * when missing, enabling deterministic resume tests).
+ */
+export interface MockResearchData {
+  /** Final report text (synthesized as streamed text deltas). */
+  report?: string;
+  /** Citations attached to the report. */
+  citations?: ResearchCitation[];
+  /** Usage to report (token fields default to 0). */
+  usage?: Partial<ResearchUsage>;
+  /** Server-side job id (default: "mock-research-job"). */
+  jobId?: string;
+  /** Terminal status (default: "completed"). */
+  status?: ResearchStatus;
+  /** Explicit event script — replayed verbatim instead of synthesis. */
+  events?: ResearchEvent[];
+  /**
+   * Throw a stream error after emitting this many events (drives
+   * reconnect/resume tests; the resumed stream does not fail again).
+   */
+  failAtEvent?: number;
+}
+
+/**
+ * A registered mock research run — lives in MockManager's shared job store so
+ * background-job refs survive across adapter/client instances.
+ */
+export interface MockResearchJobEntry {
+  events: ResearchEvent[];
+  terminalStatus: ResearchStatus;
+}
+
+/**
  * A mock response that will be returned when a matcher succeeds.
  */
 export interface MockResponse {
@@ -93,6 +139,11 @@ export interface MockResponse {
    * Will be yielded as a chunk in the stream.
    */
   audio?: MockAudioData;
+
+  /**
+   * Research run to simulate (for `client.research` mocks).
+   */
+  research?: MockResearchData;
 
   /**
    * Simulated token usage statistics

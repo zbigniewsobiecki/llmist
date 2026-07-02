@@ -23,6 +23,13 @@ import type {
   ModelDescriptor,
   ReasoningEffort,
 } from "../core/options.js";
+import type { ResearchModelSpec } from "../research/model-spec.js";
+import type {
+  ResearchEvent,
+  ResearchJobRef,
+  ResearchOptions,
+  ResearchStatusSnapshot,
+} from "../research/types.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import {
   FALLBACK_CHARS_PER_TOKEN,
@@ -37,6 +44,17 @@ import {
   openaiImageModels,
 } from "./openai-image-models.js";
 import { OPENAI_MODELS } from "./openai-models.js";
+import {
+  cancelOpenAIResearch,
+  getOpenAIResearchStatus,
+  resumeOpenAIResearch,
+  startOpenAIResearch,
+} from "./openai-research.js";
+import {
+  getOpenAIResearchModelSpec,
+  isOpenAIResearchModel,
+  openaiResearchModels,
+} from "./openai-research-models.js";
 import {
   calculateOpenAISpeechCost,
   getOpenAISpeechModelSpec,
@@ -201,6 +219,43 @@ export class OpenAIChatProvider extends BaseProviderAdapter {
       cost,
       format,
     };
+  }
+
+  // =========================================================================
+  // Deep Research (Responses API)
+  // =========================================================================
+
+  getResearchModelSpecs(): ResearchModelSpec[] {
+    return openaiResearchModels;
+  }
+
+  supportsResearch(modelId: string): boolean {
+    return isOpenAIResearchModel(modelId);
+  }
+
+  startResearch(
+    options: ResearchOptions,
+    descriptor: ModelDescriptor,
+    spec?: ResearchModelSpec,
+  ): AsyncIterable<ResearchEvent> {
+    return startOpenAIResearch(this.client as OpenAI, options, descriptor.name, spec);
+  }
+
+  resumeResearch(ref: ResearchJobRef, signal?: AbortSignal): AsyncIterable<ResearchEvent> {
+    return resumeOpenAIResearch(
+      this.client as OpenAI,
+      ref,
+      getOpenAIResearchModelSpec(ref.model),
+      signal,
+    );
+  }
+
+  getResearchStatus(ref: ResearchJobRef): Promise<ResearchStatusSnapshot> {
+    return getOpenAIResearchStatus(this.client as OpenAI, ref);
+  }
+
+  cancelResearch(ref: ResearchJobRef): Promise<void> {
+    return cancelOpenAIResearch(this.client as OpenAI, ref);
   }
 
   protected buildApiRequest(

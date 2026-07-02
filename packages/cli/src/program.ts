@@ -27,6 +27,7 @@ import { registerImageCommand } from "./image-command.js";
 import { registerInitCommand } from "./init-command.js";
 import { registerMcpCommand } from "./mcp-command.js";
 import { registerModelsCommand } from "./models-command.js";
+import { registerResearchCommand } from "./research-command.js";
 import { initSession } from "./session.js";
 import { registerSkillCommand } from "./skills/skill-command.js";
 import { registerSpeechCommand } from "./speech-command.js";
@@ -82,6 +83,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
   );
   registerImageCommand(program, env, config?.image);
   registerSpeechCommand(program, env, config?.speech);
+  registerResearchCommand(program, env, config?.["deep-research"]);
   registerVisionCommand(program, env);
   registerModelsCommand(program, env);
   registerGadgetCommand(program, env);

@@ -31,6 +31,12 @@ export interface ModelFeatures {
   structuredOutputs?: boolean;
   /** Supports fine-tuning */
   fineTuning?: boolean;
+  /**
+   * Discoverability flag: the model can also run deep research via
+   * `client.research` (see the research model catalog for capabilities
+   * and research-specific pricing).
+   */
+  research?: boolean;
 }
 
 export interface ModelSpec {

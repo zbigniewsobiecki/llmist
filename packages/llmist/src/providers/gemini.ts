@@ -19,6 +19,13 @@ import type {
   ReasoningConfig,
   ReasoningEffort,
 } from "../core/options.js";
+import type { ResearchModelSpec } from "../research/model-spec.js";
+import type {
+  ResearchEvent,
+  ResearchJobRef,
+  ResearchOptions,
+  ResearchStatusSnapshot,
+} from "../research/types.js";
 import { BaseProviderAdapter } from "./base-provider.js";
 import { FALLBACK_CHARS_PER_TOKEN } from "./constants.js";
 import { GeminiCacheManager } from "./gemini-cache-manager.js";
@@ -29,6 +36,13 @@ import {
   isGeminiImageModel,
 } from "./gemini-image-models.js";
 import { GEMINI_MODELS } from "./gemini-models.js";
+import {
+  cancelGeminiResearch,
+  getGeminiResearchStatus,
+  resumeGeminiResearch,
+  startGeminiResearch,
+} from "./gemini-research.js";
+import { geminiResearchModels, isGeminiResearchModel } from "./gemini-research-models.js";
 import {
   calculateGeminiSpeechCost,
   geminiSpeechModels,
@@ -424,6 +438,38 @@ export class GeminiGenerativeProvider extends BaseProviderAdapter {
       cost,
       format: spec?.defaultFormat ?? "wav",
     };
+  }
+
+  // =========================================================================
+  // Deep Research (Interactions API)
+  // =========================================================================
+
+  getResearchModelSpecs(): ResearchModelSpec[] {
+    return geminiResearchModels;
+  }
+
+  supportsResearch(agentId: string): boolean {
+    return isGeminiResearchModel(agentId);
+  }
+
+  startResearch(
+    options: ResearchOptions,
+    descriptor: ModelDescriptor,
+    spec?: ResearchModelSpec,
+  ): AsyncIterable<ResearchEvent> {
+    return startGeminiResearch(this.client as GoogleGenAI, options, descriptor.name, spec);
+  }
+
+  resumeResearch(ref: ResearchJobRef, signal?: AbortSignal): AsyncIterable<ResearchEvent> {
+    return resumeGeminiResearch(this.client as GoogleGenAI, ref, signal);
+  }
+
+  getResearchStatus(ref: ResearchJobRef): Promise<ResearchStatusSnapshot> {
+    return getGeminiResearchStatus(this.client as GoogleGenAI, ref);
+  }
+
+  cancelResearch(ref: ResearchJobRef): Promise<void> {
+    return cancelGeminiResearch(this.client as GoogleGenAI, ref);
   }
 
   protected buildApiRequest(
