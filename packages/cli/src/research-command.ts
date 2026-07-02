@@ -48,10 +48,30 @@ function parseRef(raw: string, flag: string): ResearchJobRef {
     );
   }
   const ref = parsed as Partial<ResearchJobRef>;
-  if (!ref || typeof ref.provider !== "string" || typeof ref.jobId !== "string") {
-    throw new Error(`${flag} ref is missing required "provider"/"jobId" fields.`);
+  if (
+    !ref ||
+    typeof ref.provider !== "string" ||
+    typeof ref.jobId !== "string" ||
+    typeof ref.model !== "string"
+  ) {
+    throw new Error(`${flag} ref is missing required "provider"/"jobId"/"model" fields.`);
   }
   return ref as ResearchJobRef;
+}
+
+/**
+ * Parse a positive-integer CLI flag, failing clearly instead of forwarding a
+ * `NaN` (or non-positive) value downstream. `--timeout notanumber` would
+ * otherwise become `NaN` → `setTimeout(fn, NaN)` → 0ms → a confusing instant
+ * `ResearchTimeoutError`; `--max-tool-calls xyz` would forward `NaN` to the
+ * provider.
+ */
+function parsePositiveInt(raw: string, flag: string): number {
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${flag} expects a positive integer (got "${raw}").`);
+  }
+  return value;
 }
 
 /** Strip the rawEvent escape hatch from NDJSON output (huge, provider-specific). */
@@ -76,7 +96,7 @@ export async function executeResearch(
 
   const timeoutMs =
     options.timeout !== undefined
-      ? Number.parseInt(options.timeout, 10) * MS_PER_SECOND
+      ? parsePositiveInt(options.timeout, "--timeout") * MS_PER_SECOND
       : undefined;
 
   // For --background we hold our own abort controller so we can tear down the
@@ -104,7 +124,9 @@ export async function executeResearch(
       query,
       timeoutMs,
       maxToolCalls:
-        options.maxToolCalls !== undefined ? Number.parseInt(options.maxToolCalls, 10) : undefined,
+        options.maxToolCalls !== undefined
+          ? parsePositiveInt(options.maxToolCalls, "--max-tool-calls")
+          : undefined,
       background: options.background ? true : undefined,
       signal: detachController?.signal,
     });

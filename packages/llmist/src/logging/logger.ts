@@ -201,21 +201,27 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
     // Use overwrite to redirect tslog's formatted output to file instead of console
     overwrite: useFileLogging
       ? {
-          transportFormatted: (logMetaMarkup: string, logArgs: unknown[], _logErrors: string[]) => {
+          transportFormatted: (logMetaMarkup: string, logArgs: unknown[], logErrors: string[]) => {
             const args = logArgs.map((arg) =>
               typeof arg === "string" ? arg : JSON.stringify(arg),
             );
 
-            // File: strip ANSI for clean plaintext
+            // File: strip ANSI for clean plaintext. tslog routes positional Error
+            // args into logErrors (not logArgs) — append them so the message and
+            // stack survive instead of being silently dropped.
             if (sharedLogFileStream) {
               const meta = stripAnsi(logMetaMarkup);
               const fileArgs = args.map((a) => stripAnsi(a));
-              sharedLogFileStream.write(`${meta}${fileArgs.join(" ")}\n`);
+              const errTail = logErrors.length
+                ? `\n${logErrors.map((e) => stripAnsi(e)).join("\n")}`
+                : "";
+              sharedLogFileStream.write(`${meta}${fileArgs.join(" ")}${errTail}\n`);
             }
 
             // Console: preserve ANSI colors
             if (teeToConsole) {
-              process.stdout.write(`${logMetaMarkup}${args.join(" ")}\n`);
+              const errTail = logErrors.length ? `\n${logErrors.join("\n")}` : "";
+              process.stdout.write(`${logMetaMarkup}${args.join(" ")}${errTail}\n`);
             }
           },
         }
@@ -228,12 +234,15 @@ export function createLogger(options: LoggerOptions = {}): Logger<ILogObj> {
             transportFormatted: (
               logMetaMarkup: string,
               logArgs: unknown[],
-              _logErrors: string[],
+              logErrors: string[],
             ) => {
               const args = logArgs.map((arg) =>
                 typeof arg === "string" ? arg : JSON.stringify(arg),
               );
-              process.stderr.write(`${logMetaMarkup}${args.join(" ")}\n`);
+              // tslog routes positional Error args into logErrors — append them so
+              // error messages and stacks reach stderr (default-transport parity).
+              const errTail = logErrors.length ? `\n${logErrors.join("\n")}` : "";
+              process.stderr.write(`${logMetaMarkup}${args.join(" ")}${errTail}\n`);
             },
           }
         : undefined,

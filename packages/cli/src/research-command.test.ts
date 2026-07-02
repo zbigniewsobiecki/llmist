@@ -296,6 +296,41 @@ describe("executeResearch — background workflow", () => {
   });
 });
 
+describe("executeResearch — input validation", () => {
+  it("rejects a non-numeric --timeout instead of forwarding NaN", async () => {
+    const { env, research } = makeEnv(fakeJob());
+    await expect(executeResearch("q", { model: "m", timeout: "notanumber" }, env)).rejects.toThrow(
+      /--timeout expects a positive integer/,
+    );
+    expect(research.start).not.toHaveBeenCalled();
+  });
+
+  it("rejects a zero or negative --timeout", async () => {
+    const { env } = makeEnv(fakeJob());
+    await expect(executeResearch("q", { model: "m", timeout: "0" }, env)).rejects.toThrow(
+      /--timeout expects a positive integer/,
+    );
+    await expect(executeResearch("q", { model: "m", timeout: "-5" }, env)).rejects.toThrow(
+      /--timeout expects a positive integer/,
+    );
+  });
+
+  it("rejects a non-numeric --max-tool-calls instead of forwarding NaN", async () => {
+    const { env, research } = makeEnv(fakeJob());
+    await expect(executeResearch("q", { model: "m", maxToolCalls: "xyz" }, env)).rejects.toThrow(
+      /--max-tool-calls expects a positive integer/,
+    );
+    expect(research.start).not.toHaveBeenCalled();
+  });
+
+  it("rejects a ref missing the required model field", async () => {
+    const { env } = makeEnv(fakeJob());
+    await expect(
+      executeResearch(undefined, { resume: '{"provider":"mock","jobId":"job-7"}' }, env),
+    ).rejects.toThrow(/missing required/);
+  });
+});
+
 describe("registerResearchCommand", () => {
   it("registers the command with config defaults applied", async () => {
     const { env, research } = makeEnv(fakeJob());

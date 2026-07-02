@@ -227,6 +227,22 @@ describe("createLogger", () => {
       expect(() => logger.info({ key: "value" })).not.toThrow();
       expect(() => logger.info("message", { data: 123 })).not.toThrow();
     });
+
+    it("should render Error message on stderr instead of dropping the arg", () => {
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+      // Default pretty transport (no file logging) → stderr. tslog routes a
+      // positional Error into logErrors, not logArgs; the transport must still
+      // render it (regression against tslog's default transport behavior).
+      const logger = createLogger({ name: "err-console", minLevel: 0 });
+      logger.error("LLM call failed:", new Error("boom-on-console"));
+
+      const stderrOutput = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(stderrOutput).toContain("LLM call failed:");
+      expect(stderrOutput).toContain("boom-on-console");
+
+      stderrSpy.mockRestore();
+    });
   });
 });
 
@@ -606,6 +622,22 @@ describe("file logging", () => {
       expect(stdoutCalls.some((c) => c.includes("no tee despite env"))).toBe(false);
 
       stdoutSpy.mockRestore();
+    });
+  });
+
+  describe("error diagnostics", () => {
+    it("writes the Error message to the file (tslog routes Errors into logErrors)", async () => {
+      process.env.LLMIST_LOG_FILE = testLogFile;
+      process.env.LLMIST_LOG_LEVEL = "0";
+      const logger = createLogger({ name: "err-file" });
+
+      logger.error("write failed:", new Error("boom-in-file"));
+      await sleep(50);
+
+      const content = readFileSync(testLogFile, "utf-8");
+      expect(content).toContain("write failed:");
+      // Regression: the Error arg must not be dropped from file output.
+      expect(content).toContain("boom-in-file");
     });
   });
 });
