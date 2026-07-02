@@ -16,6 +16,12 @@ export class MockManager {
   private static instance: MockManager | null = null;
   private mocks: Map<string, MockRegistration> = new Map();
   private stats: Map<string, MockStats> = new Map();
+  /**
+   * Simulated server-side research job store — shared across adapter
+   * instances so background-job refs survive "process restarts" in tests.
+   * Values are managed by MockProviderAdapter.
+   */
+  readonly researchJobs: Map<string, unknown> = new Map();
   private options: Required<MockOptions>;
   private logger: Logger<ILogObj>;
   private nextId = 1;
@@ -111,6 +117,7 @@ export class MockManager {
   clear(): void {
     this.mocks.clear();
     this.stats.clear();
+    this.researchJobs.clear();
     this.logger.debug("Cleared all mocks");
   }
 

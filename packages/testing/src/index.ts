@@ -60,7 +60,7 @@ export {
 // Provider adapter
 export { createMockAdapter, MockProviderAdapter } from "./mock-adapter.js";
 // Fluent builder API
-export { MockBuilder, mockLLM } from "./mock-builder.js";
+export { MockBuilder, mockLLM, mockResearch } from "./mock-builder.js";
 // Mock client factory (separate file to avoid circular dependencies)
 export { createMockClient } from "./mock-client.js";
 // Mock conversation manager
@@ -89,6 +89,7 @@ export type {
   MockMatcherContext,
   MockOptions,
   MockRegistration,
+  MockResearchData,
   MockResponse,
   MockStats,
 } from "./mock-types.js";

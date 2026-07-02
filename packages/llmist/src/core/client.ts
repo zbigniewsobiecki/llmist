@@ -1,6 +1,7 @@
 import { AgentBuilder } from "../agent/builder.js";
 import { discoverProviderAdapters } from "../providers/discovery.js";
 import type { ProviderAdapter } from "../providers/provider.js";
+import { ResearchNamespace } from "../research/namespace.js";
 import { CHARS_PER_TOKEN } from "./constants.js";
 import type { LLMMessage } from "./messages.js";
 import type { ModelSpec } from "./model-catalog.js";
@@ -68,6 +69,11 @@ export class LLMist {
   readonly image: ImageNamespace;
   readonly speech: SpeechNamespace;
   readonly vision: VisionNamespace;
+  /**
+   * Deep research — long-running, server-side research jobs with cited reports.
+   * @experimental Until all v1 provider tracks land (spec 002-deep-research).
+   */
+  readonly research: ResearchNamespace;
 
   constructor();
   constructor(adapters: ProviderAdapter[]);
@@ -138,6 +144,7 @@ export class LLMist {
     this.image = new ImageNamespace(this.adapters, this.defaultProvider);
     this.speech = new SpeechNamespace(this.adapters, this.defaultProvider);
     this.vision = new VisionNamespace(this);
+    this.research = new ResearchNamespace(this.adapters, this.parser);
   }
 
   stream(options: LLMGenerationOptions): LLMStream {
