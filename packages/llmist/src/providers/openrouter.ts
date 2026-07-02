@@ -167,6 +167,9 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
       // Mandatory: multi-minute runs hit idle disconnects without streaming.
       stream: true,
       stream_options: { include_usage: true },
+      // OpenRouter usage accounting: report the authoritative billed cost
+      // (covers per-search fees that token-based estimation cannot see).
+      usage: { include: true },
     };
     if (options.reasoning?.enabled !== undefined) {
       request.reasoning = {
@@ -174,10 +177,14 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
       };
     }
     // OpenRouter conventions: extra.routing → models/route/provider params,
-    // all other extra keys pass through (e.g. web_search_options).
+    // all other extra keys pass through (e.g. web_search_options) — EXCEPT
+    // the core request keys: mandatory streaming is a money-safety guarantee
+    // (non-streamed multi-minute runs idle-disconnect), so extra must not be
+    // able to clobber it, nor swap the model/messages/usage accounting.
+    const protectedKeys = new Set(["model", "messages", "stream", "stream_options", "usage"]);
     Object.assign(request, this.buildProviderSpecificParams(options.extra));
     for (const [key, value] of Object.entries(options.extra ?? {})) {
-      if (!this.isProviderSpecificKey(key)) {
+      if (!this.isProviderSpecificKey(key) && !protectedKeys.has(key)) {
         request[key] = value;
       }
     }

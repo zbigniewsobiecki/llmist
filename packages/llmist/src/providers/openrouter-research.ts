@@ -90,6 +90,10 @@ interface OpenRouterChunkExtras {
   usage?: ChatCompletionChunk["usage"] & {
     num_search_queries?: number;
     server_tool_use?: { web_search_requests?: number };
+    /** OpenRouter usage accounting: authoritative billed cost in USD credits
+     *  (requires `usage: {include: true}` on the request). Covers per-search
+     *  and reasoning fees our token-based estimate cannot see. */
+    cost?: number;
   };
 }
 
@@ -203,6 +207,9 @@ export async function* normalizeOpenRouterResearchStream(
           chunkUsage.num_search_queries ??
           chunkUsage.server_tool_use?.web_search_requests ??
           undefined,
+        // Authoritative billed cost from OpenRouter usage accounting —
+        // preferred over the catalog estimate (collector keeps it).
+        costUSD: typeof chunkUsage.cost === "number" ? chunkUsage.cost : undefined,
       };
     }
   }

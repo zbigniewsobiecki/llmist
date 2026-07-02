@@ -96,7 +96,9 @@ export class ResearchResultCollector {
 
   toResult(context: ResearchResultContext): ResearchResult {
     const usage: ResearchUsage = { ...(this.usage ?? EMPTY_USAGE) };
-    if (this.spec) {
+    // A provider-reported cost (e.g. OpenRouter usage accounting) is
+    // authoritative; fall back to the catalog-based estimate.
+    if (usage.costUSD === undefined && this.spec) {
       usage.costUSD = estimateResearchCost(this.spec.pricing, usage);
     }
 

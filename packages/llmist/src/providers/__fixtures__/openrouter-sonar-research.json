@@ -2,7 +2,14 @@
   {
     "id": "gen-1",
     "choices": [
-      { "index": 0, "delta": { "role": "assistant", "content": "" }, "finish_reason": null }
+      {
+        "index": 0,
+        "delta": {
+          "role": "assistant",
+          "content": ""
+        },
+        "finish_reason": null
+      }
     ]
   },
   {
@@ -13,7 +20,10 @@
         "delta": {
           "reasoning": "Let me research solid-state batteries. ",
           "reasoning_details": [
-            { "type": "reasoning.text", "text": "Let me research solid-state batteries. " }
+            {
+              "type": "reasoning.text",
+              "text": "Let me research solid-state batteries. "
+            }
           ]
         },
         "finish_reason": null
@@ -25,16 +35,33 @@
     "choices": [
       {
         "index": 0,
-        "delta": { "reasoning": "Checking recent announcements..." },
+        "delta": {
+          "reasoning": "Checking recent announcements..."
+        },
         "finish_reason": null
       }
     ]
   },
-  { "id": "gen-1", "choices": [{ "index": 0, "delta": {}, "finish_reason": null }] },
   {
     "id": "gen-1",
     "choices": [
-      { "index": 0, "delta": { "content": "Solid-state batteries " }, "finish_reason": null }
+      {
+        "index": 0,
+        "delta": {},
+        "finish_reason": null
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "content": "Solid-state batteries "
+        },
+        "finish_reason": null
+      }
     ]
   },
   {
@@ -64,7 +91,13 @@
   {
     "id": "gen-1",
     "citations": ["https://example.com/ssb-news", "https://example.com/legacy-source"],
-    "choices": [{ "index": 0, "delta": {}, "finish_reason": "stop" }]
+    "choices": [
+      {
+        "index": 0,
+        "delta": {},
+        "finish_reason": "stop"
+      }
+    ]
   },
   {
     "id": "gen-1",
@@ -73,8 +106,11 @@
       "prompt_tokens": 1200,
       "completion_tokens": 380000,
       "total_tokens": 381200,
-      "completion_tokens_details": { "reasoning_tokens": 350000 },
-      "num_search_queries": 32
+      "completion_tokens_details": {
+        "reasoning_tokens": 350000
+      },
+      "num_search_queries": 32,
+      "cost": 1.93
     }
   }
 ]
