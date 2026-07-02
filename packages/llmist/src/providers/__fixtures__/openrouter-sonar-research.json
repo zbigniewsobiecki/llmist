@@ -1,0 +1,116 @@
+[
+  {
+    "id": "gen-1",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "role": "assistant",
+          "content": ""
+        },
+        "finish_reason": null
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "reasoning": "Let me research solid-state batteries. ",
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "text": "Let me research solid-state batteries. "
+            }
+          ]
+        },
+        "finish_reason": null
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "reasoning": "Checking recent announcements..."
+        },
+        "finish_reason": null
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {},
+        "finish_reason": null
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "content": "Solid-state batteries "
+        },
+        "finish_reason": null
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "content": "are approaching mass production.",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "url_citation": {
+                "url": "https://example.com/ssb-news",
+                "title": "SSB News",
+                "content": "excerpt text",
+                "start_index": 0,
+                "end_index": 54
+              }
+            }
+          ]
+        },
+        "finish_reason": null
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "citations": ["https://example.com/ssb-news", "https://example.com/legacy-source"],
+    "choices": [
+      {
+        "index": 0,
+        "delta": {},
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  {
+    "id": "gen-1",
+    "choices": [],
+    "usage": {
+      "prompt_tokens": 1200,
+      "completion_tokens": 380000,
+      "total_tokens": 381200,
+      "completion_tokens_details": {
+        "reasoning_tokens": 350000
+      },
+      "num_search_queries": 32,
+      "cost": 1.93
+    }
+  }
+]
