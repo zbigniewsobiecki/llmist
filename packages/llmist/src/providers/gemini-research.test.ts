@@ -240,6 +240,25 @@ describe("normalizeInteractionsStream", () => {
     expect(events).toEqual([]);
   });
 
+  it("also drops client_closed_request under the 'interaction.error' shape", async () => {
+    // The disconnect marker must be suppressed symmetrically: if it ever
+    // arrives under the alternate `interaction.error` shape (handled by the
+    // defensive default branch), surfacing it would fail a healthy run just
+    // as it would under the `error` shape.
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          {
+            event_type: "interaction.error",
+            event_id: "ev-e1",
+            error: { message: "The operation was cancelled.", code: "client_closed_request" },
+          },
+        ] as unknown as InteractionSSEEvent[]),
+      ),
+    );
+    expect(events).toEqual([]);
+  });
+
   it("handles both 'error' and 'interaction.error' event shapes", async () => {
     const events = await drain(
       normalizeInteractionsStream(
