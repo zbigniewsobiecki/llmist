@@ -209,6 +209,38 @@ describe("executeResearch — formatted mode", () => {
     expect(stderr()).toContain("Report saved to /tmp/report.md");
   });
 
+  it("persists the partial and exits 2 when a run times out (--output)", async () => {
+    // A client-side timeout yields a partial: an "incomplete" status, a timeout
+    // error event, and the report collected so far. The partial must still be
+    // written to --output, the timeout printed once, and the exit code 2.
+    const events: ResearchEvent[] = [
+      { type: "created", jobId: "job-7" },
+      { type: "status", status: "in_progress" },
+      { type: "text", delta: "Partial report so far." },
+      { type: "status", status: "incomplete" },
+      { type: "error", error: { message: "research timed out after 5000ms", retryable: false } },
+    ];
+    const { env, stderr, exitCodes } = makeEnv(
+      fakeJob({
+        events,
+        result: { status: "incomplete", report: "Partial report so far.", citations: [] },
+      }),
+    );
+
+    await executeResearch("q", { model: "m", output: "/tmp/partial.md" }, env);
+
+    expect(writeFileSync).toHaveBeenCalledWith(
+      "/tmp/partial.md",
+      expect.stringContaining("Partial report so far."),
+    );
+    expect(exitCodes).toEqual([2]);
+    const err = stderr();
+    expect(err).toContain("Error: research timed out");
+    // Printed once — no double-print from a re-thrown failure.
+    expect(err.match(/timed out/g)?.length).toBe(1);
+    expect(err).toContain("Report saved to /tmp/partial.md");
+  });
+
   it("prints a wholesale report from poll-only runs (no text deltas)", async () => {
     const events: ResearchEvent[] = [
       { type: "created", jobId: "job-9" },
@@ -342,10 +374,24 @@ describe("executeResearch — ignored flag warnings", () => {
   it("warns that --timeout is ignored with --resume and does not forward it", async () => {
     const { env, research, stderr } = makeEnv(fakeJob());
     const ref = JSON.stringify({ provider: "mock", model: "fake-research", jobId: "job-7" });
-    await executeResearch(undefined, { resume: ref, timeout: "900" }, env);
+    await executeResearch(undefined, { resume: ref, timeout: "900" }, env, {
+      timeoutFromCli: true,
+    });
     expect(stderr()).toContain("--timeout is ignored with --resume");
     expect(research.attach).toHaveBeenCalled();
     expect(research.start).not.toHaveBeenCalled();
+  });
+
+  it("does not warn when --timeout came from a config default, only when explicit", async () => {
+    // registerResearchCommand feeds `[deep-research].timeout` as commander's
+    // default, so options.timeout is defined even when the user never typed
+    // --timeout. The warning must key on the CLI source, not mere presence.
+    const ref = JSON.stringify({ provider: "mock", model: "fake-research", jobId: "job-7" });
+    const configEnv = makeEnv(fakeJob());
+    await executeResearch(undefined, { resume: ref, timeout: "900" }, configEnv.env, {
+      timeoutFromCli: false,
+    });
+    expect(configEnv.stderr()).not.toContain("--timeout is ignored");
   });
 });
 

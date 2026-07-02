@@ -105,7 +105,7 @@ export const OPTION_DESCRIPTIONS = {
   imageQuality: "Image quality: 'standard', 'hd', 'low', 'medium', 'high'.",
   imageCount: "Number of images to generate (model dependent, usually 1-4).",
   imageOutput: "Output path for the generated image. Defaults to stdout if not specified.",
-  // Speech generation descriptions
+  // Deep research descriptions
   researchBackground:
     "Start the job, print its serialized ref (JSON) to stdout, and exit. Resume later with --resume.",
   researchResume: "Re-attach to a running background job from a serialized ref (JSON).",
@@ -116,6 +116,7 @@ export const OPTION_DESCRIPTIONS = {
   researchMaxToolCalls:
     "Cap on server-side tool calls (cost control; supported by OpenAI research models).",
   researchOutput: "Write the report to a file instead of stdout.",
+  // Speech generation descriptions
   voice: "Voice name for speech generation, e.g. 'nova', 'alloy', 'Zephyr'.",
   speechFormat: "Audio format: 'mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'.",
   speechSpeed: "Speech speed multiplier (0.25 to 4.0, default 1.0).",

@@ -38,6 +38,17 @@ export interface ResearchCommandOptions {
   quiet?: boolean;
 }
 
+/**
+ * Where flag values originated. `registerResearchCommand` feeds config
+ * defaults (e.g. `[deep-research].timeout`) as commander defaults, so a flag's
+ * mere presence in {@link ResearchCommandOptions} doesn't mean the user typed
+ * it — "ignored flag" warnings must key on an explicit CLI source instead.
+ */
+export interface ResearchCommandSources {
+  /** True when `--timeout` was passed on the command line (not a config default). */
+  timeoutFromCli?: boolean;
+}
+
 function parseRef(raw: string, flag: string): ResearchJobRef {
   let parsed: unknown;
   try {
@@ -84,6 +95,7 @@ export async function executeResearch(
   promptArg: string | undefined,
   options: ResearchCommandOptions,
   env: CLIEnvironment,
+  sources: ResearchCommandSources = {},
 ): Promise<void> {
   const client = env.createClient();
 
@@ -101,7 +113,10 @@ export async function executeResearch(
       `${SUMMARY_PREFIX} --output is ignored in --json mode (events stream to stdout).\n`,
     );
   }
-  if (options.resume && options.timeout !== undefined) {
+  // Only warn when the user explicitly passed --timeout on the CLI — a
+  // config-defaulted timeout paired with --resume is not a user mistake.
+  const timeoutFromCli = sources.timeoutFromCli ?? options.timeout !== undefined;
+  if (options.resume && timeoutFromCli) {
     env.stderr.write(
       `${SUMMARY_PREFIX} --timeout is ignored with --resume; it only bounds newly started jobs.\n`,
     );
@@ -322,7 +337,15 @@ export function registerResearchCommand(
     )
     .option(OPTION_FLAGS.researchMaxToolCalls, OPTION_DESCRIPTIONS.researchMaxToolCalls)
     .option(OPTION_FLAGS.quiet, OPTION_DESCRIPTIONS.quiet, config?.quiet ?? false)
-    .action((query, options) =>
-      executeAction(() => executeResearch(query, options as ResearchCommandOptions, env), env),
+    .action((query, options, command) =>
+      executeAction(
+        () =>
+          executeResearch(query, options as ResearchCommandOptions, env, {
+            // Distinguish an explicit CLI --timeout from a config default so the
+            // "ignored with --resume" warning doesn't fire on the latter.
+            timeoutFromCli: command.getOptionValueSource("timeout") === "cli",
+          }),
+        env,
+      ),
     );
 }
