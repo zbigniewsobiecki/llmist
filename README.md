@@ -88,6 +88,15 @@ const answer = await LLMist.createAgent()
 
 - **Expose** — `llmist mcp serve --gadgets <spec>` publishes your gadgets (and optional skills as prompts) as a stdio MCP server that Claude Code, Cursor, ChatGPT desktop, OpenAI Agents SDK, Cline, and the MCP Inspector can use directly
 
+### Deep Research
+
+Long-running, server-side research jobs with cited reports — one surface across providers. [Learn more →](https://llmist.dev/library/advanced/deep-research/)
+
+- **`client.research`** — normalized event stream (phases, searches, reasoning, report deltas, citations) over OpenAI's Responses API, Gemini's Interactions API, and OpenRouter research models
+- **Background jobs** — serialize a job ref, restart your process, re-attach and resume from the exact cursor; poll status or cancel server-side
+- **Money-safe** — catalog-driven model capabilities and shutdown metadata, per-search + internal-reasoning cost tracking, and no silent re-runs of multi-dollar streams
+- **`llmist research`** — CLI with `--background` / `--resume` / `--json` and cited-report output
+
 ### Multi-Provider Support
 
 First-class support for multiple LLM providers with unified API. [Learn more →](https://llmist.dev/library/providers/overview/)

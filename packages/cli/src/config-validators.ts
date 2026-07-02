@@ -11,6 +11,7 @@ import type {
   LogLevel,
   RateLimitsConfig,
   ReasoningConfigCLI,
+  ResearchConfig,
   RetryConfigCLI,
   SharedCommandConfig,
   SpeechConfig,
@@ -23,6 +24,7 @@ import {
   IMAGE_CONFIG_KEYS,
   RATE_LIMITS_CONFIG_KEYS,
   REASONING_CONFIG_KEYS,
+  RESEARCH_CONFIG_KEYS,
   RETRY_CONFIG_KEYS,
   SPEECH_CONFIG_KEYS,
   VALID_LOG_LEVELS,
@@ -295,6 +297,13 @@ const SPEECH_SCHEMA: FieldSchemaMap = {
   speed: { type: "number", min: 0.25, max: 4.0 },
   output: { type: "path" },
   quiet: { type: "boolean" },
+};
+
+const RESEARCH_SCHEMA: FieldSchemaMap = {
+  model: { type: "string" },
+  timeout: { type: "number", integer: true, min: 1 },
+  quiet: { type: "boolean" },
+  json: { type: "boolean" },
 };
 
 const COMPLETE_EXTRA_SCHEMA: FieldSchemaMap = {
@@ -683,6 +692,14 @@ export function validateImageConfig(raw: unknown, section: string): ImageConfig 
 export function validateSpeechConfig(raw: unknown, section: string): SpeechConfig {
   const rawObj = validateTable(raw, section, SPEECH_CONFIG_KEYS);
   return validateFields(rawObj, section, SPEECH_SCHEMA) as SpeechConfig;
+}
+
+/**
+ * Validates the [research] config section.
+ */
+export function validateResearchConfig(raw: unknown, section: string): ResearchConfig {
+  const rawObj = validateTable(raw, section, RESEARCH_CONFIG_KEYS);
+  return validateFields(rawObj, section, RESEARCH_SCHEMA) as ResearchConfig;
 }
 
 /**

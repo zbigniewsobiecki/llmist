@@ -117,7 +117,7 @@ packages/
         ├── testing/     # Testing docs
         └── reference/   # API reference
 
-examples/                # Runnable examples (01-27)
+examples/                # Runnable examples (01-32)
 └── gadgets/             # Example gadgets (calculator, filesystem, etc.)
 ```
 
@@ -180,6 +180,14 @@ llmist agent --mcp-server custom="my-bin --port 1234" --mcp-trust custom "..."
 **Plan 2** added: multi-server with deterministic `<server>__<tool>` prefixing on collision, Streamable HTTP transport (`transport: "http"`), MCP prompts loaded as skills, capability negotiation downgrade, signal handling, full TOML `[mcp.servers.<name>]` schema, and `llmist mcp import-claude-code` to lift existing setup from `~/.claude.json`.
 
 **Plan 3** added the exposer: `llmist mcp serve --gadgets <spec> [--skills <dir>]` runs llmist as a stdio MCP server other clients can call. Programmatic equivalent: `createMcpServer({ gadgets, skills })`. Native gadgets → MCP tools (1:1 via `schemaToJSONSchema`); skills → MCP prompts. Round-trip example in `examples/30-mcp-roundtrip.ts`.
+
+### Deep Research
+First-class surface for long-running, server-side research jobs with cited reports (spec `docs/specs/002-deep-research.md`). `client.research.start/attach/get/cancel/listModels` returns a `ResearchJob` with a normalized event stream (`created/status/phase/search/thinking/text/citation/usage/error/done`), JSON-serializable refs for resume-after-restart, and abort≠cancel semantics (abort tears down transport only; background jobs keep running server-side).
+
+- Core: `packages/llmist/src/research/` (types, job, namespace, collector, cost, constants)
+- Providers: catalog-driven via optional `ProviderAdapter` methods — `openai-research*.ts` (Responses API, background+poll+stream-resume; gpt-5.5-pro is poll-only; o3/o4-mini DR shut down 2026-07-23), `gemini-research*.ts` (Interactions API agents, background mandatory, `last_event_id` resume, follow-ups), `openrouter-research*.ts` (chat-completions stream-only, NOT resumable — never silently re-run)
+- Testing: `mockResearch()` / `returnsResearch()` / `withResearchEvents()` in `@llmist/testing`
+- CLI: `llmist research "question" [--background|--resume <ref>|--cancel <ref>|--json]`
 
 ### Hooks System
 Three-tier architecture:
@@ -309,11 +317,12 @@ Triggered on push to main:
 
 ## Examples
 
-27 runnable examples in `examples/`:
+32 runnable examples in `examples/`:
 ```bash
 npx tsx examples/01-basic-usage.ts
 npx tsx examples/12-error-handling.ts
 npx tsx examples/27-skills.ts
+npx tsx examples/32-deep-research.ts
 ```
 
 Key examples:
@@ -324,6 +333,7 @@ Key examples:
 - `19-multimodal-input.ts` - Vision/audio input
 - `20-external-gadgets.ts` - Loading gadgets from npm/git
 - `27-skills.ts` - Agent Skills (SKILL.md) integration
+- `32-deep-research.ts` - Deep research (client.research) with background jobs
 
 ## Provider Setup
 

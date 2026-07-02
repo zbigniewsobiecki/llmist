@@ -1,0 +1,79 @@
+---
+title: "llmist research"
+description: Run a deep research job and print the cited report
+---
+
+Run long-running deep research models (OpenAI, Gemini, OpenRouter) from the shell. Progress (phases, searches, status) streams to **stderr**; the report streams to **stdout**, followed by numbered sources and a cost/usage summary.
+
+## Quick start
+
+```bash
+llmist research "State of solid-state batteries in 2026" \
+  --model gemini:deep-research-preview-04-2026
+```
+
+```
+● Research job int_abc123 started.
+● Status: in_progress
+● Phase: searching
+● Searching: solid state battery production 2026
+...
+# Solid-State Batteries: 2026 Status Report
+...report text...
+
+Sources:
+  [1] https://example.com/toyota-ssb — Toyota SSB announcement
+  [2] https://example.com/qs-b1 — QuantumScape B1 samples
+● status: completed | 310000 tokens | 42 searches | cost: $1.87 | 1260s
+```
+
+## Background jobs — survive the terminal
+
+Research runs take minutes to an hour. `--background` starts the job, prints a serialized **job ref** (JSON) to stdout, and exits; the job keeps running server-side:
+
+```bash
+REF=$(llmist research "..." -m openai:gpt-5.5-pro --background)
+# later — even after a reboot:
+llmist research --resume "$REF"
+# or stop it server-side:
+llmist research --cancel "$REF"
+```
+
+Background/resume requires a provider with background jobs (OpenAI, Gemini). OpenRouter research models are stream-only — `--background` fails with guidance, and a dropped stream cannot be resumed (use `--json` to log events for salvage on long runs).
+
+## Flags
+
+| Flag | Description |
+|---|---|
+| `-m, --model <id>` | Research model (see `client.research.listModels()` or the error listing). Required unless `[research].model` is configured. |
+| `--background` | Start, print the job ref JSON, exit. |
+| `--resume <ref>` | Re-attach to a background job from its ref JSON. |
+| `--cancel <ref>` | Cancel a background job server-side. |
+| `--json` | Emit newline-delimited JSON research events to stdout (scripting; no decorative output). |
+| `-o, --output <path>` | Write the report to a file instead of stdout. |
+| `--timeout <seconds>` | Client-side time budget (background jobs keep running server-side). |
+| `-q, --quiet` | Suppress progress output. |
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Completed. |
+| 1 | Run failed. |
+| 2 | Partial result (incomplete, budget exceeded, or cancelled) — the partial report is still printed. |
+
+## Configuration
+
+Defaults live in the `[research]` section of `~/.llmist/cli.toml`:
+
+```toml
+[research]
+model = "openrouter:perplexity/sonar-deep-research"
+timeout = 1800     # seconds
+quiet = false
+json = false
+```
+
+## See also
+
+- [Deep Research (library)](/library/advanced/deep-research/) — the `client.research` surface, provider matrix, abort-vs-cancel semantics
