@@ -1,3 +1,13 @@
+## [18.4.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.3.0...v18.4.0) (2026-07-02)
+
+### Features
+
+* **cli:** llmist research command + example + docs (spec 002, plan 5) ([#651](https://github.com/zbigniewsobiecki/llmist/issues/651)) ([f48aa99](https://github.com/zbigniewsobiecki/llmist/commit/f48aa99e9f93888d7aa72814b8e505db6c2813e6)), closes [url#offset](https://github.com/zbigniewsobiecki/url/issues/offset) [url#startIndex](https://github.com/zbigniewsobiecki/url/issues/startIndex) [#5](https://github.com/zbigniewsobiecki/llmist/issues/5)
+* **core:** deep research surface — client.research + mocks (spec 002, plan 1) ([#647](https://github.com/zbigniewsobiecki/llmist/issues/647)) ([013688e](https://github.com/zbigniewsobiecki/llmist/commit/013688e128ff88f3781cce6a84f9586f4704b33a))
+* **providers:** Gemini deep research — Interactions API track (spec 002, plan 3) ([#649](https://github.com/zbigniewsobiecki/llmist/issues/649)) ([0e2f726](https://github.com/zbigniewsobiecki/llmist/commit/0e2f72607801ded4effcdbc711345a2de82081a4))
+* **providers:** OpenAI deep research — Responses API track (spec 002, plan 2) ([#648](https://github.com/zbigniewsobiecki/llmist/issues/648)) ([1d90714](https://github.com/zbigniewsobiecki/llmist/commit/1d90714c433a164867a9cb8f69a2ee078b21ba91))
+* **providers:** OpenRouter research models — chat-completions track (spec 002, plan 4) ([#650](https://github.com/zbigniewsobiecki/llmist/issues/650)) ([9be83fc](https://github.com/zbigniewsobiecki/llmist/commit/9be83fc69be9c62c11595602f024521e029c897f)), closes [url#offset](https://github.com/zbigniewsobiecki/url/issues/offset) [url#startIndex](https://github.com/zbigniewsobiecki/url/issues/startIndex) [#5](https://github.com/zbigniewsobiecki/llmist/issues/5)
+
 ## [18.3.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.2.0...v18.3.0) (2026-06-29)
 
 ### Features
