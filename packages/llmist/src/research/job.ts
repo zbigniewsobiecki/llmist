@@ -265,8 +265,21 @@ export class ResearchJobImpl implements ResearchJob {
           const err = error instanceof Error ? error : new Error(String(error));
 
           if (this.timedOut) {
-            this.failure = new ResearchTimeoutError(this.timeoutMs);
-            const info = { message: this.failure.message, code: "timeout", retryable: false };
+            // A client-side timeout is a PARTIAL outcome, not a failure: the
+            // transport is torn down but the background job keeps running
+            // server-side (abort ≠ cancel), so the collected partial and a
+            // re-attachable ref stay valid. Emit an explicit "incomplete"
+            // status (so result() yields a partial rather than "failed") plus
+            // the timeout error (so streaming consumers still see it), and do
+            // NOT set this.failure — result() must not throw away the partial.
+            const statusEvent: ResearchEvent = { type: "status", status: "incomplete" };
+            this.collector.ingest(statusEvent);
+            yield statusEvent;
+            const info = {
+              message: new ResearchTimeoutError(this.timeoutMs).message,
+              code: "timeout",
+              retryable: false,
+            };
             this.collector.ingest({ type: "error", error: info });
             yield { type: "error", error: info };
             return;

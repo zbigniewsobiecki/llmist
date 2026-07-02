@@ -160,4 +160,30 @@ describe("ResearchResultCollector", () => {
     const result = collector.toResult(CONTEXT);
     expect(result.status).toBe("failed");
   });
+
+  it("treats an error after a non-terminal status as a failure", () => {
+    // The common failure shape: progress, then an error with no terminal
+    // status — the run failed.
+    const result = collect([
+      { type: "status", status: "in_progress" },
+      { type: "text", delta: "partial" },
+      { type: "error", error: { message: "provider exploded", retryable: false } },
+    ]);
+    expect(result.status).toBe("failed");
+    expect(result.report).toBe("partial");
+  });
+
+  it("keeps an explicit terminal status (e.g. a timeout's incomplete) over the error→failed default", () => {
+    // A client-side timeout emits an explicit "incomplete" status *before* the
+    // timeout error — the run is a partial, not a failure. The explicit
+    // terminal status must win.
+    const result = collect([
+      { type: "status", status: "in_progress" },
+      { type: "text", delta: "partial" },
+      { type: "status", status: "incomplete" },
+      { type: "error", error: { message: "timed out", code: "timeout", retryable: false } },
+    ]);
+    expect(result.status).toBe("incomplete");
+    expect(result.report).toBe("partial");
+  });
 });
