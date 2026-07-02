@@ -94,8 +94,22 @@ export async function executeResearch(
     return;
   }
 
+  // Surface flag combinations that silently no-op rather than letting them
+  // quietly do nothing and surprise the user.
+  if (options.json && options.output) {
+    env.stderr.write(
+      `${SUMMARY_PREFIX} --output is ignored in --json mode (events stream to stdout).\n`,
+    );
+  }
+  if (options.resume && options.timeout !== undefined) {
+    env.stderr.write(
+      `${SUMMARY_PREFIX} --timeout is ignored with --resume; it only bounds newly started jobs.\n`,
+    );
+  }
+
+  // --timeout only bounds newly started jobs, so don't parse it when resuming.
   const timeoutMs =
-    options.timeout !== undefined
+    !options.resume && options.timeout !== undefined
       ? parsePositiveInt(options.timeout, "--timeout") * MS_PER_SECOND
       : undefined;
 
