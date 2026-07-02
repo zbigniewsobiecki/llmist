@@ -9,8 +9,9 @@
  *     npx vitest run --config vitest.e2e.config.ts packages/llmist/src/e2e/research-live-gemini.e2e.test.ts
  *
  * This test also validates our normalizer against the LIVE preview API —
- * SDK 1.43.0's wire schema differs from some preview docs, so unknown-shape
- * warnings in the event log here matter (see gemini-research.ts).
+ * the Interactions wire schema has already broken once (pre-2.0 SDK schema
+ * rejected server-side, May 2026), so unknown-shape warnings in the event
+ * log here matter (see gemini-research.ts).
  */
 
 import { describe, expect, it } from "vitest";
@@ -48,6 +49,9 @@ describe.skipIf(!LIVE)("LIVE research: gemini (Interactions API)", () => {
           if (event.type === "created") {
             console.log("[live gemini] interaction id:", event.jobId);
           }
+          if (event.type === "error") {
+            console.log("[live gemini] error event:", JSON.stringify(event.rawEvent ?? event));
+          }
           if (consumed >= 4) {
             detach.abort();
           }
@@ -70,6 +74,9 @@ describe.skipIf(!LIVE)("LIVE research: gemini (Interactions API)", () => {
       const counts: Record<string, number> = {};
       for await (const event of revived) {
         counts[event.type] = (counts[event.type] ?? 0) + 1;
+        if (event.type === "error") {
+          console.log("[live gemini] error event:", JSON.stringify(event.rawEvent ?? event));
+        }
       }
       console.log("[live gemini] resumed event counts:", counts);
 
