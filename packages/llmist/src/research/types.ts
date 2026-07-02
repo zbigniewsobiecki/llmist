@@ -6,9 +6,6 @@
  * provider-independent surface: options, the normalized event union, the final
  * result, and the serializable job reference used to re-attach to a running
  * background job after a disconnect or process restart.
- *
- * @experimental The research surface is experimental until all v1 provider
- * tracks land (see docs/specs/002-deep-research.md).
  */
 
 import type { ReasoningConfig, TokenUsage } from "../core/options.js";

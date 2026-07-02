@@ -70,8 +70,9 @@ export class LLMist {
   readonly speech: SpeechNamespace;
   readonly vision: VisionNamespace;
   /**
-   * Deep research — long-running, server-side research jobs with cited reports.
-   * @experimental Until all v1 provider tracks land (spec 002-deep-research).
+   * Deep research — long-running, server-side research jobs with cited
+   * reports (OpenAI Responses, Gemini Interactions, OpenRouter research
+   * models). See docs/specs/002-deep-research.md.
    */
   readonly research: ResearchNamespace;
 

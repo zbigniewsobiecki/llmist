@@ -130,6 +130,21 @@ describe("ResearchResultCollector", () => {
     expect(result.usage.costUSD).toBeCloseTo(6.2, 6);
   });
 
+  it("keeps a provider-reported costUSD over the catalog estimate", () => {
+    const result = collect(
+      [
+        {
+          type: "usage",
+          usage: { inputTokens: 100, outputTokens: 100, totalTokens: 200, costUSD: 0.55 },
+        },
+        { type: "done", result: { status: "completed", report: "r" } },
+      ],
+      CONTEXT,
+      SPEC,
+    );
+    expect(result.usage.costUSD).toBe(0.55);
+  });
+
   it("leaves costUSD undefined without a spec", () => {
     const result = collect([
       { type: "usage", usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 } },

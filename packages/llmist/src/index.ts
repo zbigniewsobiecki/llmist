@@ -401,7 +401,7 @@ export type {
   ResearchToolType,
   ResearchUsage,
 } from "./research/index.js";
-// Deep research (experimental — spec 002)
+// Deep research (spec 002)
 export {
   estimateResearchCost,
   RESEARCH_DATA_SOURCE_TOOL_TYPES,
