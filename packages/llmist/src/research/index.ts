@@ -1,7 +1,5 @@
 /**
- * Deep Research module.
- *
- * @experimental Until all v1 provider tracks land (spec 002-deep-research).
+ * Deep Research module (spec 002-deep-research).
  */
 
 export { ResearchResultCollector } from "./collector.js";

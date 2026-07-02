@@ -13,6 +13,7 @@ export const COMMANDS = {
   image: "image",
   speech: "speech",
   vision: "vision",
+  research: "deep-research",
   init: "init",
   config: "config",
 } as const;
@@ -47,6 +48,14 @@ export const OPTION_FLAGS = {
   imageQuality: "--quality <quality>",
   imageCount: "-n, --count <number>",
   imageOutput: "-o, --output <path>",
+  // Research options
+  researchBackground: "--background",
+  researchResume: "--resume <ref>",
+  researchCancel: "--cancel <ref>",
+  researchJson: "--json",
+  researchTimeout: "--timeout <seconds>",
+  researchMaxToolCalls: "--max-tool-calls <count>",
+  researchOutput: "-o, --output <path>",
   // Speech generation options
   voice: "--voice <name>",
   speechFormat: "--format <format>",
@@ -96,6 +105,17 @@ export const OPTION_DESCRIPTIONS = {
   imageQuality: "Image quality: 'standard', 'hd', 'low', 'medium', 'high'.",
   imageCount: "Number of images to generate (model dependent, usually 1-4).",
   imageOutput: "Output path for the generated image. Defaults to stdout if not specified.",
+  // Deep research descriptions
+  researchBackground:
+    "Start the job, print its serialized ref (JSON) to stdout, and exit. Resume later with --resume.",
+  researchResume: "Re-attach to a running background job from a serialized ref (JSON).",
+  researchCancel: "Cancel a background job server-side from a serialized ref (JSON).",
+  researchJson:
+    "Emit newline-delimited JSON research events to stdout instead of formatted output.",
+  researchTimeout: "Client-side time budget in seconds (background jobs keep running server-side).",
+  researchMaxToolCalls:
+    "Cap on server-side tool calls (cost control; supported by OpenAI research models).",
+  researchOutput: "Write the report to a file instead of stdout.",
   // Speech generation descriptions
   voice: "Voice name for speech generation, e.g. 'nova', 'alloy', 'Zephyr'.",
   speechFormat: "Audio format: 'mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'.",

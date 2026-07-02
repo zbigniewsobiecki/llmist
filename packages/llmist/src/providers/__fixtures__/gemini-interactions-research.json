@@ -1,0 +1,114 @@
+[
+  {
+    "event_type": "interaction.created",
+    "event_id": "ev-0",
+    "interaction": { "id": "int_abc", "status": "in_progress" }
+  },
+  {
+    "event_type": "step.start",
+    "event_id": "ev-1",
+    "index": 0,
+    "step": { "type": "thought", "summary": [] }
+  },
+  {
+    "event_type": "step.delta",
+    "event_id": "ev-2",
+    "index": 0,
+    "delta": {
+      "type": "thought_summary",
+      "content": { "type": "text", "text": "Planning research strategy..." }
+    }
+  },
+  {
+    "event_type": "step.delta",
+    "event_id": "ev-3",
+    "index": 0,
+    "delta": { "type": "thought_signature", "signature": "sig123" }
+  },
+  { "event_type": "step.stop", "event_id": "ev-4", "index": 0 },
+  {
+    "event_type": "step.start",
+    "event_id": "ev-5",
+    "index": 1,
+    "step": {
+      "type": "google_search_call",
+      "id": "gs_1",
+      "arguments": { "queries": ["solid state battery 2026"] }
+    }
+  },
+  {
+    "event_type": "step.delta",
+    "event_id": "ev-6",
+    "index": 1,
+    "delta": {
+      "type": "google_search_call",
+      "arguments": { "queries": ["solid state battery 2026"] }
+    }
+  },
+  {
+    "event_type": "step.delta",
+    "event_id": "ev-7",
+    "index": 1,
+    "delta": {
+      "type": "google_search_result",
+      "result": [{ "url": "https://example.com/ssb", "title": "SSB Progress" }]
+    }
+  },
+  {
+    "event_type": "interaction.status_update",
+    "event_id": "ev-8",
+    "interaction_id": "int_abc",
+    "status": "in_progress"
+  },
+  {
+    "event_type": "step.start",
+    "event_id": "ev-9",
+    "index": 2,
+    "step": { "type": "model_output", "content": [] }
+  },
+  {
+    "event_type": "step.delta",
+    "event_id": "ev-10",
+    "index": 2,
+    "delta": { "type": "text", "text": "Solid-state batteries " }
+  },
+  {
+    "event_type": "step.delta",
+    "event_id": "ev-11",
+    "index": 2,
+    "delta": { "type": "text", "text": "are nearing production." }
+  },
+  {
+    "event_type": "step.delta",
+    "event_id": "ev-12",
+    "index": 2,
+    "delta": {
+      "type": "text_annotation_delta",
+      "annotations": [
+        {
+          "type": "url_citation",
+          "url": "https://example.com/ssb",
+          "title": "SSB Progress",
+          "start_index": 0,
+          "end_index": 45
+        }
+      ]
+    }
+  },
+  { "event_type": "step.stop", "event_id": "ev-13", "index": 2 },
+  {
+    "event_type": "interaction.completed",
+    "event_id": "ev-14",
+    "interaction": {
+      "id": "int_abc",
+      "status": "completed",
+      "usage": {
+        "total_input_tokens": 250000,
+        "total_output_tokens": 60000,
+        "total_thought_tokens": 40000,
+        "total_cached_tokens": 12000,
+        "total_tokens": 310000
+      }
+    }
+  }
+]

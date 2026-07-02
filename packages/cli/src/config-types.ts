@@ -129,6 +129,20 @@ export interface SpeechConfig {
 }
 
 /**
+ * Configuration for the deep-research command ([deep-research] section).
+ */
+export interface ResearchConfig {
+  /** Default research model, e.g. "openai:o4-mini-deep-research". */
+  model?: string;
+  /** Client-side time budget in seconds. */
+  timeout?: number;
+  /** Suppress progress output. */
+  quiet?: boolean;
+  /** Emit NDJSON events instead of formatted output. */
+  json?: boolean;
+}
+
+/**
  * Configuration for a pre-seeded gadget result.
  * Used with initial-gadgets to inject context into the agent's conversation history.
  */
@@ -215,6 +229,7 @@ export interface CLIConfig {
   agent?: AgentConfig;
   image?: ImageConfig;
   speech?: SpeechConfig;
+  "deep-research"?: ResearchConfig;
   prompts?: PromptsConfig;
   /** Global subagent configuration defaults */
   subagents?: GlobalSubagentConfig;
@@ -232,6 +247,7 @@ export interface CLIConfig {
     | AgentConfig
     | ImageConfig
     | SpeechConfig
+    | ResearchConfig
     | GlobalConfig
     | PromptsConfig
     | GlobalSubagentConfig
@@ -305,6 +321,9 @@ export const IMAGE_CONFIG_KEYS = new Set(["model", "size", "quality", "count", "
 
 /** Valid keys for speech command config */
 export const SPEECH_CONFIG_KEYS = new Set(["model", "voice", "format", "speed", "output", "quiet"]);
+
+/** Valid keys for research command config */
+export const RESEARCH_CONFIG_KEYS = new Set(["model", "timeout", "quiet", "json"]);
 
 /** Valid keys for custom command config (union of complete + agent + type + description) */
 export const CUSTOM_CONFIG_KEYS = new Set([

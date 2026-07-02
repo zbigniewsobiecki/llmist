@@ -6,7 +6,6 @@ import {
   ResearchJobNotResumableError,
   ResearchNotPollableError,
   ResearchStreamConsumedError,
-  ResearchTimeoutError,
 } from "./errors.js";
 import { ResearchJobImpl } from "./job.js";
 import type { ResearchModelSpec } from "./model-spec.js";
@@ -305,7 +304,7 @@ describe("ResearchJobImpl", () => {
       vi.useRealTimers();
     });
 
-    it("aborts transport and surfaces ResearchTimeoutError; ref stays valid", async () => {
+    it("times out to a partial 'incomplete' result; transport torn down, ref stays valid", async () => {
       const adapter = fakeAdapter({ events: hangEvents(), hang: true });
       const job = new ResearchJobImpl({
         adapter,
@@ -318,12 +317,20 @@ describe("ResearchJobImpl", () => {
       await vi.advanceTimersByTimeAsync(6_000);
       const events = await consumed;
 
+      // The stream ends with an explicit "incomplete" status then the timeout
+      // error (so streaming consumers see the timeout).
       const last = events.at(-1);
       expect(last?.type).toBe("error");
       if (last?.type === "error") {
         expect(last.error.code).toBe("timeout");
       }
-      await expect(job.result()).rejects.toBeInstanceOf(ResearchTimeoutError);
+      expect(events.some((e) => e.type === "status" && e.status === "incomplete")).toBe(true);
+
+      // A client-side timeout is a PARTIAL, not a failure: result() resolves
+      // (does NOT throw away the partial) with status "incomplete", and the ref
+      // stays attachable — the server-side job survives (abort ≠ cancel).
+      const result = await job.result();
+      expect(result.status).toBe("incomplete");
       expect(job.toRef().jobId).toBe("job-42");
     });
   });

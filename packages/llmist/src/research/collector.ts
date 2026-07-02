@@ -22,6 +22,20 @@ import type {
 
 const EMPTY_USAGE: ResearchUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
+/**
+ * Statuses that describe a run that has *ended*. An `error` event promotes the
+ * status to "failed" only when the last-seen status is NOT already terminal —
+ * e.g. a client-side timeout reports "incomplete" (a partial) before its error,
+ * and that explicit terminal status must win over the failure default.
+ */
+const TERMINAL_STATUSES: ReadonlySet<ResearchStatus> = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "incomplete",
+  "budget_exceeded",
+]);
+
 /** Identity key for citation deduplication. */
 function citationKey(citation: ResearchCitation): string {
   return `${citation.url}#${citation.startIndex ?? ""}`;
@@ -96,18 +110,23 @@ export class ResearchResultCollector {
 
   toResult(context: ResearchResultContext): ResearchResult {
     const usage: ResearchUsage = { ...(this.usage ?? EMPTY_USAGE) };
-    if (this.spec) {
+    // A provider-reported cost (e.g. OpenRouter usage accounting) is
+    // authoritative; fall back to the catalog-based estimate.
+    if (usage.costUSD === undefined && this.spec) {
       usage.costUSD = estimateResearchCost(this.spec.pricing, usage);
     }
 
     const status: ResearchStatus =
       this.lastStatus ?? (this.terminalError ? "failed" : "in_progress");
+    const lastIsTerminal = this.lastStatus !== undefined && TERMINAL_STATUSES.has(this.lastStatus);
 
     return {
       jobId: context.jobId,
       provider: context.provider,
       model: context.model,
-      status: this.terminalError && !this.hasDone ? "failed" : status,
+      // An error fails the run only when no explicit terminal status preceded
+      // it (a timeout's "incomplete" is a partial, not a failure).
+      status: this.terminalError && !this.hasDone && !lastIsTerminal ? "failed" : status,
       report: this.doneReport !== "" ? this.doneReport : this.reportParts.join(""),
       citations: [...this.citations.values()],
       usage,
