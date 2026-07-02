@@ -7,7 +7,7 @@ import type {
   ProviderAdapter,
   ResearchEvent,
   ResearchJobRef,
-  ResearchOptions as ResearchRunOptions,
+  ResearchOptions,
   ResearchStatus,
   ResearchStatusSnapshot,
   ResearchUsage,
@@ -20,6 +20,7 @@ import type {
   MockMatcherContext,
   MockOptions,
   MockResearchData,
+  MockResearchJobEntry,
   MockResponse,
 } from "./mock-types.js";
 
@@ -278,21 +279,13 @@ export class MockProviderAdapter implements ProviderAdapter {
   // Deep Research Support
   // ==========================================================================
 
-  private researchJobCounter = 0;
-
   /**
    * Simulated server-side research job store. Lives on the shared MockManager
    * singleton so background-job refs survive across adapter/client instances
    * ("process restarts" in tests); cleared by getMockManager().clear().
    */
-  private get researchJobs(): Map<
-    string,
-    { events: ResearchEvent[]; terminalStatus: ResearchStatus }
-  > {
-    return this.mockManager.researchJobs as Map<
-      string,
-      { events: ResearchEvent[]; terminalStatus: ResearchStatus }
-    >;
+  private get researchJobs(): Map<string, MockResearchJobEntry> {
+    return this.mockManager.researchJobs;
   }
 
   /**
@@ -308,7 +301,7 @@ export class MockProviderAdapter implements ProviderAdapter {
    * Register one via `mockLLM()...returnsResearch(...)` or `mockResearch(...)`.
    */
   startResearch(
-    options: ResearchRunOptions,
+    options: ResearchOptions,
     descriptor: ModelDescriptor,
   ): AsyncIterable<ResearchEvent> {
     const context: MockMatcherContext = {
@@ -357,7 +350,7 @@ export class MockProviderAdapter implements ProviderAdapter {
 
   private async *createResearchStream(
     context: MockMatcherContext,
-    options: ResearchRunOptions,
+    options: ResearchOptions,
   ): AsyncGenerator<ResearchEvent> {
     const mockResponse = await this.mockManager.findMatch(context);
 
@@ -369,7 +362,9 @@ export class MockProviderAdapter implements ProviderAdapter {
     }
 
     const data = mockResponse.research;
-    const jobId = data.jobId ?? `mock-research-job-${++this.researchJobCounter}`;
+    // Id allocation lives on the shared manager — a per-adapter counter
+    // could mint duplicate ids across adapter instances (shared store).
+    const jobId = data.jobId ?? this.mockManager.allocateResearchJobId();
     const events = buildResearchEvents(data, jobId);
 
     const createdJobId = findCreatedJobId(events);

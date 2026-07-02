@@ -173,11 +173,22 @@ describe("resume and lifecycle", () => {
     await expect(job.status()).resolves.toBe("cancelled");
   });
 
-  it("throws a helpful error when no research mock matches", async () => {
+  it("produces a failed result with a registration hint when no research mock matches", async () => {
     mockLLM().whenMessageContains("something else").returnsResearch("r").register();
 
     const client = createMockClient();
     const job = client.research.start({ model: "openai:any", query: "unmatched" });
+
+    const events: ResearchEvent[] = [];
+    for await (const event of job) {
+      events.push(event);
+    }
+    const errorEvent = events.at(-1);
+    expect(errorEvent?.type).toBe("error");
+    if (errorEvent?.type === "error") {
+      // The hint tells users how to register a research mock.
+      expect(errorEvent.error.message).toContain("returnsResearch");
+    }
     await expect(job.result()).resolves.toMatchObject({ status: "failed" });
   });
 });

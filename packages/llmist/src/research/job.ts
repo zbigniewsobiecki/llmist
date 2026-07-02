@@ -77,6 +77,9 @@ export class ResearchJobImpl implements ResearchJob {
     this.cursor = init.resumeFrom?.cursor;
     this.startedAt = init.resumeFrom?.startedAt;
 
+    // An explicit user timeout deliberately bypasses the spec's maxDurationMs
+    // cap — the cap only shapes the default. (The provider still enforces its
+    // own server-side limit regardless of what the client waits for.)
     const specCap = init.spec?.maxDurationMs ?? Number.POSITIVE_INFINITY;
     this.timeoutMs = init.options?.timeoutMs ?? Math.min(RESEARCH_DEFAULT_TIMEOUT_MS, specCap);
 
