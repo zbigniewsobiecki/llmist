@@ -1,4 +1,11 @@
-import type { LLMMessage, MessageContent } from "llmist";
+import type {
+  LLMMessage,
+  MessageContent,
+  ResearchCitation,
+  ResearchEvent,
+  ResearchStatus,
+  ResearchUsage,
+} from "llmist";
 import {
   type AudioMimeType,
   detectAudioMimeType,
@@ -14,6 +21,7 @@ import type {
   MockMatcher,
   MockMatcherContext,
   MockRegistration,
+  MockResearchData,
   MockResponse,
 } from "./mock-types.js";
 
@@ -518,6 +526,66 @@ export class MockBuilder {
     return this;
   }
 
+  // ==========================================================================
+  // Research Response Helpers
+  // ==========================================================================
+
+  /**
+   * Simulate a deep research run (for `client.research` mocks).
+   *
+   * The mock adapter synthesizes a realistic normalized event stream:
+   * created → status → phase → search → thinking → text deltas → citations →
+   * usage → done.
+   *
+   * @example
+   * mockLLM()
+   *   .whenMessageContains('solid-state batteries')
+   *   .returnsResearch('# Report\n\nFindings...', {
+   *     citations: [{ url: 'https://example.com', title: 'Source' }],
+   *     usage: { searches: 12 },
+   *   })
+   *   .register();
+   */
+  returnsResearch(
+    report: string,
+    options?: {
+      citations?: ResearchCitation[];
+      usage?: Partial<ResearchUsage>;
+      jobId?: string;
+      status?: ResearchStatus;
+      failAtEvent?: number;
+    },
+  ): this {
+    if (typeof this.response === "function") {
+      throw new Error("Cannot use returnsResearch() after withResponse() with a function");
+    }
+    this.response.research = { report, ...options };
+    return this;
+  }
+
+  /**
+   * Replay an exact research event script (cursors auto-assigned from the
+   * event index when missing — enables deterministic resume tests).
+   *
+   * @example
+   * mockLLM()
+   *   .forModel('deep-research')
+   *   .withResearchEvents([
+   *     { type: 'created', jobId: 'job-1' },
+   *     { type: 'text', delta: 'partial' },
+   *     { type: 'done', result: { status: 'completed', report: '' } },
+   *   ])
+   *   .register();
+   */
+  withResearchEvents(events: ResearchEvent[], options?: { failAtEvent?: number }): this {
+    if (typeof this.response === "function") {
+      throw new Error("Cannot use withResearchEvents() after withResponse() with a function");
+    }
+    const research: MockResearchData = { ...(this.response.research ?? {}), events, ...options };
+    this.response.research = research;
+    return this;
+  }
+
   /**
    * Set the complete mock response object.
    * This allows full control over all response properties.
@@ -713,4 +781,32 @@ export class MockBuilder {
  */
 export function mockLLM(): MockBuilder {
   return new MockBuilder();
+}
+
+/**
+ * Create a MockBuilder for research mocks — convenience alias of {@link mockLLM}
+ * that pre-applies a research response when a report is given.
+ *
+ * @example
+ * ```typescript
+ * mockResearch('# Findings...', { citations: [{ url: 'https://x.example' }] })
+ *   .whenMessageContains('batteries')
+ *   .register();
+ * ```
+ */
+export function mockResearch(
+  report?: string,
+  options?: {
+    citations?: ResearchCitation[];
+    usage?: Partial<ResearchUsage>;
+    jobId?: string;
+    status?: ResearchStatus;
+    failAtEvent?: number;
+  },
+): MockBuilder {
+  const builder = new MockBuilder();
+  if (report !== undefined) {
+    builder.returnsResearch(report, options);
+  }
+  return builder;
 }

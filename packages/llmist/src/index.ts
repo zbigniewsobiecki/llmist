@@ -314,7 +314,6 @@ export { createGadgetOutputViewer } from "./gadgets/output-viewer.js";
 export { GadgetCallParser } from "./gadgets/parser.js";
 export type { GadgetClass, GadgetOrClass } from "./gadgets/registry.js";
 export { GadgetRegistry } from "./gadgets/registry.js";
-
 // Syntactic sugar: Typed gadgets and helpers
 export type { GadgetConfig } from "./gadgets/typed-gadget.js";
 export { Gadget } from "./gadgets/typed-gadget.js";
@@ -383,6 +382,39 @@ export {
 } from "./mcp/index.js";
 // Provider constants (for token estimation)
 export { FALLBACK_CHARS_PER_TOKEN } from "./providers/constants.js";
+export type {
+  ResearchCapabilities,
+  ResearchCitation,
+  ResearchDoneInfo,
+  ResearchErrorInfo,
+  ResearchEvent,
+  ResearchJob,
+  ResearchJobRef,
+  ResearchModelMetadata,
+  ResearchModelSpec,
+  ResearchOptions,
+  ResearchPricing,
+  ResearchResult,
+  ResearchStatus,
+  ResearchStatusSnapshot,
+  ResearchToolConfig,
+  ResearchToolType,
+  ResearchUsage,
+} from "./research/index.js";
+// Deep research (experimental — spec 002)
+export {
+  estimateResearchCost,
+  RESEARCH_DATA_SOURCE_TOOL_TYPES,
+  ResearchDeprecatedModelError,
+  ResearchJobNotResumableError,
+  ResearchNamespace,
+  ResearchNotPollableError,
+  ResearchNotSupportedError,
+  ResearchResultCollector,
+  ResearchStreamConsumedError,
+  ResearchTimeoutError,
+  ResearchValidationError,
+} from "./research/index.js";
 
 // Host exports helper for external gadgets
 import type { ExecutionContext, HostExports } from "./gadgets/types.js";

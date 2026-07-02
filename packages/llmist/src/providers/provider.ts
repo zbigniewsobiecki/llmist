@@ -9,6 +9,13 @@ import type {
 import type { LLMMessage } from "../core/messages.js";
 import type { ModelSpec } from "../core/model-catalog.js";
 import type { LLMGenerationOptions, LLMStream, ModelDescriptor } from "../core/options.js";
+import type { ResearchModelSpec } from "../research/model-spec.js";
+import type {
+  ResearchEvent,
+  ResearchJobRef,
+  ResearchOptions,
+  ResearchStatusSnapshot,
+} from "../research/types.js";
 
 export interface ProviderAdapter {
   readonly providerId: string;
@@ -96,4 +103,55 @@ export interface ProviderAdapter {
    * @returns Promise resolving to the generation result with audio and cost
    */
   generateSpeech?(options: SpeechGenerationOptions): Promise<SpeechGenerationResult>;
+
+  // =========================================================================
+  // Deep Research (optional)
+  // =========================================================================
+
+  /**
+   * Get research model/agent specifications for this provider.
+   * Returns undefined if the provider doesn't support research.
+   */
+  getResearchModelSpecs?(): ResearchModelSpec[];
+
+  /**
+   * Check if this provider supports deep research for a given model/agent id.
+   * @param modelId - Model or agent identifier (unprefixed)
+   */
+  supportsResearch?(modelId: string): boolean;
+
+  /**
+   * Start a research run as a normalized event stream.
+   *
+   * Contract:
+   * - The first emitted event MUST be `created` (with the server-side job id,
+   *   or `null` on providers without job handles).
+   * - Providers without live streaming implement create + poll internally,
+   *   emitting `status` heartbeats and a final `text` + `done`.
+   * - Events SHOULD carry a `cursor` when the provider supports resume.
+   *
+   * @param options - Research options (validated by the namespace before this call)
+   * @param descriptor - Parsed model descriptor
+   * @param spec - Catalog spec when the model is cataloged
+   */
+  startResearch?(
+    options: ResearchOptions,
+    descriptor: ModelDescriptor,
+    spec?: ResearchModelSpec,
+  ): AsyncIterable<ResearchEvent>;
+
+  /**
+   * Re-attach to a background research job, yielding events strictly after
+   * `ref.cursor` (or all events when no cursor is set).
+   */
+  resumeResearch?(ref: ResearchJobRef, signal?: AbortSignal): AsyncIterable<ResearchEvent>;
+
+  /**
+   * One-shot status poll for a background research job. Returns the terminal
+   * result when the job has completed.
+   */
+  getResearchStatus?(ref: ResearchJobRef): Promise<ResearchStatusSnapshot>;
+
+  /** Cancel a background research job server-side. */
+  cancelResearch?(ref: ResearchJobRef): Promise<void>;
 }
