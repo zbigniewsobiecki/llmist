@@ -175,6 +175,57 @@ describe("normalizeOpenRouterResearchStream", () => {
     expect(urls.filter((u) => u === "https://example.com/ssb-news")).toHaveLength(1);
   });
 
+  it("dedupes by url even when the legacy citations array streams before the annotation", async () => {
+    // Order-independence guard: the legacy top-level `citations` array arrives
+    // BEFORE the matching `url_citation` annotation for the same url. The url
+    // must still emit exactly once — as the richer annotation form, not a bare
+    // legacy url plus a full annotation (the collector keys by url#startIndex,
+    // so `url#` and `url#0` would otherwise both survive as duplicates).
+    const chunks = [
+      {
+        id: "g",
+        citations: ["https://example.com/x"],
+        choices: [{ index: 0, delta: {}, finish_reason: null }],
+      },
+      {
+        id: "g",
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: "hello",
+              annotations: [
+                {
+                  type: "url_citation",
+                  url_citation: {
+                    url: "https://example.com/x",
+                    title: "X",
+                    start_index: 0,
+                    end_index: 5,
+                  },
+                },
+              ],
+            },
+            finish_reason: "stop",
+          },
+        ],
+      },
+    ] as unknown as ChatCompletionChunk[];
+
+    const events = await drain(normalizeOpenRouterResearchStream(replay(chunks)));
+    const citations = events.filter((e) => e.type === "citation");
+    expect(citations).toHaveLength(1);
+    if (citations[0]?.type === "citation") {
+      // The richer annotation form wins over the bare legacy url.
+      expect(citations[0].citation).toEqual({
+        url: "https://example.com/x",
+        title: "X",
+        startIndex: 0,
+        endIndex: 5,
+      });
+    }
+  });
+
   it("maps finish_reason length → incomplete", async () => {
     const chunks = [
       {

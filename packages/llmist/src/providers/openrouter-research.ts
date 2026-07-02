@@ -120,9 +120,19 @@ export async function* normalizeOpenRouterResearchStream(
   stream: AsyncIterable<ChatCompletionChunk>,
 ): AsyncGenerator<ResearchEvent> {
   let createdEmitted = false;
+  // Annotation citations are deduped by url#offset (one source cited at several
+  // offsets is legitimately distinct). `seenCitationUrls` additionally records
+  // every emitted url so the legacy bare-url shape can dedupe against it by url
+  // alone — symmetrically, and independent of arrival order.
   const seenCitations = new Set<string>();
-  // Legacy top-level citations are bare urls — dedupe those by url alone.
   const seenCitationUrls = new Set<string>();
+  // Legacy top-level `citations: [urls]` are bare urls with no offsets. Buffer
+  // them (with their source chunk) and flush after the stream so a richer
+  // annotation for the same url always wins, whichever shape the provider emits
+  // first. Emitting inline was order-dependent: a legacy url streamed before its
+  // annotation produced both a bare `url#` and a full `url#0`, which the
+  // collector (keyed by url#startIndex) keeps as two duplicate citations.
+  const bufferedLegacyCitations: Array<{ url: string; rawEvent: unknown }> = [];
   let usage: ResearchUsage | undefined;
   let terminalStatus: ResearchStatus | undefined;
   let lastRaw: unknown;
@@ -179,15 +189,13 @@ export async function* normalizeOpenRouterResearchStream(
       }
     }
 
-    // Legacy top-level citations array (Perplexity passthrough): bare urls,
-    // deduplicated against any annotation-derived citation for the same url.
+    // Legacy top-level citations array (Perplexity passthrough): bare urls.
+    // Buffered and flushed after the stream (below) so annotation-derived
+    // citations for the same url take precedence, whatever order they stream in.
     const legacyCitations = (chunk as OpenRouterChunkExtras).citations;
     if (Array.isArray(legacyCitations)) {
       for (const url of legacyCitations) {
-        if (!seenCitationUrls.has(url)) {
-          seenCitationUrls.add(url);
-          yield { type: "citation", citation: { url }, rawEvent: chunk };
-        }
+        bufferedLegacyCitations.push({ url, rawEvent: chunk });
       }
     }
 
@@ -212,6 +220,16 @@ export async function* normalizeOpenRouterResearchStream(
         costUSD: typeof chunkUsage.cost === "number" ? chunkUsage.cost : undefined,
       };
     }
+  }
+
+  // Flush buffered legacy citations for any url not already emitted via a
+  // richer annotation, deduplicated by url. Runs after the stream so every
+  // annotation has been recorded in `seenCitationUrls` first — the annotation
+  // form wins over a bare legacy url regardless of which arrived first.
+  for (const { url, rawEvent } of bufferedLegacyCitations) {
+    if (seenCitationUrls.has(url)) continue;
+    seenCitationUrls.add(url);
+    yield { type: "citation", citation: { url }, rawEvent };
   }
 
   if (usage) {
