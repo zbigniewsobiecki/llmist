@@ -233,6 +233,38 @@ describe("OpenRouterProvider research surface", () => {
     expect(events.at(-1)?.type).toBe("done");
   });
 
+  it("extra cannot clobber mandatory streaming or core request keys", async () => {
+    const create = vi.fn().mockResolvedValue(replay(FIXTURE));
+    const provider = providerWith(create);
+
+    await drain(
+      provider.startResearch(
+        {
+          ...BASE_OPTIONS,
+          extra: {
+            stream: false,
+            stream_options: null,
+            model: "other/model",
+            usage: { include: false },
+            web_search_options: { search_context_size: "low" },
+          },
+        },
+        { provider: "openrouter", name: "perplexity/sonar-deep-research" },
+        getOpenRouterResearchModelSpec("perplexity/sonar-deep-research"),
+      ),
+    );
+
+    const [request] = create.mock.calls[0] ?? [];
+    expect(request).toMatchObject({
+      model: "perplexity/sonar-deep-research",
+      stream: true,
+      stream_options: { include_usage: true },
+      usage: { include: true },
+      // Non-core extra keys still pass through.
+      web_search_options: { search_context_size: "low" },
+    });
+  });
+
   it("does not implement resume/status/cancel (money-safety)", () => {
     const provider = providerWith(vi.fn());
     expect(provider.resumeResearch).toBeUndefined();

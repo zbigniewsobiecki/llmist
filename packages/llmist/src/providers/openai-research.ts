@@ -493,6 +493,30 @@ export function startOpenAIResearch(
   })();
 }
 
+/** Emit the terminal event sequence for a finished response. */
+function* emitTerminalResponse(response: Response): Generator<ResearchEvent> {
+  const status = mapResponseStatus(response.status);
+  const { report, citations } = extractReportFromResponse(response);
+  if (report.length > 0) {
+    yield { type: "text", delta: report };
+  }
+  for (const citation of citations) {
+    yield { type: "citation", citation };
+  }
+  yield { type: "usage", usage: usageFromResponse(response) };
+  if (status === "failed") {
+    yield {
+      type: "error",
+      error: {
+        message: response.error?.message ?? "OpenAI research run failed",
+        code: response.error?.code ?? undefined,
+        retryable: false,
+      },
+    };
+  }
+  yield doneEventFromResponse(response);
+}
+
 /**
  * Poll a background response until terminal, emitting status heartbeats and
  * a final text + done. Used by the non-streaming path and poll-mode resume.
@@ -511,25 +535,7 @@ async function* pollResponseToCompletion(
     yield { type: "status", status, rawEvent: current };
 
     if (current && isTerminalStatus(status)) {
-      const { report, citations } = extractReportFromResponse(current);
-      if (report.length > 0) {
-        yield { type: "text", delta: report };
-      }
-      for (const citation of citations) {
-        yield { type: "citation", citation };
-      }
-      yield { type: "usage", usage: usageFromResponse(current) };
-      if (status === "failed") {
-        yield {
-          type: "error",
-          error: {
-            message: current.error?.message ?? "OpenAI research run failed",
-            code: current.error?.code ?? undefined,
-            retryable: false,
-          },
-        };
-      }
-      yield doneEventFromResponse(current);
+      yield* emitTerminalResponse(current);
       return;
     }
 
@@ -567,6 +573,20 @@ export function resumeOpenAIResearch(
 
   if (streaming) {
     return (async function* () {
+      // Status-first: a job that finished while detached has nothing left to
+      // stream, and OpenAI's stream-resume HANGS on terminal responses
+      // (observed live). Emit the terminal sequence directly in that case.
+      const current = await withRetries(
+        () => client.responses.retrieve(ref.jobId, {}, requestOptions(signal)) as Promise<Response>,
+        OPENAI_RESEARCH_POLL_MAX_RETRIES,
+        signal,
+      );
+      if (isTerminalStatus(mapResponseStatus(current.status))) {
+        yield { type: "status", status: mapResponseStatus(current.status) } as ResearchEvent;
+        yield* emitTerminalResponse(current);
+        return;
+      }
+
       const stream = (await client.responses.retrieve(
         ref.jobId,
         {
