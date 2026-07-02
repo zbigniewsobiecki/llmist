@@ -1,5 +1,5 @@
 /**
- * `llmist research` — deep research runs with cited reports.
+ * `llmist deep-research` — deep research runs with cited reports.
  *
  * Streams progress (phases, searches, status) to stderr and the report text
  * to stdout; citations and a cost/usage summary follow the report. Long runs
@@ -94,7 +94,7 @@ export async function executeResearch(
         .map((spec) => `${spec.provider}:${spec.modelId}`)
         .join("\n  ");
       throw new Error(
-        `--model is required for research (or set [research].model in the config).\n` +
+        `--model is required for research (or set [deep-research].model in the config).\n` +
           `Research-capable models:\n  ${available || "(none — configure provider API keys)"}`,
       );
     }
@@ -140,7 +140,7 @@ async function runBackgroundDetach(
         env.stdout.write(`${JSON.stringify(job.toRef())}\n`);
         env.stderr.write(
           `${SUMMARY_PREFIX} Research job started in the background. ` +
-            `Resume with: llmist research --resume '<ref>'\n`,
+            `Resume with: llmist deep-research --resume '<ref>'\n`,
         );
         // Detach: abort tears down our transport only; the server-side job
         // keeps running and stays attachable via the printed ref.

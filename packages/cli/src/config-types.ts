@@ -129,7 +129,7 @@ export interface SpeechConfig {
 }
 
 /**
- * Configuration for the research command ([research] section).
+ * Configuration for the deep-research command ([deep-research] section).
  */
 export interface ResearchConfig {
   /** Default research model, e.g. "openai:o4-mini-deep-research". */
@@ -229,7 +229,7 @@ export interface CLIConfig {
   agent?: AgentConfig;
   image?: ImageConfig;
   speech?: SpeechConfig;
-  research?: ResearchConfig;
+  "deep-research"?: ResearchConfig;
   prompts?: PromptsConfig;
   /** Global subagent configuration defaults */
   subagents?: GlobalSubagentConfig;

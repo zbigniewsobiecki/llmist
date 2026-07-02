@@ -88,8 +88,8 @@ export function validateConfig(raw: unknown, configPath?: string): CLIConfig {
         result.image = validateImageConfig(value, key);
       } else if (key === "speech") {
         result.speech = validateSpeechConfig(value, key);
-      } else if (key === "research") {
-        result.research = validateResearchConfig(value, key);
+      } else if (key === "deep-research") {
+        result["deep-research"] = validateResearchConfig(value, key);
       } else if (key === "prompts") {
         result.prompts = validatePromptsConfig(value, key);
       } else if (key === "subagents") {
@@ -165,7 +165,7 @@ export function getCustomCommandNames(config: CLIConfig): string[] {
     "agent",
     "image",
     "speech",
-    "research",
+    "deep-research",
     "prompts",
     "subagents",
     "rate-limits",

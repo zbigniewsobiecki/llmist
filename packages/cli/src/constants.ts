@@ -13,7 +13,7 @@ export const COMMANDS = {
   image: "image",
   speech: "speech",
   vision: "vision",
-  research: "research",
+  research: "deep-research",
   init: "init",
   config: "config",
 } as const;

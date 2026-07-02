@@ -83,7 +83,7 @@ export function createProgram(env: CLIEnvironment, config?: CLIConfig): Command 
   );
   registerImageCommand(program, env, config?.image);
   registerSpeechCommand(program, env, config?.speech);
-  registerResearchCommand(program, env, config?.research);
+  registerResearchCommand(program, env, config?.["deep-research"]);
   registerVisionCommand(program, env);
   registerModelsCommand(program, env);
   registerGadgetCommand(program, env);

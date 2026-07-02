@@ -301,7 +301,7 @@ describe("registerResearchCommand", () => {
 
     registerResearchCommand(program, env, { model: "openrouter:perplexity/sonar-deep-research" });
 
-    await program.parseAsync(["node", "llmist", "research", "my question"]);
+    await program.parseAsync(["node", "llmist", "deep-research", "my question"]);
 
     expect(research.start).toHaveBeenCalledWith(
       expect.objectContaining({ model: "openrouter:perplexity/sonar-deep-research" }),
@@ -314,7 +314,16 @@ describe("registerResearchCommand", () => {
     program.exitOverride();
     registerResearchCommand(program, env, undefined);
 
-    await program.parseAsync(["node", "llmist", "research", "q", "-m", "m", "--timeout", "900"]);
+    await program.parseAsync([
+      "node",
+      "llmist",
+      "deep-research",
+      "q",
+      "-m",
+      "m",
+      "--timeout",
+      "900",
+    ]);
 
     expect(research.start).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 900_000 }));
   });

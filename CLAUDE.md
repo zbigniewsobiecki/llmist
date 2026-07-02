@@ -187,7 +187,7 @@ First-class surface for long-running, server-side research jobs with cited repor
 - Core: `packages/llmist/src/research/` (types, job, namespace, collector, cost, constants)
 - Providers: catalog-driven via optional `ProviderAdapter` methods — `openai-research*.ts` (Responses API, background+poll+stream-resume; gpt-5.5-pro is poll-only; o3/o4-mini DR shut down 2026-07-23), `gemini-research*.ts` (Interactions API agents, background mandatory, `last_event_id` resume, follow-ups), `openrouter-research*.ts` (chat-completions stream-only, NOT resumable — never silently re-run)
 - Testing: `mockResearch()` / `returnsResearch()` / `withResearchEvents()` in `@llmist/testing`
-- CLI: `llmist research "question" [--background|--resume <ref>|--cancel <ref>|--json]`
+- CLI: `llmist deep-research "question" [--background|--resume <ref>|--cancel <ref>|--json]`
 
 ### Hooks System
 Three-tier architecture:
