@@ -6,9 +6,15 @@
  * mandatory, streams resume via `last_event_id`, and follow-ups chain through
  * `previous_interaction_id`.
  *
+ * Wire schema: the current (May-2026) Interactions schema via
+ * `@google/genai` >= 2.x — `interaction.created/completed/status_update`,
+ * `step.start/delta/stop` over `steps[]`. The pre-2.0 SDK schema
+ * (`interaction.start`, `content.*`, `outputs[]`) is rejected by the live
+ * API ("The legacy Interactions API schema is no longer supported").
+ *
  * Transport is isolated behind small functions consuming/returning the SDK's
  * `InteractionSSEEvent` stream so a raw-fetch SSE fallback can be swapped in
- * if the preview API drifts from the installed SDK.
+ * if the preview API drifts from the installed SDK again.
  */
 
 import type { GoogleGenAI, Interactions } from "@google/genai";
@@ -32,7 +38,7 @@ import type {
 
 type InteractionSSEEvent = Interactions.InteractionSSEEvent;
 type Interaction = Interactions.Interaction;
-type ContentDelta = Interactions.ContentDelta;
+type Step = Interactions.Step;
 type Annotation = Interactions.Annotation;
 
 /** Retries for the create call (no interaction exists yet — safe). */
@@ -105,9 +111,10 @@ export function mapInteractionStatus(status: string | undefined | null): Researc
 }
 
 function annotationToCitation(annotation: Annotation): ResearchCitation | undefined {
-  if (!annotation.source) return undefined;
+  if (annotation.type !== "url_citation" || !annotation.url) return undefined;
   return {
-    url: annotation.source,
+    url: annotation.url,
+    title: annotation.title,
     startIndex: annotation.start_index,
     endIndex: annotation.end_index,
   };
@@ -118,32 +125,35 @@ interface ExtractedReport {
   citations: ResearchCitation[];
 }
 
-/** Pull report text + citations out of a completed interaction's outputs. */
+/** Pull report text + citations out of an interaction's model_output steps. */
 export function extractReportFromInteraction(interaction: Interaction): ExtractedReport {
   const parts: string[] = [];
   const citations: ResearchCitation[] = [];
-  for (const content of interaction.outputs ?? []) {
-    if (content.type !== "text") continue;
-    parts.push(content.text);
-    for (const annotation of content.annotations ?? []) {
-      const citation = annotationToCitation(annotation);
-      if (citation) citations.push(citation);
+  for (const step of interaction.steps ?? []) {
+    if (step.type !== "model_output") continue;
+    for (const content of step.content ?? []) {
+      if (content.type !== "text") continue;
+      parts.push(content.text);
+      for (const annotation of content.annotations ?? []) {
+        const citation = annotationToCitation(annotation);
+        if (citation) citations.push(citation);
+      }
     }
   }
   return { report: parts.join(""), citations };
 }
 
 /**
- * Count search queries in an interaction's outputs (poll/status path).
+ * Count search queries in an interaction's steps (poll/status path).
  * The SDK's Usage carries no search count, so this client-side count is what
  * makes the catalog's perThousandSearches pricing apply to Gemini runs. Each
  * google_search_call may fan out multiple queries; count queries, not calls.
  */
-function countSearchesInOutputs(interaction: Interaction): number {
+function countSearchesInSteps(interaction: Interaction): number {
   let searches = 0;
-  for (const content of interaction.outputs ?? []) {
-    if (content.type === "google_search_call") {
-      searches += content.arguments?.queries?.length ?? 1;
+  for (const step of interaction.steps ?? []) {
+    if (step.type === "google_search_call") {
+      searches += step.arguments?.queries?.length ?? 1;
     }
   }
   return searches;
@@ -152,14 +162,14 @@ function countSearchesInOutputs(interaction: Interaction): number {
 /**
  * Map an interaction's usage to ResearchUsage. `streamedSearches` (query
  * fan-out tallied off the stream) takes precedence; the poll/status paths
- * fall back to counting from outputs, which a non-stream GET populates.
+ * fall back to counting from steps, which a non-stream GET populates.
  */
 export function usageFromInteraction(
   interaction: Interaction,
   streamedSearches?: number,
 ): ResearchUsage {
   const usage = interaction.usage;
-  const searches = streamedSearches ?? countSearchesInOutputs(interaction);
+  const searches = streamedSearches ?? countSearchesInSteps(interaction);
   return {
     inputTokens: usage?.total_input_tokens ?? 0,
     outputTokens: usage?.total_output_tokens ?? 0,
@@ -193,24 +203,46 @@ function doneEventFromInteraction(
 
 /**
  * Normalize an Interactions SSE stream into research events.
- * Every event's `cursor` is its `event_id` (the `last_event_id` resume token).
+ *
+ * Every event's `cursor` is its `event_id` (the `last_event_id` resume
+ * token) — when the API populates it. Live agent streams have been observed
+ * omitting `event_id` from the data payload (the token rides the SSE `id:`
+ * line, which the SDK's flattened stream drops), so cursors may be absent;
+ * resume then falls back to a full replay, which is safe.
+ *
+ * `fetchFinal` covers another live-observed gap: `interaction.completed`
+ * embeds an interaction WITHOUT `usage` or `steps`. When provided, the
+ * stored interaction is fetched (a free GET) for authoritative usage and
+ * report/citations; on fetch failure the embedded payload is used as-is.
  */
 export async function* normalizeInteractionsStream(
   stream: AsyncIterable<InteractionSSEEvent>,
+  fetchFinal?: (id: string) => Promise<Interaction>,
 ): AsyncGenerator<ResearchEvent> {
-  // Client-side search count — the SDK's Usage has no search dimension, and
-  // interaction.complete arrives with empty outputs on streams. Counted here
-  // so perThousandSearches pricing applies (each call may fan out queries).
+  // The SDK never reports a search count, and the stream's terminal payload
+  // carries no steps — tally query fan-out off the stream so the catalog's
+  // perThousandSearches pricing applies. Guarded per step index so a
+  // google_search_call arriving as BOTH step.start and a delta counts once.
   let streamedSearches = 0;
+  const countedSearchSteps = new Set<number>();
+
+  // The lifecycle events carry a partial interaction; SSE-event interactions
+  // and full Interactions are structurally compatible for our extractors.
+  type LifecycleInteraction = Interaction;
+
+  let interactionId: string | undefined;
 
   for await (const event of stream) {
     const cursor = event.event_id;
 
     switch (event.event_type) {
-      case "interaction.start":
-        yield { type: "created", jobId: event.interaction.id, cursor, rawEvent: event };
-        yield { type: "status", status: mapInteractionStatus(event.interaction.status), cursor };
+      case "interaction.created": {
+        const interaction = event.interaction as LifecycleInteraction;
+        interactionId = interaction.id;
+        yield { type: "created", jobId: interaction.id, cursor, rawEvent: event };
+        yield { type: "status", status: mapInteractionStatus(interaction.status), cursor };
         break;
+      }
 
       case "interaction.status_update":
         yield {
@@ -221,40 +253,73 @@ export async function* normalizeInteractionsStream(
         };
         break;
 
-      case "content.start": {
-        const contentType = event.content?.type;
-        if (contentType === "thought") {
+      case "step.start": {
+        const step = event.step as Step;
+        if (step.type === "thought") {
           yield { type: "phase", phase: "reasoning", cursor, rawEvent: event };
-        } else if (contentType === "text") {
+        } else if (step.type === "model_output") {
           yield { type: "phase", phase: "writing", cursor, rawEvent: event };
-        } else if (contentType === "google_search_call") {
+        } else if (step.type === "google_search_call") {
+          if (!countedSearchSteps.has(event.index)) {
+            countedSearchSteps.add(event.index);
+            streamedSearches += step.arguments?.queries?.length ?? 1;
+          }
           yield { type: "phase", phase: "searching", cursor, rawEvent: event };
+          yield {
+            type: "search",
+            action: "search",
+            status: "started",
+            query: step.arguments?.queries?.join("; "),
+            cursor,
+          };
+        } else if (step.type === "google_search_result") {
+          yield { type: "search", action: "search", status: "completed", cursor, rawEvent: event };
         }
         break;
       }
 
-      case "content.delta":
+      case "step.delta":
         yield* normalizeDelta(event, cursor, (queries) => {
-          streamedSearches += queries;
+          if (!countedSearchSteps.has(event.index)) {
+            countedSearchSteps.add(event.index);
+            streamedSearches += queries;
+          }
         });
         break;
 
-      case "content.stop":
+      case "step.stop":
         break;
 
-      case "interaction.complete": {
+      case "interaction.completed": {
+        let interaction = event.interaction as LifecycleInteraction;
+        const finalId = interaction.id ?? interactionId;
+        if (fetchFinal && finalId !== undefined && !interaction.usage?.total_tokens) {
+          try {
+            interaction = await fetchFinal(finalId);
+          } catch {
+            // Free authoritative GET failed — the embedded payload still
+            // yields a valid (if usage-less) terminal sequence.
+          }
+        }
         const searches = streamedSearches > 0 ? streamedSearches : undefined;
         yield {
           type: "usage",
-          usage: usageFromInteraction(event.interaction, searches),
+          usage: usageFromInteraction(interaction, searches),
           cursor,
           rawEvent: event,
         };
-        yield { ...doneEventFromInteraction(event.interaction, searches), cursor };
+        yield { ...doneEventFromInteraction(interaction, searches), cursor };
         break;
       }
 
       case "error":
+        // A client_closed_request marker records a PREVIOUS consumer's
+        // disconnect in the interaction's event log — it can never describe
+        // the current consumer, who is provably connected (reading it).
+        // Replay streams opened after a disconnect end with this marker
+        // instead of interaction.completed (live-observed); surfacing it
+        // would mark a healthy run as failed.
+        if (event.error?.code === "client_closed_request") break;
         yield {
           type: "error",
           error: {
@@ -286,22 +351,29 @@ export async function* normalizeInteractionsStream(
 }
 
 function* normalizeDelta(
-  event: Extract<InteractionSSEEvent, { event_type: "content.delta" }>,
+  event: Extract<InteractionSSEEvent, { event_type: "step.delta" }>,
   cursor: string | undefined,
   onSearchCall: (queries: number) => void,
 ): Generator<ResearchEvent> {
-  // Widened to a plain discriminator: the preview API emits shapes the SDK
-  // union doesn't know yet (e.g. docs show "thought" for "thought_summary").
+  // Widened to a plain discriminator: the preview API has emitted shapes the
+  // SDK union didn't know yet (e.g. docs once showed "thought" for
+  // "thought_summary").
   const delta = event.delta as { type: string };
 
   switch (delta.type) {
     case "text": {
-      const textDelta = delta as unknown as { text: string; annotations?: Annotation[] };
+      const textDelta = delta as unknown as { text: string };
       yield { type: "text", delta: textDelta.text, cursor, rawEvent: event };
-      for (const annotation of textDelta.annotations ?? []) {
+      break;
+    }
+
+    // Citations arrive as dedicated annotation deltas in the current schema.
+    case "text_annotation_delta": {
+      const annotationDelta = delta as unknown as { annotations?: Annotation[] };
+      for (const annotation of annotationDelta.annotations ?? []) {
         const citation = annotationToCitation(annotation);
         if (citation) {
-          yield { type: "citation", citation, cursor };
+          yield { type: "citation", citation, cursor, rawEvent: event };
         }
       }
       break;
@@ -454,9 +526,74 @@ const requestOptions = (signal?: AbortSignal) => ({
   maxRetries: 0,
 });
 
-type InteractionsClient = GoogleGenAI & { interactions: Interactions };
+/** Structural view of the SDK's interactions client (methods we use). */
+interface InteractionsApi {
+  create(params: unknown, options?: unknown): Promise<unknown>;
+  get(id: string, params?: unknown, options?: unknown): Promise<unknown>;
+  cancel(id: string, params?: unknown, options?: unknown): Promise<unknown>;
+}
 
-/** Start a deep research interaction as a normalized event stream. */
+type InteractionsClient = GoogleGenAI & { interactions: InteractionsApi };
+
+/** Fetch the stored interaction — authoritative usage/steps for terminal events. */
+const finalInteractionFetcher =
+  (client: GoogleGenAI, signal?: AbortSignal) =>
+  (id: string): Promise<Interaction> =>
+    (client as InteractionsClient).interactions.get(
+      id,
+      undefined,
+      requestOptions(signal),
+    ) as Promise<Interaction>;
+
+/**
+ * Follow a normalized stream and, when it ends without a `done` event, poll
+ * the stored interaction to a terminal state and emit the real terminal
+ * sequence. LIVE-observed: replay streams opened after a client disconnect
+ * end with a client_closed_request marker instead of interaction.completed,
+ * while the interaction itself runs to completion server-side.
+ */
+async function* withTerminalReconciliation(
+  events: AsyncIterable<ResearchEvent>,
+  client: GoogleGenAI,
+  jobIdHint: string | undefined,
+  signal?: AbortSignal,
+): AsyncGenerator<ResearchEvent> {
+  let jobId = jobIdHint;
+  let sawDone = false;
+  for await (const event of events) {
+    if (event.type === "created" && event.jobId !== null) jobId = event.jobId;
+    if (event.type === "done") sawDone = true;
+    yield event;
+  }
+  if (sawDone || jobId === undefined) return;
+
+  const fetchInteraction = finalInteractionFetcher(client, signal);
+  while (true) {
+    const interaction = await fetchInteraction(jobId);
+    const status = mapInteractionStatus(interaction.status);
+    yield { type: "status", status };
+    if (isTerminalStatus(status)) {
+      yield { type: "usage", usage: usageFromInteraction(interaction) };
+      yield doneEventFromInteraction(interaction);
+      return;
+    }
+    await sleep(RESEARCH_POLL_INTERVAL_MS, signal);
+  }
+}
+
+/**
+ * Start a deep research interaction as a normalized event stream.
+ *
+ * Create is deliberately NOT streamed. LIVE-observed: a streaming create
+ * ties the background interaction's fate to that HTTP connection — when the
+ * create stream disconnects (client abort, network drop), the API cancels
+ * the whole run with `client_closed_request` at its next agent checkpoint,
+ * even though status polls keep reporting in_progress in the meantime. That
+ * silently breaks the abort≠cancel guarantee and burns the run's spend.
+ * A plain create returns once the interaction is registered; events then
+ * come from a separate GET stream, which is designed to be dropped and
+ * resumed (`last_event_id`).
+ */
 export function startGeminiResearch(
   client: GoogleGenAI,
   options: ResearchOptions,
@@ -465,17 +602,50 @@ export function startGeminiResearch(
 ): AsyncIterable<ResearchEvent> {
   const request = buildGeminiResearchRequest(options, agentId);
   return (async function* () {
-    const stream = await withRetries(
+    const interaction = (await withRetries(
       () =>
-        (client as InteractionsClient).interactions.create(
-          { ...request, stream: true } as Parameters<Interactions["create"]>[0],
-          requestOptions(options.signal),
-        ) as Promise<AsyncIterable<InteractionSSEEvent>>,
+        (client as InteractionsClient).interactions.create(request, requestOptions(options.signal)),
       GEMINI_RESEARCH_CREATE_MAX_RETRIES,
       options.signal,
-    );
-    yield* normalizeInteractionsStream(stream);
+    )) as Interaction;
+
+    if (interaction.id === undefined) {
+      throw new Error(
+        "Gemini interactions.create returned no interaction id — cannot stream events.",
+      );
+    }
+
+    yield { type: "created", jobId: interaction.id, rawEvent: interaction };
+    yield { type: "status", status: mapInteractionStatus(interaction.status) };
+
+    const stream = (await (client as InteractionsClient).interactions.get(
+      interaction.id,
+      { stream: true },
+      requestOptions(options.signal),
+    )) as AsyncIterable<InteractionSSEEvent>;
+
+    // The GET stream replays from the beginning, including interaction.created —
+    // drop the duplicate (created was already emitted from the create response).
+    for await (const event of withTerminalReconciliation(
+      normalizeInteractionsStream(stream, finalInteractionFetcher(client, options.signal)),
+      client,
+      interaction.id,
+      options.signal,
+    )) {
+      if (event.type === "created") continue;
+      yield event;
+    }
   })();
+}
+
+function isTerminalStatus(status: ResearchStatus): boolean {
+  return (
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "incomplete" ||
+    status === "budget_exceeded"
+  );
 }
 
 /** Resume a background interaction stream from the ref's `last_event_id`. */
@@ -487,7 +657,7 @@ export function resumeGeminiResearch(
   return (async function* () {
     // Status-first: a job that finished while detached may have nothing left
     // to stream (OpenAI's stream-resume hangs on terminal responses — apply
-    // the same defense here). Emit the terminal sequence from outputs instead.
+    // the same defense here). Emit the terminal sequence from steps instead.
     const current = (await (client as InteractionsClient).interactions.get(
       ref.jobId,
       undefined,
@@ -513,18 +683,13 @@ export function resumeGeminiResearch(
       { stream: true, ...(ref.cursor !== undefined ? { last_event_id: ref.cursor } : {}) },
       requestOptions(signal),
     )) as AsyncIterable<InteractionSSEEvent>;
-    yield* normalizeInteractionsStream(stream);
+    yield* withTerminalReconciliation(
+      normalizeInteractionsStream(stream, finalInteractionFetcher(client, signal)),
+      client,
+      ref.jobId,
+      signal,
+    );
   })();
-}
-
-function isTerminalStatus(status: ResearchStatus): boolean {
-  return (
-    status === "completed" ||
-    status === "failed" ||
-    status === "cancelled" ||
-    status === "incomplete" ||
-    status === "budget_exceeded"
-  );
 }
 
 /** One-shot status poll; returns the terminal result when available. */
