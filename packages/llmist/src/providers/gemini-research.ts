@@ -149,9 +149,17 @@ function countSearchesInOutputs(interaction: Interaction): number {
   return searches;
 }
 
-export function usageFromInteraction(interaction: Interaction): ResearchUsage {
+/**
+ * Map an interaction's usage to ResearchUsage. `streamedSearches` (query
+ * fan-out tallied off the stream) takes precedence; the poll/status paths
+ * fall back to counting from outputs, which a non-stream GET populates.
+ */
+export function usageFromInteraction(
+  interaction: Interaction,
+  streamedSearches?: number,
+): ResearchUsage {
   const usage = interaction.usage;
-  const searches = countSearchesInOutputs(interaction);
+  const searches = streamedSearches ?? countSearchesInOutputs(interaction);
   return {
     inputTokens: usage?.total_input_tokens ?? 0,
     outputTokens: usage?.total_output_tokens ?? 0,
@@ -162,7 +170,10 @@ export function usageFromInteraction(interaction: Interaction): ResearchUsage {
   };
 }
 
-function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
+function doneEventFromInteraction(
+  interaction: Interaction,
+  streamedSearches?: number,
+): ResearchEvent {
   const { report, citations } = extractReportFromInteraction(interaction);
   return {
     type: "done",
@@ -170,7 +181,7 @@ function doneEventFromInteraction(interaction: Interaction): ResearchEvent {
       status: mapInteractionStatus(interaction.status),
       report,
       citations,
-      usage: usageFromInteraction(interaction),
+      usage: usageFromInteraction(interaction, streamedSearches),
       raw: interaction,
     },
   };
@@ -232,12 +243,14 @@ export async function* normalizeInteractionsStream(
         break;
 
       case "interaction.complete": {
-        const usage = usageFromInteraction(event.interaction);
-        if (usage.searches === undefined && streamedSearches > 0) {
-          usage.searches = streamedSearches;
-        }
-        yield { type: "usage", usage, cursor, rawEvent: event };
-        yield { ...doneEventFromInteraction(event.interaction), cursor };
+        const searches = streamedSearches > 0 ? streamedSearches : undefined;
+        yield {
+          type: "usage",
+          usage: usageFromInteraction(event.interaction, searches),
+          cursor,
+          rawEvent: event,
+        };
+        yield { ...doneEventFromInteraction(event.interaction, searches), cursor };
         break;
       }
 
