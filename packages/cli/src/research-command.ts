@@ -183,8 +183,17 @@ async function runBackgroundDetach(
   detachController: AbortController,
   env: CLIEnvironment,
 ): Promise<void> {
+  // A start failure (bad key, unknown model, provider 4xx/5xx) is *yielded* as
+  // an `error` event with no preceding `created` — there's no job id to
+  // reconnect from. Track it so we can fail loudly instead of exiting 0 with an
+  // empty ref, which would leave `REF=$(… --background)` empty and lose the error.
+  let startError: string | undefined;
   try {
     for await (const event of job) {
+      if (event.type === "error") {
+        startError = event.error.message;
+        continue;
+      }
       if (event.type === "created") {
         if (event.jobId === null) {
           throw new Error(
@@ -202,6 +211,12 @@ async function runBackgroundDetach(
         return;
       }
     }
+    // Stream ended before `created`: the job never started. Surface the error
+    // (empty stdout, so the ref capture stays empty) and set a non-zero exit.
+    env.stderr.write(
+      `${SUMMARY_PREFIX} Research job failed to start${startError ? `: ${startError}` : "."}\n`,
+    );
+    env.setExitCode(EXIT_FAILED);
   } catch (error) {
     if (error instanceof Error && isAbortError(error)) {
       return;
@@ -269,9 +284,16 @@ async function runFormatted(
   const result = await job.result();
 
   // The report may arrive wholesale in the terminal payload (poll-only models)
-  // rather than as streamed deltas.
+  // rather than as streamed deltas. Emit only the not-yet-printed tail — but
+  // only when the terminal report actually extends what streamed, so a future
+  // provider that both streams partial text and returns an unrelated full
+  // report doesn't get a garbled slice printed.
   const streamed = reportParts.join("");
-  if (!options.output && result.report.length > streamed.length) {
+  if (
+    !options.output &&
+    result.report.startsWith(streamed) &&
+    result.report.length > streamed.length
+  ) {
     env.stdout.write(result.report.slice(streamed.length));
   }
   const sources =

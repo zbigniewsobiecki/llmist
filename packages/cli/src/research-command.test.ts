@@ -295,6 +295,25 @@ describe("executeResearch — background workflow", () => {
     );
   });
 
+  it("--background surfaces a start failure (error before created) with exit 1 and no ref", async () => {
+    // A start error (bad key / unknown model / provider 4xx) is *yielded* as an
+    // `error` event with no preceding `created` — the run loop has no job id to
+    // reconnect from. The ref-capturing caller must get empty stdout, the error
+    // on stderr, and a non-zero exit — not a silent exit 0 with an empty REF.
+    const events: ResearchEvent[] = [
+      { type: "status", status: "queued" },
+      { type: "error", error: { message: "invalid api key", retryable: false } },
+    ];
+    const { env, stdout, stderr, exitCodes } = makeEnv(fakeJob({ events }));
+
+    await executeResearch("q", { model: "m", background: true }, env);
+
+    expect(stdout()).toBe(""); // no ref emitted → REF="" is not silently accepted
+    expect(stderr()).toContain("failed to start");
+    expect(stderr()).toContain("invalid api key");
+    expect(exitCodes).toEqual([1]);
+  });
+
   it("--resume attaches from the ref JSON", async () => {
     const { env, research, stdout } = makeEnv(fakeJob());
     const ref = JSON.stringify({ provider: "mock", model: "fake-research", jobId: "job-7" });
