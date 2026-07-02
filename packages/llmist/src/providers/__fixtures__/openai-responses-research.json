@@ -1,0 +1,142 @@
+[
+  {
+    "type": "response.created",
+    "sequence_number": 0,
+    "response": { "id": "resp_123", "status": "queued", "output": [] }
+  },
+  {
+    "type": "response.queued",
+    "sequence_number": 1,
+    "response": { "id": "resp_123", "status": "queued", "output": [] }
+  },
+  {
+    "type": "response.in_progress",
+    "sequence_number": 2,
+    "response": { "id": "resp_123", "status": "in_progress", "output": [] }
+  },
+  {
+    "type": "response.output_item.added",
+    "sequence_number": 3,
+    "output_index": 0,
+    "item": { "type": "reasoning", "id": "rs_1", "summary": [] }
+  },
+  {
+    "type": "response.reasoning_summary_text.delta",
+    "sequence_number": 4,
+    "item_id": "rs_1",
+    "output_index": 0,
+    "summary_index": 0,
+    "delta": "Planning the research approach..."
+  },
+  {
+    "type": "response.output_item.added",
+    "sequence_number": 5,
+    "output_index": 1,
+    "item": {
+      "type": "web_search_call",
+      "id": "ws_1",
+      "status": "in_progress",
+      "action": { "type": "search", "query": "solid state batteries 2026" }
+    }
+  },
+  {
+    "type": "response.web_search_call.searching",
+    "sequence_number": 6,
+    "output_index": 1,
+    "item_id": "ws_1"
+  },
+  {
+    "type": "response.web_search_call.completed",
+    "sequence_number": 7,
+    "output_index": 1,
+    "item_id": "ws_1"
+  },
+  {
+    "type": "response.output_item.added",
+    "sequence_number": 8,
+    "output_index": 2,
+    "item": {
+      "type": "message",
+      "id": "msg_1",
+      "role": "assistant",
+      "status": "in_progress",
+      "content": []
+    }
+  },
+  {
+    "type": "response.output_text.delta",
+    "sequence_number": 9,
+    "item_id": "msg_1",
+    "output_index": 2,
+    "content_index": 0,
+    "delta": "Solid-state batteries "
+  },
+  {
+    "type": "response.output_text.delta",
+    "sequence_number": 10,
+    "item_id": "msg_1",
+    "output_index": 2,
+    "content_index": 0,
+    "delta": "are progressing rapidly."
+  },
+  {
+    "type": "response.output_text.annotation.added",
+    "sequence_number": 11,
+    "item_id": "msg_1",
+    "output_index": 2,
+    "content_index": 0,
+    "annotation_index": 0,
+    "annotation": {
+      "type": "url_citation",
+      "url": "https://example.com/battery-progress",
+      "title": "Battery Progress",
+      "start_index": 0,
+      "end_index": 22
+    }
+  },
+  {
+    "type": "response.completed",
+    "sequence_number": 12,
+    "response": {
+      "id": "resp_123",
+      "status": "completed",
+      "output": [
+        { "type": "reasoning", "id": "rs_1", "summary": [] },
+        {
+          "type": "web_search_call",
+          "id": "ws_1",
+          "status": "completed",
+          "action": { "type": "search", "query": "solid state batteries 2026" }
+        },
+        {
+          "type": "message",
+          "id": "msg_1",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "Solid-state batteries are progressing rapidly.",
+              "annotations": [
+                {
+                  "type": "url_citation",
+                  "url": "https://example.com/battery-progress",
+                  "title": "Battery Progress",
+                  "start_index": 0,
+                  "end_index": 22
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "usage": {
+        "input_tokens": 5000,
+        "output_tokens": 1200,
+        "total_tokens": 6200,
+        "input_tokens_details": { "cached_tokens": 1000 },
+        "output_tokens_details": { "reasoning_tokens": 800 }
+      }
+    }
+  }
+]
