@@ -11,7 +11,6 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { ResearchEvent } from "../index.js";
 import { LLMist } from "../index.js";
 
 const LIVE = process.env.RUN_LIVE_RESEARCH_TESTS === "1" && !!process.env.OPENAI_API_KEY;

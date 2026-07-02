@@ -162,9 +162,14 @@ for await (const event of job) {
 
 const result = await job.result();
 console.log("\n=== Report ===\n");
-console.log(result.report);
+// `report` was accumulated from the streamed `text` deltas above. Poll-only
+// models (e.g. gpt-5.5-pro) emit no deltas and deliver the report wholesale in
+// the terminal payload, so fall back to `result.report` when nothing streamed.
+console.log(report || result.report);
 console.log("\nSources:");
-result.citations.forEach((c, i) => console.log(`  [${i + 1}] ${c.url} — ${c.title ?? ""}`));
+for (const [i, citation] of result.citations.entries()) {
+  console.log(`  [${i + 1}] ${citation.url} — ${citation.title ?? ""}`);
+}
 console.log(
   `\nUsage: ${result.usage.totalTokens} tokens | ${result.usage.searches} searches` +
     (result.usage.costUSD !== undefined ? ` | ~$${result.usage.costUSD}` : ""),
