@@ -375,8 +375,12 @@ describe("startOpenAIResearch — poll-only spec (gpt-5.5-pro)", () => {
 });
 
 describe("resumeOpenAIResearch", () => {
-  it("streams from the cursor via starting_after on streaming specs", async () => {
-    const retrieve = vi.fn().mockResolvedValue(replay(FIXTURE.slice(9)));
+  it("polls status first, then streams from the cursor when still running", async () => {
+    const retrieve = vi
+      .fn()
+      // Status-first poll: job still in progress → open the resume stream.
+      .mockResolvedValueOnce({ id: "resp_123", status: "in_progress", output: [] })
+      .mockResolvedValueOnce(replay(FIXTURE.slice(9)));
     const client = { responses: { retrieve } } as unknown as OpenAI;
 
     const events = await drain(
@@ -387,13 +391,72 @@ describe("resumeOpenAIResearch", () => {
       ),
     );
 
-    expect(retrieve).toHaveBeenCalledWith(
+    expect(retrieve).toHaveBeenNthCalledWith(1, "resp_123", {}, expect.anything());
+    expect(retrieve).toHaveBeenNthCalledWith(
+      2,
       "resp_123",
       { stream: true, starting_after: 8 },
       expect.anything(),
     );
     expect(events[0]?.cursor).toBe("9");
     expect(events.at(-1)?.type).toBe("done");
+  });
+
+  it("emits the terminal sequence without streaming when the job finished while detached", async () => {
+    // Observed live: stream-resume on an already-completed response HANGS.
+    const completed = {
+      id: "resp_123",
+      status: "completed",
+      output: [
+        { type: "web_search_call", id: "ws", status: "completed", action: { type: "search" } },
+        {
+          type: "message",
+          id: "m",
+          role: "assistant",
+          content: [
+            {
+              type: "output_text",
+              text: "Finished while detached.",
+              annotations: [
+                {
+                  type: "url_citation",
+                  url: "https://done.example",
+                  title: "D",
+                  start_index: 0,
+                  end_index: 8,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      usage: {
+        input_tokens: 10,
+        output_tokens: 20,
+        total_tokens: 30,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens_details: { reasoning_tokens: 5 },
+      },
+    };
+    const retrieve = vi.fn().mockResolvedValue(completed);
+    const client = { responses: { retrieve } } as unknown as OpenAI;
+
+    const events = await drain(
+      resumeOpenAIResearch(
+        client,
+        { provider: "openai", model: "o3-deep-research", jobId: "resp_123", cursor: "0" },
+        DR_SPEC,
+      ),
+    );
+
+    // Exactly one non-streaming retrieve; the streaming endpoint is never hit.
+    expect(retrieve).toHaveBeenCalledTimes(1);
+    expect(retrieve).toHaveBeenCalledWith("resp_123", {}, expect.anything());
+    expect(events.map((e) => e.type)).toEqual(["status", "text", "citation", "usage", "done"]);
+    const text = events.find((e) => e.type === "text");
+    if (text?.type === "text") {
+      expect(text.delta).toBe("Finished while detached.");
+    }
   });
 
   it("re-enters the poll loop for poll-only specs", async () => {
