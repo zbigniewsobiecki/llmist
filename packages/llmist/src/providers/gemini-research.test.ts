@@ -45,7 +45,8 @@ async function drain(iterable: AsyncIterable<ResearchEvent>): Promise<ResearchEv
   return events;
 }
 
-function clientWith(interactions: Partial<Interactions>): GoogleGenAI {
+/** The SDK's Interactions is a namespace in v2 — mock the client structurally. */
+function clientWith(interactions: Record<string, unknown>): GoogleGenAI {
   return { interactions } as unknown as GoogleGenAI;
 }
 
@@ -136,19 +137,20 @@ describe("normalizeInteractionsStream", () => {
     const types = events.map((e) => e.type);
 
     expect(types).toEqual([
-      "created", // interaction.start
+      "created", // interaction.created
       "status",
-      "phase", // thought content.start → reasoning
+      "phase", // thought step.start → reasoning
       "thinking", // thought_summary delta
       // thought_signature ignored
-      "phase", // google_search_call content.start → searching
-      "search", // call delta → started
+      "phase", // google_search_call step.start → searching
+      "search", // step.start → started (counted once)
+      "search", // duplicate call delta → started again, but NOT double-counted
       "search", // result delta → completed
       "status", // status_update
-      "phase", // text content.start → writing
+      "phase", // model_output step.start → writing
       "text",
       "text",
-      "citation", // annotation on second text delta
+      "citation", // text_annotation_delta
       "usage",
       "done",
     ]);
@@ -170,6 +172,7 @@ describe("normalizeInteractionsStream", () => {
     if (citation?.type === "citation") {
       expect(citation.citation).toEqual({
         url: "https://example.com/ssb",
+        title: "SSB Progress",
         startIndex: 0,
         endIndex: 45,
       });
@@ -183,12 +186,12 @@ describe("normalizeInteractionsStream", () => {
         totalTokens: 310_000,
         reasoningTokens: 40_000,
         cachedInputTokens: 12_000,
-        // Tallied from the single google_search_result delta — drives per-search pricing.
+        // One query, index-guarded across step.start + call delta — drives per-search pricing.
         searches: 1,
       });
     }
 
-    // Report accumulated from text deltas (interaction.complete has empty outputs);
+    // Report accumulated from text deltas (interaction.completed carries no steps);
     // the job collector joins them — done.report itself is empty here.
     const done = events.at(-1);
     if (done?.type === "done") {
@@ -207,7 +210,7 @@ describe("normalizeInteractionsStream", () => {
       normalizeInteractionsStream(
         replay([
           {
-            event_type: "content.delta",
+            event_type: "step.delta",
             event_id: "ev-x",
             index: 0,
             delta: { type: "thought", content: { type: "text", text: "alt shape" } },
@@ -216,6 +219,25 @@ describe("normalizeInteractionsStream", () => {
       ),
     );
     expect(events).toEqual([expect.objectContaining({ type: "thinking", delta: "alt shape" })]);
+  });
+
+  it("drops replayed client_closed_request error markers", async () => {
+    // LIVE-observed: a client disconnect is recorded into the interaction's
+    // event log; replay streams then end with that marker instead of
+    // interaction.completed. It can never describe the CURRENT consumer
+    // (who is provably connected, reading it) — never surface it as an error.
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          {
+            event_type: "error",
+            event_id: "ev-e1",
+            error: { message: "The operation was cancelled.", code: "client_closed_request" },
+          },
+        ] as unknown as InteractionSSEEvent[]),
+      ),
+    );
+    expect(events).toEqual([]);
   });
 
   it("handles both 'error' and 'interaction.error' event shapes", async () => {
@@ -262,7 +284,7 @@ describe("normalizeInteractionsStream", () => {
       normalizeInteractionsStream(
         replay([
           {
-            event_type: "content.delta",
+            event_type: "step.delta",
             event_id: "ev-u",
             index: 0,
             delta: { type: "url_context_call", arguments: { urls: ["https://example.com/page"] } },
@@ -280,6 +302,75 @@ describe("normalizeInteractionsStream", () => {
     ]);
   });
 
+  it("fetches the stored interaction for usage when the terminal event lacks it", async () => {
+    // LIVE-observed: interaction.completed embeds an interaction WITHOUT
+    // usage or steps — the stored interaction (free GET) has both.
+    const full = {
+      id: "int_abc",
+      status: "completed",
+      usage: { total_input_tokens: 399_725, total_output_tokens: 4_527, total_tokens: 482_868 },
+      steps: [
+        {
+          type: "model_output",
+          content: [{ type: "text", text: "Fetched report.", annotations: [] }],
+        },
+      ],
+    } as unknown as Interactions.Interaction;
+    const fetchFinal = vi.fn().mockResolvedValue(full);
+
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          {
+            event_type: "interaction.created",
+            event_id: "ev-0",
+            interaction: { id: "int_abc", status: "in_progress" },
+          },
+          {
+            event_type: "interaction.completed",
+            event_id: "ev-1",
+            interaction: { id: "int_abc", status: "completed" },
+          },
+        ] as unknown as InteractionSSEEvent[]),
+        fetchFinal,
+      ),
+    );
+
+    expect(fetchFinal).toHaveBeenCalledExactlyOnceWith("int_abc");
+    const usage = events.find((e) => e.type === "usage");
+    expect(usage?.type === "usage" && usage.usage.totalTokens).toBe(482_868);
+    const done = events.at(-1);
+    expect(done?.type === "done" && done.result.report).toBe("Fetched report.");
+  });
+
+  it("does not fetch when the terminal event already carries usage", async () => {
+    const fetchFinal = vi.fn();
+    await drain(normalizeInteractionsStream(replay(FIXTURE), fetchFinal));
+    expect(fetchFinal).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the embedded interaction when the final fetch fails", async () => {
+    const fetchFinal = vi.fn().mockRejectedValue(new Error("GET blew up"));
+
+    const events = await drain(
+      normalizeInteractionsStream(
+        replay([
+          {
+            event_type: "interaction.completed",
+            event_id: "ev-1",
+            interaction: { id: "int_abc", status: "completed" },
+          },
+        ] as unknown as InteractionSSEEvent[]),
+        fetchFinal,
+      ),
+    );
+
+    const done = events.at(-1);
+    expect(done?.type === "done" && done.result.status).toBe("completed");
+    const usage = events.find((e) => e.type === "usage");
+    expect(usage?.type === "usage" && usage.usage.totalTokens).toBe(0);
+  });
+
   it("tallies search queries (incl. per-call fan-out) into usage.searches", async () => {
     // Google bills per grounding QUERY, and one google_search_call may carry
     // several — count queries from call deltas, not completed results.
@@ -287,7 +378,7 @@ describe("normalizeInteractionsStream", () => {
       normalizeInteractionsStream(
         replay([
           {
-            event_type: "content.delta",
+            event_type: "step.delta",
             event_id: "ev-s1",
             index: 0,
             delta: {
@@ -297,15 +388,15 @@ describe("normalizeInteractionsStream", () => {
             },
           },
           {
-            event_type: "content.delta",
+            event_type: "step.delta",
             event_id: "ev-s2",
             index: 1,
             delta: { type: "google_search_call", id: "g2", arguments: { queries: ["d"] } },
           },
           {
-            event_type: "interaction.complete",
+            event_type: "interaction.completed",
             event_id: "ev-done",
-            interaction: { id: "int_abc", status: "completed", outputs: [] },
+            interaction: { id: "int_abc", status: "completed" },
           },
         ] as unknown as InteractionSSEEvent[]),
       ),
@@ -320,9 +411,14 @@ describe("normalizeInteractionsStream", () => {
 });
 
 describe("startGeminiResearch", () => {
-  it("creates a streaming background interaction and normalizes it", async () => {
-    const create = vi.fn().mockResolvedValue(replay(FIXTURE));
-    const client = clientWith({ create: create as Interactions["create"] });
+  it("creates WITHOUT streaming, then streams events via a separate GET", async () => {
+    // LIVE-observed: a streaming create ties the interaction's fate to that
+    // connection — the API cancels the whole background run
+    // (client_closed_request) when the create stream disconnects, breaking
+    // abort≠cancel. Create must be a plain request; events come from GET.
+    const create = vi.fn().mockResolvedValue({ id: "int_abc", status: "in_progress" });
+    const get = vi.fn().mockResolvedValue(replay(FIXTURE));
+    const client = clientWith({ create, get });
 
     const events = await drain(startGeminiResearch(client, BASE_OPTIONS, AGENT, SPEC));
 
@@ -331,11 +427,90 @@ describe("startGeminiResearch", () => {
       agent: AGENT,
       background: true,
       store: true,
-      stream: true,
     });
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("stream");
     // Per-request options: long timeout, SDK retries disabled.
     expect(create.mock.calls[0]?.[1]).toMatchObject({ maxRetries: 0 });
+    expect(get).toHaveBeenCalledWith("int_abc", { stream: true }, expect.anything());
+
+    // created comes from the create response; the GET stream's replayed
+    // interaction.created is deduped.
+    expect(events.filter((e) => e.type === "created")).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "created", jobId: "int_abc" });
+    expect(events[1]).toMatchObject({ type: "status", status: "in_progress" });
     expect(events.at(-1)?.type).toBe("done");
+  });
+
+  it("polls the stored interaction to terminal when the stream ends without done", async () => {
+    // LIVE-observed: after a prior client disconnect, replay streams end with
+    // a client_closed_request marker and never deliver interaction.completed,
+    // while the interaction itself completes fine server-side.
+    const create = vi.fn().mockResolvedValue({ id: "int_abc", status: "in_progress" });
+    const full = {
+      id: "int_abc",
+      status: "completed",
+      usage: { total_input_tokens: 311_967, total_output_tokens: 6_536, total_tokens: 376_067 },
+      steps: [{ type: "model_output", content: [{ type: "text", text: "Recovered report." }] }],
+    };
+    const get = vi.fn().mockImplementation((_id: string, params?: { stream?: boolean }) =>
+      params?.stream
+        ? Promise.resolve(
+            replay([
+              {
+                event_type: "step.delta",
+                event_id: "ev-1",
+                index: 0,
+                delta: { type: "text", text: "partial " },
+              },
+              {
+                event_type: "error",
+                event_id: "ev-2",
+                error: { message: "The operation was cancelled.", code: "client_closed_request" },
+              },
+            ] as unknown as InteractionSSEEvent[]),
+          )
+        : Promise.resolve(full),
+    );
+    const client = clientWith({ create, get });
+
+    const events = await drain(startGeminiResearch(client, BASE_OPTIONS, AGENT, SPEC));
+
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    const done = events.at(-1);
+    expect(done?.type === "done" && done.result.status).toBe("completed");
+    expect(done?.type === "done" && done.result.report).toBe("Recovered report.");
+    expect(done?.type === "done" && done.result.usage?.totalTokens).toBe(376_067);
+  });
+
+  it("fetches the stored interaction when the live terminal event omits usage", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "int_abc", status: "in_progress" });
+    const full = {
+      id: "int_abc",
+      status: "completed",
+      usage: { total_input_tokens: 10, total_output_tokens: 2, total_tokens: 12 },
+      steps: [{ type: "model_output", content: [{ type: "text", text: "Full report." }] }],
+    };
+    const get = vi.fn().mockImplementation((_id: string, params?: { stream?: boolean }) =>
+      params?.stream
+        ? Promise.resolve(
+            replay([
+              {
+                event_type: "interaction.completed",
+                event_id: "ev-1",
+                interaction: { id: "int_abc", status: "completed" },
+              },
+            ] as unknown as InteractionSSEEvent[]),
+          )
+        : Promise.resolve(full),
+    );
+    const client = clientWith({ create, get });
+
+    const events = await drain(startGeminiResearch(client, BASE_OPTIONS, AGENT, SPEC));
+
+    expect(get).toHaveBeenCalledWith("int_abc", undefined, expect.anything());
+    const done = events.at(-1);
+    expect(done?.type === "done" && done.result.report).toBe("Full report.");
+    expect(done?.type === "done" && done.result.usage?.totalTokens).toBe(12);
   });
 });
 
@@ -343,9 +518,9 @@ describe("resumeGeminiResearch", () => {
   it("polls status first, then resumes the stream via last_event_id when still running", async () => {
     const get = vi
       .fn()
-      .mockResolvedValueOnce({ id: "int_abc", status: "in_progress", outputs: [] })
+      .mockResolvedValueOnce({ id: "int_abc", status: "in_progress", steps: [] })
       .mockResolvedValueOnce(replay(FIXTURE.slice(9)));
-    const client = clientWith({ get: get as Interactions["get"] });
+    const client = clientWith({ get });
 
     const events = await drain(
       resumeGeminiResearch(client, {
@@ -367,22 +542,64 @@ describe("resumeGeminiResearch", () => {
     expect(events.at(-1)?.type).toBe("done");
   });
 
+  it("reconciles a resumed stream that ends without done against the stored interaction", async () => {
+    const completed = {
+      id: "int_abc",
+      status: "completed",
+      usage: { total_input_tokens: 5, total_output_tokens: 5, total_tokens: 10 },
+      steps: [{ type: "model_output", content: [{ type: "text", text: "Recovered." }] }],
+    };
+    const get = vi
+      .fn()
+      // Status-first probe: still running → open the stream.
+      .mockResolvedValueOnce({ id: "int_abc", status: "in_progress", steps: [] })
+      // The stream ends with the disconnect marker, no interaction.completed.
+      .mockResolvedValueOnce(
+        replay([
+          {
+            event_type: "error",
+            event_id: "ev-2",
+            error: { message: "The operation was cancelled.", code: "client_closed_request" },
+          },
+        ] as unknown as InteractionSSEEvent[]),
+      )
+      // Reconciliation poll finds the terminal interaction.
+      .mockResolvedValueOnce(completed);
+    const client = clientWith({ get });
+
+    const events = await drain(
+      resumeGeminiResearch(client, { provider: "gemini", model: AGENT, jobId: "int_abc" }),
+    );
+
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    const done = events.at(-1);
+    expect(done?.type === "done" && done.result.status).toBe("completed");
+    expect(done?.type === "done" && done.result.report).toBe("Recovered.");
+  });
+
   it("emits the terminal sequence without streaming when the job finished while detached", async () => {
     const completed = {
       id: "int_abc",
       status: "completed",
-      outputs: [
+      steps: [
         { type: "google_search_call", id: "g1", arguments: { queries: ["q1"] } },
         {
-          type: "text",
-          text: "Finished while detached.",
-          annotations: [{ source: "https://done.example", start_index: 0, end_index: 8 }],
+          type: "model_output",
+          content: [
+            {
+              type: "text",
+              text: "Finished while detached.",
+              annotations: [
+                { type: "url_citation", url: "https://done.example", start_index: 0, end_index: 8 },
+              ],
+            },
+          ],
         },
       ],
       usage: { total_input_tokens: 5, total_output_tokens: 5, total_tokens: 10 },
     };
     const get = vi.fn().mockResolvedValue(completed);
-    const client = clientWith({ get: get as Interactions["get"] });
+    const client = clientWith({ get });
 
     const events = await drain(
       resumeGeminiResearch(client, {
@@ -404,21 +621,34 @@ describe("resumeGeminiResearch", () => {
 
 describe("getGeminiResearchStatus", () => {
   it("returns status-only while running, full result when terminal", async () => {
-    const running = { id: "int_abc", status: "in_progress", outputs: [] };
+    const running = { id: "int_abc", status: "in_progress", steps: [] };
     const completed = {
       id: "int_abc",
       status: "completed",
-      outputs: [
+      steps: [
         {
-          type: "text",
-          text: "Final report body.",
-          annotations: [{ source: "https://example.com/src", start_index: 0, end_index: 5 }],
+          type: "model_output",
+          content: [
+            {
+              type: "text",
+              text: "Final report body.",
+              annotations: [
+                {
+                  type: "url_citation",
+                  url: "https://example.com/src",
+                  title: "Src",
+                  start_index: 0,
+                  end_index: 5,
+                },
+              ],
+            },
+          ],
         },
       ],
       usage: { total_input_tokens: 10, total_output_tokens: 5, total_tokens: 15 },
     };
     const get = vi.fn().mockResolvedValueOnce(running).mockResolvedValueOnce(completed);
-    const client = clientWith({ get: get as Interactions["get"] });
+    const client = clientWith({ get });
     const ref = { provider: "gemini", model: AGENT, jobId: "int_abc" };
 
     await expect(getGeminiResearchStatus(client, ref)).resolves.toEqual({
@@ -429,7 +659,7 @@ describe("getGeminiResearchStatus", () => {
     expect(snapshot.status).toBe("completed");
     expect(snapshot.result?.report).toBe("Final report body.");
     expect(snapshot.result?.citations).toEqual([
-      { url: "https://example.com/src", startIndex: 0, endIndex: 5 },
+      { url: "https://example.com/src", title: "Src", startIndex: 0, endIndex: 5 },
     ]);
   });
 });
