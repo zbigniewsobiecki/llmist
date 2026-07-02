@@ -31,11 +31,22 @@ import type { ModelSpec } from "../core/model-catalog.js";
 import { getModelId } from "../core/model-shortcuts.js";
 import type { LLMGenerationOptions, ModelDescriptor, ReasoningEffort } from "../core/options.js";
 import { createLogger } from "../logging/logger.js";
+import { OPENROUTER_RESEARCH_HTTP_TIMEOUT_MS } from "../research/constants.js";
+import type { ResearchModelSpec } from "../research/model-spec.js";
+import type { ResearchEvent, ResearchOptions } from "../research/types.js";
 import {
   type OpenAICompatibleConfig,
   OpenAICompatibleProvider,
 } from "./openai-compatible-provider.js";
 import { OPENROUTER_MODELS } from "./openrouter-models.js";
+import {
+  buildOpenRouterResearchMessages,
+  normalizeOpenRouterResearchStream,
+} from "./openrouter-research.js";
+import {
+  isOpenRouterResearchModel,
+  openrouterResearchModels,
+} from "./openrouter-research-models.js";
 import {
   calculateOpenRouterSpeechCost,
   getOpenRouterSpeechModelSpec,
@@ -123,6 +134,75 @@ export class OpenRouterProvider extends OpenAICompatibleProvider<OpenRouterConfi
 
   getModelSpecs(): ModelSpec[] {
     return OPENROUTER_MODELS;
+  }
+
+  // =========================================================================
+  // Deep Research (chat-completions surface)
+  //
+  // Stream-only: no background mode, no job id, no resume. resumeResearch /
+  // getResearchStatus / cancelResearch are deliberately NOT implemented — the
+  // research job surfaces typed errors for those operations, and a dropped
+  // stream is never silently re-run (a multi-dollar research run).
+  // =========================================================================
+
+  getResearchModelSpecs(): ResearchModelSpec[] {
+    return openrouterResearchModels;
+  }
+
+  supportsResearch(modelId: string): boolean {
+    return isOpenRouterResearchModel(modelId);
+  }
+
+  startResearch(
+    options: ResearchOptions,
+    descriptor: ModelDescriptor,
+    _spec?: ResearchModelSpec,
+  ): AsyncIterable<ResearchEvent> {
+    const { messages } = buildOpenRouterResearchMessages(options);
+    const client = this.client as OpenAI;
+
+    const request: Record<string, unknown> = {
+      model: descriptor.name,
+      messages,
+      // Mandatory: multi-minute runs hit idle disconnects without streaming.
+      stream: true,
+      stream_options: { include_usage: true },
+    };
+    if (options.reasoning?.enabled !== undefined) {
+      request.reasoning = {
+        effort: OPENROUTER_EFFORT_MAP[options.reasoning.effort ?? "medium"],
+      };
+    }
+    // OpenRouter conventions: extra.routing → models/route/provider params,
+    // all other extra keys pass through (e.g. web_search_options).
+    Object.assign(request, this.buildProviderSpecificParams(options.extra));
+    for (const [key, value] of Object.entries(options.extra ?? {})) {
+      if (!this.isProviderSpecificKey(key)) {
+        request[key] = value;
+      }
+    }
+
+    const headers = this.getCustomHeaders();
+    const requestOptions = {
+      signal: options.signal,
+      // Research runs take minutes — override the client's default timeout.
+      timeout: OPENROUTER_RESEARCH_HTTP_TIMEOUT_MS,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    };
+
+    const enhance = (error: unknown) => this.enhanceError(error);
+    return (async function* () {
+      let stream: AsyncIterable<ChatCompletionChunk>;
+      try {
+        stream = (await client.chat.completions.create(
+          request as unknown as Parameters<OpenAI["chat"]["completions"]["create"]>[0],
+          requestOptions,
+        )) as unknown as AsyncIterable<ChatCompletionChunk>;
+      } catch (error) {
+        throw enhance(error);
+      }
+      yield* normalizeOpenRouterResearchStream(stream);
+    })();
   }
 
   /**
