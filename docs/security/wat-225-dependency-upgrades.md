@@ -1,10 +1,11 @@
 # WAT-225 dependency security upgrade
 
-## Draft status and unapproved residual
+## Accepted residual and follow-up ownership
 
-**The residual below is NOT APPROVED. This branch is prepared for a draft PR,
-not for merge or release.** There is one high and two moderate advisory records
-in two bundled development/release-tool packages:
+The original security repair is merged. The user explicitly accepts exactly the
+following one high and two moderate advisory records in WAT-236 (human decision
+`4e1c`). WAT-238 owns the next daily and before-release recheck. This acceptance
+does not cover additional unfixed findings or authorize a release.
 
 | Package | Selected | Advisory | Severity | Fixed |
 | --- | --- | --- | --- | --- |
@@ -16,8 +17,10 @@ The chain is semantic-release 25.0.3 → @semantic-release/npm 13.1.5 →
 npm 11.21.1. The latter bundles node-gyp → undici and make-fetch-happen →
 @npmcli/agent → socks-proxy-agent → socks → ip-address. Inspection of the
 published npm 11.21.1 tarball confirms both affected versions. The inspected
-latest parents, semantic-release 25.0.9 and @semantic-release/npm 13.2.0,
-still require npm 11; npm 11.21.1 is the latest published compatible npm line.
+parents at the original repair, semantic-release 25.0.9 and
+@semantic-release/npm 13.2.0, still require npm 11; the selected compatible npm
+line at that inspection is 11.21.1. This is historical research, not a new
+latest-version claim.
 There is no unused direct npm-plugin dependency to remove. Removing core
 semantic-release would remove the existing release workflow's executable;
 patching its bundled children or overriding its graph is outside this repair.
@@ -54,7 +57,7 @@ packages/features, or reduced test tiers are introduced.
 
 [Sanitized complete npm audit reports](wat-225-audits.json) retain both scopes
 before and after. Raw evidence is retained in protected ignored storage.
-An all-workspace audit exits 1 because of the exact three unapproved advisories;
+An all-workspace audit exits 1 because of the exact three accepted advisories;
 the production audit exits 0. These counts are affected npm package entries,
 including dependency propagation, not advisory-record counts. Production-only
 omission excludes the bundled dev-tool nodes by construction and does not
@@ -69,8 +72,80 @@ outside their original affected ranges. [Additional advisories](wat-225-addition
 map findings beyond that inventory to their current disposition. No GitHub
 alert closure is claimed.
 
-The evidence is bound to package-lock SHA-256
+The original reviewed lock SHA-256 is
 `0d479f423301bf2f0cf062bd04453666cfa6cc516d3c56d2141948e1019db322`.
+The peer repair changes it to
+`78b6022fa06077dfc2273733c2c63fbc7ee6df6c5867038f738d84dd543f5a12`.
+Fresh all-workspace and production audit reports for the new lock are identical
+to `allAfter` and `productionAfter` in the committed audit JSON, including
+dependency counts. The 103-row reconciliation is rechecked against every
+selected copy in the new lock: all 170 alert/copy comparisons remain outside
+their original affected ranges. Its copy lists require no edits.
+
+## Postmerge peer consistency repair
+
+A clean frozen installation of the merged security repair succeeds even though
+Astro 7.3.8's installed optional peer is invalid: its `^7.3.0` requirement resolves
+to Markdown Remark 7.2.4. Optional means the peer can be absent; an installed
+version still has to satisfy the range. Builds and audit do not detect this edge.
+
+The private root declares the ordinary development peer dependency
+`@astrojs/markdown-remark` at exactly 7.3.2, the version used by Astro 7.3.8's own
+development manifest. Declaring it at the root supplies the hoisted Astro's peer;
+a docs-only declaration can leave the invalid root copy in place. npm selects
+7.3.2 at the root and keeps 7.2.4 under the private docs workspace for
+`@astrojs/mdx` 7.0.8's exact dependency. Starlight's `^7.2.0` peer accepts that
+docs copy. No parent major, published manifest, override, resolution, vendored
+patch, or dependency validation framework changes. An exact peer selection
+avoids unrelated patch-line graph changes.
+
+Both installations use Node 24.22.1 and authoring npm 10.9.2 on Linux x64, with
+`npm ci --engine-strict` and lifecycle scripts enabled. Both exit 0 and leave
+the lock unchanged. The actual installed graph, rather than only published
+runtime closures, is checked with npm's Arborist and semver: enumerate every
+non-link package's declared peers, including peers also listed as development
+dependencies, and resolve workspace links to their targets. This independently
+checks 133 declarations: 81 installed peers and 52 permitted absent optional
+peers. The sole invalid edge before the repair is Astro's; afterward there are
+zero invalid peers and zero missing required peers.
+
+| Check | Before peer repair | After peer repair |
+| --- | --- | --- |
+| Frozen engine-strict install with lifecycle | Exit 0 | Exit 0 |
+| Unfiltered `npm ls --all --json` | Exit 1: invalid Astro peer plus two extraneous reports | Exit 0: only the same two extraneous reports |
+| `npm ls --all --workspaces --include-workspace-root --json` | Not separately repeated; root graph failure established | Exit 0 |
+| Each workspace's independent `npm ls --all` | Not separately repeated | All four exit 0 |
+| All-workspace audit including root | Exit 1: the three accepted advisory records in two packages | Identical, exit 1 |
+| All-workspace production audit | Exit 0, zero findings | Identical, exit 0 |
+
+The extraneous reports are separate from the invalid peer and remain visible:
+
+- `@img/sharp-wasm32@0.35.5` is locked as optional and required by Sharp's
+  FreeBSD and WebContainers WASM optional packages. Those parents are omitted
+  on Linux x64 (`os: freebsd` or `cpu: wasm32`); their child has no such platform
+  restriction and is installed without a reachable installed parent.
+- `@napi-rs/wasm-runtime@1.2.6` is likewise an optional locked child of Astro's
+  compiler and Satteri WASM bindings (`cpu: wasm32`), which are omitted here.
+  Astro2tsx's required runtime is a separate nested 1.2.4 copy, present and valid.
+
+These two reports reproduce on the unchanged merged lock and the repaired lock
+after actual clean installs. They are optional platform-subtree install residue,
+not additional invalid peers, manually installed packages, or newly accepted
+security findings. npm 10.9.2's own `ls` implementation returns success when its
+only problems are extraneous entries; no wrapper, filtering, ignored exit code,
+or suppression changes that behavior. Native Sharp 0.35.5 loads successfully.
+Other operating systems are not installed or qualified by this repair.
+
+The published `llmist`, CLI, and testing manifests are byte-for-byte unchanged.
+Dependency/optional-dependency/peer traversal of both locks, resolving nested
+copies and workspace links and retaining peers also declared as dev dependencies,
+compares equal for all 235, 243, and 236 nodes respectively. Versions, declared
+dependency/peer ranges, selected edges, and engines all match. Thus the published
+consumer Node >=22.0.0 boundary is preserved without repeating the original
+Node 22.0.0 consumer probes on an identical consumer graph. The changed private
+docs graph is exercised by the real Astro docs build. No test is removed,
+narrowed, skipped, or replaced; the failing installation/peer check is the
+regression evidence rather than a mirror dependency fixture.
 
 ## Dependency and compatibility choices
 
@@ -93,7 +168,7 @@ The evidence is bound to package-lock SHA-256
   entries. The new scratch-directory exclusion affects ignored research data,
   not repository source. No coverage threshold or assertion is lowered.
 - Release tooling: compatible bundled npm advances to 11.21.1, fixing original
-  bundled alerts while retaining only the three additional unapproved advisories.
+  bundled alerts while retaining only the three additional accepted advisories.
   Neither release configuration nor the pinned authoring npm changes.
 
 Compatible parent alternatives are checked rather than assumed unsafe from their
@@ -165,7 +240,7 @@ covering supported records:
 No product code or exported API is changed to artificially reject a schema that
 the patched converter now supports. No test is deleted or skipped.
 
-## Verification progress and remaining gates
+## Original security repair verification
 
 - [x] Frozen npm 10.9.2 engine-strict install with lifecycle enabled.
 - [x] Unwrapped postinstall and direct Lefthook install/validation; all three hooks
@@ -186,8 +261,23 @@ Normal commit hooks remain enforced: the candidate is committed only if they pas
 
 Constructor assertions are unchanged; the two retargeted schema assertions and
 their additional coverage are accounted for above. No timing/speed claim is made.
-Merge requires an explicit user decision on the unapproved residual, independent
-and Root review, actual successful lint-and-test/validate-commits/e2e-tests at the
-exact reviewed head, the required distinct approving identity, and strict dev
-up-to-date checks. Merge, release, alert closure, rollout, final fresh-checkout
-canary, and completion of WAT-225/WAT-224 are not claimed.
+Those measurements belong to the original security repair's lock and are not
+carried forward as check proof for the changed lock.
+
+## Peer repair verification and remaining gates
+
+The peer repair runs the unchanged required tiers sequentially on the staged
+inputs: build (including the real docs build), typecheck, lint, unit, coverage,
+and mocked E2E. All six exit 0. Direct Lefthook installation and validation and
+unwrapped postinstall pass after the frozen installation; pre-commit and
+commit-msg hooks remain required for the single Conventional Commit. The fresh
+local-review gate result and final commit are reported with delivery.
+
+Independent fleet/Root review, actual successful lint-and-test, validate-commits,
+and e2e-tests at the exact reviewed head, legitimate distinct approval identity,
+strict dev up-to-date checks, and merge authority remain pending. The user's
+manual merge of the original repair grants no standing bypass. This local audit
+makes no GitHub alert reopen/closure, approval, final canary, release, or rollout
+claim. WAT-224 and WAT-225 remain open under Root through this repair and the
+independent fresh-checkout reconciliation. No release, dry release, npm
+publication, provider call, or live Slack action is performed.
