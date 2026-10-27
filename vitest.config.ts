@@ -13,6 +13,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      include: ["**/*.{js,cjs,mjs,ts,mts,tsx,jsx,vue,svelte,marko,astro}"],
       exclude: [
         "**/*.test.ts",
         "**/e2e/**",
@@ -20,6 +21,7 @@ export default defineConfig({
         "**/dist/**",
         "**/cli.ts",
         "**/index.ts",
+        "**/.watershed/**",
       ],
     },
   },

@@ -5,6 +5,15 @@ import { schemaToJSONSchema } from "./schema-to-json.js";
 
 describe("schemaToJSONSchema", () => {
   describe("basic conversion", () => {
+    it("preserves typed record values in gadget JSON instructions", () => {
+      const jsonSchema = schemaToJSONSchema(z.object({ metadata: z.record(z.string()) }));
+
+      expect((jsonSchema.properties as Record<string, unknown>).metadata).toMatchObject({
+        type: "object",
+        additionalProperties: { type: "string" },
+      });
+    });
+
     it("converts simple schema to JSON Schema", () => {
       const schema = z.object({
         name: z.string(),
