@@ -116,12 +116,12 @@ describe("Zod v4 toJSONSchema() Compatibility", () => {
   });
 
   describe("unsupported patterns", () => {
-    it("FAILS: z.record(z.string())", () => {
+    it("rejects a record missing its key and value schemas", () => {
       class TestGadget extends Gadget({
         name: "TestGadget",
         description: "Test",
         schema: z.object({
-          metadata: z.record(z.string()),
+          metadata: Reflect.apply(z.record, undefined, []),
         }),
       }) {
         execute(): string {

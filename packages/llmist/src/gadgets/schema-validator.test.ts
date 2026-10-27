@@ -80,13 +80,23 @@ describe("validateGadgetSchema", () => {
       expect(() => validateGadgetSchema(schema, "PrimitiveGadget")).not.toThrow();
     });
 
-    it("rejects z.record(z.string()) - use .passthrough() instead", () => {
+    it("rejects a record missing its key and value schemas", () => {
       const schema = z.object({
         id: z.string(),
-        content: z.record(z.string()),
+        content: Reflect.apply(z.record, undefined, []),
       });
 
       expect(() => validateGadgetSchema(schema, "RecordGadget")).toThrow(/cannot be serialized/);
+    });
+
+    it("allows a typed record supported by the patched Zod converter", () => {
+      const schema = z.object({ content: z.record(z.string()) });
+
+      expect(() => validateGadgetSchema(schema, "RecordGadget")).not.toThrow();
+      expect(schema.parse({ content: { title: "hello" } })).toEqual({
+        content: { title: "hello" },
+      });
+      expect(() => schema.parse({ content: { title: 42 } })).toThrow();
     });
 
     it("allows z.object({}).passthrough() for flexible objects", () => {

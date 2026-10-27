@@ -74,8 +74,12 @@ describe("createProviderFromEnv", () => {
     const mockClient = {};
     const mockProvider = { name: "mock-provider" };
 
-    const MockClient = vi.fn().mockReturnValue(mockClient);
-    const MockProvider = vi.fn().mockReturnValue(mockProvider);
+    const MockClient = vi.fn().mockImplementation(function MockConstructor() {
+      return mockClient;
+    });
+    const MockProvider = vi.fn().mockImplementation(function MockConstructor() {
+      return mockProvider;
+    });
 
     const result = createProviderFromEnv("MY_API_KEY", MockClient, MockProvider);
 
@@ -127,8 +131,12 @@ describe("createProviderFromEnv", () => {
   it("trims whitespace from the API key before passing to the client", () => {
     vi.stubEnv("PADDED_KEY", "  trimmed-key  ");
 
-    const MockClient = vi.fn().mockReturnValue({});
-    const MockProvider = vi.fn().mockReturnValue({});
+    const MockClient = vi.fn().mockImplementation(function MockConstructor() {
+      return {};
+    });
+    const MockProvider = vi.fn().mockImplementation(function MockConstructor() {
+      return {};
+    });
 
     createProviderFromEnv("PADDED_KEY", MockClient, MockProvider);
 
@@ -138,8 +146,12 @@ describe("createProviderFromEnv", () => {
   it("passes additional clientOptions to the client constructor", () => {
     vi.stubEnv("EXTRA_OPTS_KEY", "api-key");
 
-    const MockClient = vi.fn().mockReturnValue({});
-    const MockProvider = vi.fn().mockReturnValue({});
+    const MockClient = vi.fn().mockImplementation(function MockConstructor() {
+      return {};
+    });
+    const MockProvider = vi.fn().mockImplementation(function MockConstructor() {
+      return {};
+    });
 
     const clientOptions = { baseURL: "https://custom.api.com", timeout: 5000 };
     createProviderFromEnv("EXTRA_OPTS_KEY", MockClient, MockProvider, clientOptions);
@@ -155,8 +167,12 @@ describe("createProviderFromEnv", () => {
   it("sets maxRetries to 0 by default (clientOptions can override)", () => {
     vi.stubEnv("RETRY_KEY", "api-key");
 
-    const MockClient = vi.fn().mockReturnValue({});
-    const MockProvider = vi.fn().mockReturnValue({});
+    const MockClient = vi.fn().mockImplementation(function MockConstructor() {
+      return {};
+    });
+    const MockProvider = vi.fn().mockImplementation(function MockConstructor() {
+      return {};
+    });
 
     // When no clientOptions are provided, maxRetries defaults to 0
     createProviderFromEnv("RETRY_KEY", MockClient, MockProvider);
