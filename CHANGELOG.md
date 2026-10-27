@@ -1,3 +1,9 @@
+## [18.4.1](https://github.com/zbigniewsobiecki/llmist/compare/v18.4.0...v18.4.1) (2026-10-27)
+
+### Bug Fixes
+
+* **deps:** satisfy Astro's Markdown Remark peer ([8be803c](https://github.com/zbigniewsobiecki/llmist/commit/8be803cf1abb313796cbf6f3e1b0562c7c8cf8b3))
+
 ## [18.4.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.3.0...v18.4.0) (2026-07-02)
 
 ### Features
