@@ -1,0 +1,46 @@
+package	ghsa	severity	baselineRange	candidateCopies	disposition
+astro	GHSA-98hj-9722-w3j8	moderate	<7.3.2	node_modules/astro@7.3.8	fixed in candidate graph
+body-parser	GHSA-27r3-jxmh-p828	high	>=2.0.0 <2.4.0	node_modules/body-parser@2.4.0	fixed in candidate graph
+brace-expansion	GHSA-6j4f-fj2g-mc7p	high	>=2.0.0 <2.1.5	node_modules/brace-expansion@2.1.7;node_modules/npm/node_modules/brace-expansion@5.0.12	fixed in candidate graph
+brace-expansion	GHSA-6j4f-fj2g-mc7p	high	>=4.0.0 <5.0.10	node_modules/brace-expansion@2.1.7;node_modules/npm/node_modules/brace-expansion@5.0.12	fixed in candidate graph
+brace-expansion	GHSA-q2hr-2g5m-vwhr	moderate	>=2.0.0 <2.1.7	node_modules/brace-expansion@2.1.7;node_modules/npm/node_modules/brace-expansion@5.0.12	fixed in candidate graph
+brace-expansion	GHSA-q2hr-2g5m-vwhr	moderate	>=4.0.0 <5.0.12	node_modules/brace-expansion@2.1.7;node_modules/npm/node_modules/brace-expansion@5.0.12	fixed in candidate graph
+brace-expansion	GHSA-qhr7-859c-m2p7	high	>=2.0.0 <2.1.6	node_modules/brace-expansion@2.1.7;node_modules/npm/node_modules/brace-expansion@5.0.12	fixed in candidate graph
+brace-expansion	GHSA-qhr7-859c-m2p7	high	>=4.0.0 <5.0.11	node_modules/brace-expansion@2.1.7;node_modules/npm/node_modules/brace-expansion@5.0.12	fixed in candidate graph
+devalue	GHSA-4q55-j62x-fr9h	moderate	<=5.9.2	node_modules/devalue@5.9.4	fixed in candidate graph
+devalue	GHSA-hx4r-w6wj-j8fg	moderate	<=5.9.2	node_modules/devalue@5.9.4	fixed in candidate graph
+devalue	GHSA-mcm9-63f2-9j32	high	<=5.9.2	node_modules/devalue@5.9.4	fixed in candidate graph
+devalue	GHSA-wf3x-273g-mvxv	low	>=1.0.0 <=5.9.2	node_modules/devalue@5.9.4	fixed in candidate graph
+fast-uri	GHSA-333x-w4r6-6crp	low	>=3.0.0 <3.1.9	node_modules/fast-uri@3.1.9	fixed in candidate graph
+fast-uri	GHSA-hrr3-gc8f-f4qj	moderate	>=3.0.0 <3.1.8	node_modules/fast-uri@3.1.9	fixed in candidate graph
+fast-uri	GHSA-qw65-cvwx-89v3	high	>=3.0.0 <3.1.7	node_modules/fast-uri@3.1.9	fixed in candidate graph
+fast-uri	GHSA-w74x-v6f9-j3xg	moderate	>=3.0.0 <3.1.9	node_modules/fast-uri@3.1.9	fixed in candidate graph
+fast-uri	GHSA-xhq7-xmqj-769h	low	>=3.0.0 <3.1.9	node_modules/fast-uri@3.1.9	fixed in candidate graph
+hono	GHSA-hxh3-vqpv-xpqv	moderate	<4.13.7	node_modules/hono@4.13.14	fixed in candidate graph
+http-cache-semantics	GHSA-ch52-4w7c-c8xp	high	<=4.2.0	node_modules/http-cache-semantics@4.3.0;node_modules/npm/node_modules/http-cache-semantics@4.3.0	fixed in candidate graph
+ip-address	GHSA-h3mg-xc3c-68pw	moderate	<=10.7.0	node_modules/ip-address@10.7.5;node_modules/npm/node_modules/ip-address@10.7.2	fixed in candidate graph
+ip-address	GHSA-rxp7-6hxx-x8q5	moderate	<=10.7.3	node_modules/ip-address@10.7.5;node_modules/npm/node_modules/ip-address@10.7.2	accepted by WAT-236 human 4e1c; recheck owned by WAT-238
+postcss-selector-parser	GHSA-rj75-hqrm-r3gf	moderate	<6.1.5	node_modules/npm/node_modules/postcss-selector-parser@7.1.6;node_modules/postcss-selector-parser@7.1.7	fixed in candidate graph
+postcss-selector-parser	GHSA-rj75-hqrm-r3gf	moderate	>=7.0.0 <7.1.6	node_modules/npm/node_modules/postcss-selector-parser@7.1.6;node_modules/postcss-selector-parser@7.1.7	fixed in candidate graph
+sharp	GHSA-wq5f-xc86-pv6w	high	<0.35.5	node_modules/sharp@0.35.5	fixed in candidate graph
+smol-toml	GHSA-r4xh-jqrq-34v2	moderate	<=1.8.0	node_modules/smol-toml@1.9.1	fixed in candidate graph
+tar	GHSA-23hp-3jrh-7fpw	critical	<=7.5.18	node_modules/npm/node_modules/tar@7.5.22	fixed in candidate graph
+tar	GHSA-8x88-c5mf-7j5w	high	<=7.5.17	node_modules/npm/node_modules/tar@7.5.22	fixed in candidate graph
+tar	GHSA-gvwx-54wh-qm9j	moderate	<=7.5.16	node_modules/npm/node_modules/tar@7.5.22	fixed in candidate graph
+tar	GHSA-r292-9mhp-454m	high	<=7.5.20	node_modules/npm/node_modules/tar@7.5.22	fixed in candidate graph
+tinypool	GHSA-5gmw-xhrv-c9v3	critical	<=2.1.0		fixed in candidate graph
+tinypool	GHSA-85c8-ppgw-ccpr	critical	<2.1.2		fixed in candidate graph
+undici	GHSA-3wwx-pv8p-q78v	moderate	>=6.25.0 <6.28.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-3wwx-pv8p-q78v	moderate	>=7.28.0 <7.29.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-3xpg-4rpp-hhhm	moderate	>=7.15.0 <7.29.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-4qv8-2p9j-2685	moderate	>=6.5.0 <6.29.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	accepted by WAT-236 human 4e1c; recheck owned by WAT-238
+undici	GHSA-4qv8-2p9j-2685	moderate	>=7.0.0 <7.30.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-f72v-6w45-q472	moderate	>=7.15.0 <7.30.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-rfgv-xxqx-mfg5	high	>=6.7.0 <6.28.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-rfgv-xxqx-mfg5	high	>=7.0.0 <7.29.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-rx4f-c7p8-82vq	moderate	>=7.0.0 <7.29.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-vxpw-j846-p89q	high	<6.27.0	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+undici	GHSA-xjj6-f33q-929c	high	>=6.23.0 <6.29.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	accepted by WAT-236 human 4e1c; recheck owned by WAT-238
+undici	GHSA-xjj6-f33q-929c	high	>=7.18.0 <7.30.1	node_modules/@actions/http-client/node_modules/undici@6.29.1;node_modules/npm/node_modules/undici@6.29.0;node_modules/undici@7.30.1;node_modules/unifont/node_modules/undici@8.12.3	fixed in candidate graph
+yaml	GHSA-48c2-rrv3-qjmp	moderate	>=2.0.0 <2.8.3	node_modules/yaml@2.9.1;node_modules/yaml-language-server/node_modules/yaml@2.8.3	fixed in candidate graph
+zod	GHSA-mrhx-c7xc-m3w5	high	<4.6.6	node_modules/zod@4.6.7	fixed in candidate graph

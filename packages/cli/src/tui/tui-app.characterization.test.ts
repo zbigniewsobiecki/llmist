@@ -42,113 +42,123 @@ vi.mock("./layout.js", () => ({
 }));
 
 vi.mock("./status-bar.js", () => ({
-  StatusBar: vi.fn().mockImplementation(() => ({
-    subscribeToTree: vi.fn(() => vi.fn()),
-    updateStreaming: vi.fn(),
-    clearActivity: vi.fn(),
-    addGadgetCost: vi.fn(),
-    showThrottling: vi.fn(),
-    clearThrottling: vi.fn(),
-    showRetry: vi.fn(),
-    clearRetry: vi.fn(),
-    setProfiles: vi.fn(),
-    getCurrentProfile: vi.fn(() => "default"),
-    getElapsedSeconds: vi.fn(() => 0),
-    getMetrics: vi.fn(() => ({})),
-    setFocusMode: vi.fn(),
-    setContentFilterMode: vi.fn(),
-    setMouseEnabled: vi.fn(),
-    cycleProfile: vi.fn(),
-  })),
+  StatusBar: vi.fn().mockImplementation(function MockConstructor() {
+    return {
+      subscribeToTree: vi.fn(() => vi.fn()),
+      updateStreaming: vi.fn(),
+      clearActivity: vi.fn(),
+      addGadgetCost: vi.fn(),
+      showThrottling: vi.fn(),
+      clearThrottling: vi.fn(),
+      showRetry: vi.fn(),
+      clearRetry: vi.fn(),
+      setProfiles: vi.fn(),
+      getCurrentProfile: vi.fn(() => "default"),
+      getElapsedSeconds: vi.fn(() => 0),
+      getMetrics: vi.fn(() => ({})),
+      setFocusMode: vi.fn(),
+      setContentFilterMode: vi.fn(),
+      setMouseEnabled: vi.fn(),
+      cycleProfile: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("./input-handler.js", () => ({
-  InputHandler: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    deactivate: vi.fn(),
-    waitForInput: vi.fn(),
-    waitForPrompt: vi.fn(),
-    startWaitingForPrompt: vi.fn(),
-    setMidSessionHandler: vi.fn(),
-    cancelPending: vi.fn(),
-    setGetFocusMode: vi.fn(),
-    setGetContentFilterMode: vi.fn(),
-    setGetMouseEnabled: vi.fn(),
-    onCtrlC: vi.fn(),
-    onCtrlB: vi.fn(),
-    onCtrlK: vi.fn(),
-    onCtrlI: vi.fn(),
-    onCtrlJ: vi.fn(),
-    onCtrlP: vi.fn(),
-    onCtrlY: vi.fn(),
-    onArrowUp: vi.fn(),
-    onArrowDown: vi.fn(),
-    isWaitingForREPLPrompt: vi.fn(() => false),
-    hasPendingInput: vi.fn(() => false),
-  })),
+  InputHandler: vi.fn().mockImplementation(function MockConstructor() {
+    return {
+      activate: vi.fn(),
+      deactivate: vi.fn(),
+      waitForInput: vi.fn(),
+      waitForPrompt: vi.fn(),
+      startWaitingForPrompt: vi.fn(),
+      setMidSessionHandler: vi.fn(),
+      cancelPending: vi.fn(),
+      setGetFocusMode: vi.fn(),
+      setGetContentFilterMode: vi.fn(),
+      setGetMouseEnabled: vi.fn(),
+      onCtrlC: vi.fn(),
+      onCtrlB: vi.fn(),
+      onCtrlK: vi.fn(),
+      onCtrlI: vi.fn(),
+      onCtrlJ: vi.fn(),
+      onCtrlP: vi.fn(),
+      onCtrlY: vi.fn(),
+      onArrowUp: vi.fn(),
+      onArrowDown: vi.fn(),
+      isWaitingForREPLPrompt: vi.fn(() => false),
+      hasPendingInput: vi.fn(() => false),
+    };
+  }),
 }));
 
 vi.mock("./block-renderer.js", () => ({
-  BlockRenderer: vi.fn().mockImplementation(() => ({
-    subscribeToTree: vi.fn(() => vi.fn()),
-    addText: vi.fn(),
-    addThinking: vi.fn(),
-    addUserMessage: vi.fn(),
-    addSystemMessage: vi.fn(() => "block-id"),
-    clear: vi.fn(),
-    startNewSession: vi.fn(),
-    clearPreviousSession: vi.fn(),
-    handleUserScroll: vi.fn(),
-    handleResize: vi.fn(),
-    getSelectedBlock: vi.fn(),
-    selectNext: vi.fn(),
-    selectPrevious: vi.fn(),
-    selectFirst: vi.fn(),
-    selectLast: vi.fn(),
-    toggleExpand: vi.fn(),
-    collapseOrDeselect: vi.fn(),
-    enableFollowMode: vi.fn(),
-    onHasContentChange: vi.fn(),
-    setContentFilterMode: vi.fn(),
-    flushText: vi.fn(),
-  })),
+  BlockRenderer: vi.fn().mockImplementation(function MockConstructor() {
+    return {
+      subscribeToTree: vi.fn(() => vi.fn()),
+      addText: vi.fn(),
+      addThinking: vi.fn(),
+      addUserMessage: vi.fn(),
+      addSystemMessage: vi.fn(() => "block-id"),
+      clear: vi.fn(),
+      startNewSession: vi.fn(),
+      clearPreviousSession: vi.fn(),
+      handleUserScroll: vi.fn(),
+      handleResize: vi.fn(),
+      getSelectedBlock: vi.fn(),
+      selectNext: vi.fn(),
+      selectPrevious: vi.fn(),
+      selectFirst: vi.fn(),
+      selectLast: vi.fn(),
+      toggleExpand: vi.fn(),
+      collapseOrDeselect: vi.fn(),
+      enableFollowMode: vi.fn(),
+      onHasContentChange: vi.fn(),
+      setContentFilterMode: vi.fn(),
+      flushText: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("./controller.js", () => ({
-  TUIController: vi.fn().mockImplementation(() => ({
-    getFocusMode: vi.fn(() => "browse"),
-    getContentFilterMode: vi.fn(() => "full"),
-    isMouseEnabled: vi.fn(() => false),
-    toggleFocusMode: vi.fn(),
-    setFocusMode: vi.fn(),
-    toggleContentFilterMode: vi.fn(),
-    toggleMouse: vi.fn(),
-    pushInputMode: vi.fn(),
-    popInputMode: vi.fn(),
-    getAbortSignal: vi.fn(() => new AbortController().signal),
-    resetAbort: vi.fn(),
-    isAborted: vi.fn(() => false),
-    onQuit: vi.fn(),
-    onCancel: vi.fn(),
-    onMidSessionInput: vi.fn(),
-    handleCtrlC: vi.fn(),
-    triggerCancel: vi.fn(),
-    abort: vi.fn(),
-  })),
+  TUIController: vi.fn().mockImplementation(function MockConstructor() {
+    return {
+      getFocusMode: vi.fn(() => "browse"),
+      getContentFilterMode: vi.fn(() => "full"),
+      isMouseEnabled: vi.fn(() => false),
+      toggleFocusMode: vi.fn(),
+      setFocusMode: vi.fn(),
+      toggleContentFilterMode: vi.fn(),
+      toggleMouse: vi.fn(),
+      pushInputMode: vi.fn(),
+      popInputMode: vi.fn(),
+      getAbortSignal: vi.fn(() => new AbortController().signal),
+      resetAbort: vi.fn(),
+      isAborted: vi.fn(() => false),
+      onQuit: vi.fn(),
+      onCancel: vi.fn(),
+      onMidSessionInput: vi.fn(),
+      handleCtrlC: vi.fn(),
+      triggerCancel: vi.fn(),
+      abort: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("./modal-manager.js", () => ({
-  ModalManager: vi.fn().mockImplementation(() => ({
-    showRawViewer: vi.fn(),
-    showApproval: vi.fn(),
-    closeAll: vi.fn(),
-  })),
+  ModalManager: vi.fn().mockImplementation(function MockConstructor() {
+    return {
+      showRawViewer: vi.fn(),
+      showApproval: vi.fn(),
+      closeAll: vi.fn(),
+    };
+  }),
 }));
 
 let capturedOnAction: (action: KeyAction) => void;
 
 vi.mock("./keymap.js", () => ({
-  KeyboardManager: vi.fn().mockImplementation((config) => {
+  KeyboardManager: vi.fn().mockImplementation(function MockConstructor(config) {
     capturedOnAction = config.onAction;
     return {
       setup: vi.fn(),
@@ -158,12 +168,14 @@ vi.mock("./keymap.js", () => ({
 }));
 
 vi.mock("./hints-bar.js", () => ({
-  HintsBar: vi.fn().mockImplementation(() => ({
-    setHasContent: vi.fn(),
-    setFocusMode: vi.fn(),
-    setContentFilterMode: vi.fn(),
-    setMouseEnabled: vi.fn(),
-  })),
+  HintsBar: vi.fn().mockImplementation(function MockConstructor() {
+    return {
+      setHasContent: vi.fn(),
+      setFocusMode: vi.fn(),
+      setContentFilterMode: vi.fn(),
+      setMouseEnabled: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("./tui-app-bootstrap.js", async (importOriginal) => {

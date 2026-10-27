@@ -14,12 +14,14 @@ vi.mock("llmist", async (importOriginal) => {
     formatLlmRequest: vi.fn(() => "formatted request"),
     FALLBACK_CHARS_PER_TOKEN: 4,
     text: vi.fn((t: string) => ({ type: "text", text: t })),
-    LLMMessageBuilder: vi.fn().mockImplementation(() => ({
-      addSystem: vi.fn(),
-      addUser: vi.fn(),
-      addUserMultimodal: vi.fn(),
-      build: vi.fn().mockReturnValue([]),
-    })),
+    LLMMessageBuilder: vi.fn().mockImplementation(function MockConstructor() {
+      return {
+        addSystem: vi.fn(),
+        addUser: vi.fn(),
+        addUserMultimodal: vi.fn(),
+        build: vi.fn().mockReturnValue([]),
+      };
+    }),
   };
 });
 
@@ -42,20 +44,24 @@ vi.mock("./utils.js", async (importOriginal) => {
   return {
     ...actual,
     resolvePrompt: vi.fn().mockResolvedValue("resolved prompt"),
-    StreamPrinter: vi.fn().mockImplementation(() => ({
-      write: vi.fn(),
-      ensureNewline: vi.fn(),
-    })),
-    StreamProgress: vi.fn().mockImplementation(() => ({
-      startCall: vi.fn(),
-      setInputTokens: vi.fn(),
-      setOutputTokens: vi.fn(),
-      pause: vi.fn(),
-      update: vi.fn(),
-      endCall: vi.fn(),
-      complete: vi.fn(),
-      getTotalCost: vi.fn().mockReturnValue(0.001),
-    })),
+    StreamPrinter: vi.fn().mockImplementation(function MockConstructor() {
+      return {
+        write: vi.fn(),
+        ensureNewline: vi.fn(),
+      };
+    }),
+    StreamProgress: vi.fn().mockImplementation(function MockConstructor() {
+      return {
+        startCall: vi.fn(),
+        setInputTokens: vi.fn(),
+        setOutputTokens: vi.fn(),
+        pause: vi.fn(),
+        update: vi.fn(),
+        endCall: vi.fn(),
+        complete: vi.fn(),
+        getTotalCost: vi.fn().mockReturnValue(0.001),
+      };
+    }),
     executeAction: vi.fn(async (fn: () => Promise<void>, _env: CLIEnvironment) => {
       await fn();
     }),
@@ -174,36 +180,33 @@ describe("complete-command", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Re-initialize LLMMessageBuilder default mock after clearAllMocks
-    vi.mocked(LLMMessageBuilder).mockImplementation(
-      () =>
-        ({
-          addSystem: vi.fn(),
-          addUser: vi.fn(),
-          addUserMultimodal: vi.fn(),
-          build: vi.fn().mockReturnValue([]),
-        }) as any,
-    );
+    vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+      return {
+        addSystem: vi.fn(),
+        addUser: vi.fn(),
+        addUserMultimodal: vi.fn(),
+        build: vi.fn().mockReturnValue([]),
+      } as any;
+    });
     // Re-initialize StreamProgress and StreamPrinter defaults
-    vi.mocked(StreamProgress).mockImplementation(
-      () =>
-        ({
-          startCall: vi.fn(),
-          setInputTokens: vi.fn(),
-          setOutputTokens: vi.fn(),
-          pause: vi.fn(),
-          update: vi.fn(),
-          endCall: vi.fn(),
-          complete: vi.fn(),
-          getTotalCost: vi.fn().mockReturnValue(0.001),
-        }) as any,
-    );
-    vi.mocked(StreamPrinter).mockImplementation(
-      () =>
-        ({
-          write: vi.fn(),
-          ensureNewline: vi.fn(),
-        }) as any,
-    );
+    vi.mocked(StreamProgress).mockImplementation(function MockConstructor() {
+      return {
+        startCall: vi.fn(),
+        setInputTokens: vi.fn(),
+        setOutputTokens: vi.fn(),
+        pause: vi.fn(),
+        update: vi.fn(),
+        endCall: vi.fn(),
+        complete: vi.fn(),
+        getTotalCost: vi.fn().mockReturnValue(0.001),
+      } as any;
+    });
+    vi.mocked(StreamPrinter).mockImplementation(function MockConstructor() {
+      return {
+        write: vi.fn(),
+        ensureNewline: vi.fn(),
+      } as any;
+    });
     vi.mocked(resolvePrompt).mockResolvedValue("resolved prompt");
     vi.mocked(executeAction).mockImplementation(async (fn: any) => {
       await fn();
@@ -347,7 +350,9 @@ describe("complete-command", () => {
         addUserMultimodal: vi.fn(),
         build: vi.fn().mockReturnValue([]),
       };
-      vi.mocked(LLMMessageBuilder).mockImplementation(() => builderInstance as any);
+      vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+        return builderInstance as any;
+      });
 
       await executeComplete(
         "describe this image",
@@ -375,7 +380,9 @@ describe("complete-command", () => {
         addUserMultimodal: vi.fn(),
         build: vi.fn().mockReturnValue([]),
       };
-      vi.mocked(LLMMessageBuilder).mockImplementation(() => builderInstance as any);
+      vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+        return builderInstance as any;
+      });
 
       await executeComplete(
         "transcribe this audio",
@@ -400,7 +407,9 @@ describe("complete-command", () => {
         addUserMultimodal: vi.fn(),
         build: vi.fn().mockReturnValue([]),
       };
-      vi.mocked(LLMMessageBuilder).mockImplementation(() => builderInstance as any);
+      vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+        return builderInstance as any;
+      });
 
       await executeComplete(
         "describe",
@@ -430,7 +439,9 @@ describe("complete-command", () => {
         addUserMultimodal: vi.fn(),
         build: vi.fn().mockReturnValue([]),
       };
-      vi.mocked(LLMMessageBuilder).mockImplementation(() => builderInstance as any);
+      vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+        return builderInstance as any;
+      });
 
       await executeComplete("plain text prompt", { model: "openai:gpt-5-nano" } as any, env);
 
@@ -452,7 +463,9 @@ describe("complete-command", () => {
         addUserMultimodal: vi.fn(),
         build: vi.fn().mockReturnValue([]),
       };
-      vi.mocked(LLMMessageBuilder).mockImplementation(() => builderInstance as any);
+      vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+        return builderInstance as any;
+      });
 
       await executeComplete(
         "prompt",
@@ -614,7 +627,9 @@ describe("complete-command", () => {
         write: vi.fn(),
         ensureNewline: vi.fn(),
       };
-      vi.mocked(StreamPrinter).mockImplementation(() => printerInstance as any);
+      vi.mocked(StreamPrinter).mockImplementation(function MockConstructor() {
+        return printerInstance as any;
+      });
 
       await executeComplete("hello", { model: "openai:gpt-5-nano" } as any, env);
 
@@ -684,7 +699,9 @@ describe("complete-command", () => {
         complete: vi.fn(),
         getTotalCost: vi.fn().mockReturnValue(0),
       };
-      vi.mocked(StreamProgress).mockImplementation(() => progressInstance as any);
+      vi.mocked(StreamProgress).mockImplementation(function MockConstructor() {
+        return progressInstance as any;
+      });
 
       await executeComplete("prompt", { model: "openai:gpt-5-nano" } as any, env);
 
@@ -789,7 +806,9 @@ describe("complete-command", () => {
         addUserMultimodal: vi.fn(),
         build: vi.fn().mockReturnValue([]),
       };
-      vi.mocked(LLMMessageBuilder).mockImplementation(() => builderInstance as any);
+      vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+        return builderInstance as any;
+      });
 
       await executeComplete(
         "prompt",
@@ -811,7 +830,9 @@ describe("complete-command", () => {
         addUserMultimodal: vi.fn(),
         build: vi.fn().mockReturnValue([]),
       };
-      vi.mocked(LLMMessageBuilder).mockImplementation(() => builderInstance as any);
+      vi.mocked(LLMMessageBuilder).mockImplementation(function MockConstructor() {
+        return builderInstance as any;
+      });
 
       await executeComplete("prompt", { model: "openai:gpt-5-nano" } as any, env);
 
