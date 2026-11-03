@@ -273,6 +273,17 @@ The OpenRouter provider includes enhanced error messages:
 
 ## Reasoning Models via OpenRouter
 
+When calling `client.stream()` with `reasoning: { enabled: true }`, an omitted or
+undefined `temperature` is left out of the OpenRouter request, leaving the upstream
+provider's default in effect. Explicit numeric temperatures, including `0`, are
+preserved; support depends on the endpoint. Without enabled reasoning, llmist
+defaults an omitted temperature to `0`.
+
+OpenRouter's `extra: { provider: { require_parameters: true } }` filters routing to
+endpoints that support every supplied parameter. Leaving temperature unspecified
+avoids filtering out endpoints solely because they do not support temperature.
+Other supplied parameters still apply to that filter.
+
 OpenRouter provides access to reasoning-capable models like DeepSeek R1, which excels at math, logic, and coding with chain-of-thought reasoning:
 
 ```typescript
