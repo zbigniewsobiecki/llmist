@@ -1,3 +1,9 @@
+## [18.4.2](https://github.com/zbigniewsobiecki/llmist/compare/v18.4.1...v18.4.2) (2026-11-03)
+
+### Bug Fixes
+
+* **core:** preserve unspecified temperature for enabled reasoning ([d7c206f](https://github.com/zbigniewsobiecki/llmist/commit/d7c206f4c4c2867ec6665f44d46d68e17d08e60d))
+
 ## [18.4.1](https://github.com/zbigniewsobiecki/llmist/compare/v18.4.0...v18.4.1) (2026-10-27)
 
 ### Bug Fixes
