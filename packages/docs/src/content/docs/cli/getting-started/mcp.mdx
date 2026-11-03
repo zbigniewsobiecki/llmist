@@ -87,6 +87,30 @@ llmist mcp import-claude-code >> ~/.llmist/config.toml
 
 See [TOML configuration — MCP servers](/cli/configuration/toml-reference/#mcp-servers-mcpserversname) for the full schema.
 
+## Web search with Parallel
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) gives your agent web search and page fetching over Streamable HTTP. It provides `web_search` for finding sources and `web_fetch` for reading specific URLs. The free anonymous tier uses Fast mode for search and requires no Parallel account or API key; it is intended for exploration and light use.
+
+Add this server to `~/.llmist/cli.toml`, keeping any existing configuration:
+
+```toml
+[mcp.servers.parallel]
+transport = "http"
+url = "https://search.parallel.ai/mcp"
+timeout-ms = 30000
+
+[mcp.servers.parallel.headers]
+User-Agent = "llmist"
+```
+
+With a model API key set as in the walkthrough, run:
+
+```bash
+llmist agent "Use web_search to find the latest Node.js LTS release on nodejs.org, then use web_fetch to read the release page. Summarize the changes and cite the source URLs."
+```
+
+The CLI loads the configured server automatically. No `--mcp-server` flag or local MCP server package is needed for this HTTP connection. To stop loading it, add `enabled = false` inside `[mcp.servers.parallel]`, before the headers table, or remove that server's configuration.
+
 ## Prompts and expose side
 
 Servers that advertise MCP prompts expose them as slash-invocable llmist skills. To publish llmist gadgets and skills for other MCP clients, use [`llmist mcp serve`](/cli/commands/mcp-serve/).
