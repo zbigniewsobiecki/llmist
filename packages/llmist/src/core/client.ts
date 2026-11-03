@@ -153,10 +153,10 @@ export class LLMist {
     const spec = this.modelRegistry.getModelSpec(descriptor.name);
     const adapter = this.resolveAdapter(descriptor);
 
-    // Apply global default temperature of 0 (deterministic) when not specified
+    // Leave sampling to the provider when reasoning is enabled unless explicitly requested.
     const optionsWithDefaults: LLMGenerationOptions = {
       ...options,
-      temperature: options.temperature ?? 0,
+      temperature: options.temperature ?? (options.reasoning?.enabled === true ? undefined : 0),
     };
 
     return adapter.stream(optionsWithDefaults, descriptor, spec);

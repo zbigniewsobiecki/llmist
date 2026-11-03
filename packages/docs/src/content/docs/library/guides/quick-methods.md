@@ -82,13 +82,18 @@ for await (const chunk of client.streamText('Hello')) {
 ```typescript
 interface TextGenerationOptions {
   model?: string;        // Model name or alias (default: 'gpt-5-nano')
-  temperature?: number;  // 0-1 (default: provider default)
+  temperature?: number;  // 0-1 (default: 0)
   systemPrompt?: string; // System prompt (default: none)
   maxTokens?: number;    // Max tokens (default: provider default)
 }
 ```
 
 ## Model Shortcuts
+
+Quick methods do not expose reasoning configuration and use the client's default
+temperature of `0` when omitted. With the low-level `client.stream()` API,
+`reasoning: { enabled: true }` leaves an omitted or undefined temperature
+unspecified. An explicit numeric temperature, including `0`, is preserved.
 
 Works with all model shortcuts:
 
