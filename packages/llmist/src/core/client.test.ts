@@ -1,5 +1,7 @@
+import OpenAI from "openai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as discoveryModule from "../providers/discovery.js";
+import { OpenRouterProvider } from "../providers/openrouter.js";
 import type { ProviderAdapter } from "../providers/provider.js";
 import { LLMist } from "./client.js";
 import type { LLMMessage } from "./messages.js";
@@ -247,6 +249,97 @@ describe("LLMist Client", () => {
         expect.anything(),
         expect.anything(),
       );
+    });
+
+    describe.each([
+      undefined,
+      { enabled: false },
+      { enabled: true },
+    ] as const)("temperature with reasoning %j", (reasoning) => {
+      it.each([
+        {},
+        { temperature: undefined },
+        { temperature: 0 },
+        { temperature: 0.7 },
+      ])("preserves caller options and resolves %j", (temperatureOptions) => {
+        const options: LLMGenerationOptions = {
+          model: "test:test-model",
+          messages: [{ role: "user", content: "Hello" }],
+          reasoning,
+          extra: { provider: { require_parameters: true } },
+          ...temperatureOptions,
+        };
+        const original = structuredClone(options);
+
+        client.stream(options);
+
+        const expectedTemperature =
+          temperatureOptions.temperature ?? (reasoning?.enabled === true ? undefined : 0);
+        expect(mockAdapter.stream).toHaveBeenCalledWith(
+          { ...original, temperature: expectedTemperature },
+          expect.anything(),
+          expect.anything(),
+        );
+        expect(options).toStrictEqual(original);
+      });
+    });
+
+    it.each([
+      {},
+      { temperature: undefined },
+    ])("WAT-391: omits unspecified temperature from strict OpenRouter requests (%j)", async (temperatureOptions) => {
+      let requestBody: Record<string, unknown> | undefined;
+      const sdk = new OpenAI({
+        apiKey: "test-only",
+        baseURL: "https://openrouter.invalid/api/v1",
+        maxRetries: 0,
+        fetch: async (_url, init) => {
+          requestBody = JSON.parse(String(init?.body));
+          return new Response("data: [DONE]\n\n", {
+            headers: { "content-type": "text/event-stream" },
+          });
+        },
+      });
+      const routerClient = new LLMist({
+        adapters: [new OpenRouterProvider(sdk)],
+        autoDiscoverProviders: false,
+      });
+      const options: LLMGenerationOptions = {
+        model: "openrouter:openai/gpt-4o",
+        messages: [{ role: "user", content: "Return JSON" }],
+        reasoning: { enabled: true, effort: "high" },
+        extra: {
+          provider: { require_parameters: true },
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "answer",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: { answer: { type: "string" } },
+                required: ["answer"],
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        ...temperatureOptions,
+      };
+      const original = structuredClone(options);
+
+      for await (const _chunk of routerClient.stream(options)) {
+        // Consume the real SDK stream through the fake HTTP transport.
+      }
+
+      expect(requestBody).toMatchObject({
+        model: "openai/gpt-4o",
+        stream: true,
+        reasoning: { effort: "high" },
+        ...original.extra,
+      });
+      expect(requestBody).not.toHaveProperty("temperature");
+      expect(options).toStrictEqual(original);
     });
 
     it("should preserve explicit temperature when specified", async () => {

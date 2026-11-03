@@ -94,6 +94,7 @@ export interface LLMGenerationOptions {
   model: string;
   messages: LLMMessage[];
   maxTokens?: number;
+  /** Defaults to 0 unless reasoning.enabled is true, in which case it stays unspecified. */
   temperature?: number;
   topP?: number;
   stopSequences?: string[];
