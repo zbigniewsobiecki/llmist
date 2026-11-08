@@ -13,6 +13,7 @@ status: pending
 # 003/1: Compatible dependency remediation and residual evidence
 
 > Part 1 of 1. Parent: [full spec](../../specs/003-current-lock-security-remediation.md).
+> Implementation updates this link to `.md.done` when the parent lifecycle transition lands.
 
 ## Summary
 
@@ -32,6 +33,15 @@ or release permission. No later plan in this spec performs a major migration.
 
 - `package-lock.json`: narrowly selected transitive updates and required graph changes.
 - This plan's Evidence and Progress sections: baseline, candidate, residual and gate results.
+- This execution plan: own its `.md` → `.md.wip` → `.md.done` lifecycle, ending at
+  `docs/plans/003-current-lock-security-remediation/1-compatible-remediation.md.done`
+  with frontmatter `status: done` in the implementation's reviewed candidate.
+- `docs/specs/003-current-lock-security-remediation.md` →
+  `docs/specs/003-current-lock-security-remediation.md.done`: since this is the only plan,
+  own the parent completion rename and `status: draft` → `status: done`, with no other
+  parent-spec text change. The pinned commit below remains the historical source reference.
+- `docs/plans/003-current-lock-security-remediation/_coverage.md`: update lifecycle links
+  and coverage disposition for the completed candidate, retaining any CI-only deferral.
 - `changelog.d/wat-392-compatible-remediation.md`: one measured implementation fragment.
 - No manifest or source change is expected: `@google/genai` already permits
   google-auth-library `^10.3.0`; `@semantic-release/npm` already permits npm `^11.6.2`.
@@ -53,6 +63,9 @@ outside this assignment. Keep the temperature work separate.
   unresolved and without suppression or acceptance.
 - Spec AC #4 — **full**: six sequential local tiers, unchanged assertions and exact-head CI.
 - Spec AC #5 — **full**: behavior, policy and gate preservation; dependency/evidence-only diff.
+
+Required approval and repository merge governance remain in the operator handoff below,
+outside per-plan criteria. This does not waive the parent spec's required approval.
 
 ## Depends On
 
@@ -164,10 +177,53 @@ residual advisory as accepted. Audit totals alone cannot satisfy this check.
   minimatch remains a potential denial-of-service surface for pathological patterns.
   Installed reachability establishes neither practical exploitability nor safety.
 - Add one implementation changelog fragment reporting only measured compatible reductions
-  and the unresolved residuals. Keep this pinned spec unchanged; this plan owns fresh
-  implementation evidence and any changed audit conclusions. No global documentation edit.
+  and the unresolved residuals. This plan owns fresh implementation evidence and changed
+  audit conclusions. Preserve all parent-spec text except task 4's completion status change
+  and rename. No global documentation edit.
 
-### 4. Run the preserved gates and capture exact-head evidence
+### 4. Prepare the implementation completion transitions
+
+**Tests first — candidate lifecycle acceptance checks:**
+
+- `completed-candidate-lifecycle`: require this plan and the sole parent spec at their
+  `.md.done` paths with `status: done`, and no pending/`.wip` copies of those files.
+  Expected red on the planning candidate: this plan is `.md` / `pending` and the parent
+  is `.md` / `draft`; neither completed path exists.
+- `parent-spec-text-preserved`: compare the completed parent against the historical pinned
+  blob after changing exactly its one frontmatter `status: draft` line to `status: done`.
+  Require byte equality for all other text. Expected red before completion: the completed
+  file is absent; any additional parent edit must also fail this comparison.
+- `progress-ready`: require each Progress AC checked from observed evidence, except AC #6
+  may use the exact CI-only deferral below. Missing dispositions or any non-CI deferral fail.
+  Run the supplied `check_plan_done.py` with `--expect-status done` on the completed plan;
+  additionally enforce this plan's narrower rule that only AC #6 may be deferred.
+  Expected red on the planning candidate: status is pending and all seven ACs are unchecked.
+
+**Implementation — lifecycle files owned above:**
+
+- Keep this planning PR pending and the parent spec untouched. These transitions belong to
+  the implementation candidate, before publication and the review of that candidate.
+- Prepare the plan's `.md.wip` → `.md.done` rename and `status: done`, then rename the
+  sole parent spec to `.md.done` and set only its frontmatter status to `done`. Retain the
+  pinned commit/hash as provenance; do not rewrite the parent inventory or any other text.
+- Update this plan's parent link and the coverage map's plan/parent links to `.md.done`.
+  Record local evidence and lifecycle results in this plan; check AC #7 after inspecting
+  both completed artifacts and the byte-preserving parent comparison.
+- Before sealing the implementation commit, require AC #1–5 and #7 checked from evidence.
+  If exact-head CI cannot yet be observed, replace only the AC #6 Progress line with:
+
+  ```markdown
+  - [ ] AC #6 — deferred: CI-only to lint-and-test, validate-commits, e2e-tests; satisfied only by all three jobs succeeding at the final reviewed head.
+  ```
+
+  This is the only allowed deferral, not a waiver or a claim that pending jobs have passed.
+  It permits the completed plan/spec forms in the candidate while exact-head CI is pending.
+  A red or missing job still blocks merge. Do not use governance state as a deferral.
+- Task 5 qualifies this completed candidate and supplies the remaining local evidence.
+  Commit the lifecycle edits with the candidate, after those local checks and review pass;
+  do not require a later publication, CI-evidence or approval-evidence commit.
+
+### 5. Run the preserved gates and hand off exact-head CI
 
 **Tests first:** retain all existing assertions. Relevant existing unit checks include
 `packages/llmist/src/providers/gemini.test.ts` ("maps messages with system instructions and
@@ -180,8 +236,9 @@ not evidence of vulnerability removal or live Google authentication coverage.
 
 **Implementation — verification and delivery evidence:**
 
-- Finish edits and stage intended files before final checks. Keep live research opt-in unset
-  (`RUN_LIVE_RESEARCH_TESTS`); do not supply provider credentials or run paid/exploit tests.
+- Finish task 4's candidate edits and stage intended files before final checks. Keep live
+  research opt-in unset (`RUN_LIVE_RESEARCH_TESTS`); do not supply provider credentials or
+  run paid/exploit tests.
 - Run these sequentially, stopping on failure: `npm run build`, `npm run typecheck`,
   `npm run lint`, `npm test`, `npm run test:coverage`, `npm run test:e2e`. Record exit status,
   test counts, skipped live suites and relevant warnings. Confirm a suspected baseline failure
@@ -194,12 +251,21 @@ not evidence of vulnerability removal or live Google authentication coverage.
 - Commit with normal hooks and Conventional Commits. Use only `Related to WAT-392` for an
   issue reference in commit messages and PR text. Deliver through the declared hook lane into
   `dev`; do not push, publish packages, create a release PR, promote to `main`, or auto-merge.
-- After publication, the operator must obtain actual successful `lint-and-test`,
-  `validate-commits` and `e2e-tests` at the exact reviewed head plus the required legitimate
-  independent approval and up-to-date checks. Record check links, head identity and review
-  disposition in this plan's evidence. A local review COMMENT does not supply the approval.
-  If publication/checks cannot be observed in-session, hand off the committed candidate with
-  these gates pending; do not mark this plan's exact-head criterion or the spec done.
+- Hand off the completed candidate with either observed AC #6 success or task 4's explicit
+  CI-only Progress deferral to `lint-and-test`, `validate-commits` and `e2e-tests`.
+  After publication, read GitHub check runs for the final reviewed head: all three named
+  jobs must actually succeed at that head to satisfy the deferral. A missing, stale, pending
+  or failed run does not satisfy it. Local success is no substitute for these CI results.
+  Keep final check results in GitHub's head-specific records; no post-publication
+  evidence-only commit or checkbox update is required to satisfy the CI-only deferral.
+
+## Operator governance handoff (outside plan criteria)
+
+The existing owner decision assigns approval, required-review counts, strict up-to-date
+ruleset enforcement and merge authority to the operator. They remain required repository
+governance, separate from per-plan ACs, Progress and CI-only deferrals. A local-review COMMENT
+does not supply an approving review. The operator checks these requirements before merge
+without requesting a post-publication plan-evidence commit. No rule or approval is waived.
 
 ## Test Plan
 
@@ -210,13 +276,15 @@ not evidence of vulnerability removal or live Google authentication coverage.
 | `bundled-ip-address-advisory-absent` | Audit plus installed bundle; tasks 1–2 | Specified GHSA absent |
 | `google-auth-cleanup-path-removed` | Installed dependency traversal; tasks 1–2 | Authentication subtree has no rimraf/glob |
 | `residual-inventory-complete` | Audit/lock/parent reconciliation; task 3 | Every residual path listed, no acceptance |
-| Existing provider/skill suites | Unit; task 4 | Existing assertions remain green |
-| Existing workspace build/type/lint/unit/coverage/mocked E2E | Six sequential commands; task 4 | Every command succeeds |
-| Exact-head CI and review | External gates; task 4 | All three named checks and legitimate approval |
+| Completed lifecycle and parent text | Candidate acceptance; task 4 | Both `.md.done` / `status: done`; parent otherwise byte-identical |
+| Progress dispositions | Done-gate plus CI-only restriction; task 4 | AC #1–5 and #7 checked; only AC #6 can defer to all three named jobs |
+| Existing provider/skill suites | Unit; task 5 | Existing assertions remain green |
+| Existing workspace build/type/lint/unit/coverage/mocked E2E | Six sequential commands; task 5 | Every command succeeds |
+| Exact-head CI | External jobs; task 5 | All three named jobs succeed at the final reviewed head; satisfies AC #6's CI-only deferral |
 
 ## Manual Verification
 
-AC #3, #5 and #6 below include evidence review or external state that cannot be truthfully
+AC #3 and #5 below include evidence review that cannot be truthfully
 replaced by a unit test. Run these protocols, record observed outcomes under Evidence, and
 leave their boxes unchecked until their full protocols pass:
 
@@ -228,11 +296,10 @@ leave their boxes unchecked until their full protocols pass:
   report. Expect only authorized lock/evidence/changelog and normal plan lifecycle edits,
   unchanged manifests/source/tests/tool policies, and no forbidden mechanisms or weakened gates.
   Record changed-file disposition and gate result. An unexplained change blocks completion.
-- **AC #6 [manual], external checks:** read check runs and approval for the published candidate
-  using GitHub MCP. Compare check head and reviewed head with the candidate identity. Expect
-  all three named checks successful, required approval and strict up-to-date checks. Record
-  check/review links and identities. Missing, stale or pending results leave AC #6 pending;
-  do not loop new evidence-only commits that invalidate the very head being checked.
+
+AC #6 is automated CI, not manual verification. It follows the named-job CI-only Progress
+deferral in task 4 and the exact-head comparison in task 5. Its final result is recorded by
+GitHub, without a required follow-up commit. Governance remains in the separate handoff.
 
 ## Acceptance Criteria (per-plan, testable)
 
@@ -249,16 +316,23 @@ leave their boxes unchecked until their full protocols pass:
 5. [manual] The delta and local-review gate preserve public behavior, shapes and all specified
    tools/policies, and contain only authorized dependency/evidence work with no forbidden
    mechanism (spec AC #5).
-6. [manual] Actual successful exact-reviewed-head CI checks, legitimate approval and strict
-   up-to-date checks are recorded before completion/merge (spec AC #4).
+6. `lint-and-test`, `validate-commits` and `e2e-tests` actually succeed at the final reviewed
+   head (spec AC #4). Progress may explicitly defer this criterion only to those three CI jobs;
+   only their success at that exact head satisfies the deferral. No subsequent evidence-only
+   commit is required.
+7. This plan and its sole parent spec are `.md.done` with frontmatter `status: done` in the
+   implementation's reviewed candidate. Only the parent's status line changes beyond its rename;
+   lifecycle links are updated, and all Progress criteria are checked or carry the permitted
+   named-job CI-only deferral (spec AC #5 and Documentation Impact).
 
 ## Documentation Impact
 
 | File | Change |
 |---|---|
-| This plan, Evidence and Progress | Fresh baseline/candidate inventory, bundled targets, residual conclusions, local gates and external check/review evidence |
+| This plan, Evidence and Progress | Fresh audit/graph/residual/local-gate evidence; completed `.md.done` / `status: done` form and explicit named-job CI-only deferral when needed |
+| `_coverage.md` | Update completed plan/parent links and lifecycle disposition; distinguish exact-head CI from operator governance |
 | `changelog.d/wat-392-compatible-remediation.md` | One fragment for measured implementation outcome, preserving explicit unresolved residuals |
-| Parent spec | Preserve the pinned source; reference its inventory/decisions and keep changed measurements in this downstream plan |
+| `docs/specs/003-current-lock-security-remediation.md` → `.md.done` | Implementation owns completion rename and `status: draft` → `status: done` only; preserve all other pinned-source text and retain its historical provenance |
 | README, CLAUDE.md, global guidance | No change required; this maintenance work introduces no cross-cutting policy or public API |
 
 ## Out of Scope
@@ -275,15 +349,23 @@ Pending implementation. The parent spec's audit and scratch experiment are refer
 not proof that this plan is executed. Record fresh results here: base/lock/tool identities,
 timestamp and valid audit statuses; unique advisory and affected-entry totals separately;
 GHSA/version/path/exposure/disposition rows; installed bundle and Google subtree results;
-all residual boundaries; local verification results; local-review outcome; external CI and
-approval evidence or explicit pending hand-off. Raw scratch paths are not reviewer evidence.
+all residual boundaries; local verification results; local-review outcome; lifecycle checks
+and the permitted named-job CI-only handoff. Record these before publication in the completed
+plan. Final exact-head CI results stay in GitHub's job records and satisfy the explicit
+deferral there; no post-publication evidence-only commit is required. Governance evidence
+belongs to the operator handoff, not this plan's criteria. Raw scratch paths are not reviewer evidence.
 
 ## Progress
 
 <!-- /implement updates these from observed evidence, never from the planning run. -->
+Implementation checks AC #1–5 and #7 from evidence before sealing its completed candidate.
+For AC #6 only, it may substitute task 4's explicit CI-only deferral line. All lines remain
+unchecked and undeferred in this planning PR; none of the implementation work has run here.
+
 - [ ] AC #1 — fresh valid audit inventories
 - [ ] AC #2 — installed compatible remediation
 - [ ] AC #3 — residual evidence and changelog
 - [ ] AC #4 — six sequential local tiers
 - [ ] AC #5 — preserved scope/policies and review gate
-- [ ] AC #6 — exact-head CI and required approval
+- [ ] AC #6 — exact-head lint-and-test, validate-commits and e2e-tests
+- [ ] AC #7 — completed plan/spec lifecycle and preserved parent text
