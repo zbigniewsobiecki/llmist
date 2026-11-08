@@ -4,7 +4,7 @@ slug: current-lock-security-remediation
 level: spec
 title: Current-lock security remediation within compatible upstream releases
 created: 2026-11-08
-status: draft
+status: done
 ---
 
 # 003: Current-lock security remediation within compatible upstream releases

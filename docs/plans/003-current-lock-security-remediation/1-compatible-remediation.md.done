@@ -5,15 +5,15 @@ plan: 1
 plan_slug: compatible-remediation
 level: plan
 title: Compatible dependency remediation and residual evidence
-parent_spec: docs/specs/003-current-lock-security-remediation.md
+parent_spec: docs/specs/003-current-lock-security-remediation.md.done
 depends_on: []
-status: pending
+status: done
+locked_at: 8e1942e2b5f43ec1d737eb817d4958b4b58b6f6d
 ---
 
 # 003/1: Compatible dependency remediation and residual evidence
 
-> Part 1 of 1. Parent: [full spec](../../specs/003-current-lock-security-remediation.md).
-> Implementation updates this link to `.md.done` when the parent lifecycle transition lands.
+> Part 1 of 1. Parent: [full spec](../../specs/003-current-lock-security-remediation.md.done).
 
 ## Summary
 
@@ -345,27 +345,279 @@ GitHub, without a required follow-up commit. Governance remains in the separate 
 
 ## Evidence
 
-Pending implementation. The parent spec's audit and scratch experiment are reference evidence,
-not proof that this plan is executed. Record fresh results here: base/lock/tool identities,
-timestamp and valid audit statuses; unique advisory and affected-entry totals separately;
-GHSA/version/path/exposure/disposition rows; installed bundle and Google subtree results;
-all residual boundaries; local verification results; local-review outcome; lifecycle checks
-and the permitted named-job CI-only handoff. Record these before publication in the completed
-plan. Final exact-head CI results stay in GitHub's job records and satisfy the explicit
-deferral there; no post-publication evidence-only commit is required. Governance evidence
-belongs to the operator handoff, not this plan's criteria. Raw scratch paths are not reviewer evidence.
+### Execution identities and decisions
+
+Executed for project `llmist`, target-qualified agent `llmist-implement`, against
+`zbigniewsobiecki/llmist`, base `dev` at
+`8e1942e2b5f43ec1d737eb817d4958b4b58b6f6d`. The implementation plan's starting blob is
+`fd8230c7295182dc95c985f3ed290f2b72d8957d`. Both local `origin/dev` and GitHub `dev`
+were checked before resuming the preserved work; they match this base.
+
+The operator authorizes autonomous execution of this single plan and its parent completion.
+Use command-driven red/green acceptance, retain all application tests, combine lifecycle
+and dependency work in one commit with normal hooks, and deliver a draft through the trusted
+post-turn hook. Only AC #6 uses the specified CI-only deferral. No additional cross-spec
+decision is introduced; CLAUDE.md remains untouched by this spec, with nothing to audit.
+
+Tool identities: Node `v24.22.2` (compatible with CONTRIBUTING.md), installation npm
+`10.9.2` at `/usr/local/bin/npm`. All install/update/audit commands explicitly use
+`--engine-strict`; verification and hooks inherit `npm_config_engine_strict=true`.
+Release-tool npm under `node_modules/npm` is separate from the installation command.
+Consumer Node `>=22.0.0`, `.nvmrc` 22, all manifests and normal tooling remain unchanged.
+
+| Input / observation | Baseline | Installed candidate |
+|---|---|---|
+| Lock SHA-256 | `78b6022fa06077dfc2273733c2c63fbc7ee6df6c5867038f738d84dd543f5a12` | `ab5bd11c811aa107c8d041b51f2ee865b5ac5858e12d840e0267ed9b67262de1` |
+| Audit UTC, 2026-11-08 | `16:09:09.734979` | `16:41:54.725166` |
+| Audit exit / schema | 1 / auditReportVersion 2, valid JSON, no error object | 1 / auditReportVersion 2, valid JSON, no error object |
+| Unique GHSA identities | 8 (5 Moderate, 3 High) | 2 (both Moderate) |
+| Affected package entries, including propagation | 44 (43 Moderate, 1 High), 46 installed nodes | 40 Moderate, 42 installed nodes; no High |
+| Google authentication reachable runtime nodes | 64, includes rimraf and glob | 23, no rimraf or glob |
+
+Both audits capture stdout, stderr and exit status separately; exit 1 denotes findings,
+not a registry failure. Advisory identity, severity and affected ranges reconcile with all
+eight parent rows: exactly the six target identities disappear, the two residual identities
+remain, and no advisory is added or otherwise changed. The removed propagated entries are
+gaxios, google-auth-library, ip-address and undici; totals alone are not the acceptance proof.
+
+### Compatible update, installation and baseline lock-metadata normalization
+
+The preserved lock comes exclusively from npm 10.9.2's ordinary targeted
+`npm update npm google-auth-library gaxios --package-lock-only --ignore-scripts --engine-strict`
+(exit 0); there are no hand-edits of the lock. Fresh registry metadata and installed parent
+artifacts confirm @google/genai 2.10.0 → google-auth-library `^10.3.0`,
+google-auth-library 10.9.1 → gaxios `^7.1.4`, and @semantic-release/npm 13.1.5 → npm
+`^11.6.2`; semver checks accept the exact targets below.
+
+| Updated installed path | Before → after | Candidate registry artifact integrity (SHA-512) |
+|---|---|---|
+| `node_modules/google-auth-library` | 10.6.1 → 10.9.1 | `sha512-i1ydyHrqcIxXkWh/uBmVkzCvIuq5yiK2ATndIe5XxKholrG/MTYP9xGYka4sQhrbIAgGjL2B6NOE7rFaiF3fXw==` |
+| `node_modules/gaxios` | 7.1.3 → 7.3.1 | `sha512-kB3rzJV7d9juLZh8/56QTXCwQfxyhdOMdyYk1HdQKFtF8TJTDTZQJtixWIwXdE9Jji91mC41DUNpjleo4L4eAQ==` |
+| `node_modules/npm` | 11.21.1 → 11.21.2 | `sha512-7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A==` |
+
+Resolved URLs are the corresponding `https://registry.npmjs.org/<name>/-/<name>-<version>.tgz`
+artifacts. The lock integrities agree with freshly fetched registry metadata. npm ci verifies
+the parent artifact; nested `inBundle: true` entries are proven by the actual installed npm
+bundle, not inferred from unrelated top-level packages.
+
+Required bundle changes beneath `node_modules/npm/node_modules/`: @npmcli/promise-spawn
+9.0.1 → 9.0.2, bin-links 6.0.2 → 6.0.3, ip-address 10.7.2 → 10.7.5, libnpmexec
+10.3.4 → 10.3.5, pacote 21.5.1 → 21.5.2, semver 7.8.5 → 7.8.6, undici 6.29.0 → 6.29.1.
+These are npm 11.21.2's bundled contents. gaxios drops its rimraf edge; the resulting `dev: true`
+changes apply only to the former rimraf/glob cleanup subtree (29 entries), with no resolution
+changes there. Google SDK, semantic-release, direct minimatch, rimraf and TypeDoc versions
+are unchanged. Every third-party change belongs to these targeted parent updates.
+
+**Baseline lock-metadata normalization:** npm's ordinary write synchronizes exactly the
+three workspace version fields (`packages/cli`, `packages/llmist`, `packages/testing`)
+from `18.4.0` to their unchanged manifests' `18.4.1`, and exactly these four internal ranges
+from `^18.4.0` to `^18.4.1`:
+
+- `packages/cli` dependencies `llmist`;
+- `packages/cli` devDependencies `@llmist/testing`;
+- `packages/testing` devDependencies `llmist`;
+- `packages/testing` peerDependencies `llmist`.
+
+The operator explicitly authorizes these seven lock metadata fields as a required graph
+change. No other workspace-entry field changes; no manifest changes. This is metadata
+normalization, not a version bump or release, and causes no third-party resolution change.
+The four `node_modules/{llmist,@llmist/cli,@llmist/testing,@llmist/docs}` entries remain
+`link: true` and resolve to their respective `packages/*` directories. A structural comparison
+checks these exact allowances and byte-compares every tracked manifest against the base.
+
+`npm ci --engine-strict --ignore-scripts=false` passes on the candidate (exit 0, 10.19 s),
+with no lock mutation. Direct `node_modules/.bin/lefthook install` succeeds; executable
+pre-commit, commit-msg and pre-push hooks all invoke Lefthook. Root postinstall and prepare
+output contains no hidden lifecycle error; `@unblessed/core/dist/data` is a working symlink
+to `../data`. Baseline installation also passes (exit 0, 9.65 s).
+
+Baseline/candidate `npm explain` and `npm ls --all --json` each exit 0. Both trees flag the
+same two extraneous optional lock artifacts, @img/sharp-wasm32 0.35.5 and top-level
+@napi-rs/wasm-runtime 1.2.6, which exist even after clean baseline npm ci. Their optional
+lock entries have no active incoming dependency in this platform's graph; they are neither
+new dependency changes nor missing/invalid required edges. The candidate preserves them.
+
+### Independent advisory and installed-path checks
+
+Let `B/` denote `node_modules/npm/node_modules/`; all six removed advisories are release
+tooling exposure through root semantic-release 25.0.3 → @semantic-release/npm 13.1.5 → npm.
+Baseline bundle inspection verifies the affected nested copies before the update. Each
+absence check independently fails on the baseline and passes on the installed candidate:
+
+| GHSA | Severity | Baseline affected installed node | Candidate result |
+|---|---|---|---|
+| GHSA-4qv8-2p9j-2685 | Moderate | `B/undici@6.29.0` | Absent; actual bundled undici 6.29.1 |
+| GHSA-xjj6-f33q-929c | High | `B/undici@6.29.0` | Absent; actual bundled undici 6.29.1 |
+| GHSA-2m5v-pch6-74hx | High | `B/undici@6.29.0` | Absent; actual bundled undici 6.29.1 |
+| GHSA-qrxm-fqhp-jwvm | High | `B/undici@6.29.0` | Absent; actual bundled undici 6.29.1 |
+| GHSA-9fm3-97px-rjf6 | Moderate | `B/undici@6.29.0` | Absent; actual bundled undici 6.29.1 |
+| GHSA-rxp7-6hxx-x8q5 | Moderate | `B/ip-address@10.7.2` | Absent; actual bundled ip-address 10.7.5 |
+
+`google-auth-cleanup-path-removed` also fails before the update: CLI → llmist →
+@google/genai 2.10.0 → google-auth-library 10.6.1 → gaxios 7.1.3 → rimraf 5.0.10 →
+glob 10.5.0 → minimatch 9.0.9. After installation, traversal of actual dependency declarations
+from @google/genai's authentication dependency (with every reachable installed package checked
+against the lock) finds 23 nodes and no rimraf/glob. gaxios 7.3.1 retains extend,
+https-proxy-agent and node-fetch; the cleanup dependency is gone. This does not remove direct
+runtime minimatch or other independent glob paths.
+
+### Residual interpretation: AC #3 manual protocol, 2026-11-08
+
+**GHSA-3g3m-2fjr-6pw4 (glob), Moderate — unresolved — owner decision required.**
+Affected installed copies remain `node_modules/glob@10.5.0` and
+`node_modules/npm/node_modules/glob@13.0.6`. Root and llmist/CLI/testing development cleanup
+scripts declare rimraf `^5.0.5`, resolving to 5.0.10 → glob `^10.3.7`. Release npm 11.21.2
+declares glob `^13.0.6`; bundled @npmcli/map-workspaces, @npmcli/package-json and cacache
+also declare glob `^13.0.0`. Fresh advisory range `>=9.0.0 <=14.0.1` and registry metadata
+place the fixed boundary at 14.0.2, outside all these ranges. Google authentication's
+former runtime glob path is removed; cleanup/release copies remain affected.
+
+**GHSA-g3hv-75wg-m249 (minimatch), Moderate — unresolved — owner decision required.**
+Affected installed copies remain `node_modules/minimatch@9.0.9` and
+`node_modules/npm/node_modules/minimatch@10.2.5`. Direct llmist skill filtering declares
+`^9.0.9`, inherited by CLI runtime. This remains a potential denial-of-service surface for
+pathological patterns. Root/workspace rimraf → glob 10.5.0 declares minimatch `^9.0.4`.
+Private documentation directly uses TypeDoc 0.28.17 → minimatch `^9.0.5`; its
+typedoc-plugin-markdown 4.10.0 peer and starlight-typedoc 0.22.0 peers reach that same TypeDoc.
+Documentation workspace dependency flags do not make this shipped library runtime.
+Release npm declares minimatch `^10.2.5`; bundled glob uses `^10.2.2`, @npmcli/arborist,
+@npmcli/map-workspaces, ignore-walk and libnpmdiff use `^10.0.3`, and @tufjs/models uses
+`^10.1.1`. Fresh advisory range `>=7.0.0 <11.0.1` and registry metadata place the fixed
+boundary at 11.0.1, outside each examined range. Semver checks independently confirm the
+rimraf/npm glob and direct/TypeDoc/npm minimatch boundaries. No major migration is authorized.
+
+Every residual node and its propagated advisory edges is reconciled below, including peer
+edges and cycles. `N/` denotes `node_modules/`, `B/` the npm bundle prefix above; thus
+`packages/docs/N/` is private docs' installed path. Versions agree with installed artifacts
+and the candidate lock. Every listed node is also present in the baseline; each propagated
+entry traces to one or both named residual GHSAs. Direct runtime, development cleanup,
+private documentation and release exposure are classified from these parent paths, not dev flags.
+
+| Affected audit entry (all Moderate) | Installed node(s) and version | Audit propagation via |
+|---|---|---|
+| `@npmcli/arborist` | `B/@npmcli/arborist@9.9.3` | `@npmcli/map-workspaces`, `@npmcli/metavuln-calculator`, `@npmcli/package-json`, `@npmcli/run-script`, `cacache`, `minimatch`, `npm-registry-fetch`, `pacote` |
+| `@npmcli/config` | `B/@npmcli/config@10.14.0` | `@npmcli/map-workspaces`, `@npmcli/package-json` |
+| `@npmcli/map-workspaces` | `B/@npmcli/map-workspaces@5.0.3` | `@npmcli/package-json`, `glob`, `minimatch` |
+| `@npmcli/metavuln-calculator` | `B/@npmcli/metavuln-calculator@9.0.3` | `cacache`, `pacote` |
+| `@npmcli/package-json` | `B/@npmcli/package-json@7.0.5` | `glob` |
+| `@npmcli/run-script` | `B/@npmcli/run-script@10.0.4` | `@npmcli/package-json` |
+| `@semantic-release/exec` | `N/@semantic-release/exec@7.1.0` | `semantic-release` |
+| `@semantic-release/github` | `N/@semantic-release/github@12.0.6` | `semantic-release` |
+| `@semantic-release/npm` | `N/@semantic-release/npm@13.1.5` | `npm` |
+| `@sigstore/sign` | `B/@sigstore/sign@4.1.1` | `make-fetch-happen` |
+| `@sigstore/tuf` | `B/@sigstore/tuf@4.0.2` | `tuf-js` |
+| `@tufjs/models` | `B/@tufjs/models@4.1.0` | `minimatch` |
+| `cacache` | `B/cacache@20.0.4` | `glob` |
+| `glob` | `N/glob@10.5.0`; `B/glob@13.0.6` | `GHSA-3g3m-2fjr-6pw4`, `minimatch` |
+| `ignore-walk` | `B/ignore-walk@8.0.0` | `minimatch` |
+| `init-package-json` | `B/init-package-json@8.2.5` | `@npmcli/package-json` |
+| `libnpmaccess` | `B/libnpmaccess@10.0.3` | `npm-registry-fetch` |
+| `libnpmdiff` | `B/libnpmdiff@8.1.14` | `@npmcli/arborist`, `minimatch`, `pacote` |
+| `libnpmexec` | `B/libnpmexec@10.3.5` | `@npmcli/arborist`, `@npmcli/package-json`, `@npmcli/run-script`, `pacote` |
+| `libnpmfund` | `B/libnpmfund@7.0.28` | `@npmcli/arborist` |
+| `libnpmorg` | `B/libnpmorg@8.0.1` | `npm-registry-fetch` |
+| `libnpmpack` | `B/libnpmpack@9.1.15` | `@npmcli/arborist`, `@npmcli/run-script`, `pacote` |
+| `libnpmpublish` | `B/libnpmpublish@11.2.1` | `@npmcli/package-json`, `npm-registry-fetch`, `sigstore` |
+| `libnpmsearch` | `B/libnpmsearch@9.0.1` | `npm-registry-fetch` |
+| `libnpmteam` | `B/libnpmteam@8.0.2` | `npm-registry-fetch` |
+| `libnpmversion` | `B/libnpmversion@8.0.4` | `@npmcli/run-script` |
+| `make-fetch-happen` | `B/make-fetch-happen@15.0.6` | `cacache` |
+| `minimatch` | `N/minimatch@9.0.9`; `B/minimatch@10.2.5` | `GHSA-g3hv-75wg-m249` |
+| `npm` | `N/npm@11.21.2` | `@npmcli/arborist`, `@npmcli/config`, `@npmcli/map-workspaces`, `@npmcli/metavuln-calculator`, `@npmcli/package-json`, `@npmcli/run-script`, `@sigstore/tuf`, `cacache`, `glob`, `init-package-json`, `libnpmaccess`, `libnpmdiff`, `libnpmexec`, `libnpmfund`, `libnpmorg`, `libnpmpack`, `libnpmpublish`, `libnpmsearch`, `libnpmteam`, `libnpmversion`, `make-fetch-happen`, `minimatch`, `npm-profile`, `npm-registry-fetch`, `pacote` |
+| `npm-packlist` | `B/npm-packlist@10.0.4` | `ignore-walk` |
+| `npm-profile` | `B/npm-profile@12.0.2` | `npm-registry-fetch` |
+| `npm-registry-fetch` | `B/npm-registry-fetch@19.1.1` | `make-fetch-happen` |
+| `pacote` | `B/pacote@21.5.2` | `@npmcli/package-json`, `@npmcli/run-script`, `cacache`, `npm-packlist`, `npm-registry-fetch`, `sigstore` |
+| `rimraf` | `N/rimraf@5.0.10` | `glob` |
+| `semantic-release` | `N/semantic-release@25.0.3` | `@semantic-release/github`, `@semantic-release/npm` |
+| `sigstore` | `B/sigstore@4.1.1` | `@sigstore/sign`, `@sigstore/tuf` |
+| `starlight-typedoc` | `packages/docs/N/starlight-typedoc@0.22.0` | `typedoc`, `typedoc-plugin-markdown` |
+| `tuf-js` | `B/tuf-js@4.1.0` | `@tufjs/models`, `make-fetch-happen` |
+| `typedoc` | `N/typedoc@0.28.17` | `minimatch` |
+| `typedoc-plugin-markdown` | `N/typedoc-plugin-markdown@4.10.0` | `typedoc` |
+
+The complete-table acceptance initially reports red while this Evidence section lacks its
+rows; it passes after all 40 entries / 42 nodes and their installed edges are accounted for.
+No residual is suppressed, accepted or described as safe. Installed reachability proves
+neither practical exploitability nor safety. The single implementation changelog fragment
+reports only measured reductions and the unresolved residuals; existing fragments are preserved.
+
+### Lifecycle, scope and verification
+
+The lifecycle checks initially fail because the completed artifacts are absent and all
+Progress criteria are unchecked. Both plan and sole parent now use `.md.done` and
+`status: done`, with no pending or `.wip` copies; parent and coverage links use completed
+paths. The completed parent is byte-compared with historical blob
+`ff3239eb588892df0e8945e453500632ed326059` after replacing exactly its single frontmatter
+`status: draft` line with `status: done`. No other parent text changes.
+
+Scope protocol inspects the full base-to-candidate diff: only package-lock.json, this
+completed plan, its coverage map, the single implementation changelog and the completed
+parent change. All manifests, source, tests, workflows, hooks and governance files are
+byte-identical to the base; no assertions are removed or weakened and no forbidden mechanism
+is introduced. No new permanent version-pin tests or global guidance changes are warranted.
+
+All intended files are staged before the following six sequential commands. Every command
+exits 0, stopping-on-failure orchestration records each result, and no tracked file changes
+during the full sequence. Only evidence/progress text is filled from those observed results
+afterward; source, imports, tests, fixtures, compiler/test/build configuration, manifests,
+lock and installed dependencies remain unchanged. No timing or speed improvement is claimed.
+
+| Command | Exit | Elapsed | Observed result |
+|---|---|---|---|
+| `npm run build` | 0 | 28.45 s | All four workspace builds pass; docs builds 482 pages |
+| `npm run typecheck` | 0 | 16.66 s | All six Turbo tasks pass; Astro diagnostics 0 errors/warnings/hints |
+| `npm run lint` | 0 | 1.51 s | 646 files checked; 1,012 warnings and 63 informational diagnostics, no fixes applied |
+| `npm test` | 0 | 44.38 s | 248 files, 7,045 tests passed; no skips |
+| `npm run test:coverage` | 0 | 48.79 s | 248 files, 7,045 tests passed; no skips |
+| `npm run test:e2e` | 0 | 5.59 s | 11 files / 99 tests passed; 3 files / 4 live tests skipped |
+
+Coverage: statements 77.13% (12,232/15,858), branches 78.61% (7,407/9,422),
+functions 77.83% (2,131/2,738), lines 77.43% (11,709/15,122). The named Gemini unit,
+skill registry and provider E2E regression assertions remain present and pass within these
+unchanged suites; they do not establish live authentication coverage or vulnerability removal.
+
+`RUN_LIVE_RESEARCH_TESTS` remains unset, provider credentials are absent from the test
+processes, and research-live-openai, research-live-gemini and research-live-openrouter are
+the three skipped E2E files. No paid provider or exploit tests run. Install warnings include
+the existing @types/diff stub, deprecated git-raw-commits/node-domexception and affected
+glob 10.5.0. Build warns about unsupported `ebnf` highlighting (falls back to text), empty
+i18n and missing 404 content. Unit/coverage emit a MockInputStream MaxListeners warning
+and expected mock/error-path warnings; mocked E2E emits model-registry compaction warnings.
+These commands all pass; no source/test change or warning suppression is applied.
+
+Fresh-context `agent-plugins__z:local-review`, gate mode, round 1, reviews the full
+`locked_at..HEAD` scope plus staged/unstaged work and this plan: five staged files,
++339/−67 lines before recording its result. **No must-fix or should-fix findings.** The
+reviewer independently verifies exact normalization fields and workspace links, all targeted
+resolutions and 29 cleanup flags, installed bundle provenance, advisory/path inventories,
+residual boundaries, unchanged manifests/policies/tests, parent preservation, local results
+and draft PR claims. AC #5's full manual protocol therefore passes. No blocker is deferred
+or waived. Only evidence/progress observations follow the review; runtime/test inputs do
+not change. The same reviewer checks the final metadata disposition for convergence.
+
+`completed-candidate-lifecycle` and `parent-spec-text-preserved` pass. The supplied
+`check_plan_done.py --expect-status done` and the narrower progress check enforce six checked
+criteria (#1–5 and #7) and exactly the permitted AC #6 deferral. Structural scope checks
+also confirm every changed third-party lock field comes from the targeted updates, the
+seven normalization fields are exact and all four workspace links are unchanged.
+
+Exact-head CI is pending publication via the trusted hook. Only AC #6 is explicitly deferred
+to successful `lint-and-test`, `validate-commits` and `e2e-tests` jobs at the final reviewed
+head. Missing, stale, pending or failed jobs cannot satisfy this criterion. The operator
+retains legitimate approval, strict up-to-date enforcement and merge authority; there is no
+post-publication evidence-only commit or checkbox update.
 
 ## Progress
 
 <!-- /implement updates these from observed evidence, never from the planning run. -->
-Implementation checks AC #1–5 and #7 from evidence before sealing its completed candidate.
-For AC #6 only, it may substitute task 4's explicit CI-only deferral line. All lines remain
-unchecked and undeferred in this planning PR; none of the implementation work has run here.
+Implementation dispositions below derive from the Evidence section. Only AC #6 may carry
+the named-job CI-only deferral; all other criteria require observed passing results.
 
-- [ ] AC #1 — fresh valid audit inventories
-- [ ] AC #2 — installed compatible remediation
-- [ ] AC #3 — residual evidence and changelog
-- [ ] AC #4 — six sequential local tiers
-- [ ] AC #5 — preserved scope/policies and review gate
-- [ ] AC #6 — exact-head lint-and-test, validate-commits and e2e-tests
-- [ ] AC #7 — completed plan/spec lifecycle and preserved parent text
+- [x] AC #1 — fresh valid audit inventories
+- [x] AC #2 — installed compatible remediation
+- [x] AC #3 — residual evidence and changelog
+- [x] AC #4 — six sequential local tiers
+- [x] AC #5 — preserved scope/policies and review gate
+- [ ] AC #6 — deferred: CI-only to lint-and-test, validate-commits, e2e-tests; satisfied only by all three jobs succeeding at the final reviewed head.
+- [x] AC #7 — completed plan/spec lifecycle and preserved parent text
