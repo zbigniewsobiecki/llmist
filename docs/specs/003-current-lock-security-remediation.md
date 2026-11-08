@@ -1,0 +1,185 @@
+---
+id: 003
+slug: current-lock-security-remediation
+level: spec
+title: Current-lock security remediation within compatible upstream releases
+created: 2026-11-08
+status: draft
+---
+
+# 003: Current-lock security remediation within compatible upstream releases
+
+## Problem & Motivation
+
+Related to WAT-392
+
+Maintainers need a reproducible account of the dependency security exposure on current dev,
+and a supported upgrade boundary before changing dependencies or making risk decisions.
+Historical audit totals and GitHub alert counts cannot establish the current dependency graph.
+This specification records a fresh audit of dev at
+`9c90e577b1d834d03011d3092b4165324fccf945`, without changing its manifests or lock.
+
+The 2026-11-08 audit returns 44 affected package entries (43 Moderate, one High), representing
+eight unique advisories: five Moderate and three High. Package-entry severity is the highest
+severity affecting that package; propagated parent entries are not additional advisories.
+The historical three-advisory acceptance associated with WAT-236 is narrow, covers nothing
+newer, and is neither a blanket waiver nor permission for a future release. No new acceptance
+is proposed here. The private historical audit is not an input to this specification.
+
+---
+
+## Goals
+
+- Identify every unique current-lock advisory and distinguish shipped runtime dependencies
+  from documentation, development, and release tooling.
+- Remove exposure reachable through ordinary compatible upstream updates without changing
+  the public API or the project's Node, package-manager, and verification policies.
+- Give the owner an explicit residual-risk inventory wherever compatible updates are insufficient.
+
+---
+
+## Non-goals
+
+- Zero audit findings through forced overrides, resolutions, vendor patches, suppressions,
+  ignore lists, dependency downgrades, or a new exception.
+- Release execution, package publication, promotion to main, identity or governance changes.
+- Changes to temperature behavior or unrelated feature work.
+
+---
+
+## Constraints
+
+- Implementation is limited to current dev and compatible upstream dependency remediation.
+  Compatible means satisfying existing dependency ranges and preserving observable behavior;
+  a package major upgrade is not presumed compatible merely because Node can run it.
+- Preserve npm 10.9.2, engine-strict installation, the lockfile, Node >=22 policy and Node 22
+  selection, Lefthook, commitlint, Biome, and the existing mocked verification tiers.
+- No exploit execution or paid provider tests. Installed reachability is not proof of
+  exploitability; absence from a production-only audit is not proof of safety.
+- This delivery contains a specification and one changelog fragment only. Audit experiments
+  do not alter the delivered dependency graph.
+
+---
+
+## User stories / Requirements
+
+1. Maintainers SHALL retain the following complete advisory inventory when planning remediation.
+   All five undici rows refer exclusively to release-tool npm's bundled undici 6.29.0;
+   other locked undici copies are not reported affected by this audit.
+
+| Advisory | Severity and affected locked package | Exposure | Compatible outcome / target |
+|---|---|---|---|
+| [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), EventSource memory growth | Moderate; undici 6.29.0 | Release tooling only | npm 11.21.2 bundles undici 6.29.1 and removes this finding. |
+| [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c), excessive content encodings | High; undici 6.29.0 | Release tooling only | Same compatible npm 11.21.2 target. |
+| [GHSA-2m5v-pch6-74hx](https://github.com/advisories/GHSA-2m5v-pch6-74hx), TLS validation bypass | High; undici 6.29.0 | Release tooling only | Same compatible npm 11.21.2 target. |
+| [GHSA-qrxm-fqhp-jwvm](https://github.com/advisories/GHSA-qrxm-fqhp-jwvm), TLS renegotiation denial of service | High; undici 6.29.0 | Release tooling only | Same compatible npm 11.21.2 target. |
+| [GHSA-9fm3-97px-rjf6](https://github.com/advisories/GHSA-9fm3-97px-rjf6), WebSocket PONG buffering | Moderate; undici 6.29.0 | Release tooling only | Same compatible npm 11.21.2 target. |
+| [GHSA-rxp7-6hxx-x8q5](https://github.com/advisories/GHSA-rxp7-6hxx-x8q5), quadratic IPv6 zone parsing | Moderate; bundled ip-address 10.7.2 | Release tooling only | npm 11.21.2 bundles unaffected ip-address 10.7.5; affected range is <=10.7.3. |
+| [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4), cancellation bypass | Moderate; glob 10.5.0 and bundled 13.0.6 | Runtime Google authentication chain, development cleanup, release tooling | google-auth-library 10.9.1 with gaxios 7.3.1 removes its runtime rimraf/glob path. No compatible complete removal: rimraf 5.0.10 still requires glob 10; npm 11.21.2 still bundles glob 13.0.6. Fixed glob starts at 14.0.2, outside these parent ranges. |
+| [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249), pattern amplification | Moderate; minimatch 9.0.9 and bundled 10.2.5 | Direct runtime skill filtering; Google authentication chain; docs TypeDoc; cleanup; release tooling | Google parent update removes one path only. No compatible complete removal: fixed minimatch starts at 11.0.1; current direct range is ^9.0.9, TypeDoc and npm still select affected majors. |
+
+2. Exposure SHALL be traced through parents, not inferred solely from npm's dev flags:
+   - Runtime: llmist directly uses minimatch for skill-file pattern matching. llmist also
+     depends on @google/genai 2.10.0 → google-auth-library 10.6.1 → gaxios 7.1.3 →
+     rimraf 5.0.10 → glob 10.5.0 → minimatch 9.0.9; the CLI inherits llmist's runtime graph.
+   - Development: root and package cleanup tooling use rimraf 5; private documentation uses
+     TypeDoc 0.28.17 → minimatch 9, also reached through documentation plugins.
+   - Release: semantic-release 25.0.3 → @semantic-release/npm 13.1.5 → npm 11.21.1.
+     npm bundles its own affected glob, minimatch, ip-address and undici. Bundled versions
+     must be verified from the parent artifact; top-level upgrades do not replace them.
+3. The compatible remediation target SHALL update release-tool npm to 11.21.2 and the Google
+   authentication chain to google-auth-library 10.9.1 / gaxios 7.3.1. Existing parent ranges
+   permit these targets; updating the direct Google SDK or semantic-release is not required.
+   This npm dependency is distinct from the npm 10.9.2 installation tool.
+4. Residual glob cancellation bypass and minimatch amplification SHALL remain explicitly
+   unresolved for owner decision. Direct runtime minimatch remains a potential denial-of-service
+   surface for pathological patterns; developer/docs/release paths remain affected as listed.
+   No assertion of practical exploitability or safety is made without additional evidence.
+   No compatible complete-removal target exists in the examined published versions.
+
+---
+
+## Research Notes
+
+- Fresh audit: `npm audit --package-lock-only --json --ignore-scripts` against the npm registry
+  exits 1 with valid advisory JSON, not a network error. The unchanged lock's SHA-256 is
+  `78b6022fa06077dfc2273733c2c63fbc7ee6df6c5867038f738d84dd543f5a12`.
+- [npm registry metadata](https://registry.npmjs.org/npm) reports latest npm 12.2.2;
+  latest compatible 11.x is 11.21.2. The 11.21.2 published tarball contains undici 6.29.1,
+  ip-address 10.7.5, glob 13.0.6 and minimatch 10.2.5. Moving to npm 12 is unnecessary and
+  does not solve the glob/minimatch parent-range problem.
+- [Google authentication metadata](https://registry.npmjs.org/google-auth-library) permits
+  gaxios ^7.1.4 in 10.9.1; [gaxios 7.3.1](https://registry.npmjs.org/gaxios/7.3.1) no longer
+  depends on rimraf. This removes that runtime chain without replacing the Google SDK.
+- [TypeDoc 0.28.20](https://registry.npmjs.org/typedoc/0.28.20), the latest compatible release,
+  still depends on minimatch ^10.2.5. Latest minimatch 9.x is 9.0.9 and 10.x is 10.2.6;
+  neither escapes the advisory. Latest rimraf 5.x is 5.0.10. Rimraf 6.1.4 uses glob ^14.0.3,
+  but is outside the authorized existing major range and does not solve direct minimatch.
+- A scratch copy of the current workspace manifests and lock permits ordinary updates of
+  npm, google-auth-library and gaxios with engine-strict and lifecycle scripts disabled.
+  Its fresh audit reports 40 Moderate package entries, no High, and only the glob and
+  minimatch advisories. This is resolver/audit evidence, not an implementation test result.
+- npm audit's suggested semantic-release 21.1.2 downgrade and other major replacements are
+  not compatible remediation instructions. Upstream metadata and actual bundled contents
+  govern the target selection, rather than the audit's boolean fixAvailable fields.
+
+---
+
+## Open Source Decisions
+
+| Tool | Solves | Decision | Reason |
+|---|---|---|---|
+| [npm](https://www.npmjs.com/package/npm) | Dependency resolution and advisory inventory | Use existing tool | Preserves project tooling; parent bundle inspection closes the bundled-dependency evidence gap. |
+| [google-auth-library](https://www.npmjs.com/package/google-auth-library) | Google SDK authentication | Use compatible upstream update | Removes the obsolete gaxios cleanup dependency without a provider rewrite. |
+| Forced resolution or vendor patch tooling | Bypasses upstream ranges | Skip | Explicitly outside scope; cannot establish supported compatibility. |
+
+---
+
+## Strategic decisions
+
+1. Use existing semver ranges as the compatibility boundary and verify behavior through normal
+   checks. No major migration is silently folded into security maintenance.
+2. Separate supported exposure reduction from risk acceptance. Residual findings are visible
+   owner decisions; a successful specification or partial remediation does not authorize them.
+3. Preserve the existing runtime API, stored shapes, architecture and tooling. No new strategic
+   dependency or cross-spec decision is necessary. The slug is current-lock-security-remediation.
+4. Record version targets as required security evidence, not a step-by-step implementation plan.
+   Re-audit at implementation time because registry metadata and advisory coverage can change.
+
+---
+
+## Acceptance Criteria (outcome-level)
+
+1. WHEN implementation re-audits current dev, it SHALL produce valid advisory JSON and a
+   deduplicated inventory linking each advisory to affected versions, parents and exposure.
+   A network/HTTP failure SHALL block conclusions, rather than count as a clean audit.
+2. WHEN compatible updates are installed from the committed lock with engine-strict, the five
+   undici findings and bundled ip-address finding SHALL be absent, and the Google authentication
+   path SHALL no longer include rimraf/glob. Any new advisory SHALL be explicitly assessed.
+3. WHEN the resulting graph retains glob or minimatch findings, evidence SHALL enumerate the
+   remaining runtime, documentation, development and release paths and explain the incompatible
+   upstream boundary. No finding SHALL be suppressed or presented as newly accepted.
+4. WHEN the candidate is verified, build, typecheck, lint, unit tests, coverage and mocked E2E
+   SHALL pass sequentially, with no removed or weakened assertions, paid tests or publication.
+   The CI workflow SHALL report successful lint-and-test, validate-commits and e2e-tests on the
+   exact reviewed head. Local checks do not substitute for these results or required approval.
+5. WHEN the implementation is reviewed, its diff SHALL preserve public behavior, Node policy,
+   package manager and normal gates; contain only authorized dependency changes and their
+   evidence; and contain no override, patch, suppression or exception mechanism.
+
+---
+
+## Documentation Impact (high-level)
+
+- Changelog: describe the specification now and the measured compatible remediation when implemented.
+- This specification and downstream plan evidence: keep advisory inventory, target versions and
+  residual-risk conclusions current. No README or global agent-guidance changes are required.
+
+---
+
+## Out of Scope
+
+- Major dependency migrations to eliminate residual findings, new acceptance decisions, or exploit research.
+- Temperature changes, provider feature changes, release execution and automatic merge.
+- Treating documentation workspace dependencies as shipped library runtime solely because npm
+  classifies their workspace dependency edges as production dependencies.
