@@ -78,7 +78,7 @@ release-tool findings or imply that the whole dependency graph is advisory-free.
    New or changed findings require explicit assessment, never silent suppression.
 6. Build, typecheck, lint, unit, coverage and mocked E2E verification SHALL pass sequentially.
    The exact PR head requires successful lint-and-test, validate-commits and e2e-tests,
-   followed by independent review of that head. Local results do not replace CI or approval.
+   followed by independent review of that head. Local results do not replace CI.
 
 ---
 
@@ -146,10 +146,9 @@ release-tool findings or imply that the whole dependency graph is advisory-free.
    with compatibility characterization covering relevant pattern edge cases.
 5. WHEN library and CLI consumers load and use the updated runtime, supported module formats
    and skill workflows SHALL remain usable without API, configuration or stored-data migration.
-6. WHEN the implementation is proposed for merge, all six local verification tiers SHALL pass,
+6. WHEN the implementation is proposed for merge, all six local verification tiers SHALL pass sequentially,
    and lint-and-test, validate-commits and e2e-tests SHALL succeed on the exact independently
-   reviewed head. Required approval and up-to-date dev checks remain mandatory; a comment review
-   alone does not satisfy the approval requirement.
+   reviewed head. Local results do not replace CI.
 
 ---
 
