@@ -2,7 +2,7 @@
 
 Related to WAT-558
 
-Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md), merged at
+Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md.done), merged at
 `c392dcd711b1ed399f2da9cba3532d5864785df4`; SHA-256
 `ea79004167e50940b33aa4479b3756920fd7f3046ca008f5e128b9a953b5090c`.
 
@@ -10,7 +10,7 @@ Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md), merged 
 
 | # | Spec AC (short) | Satisfied by | Coverage / verification |
 |---|---|---|---|
-| 1 | Direct `^11`, resolution >=11.0.1, reproducible engine-strict installation, explained lock changes | [Plan 1](1-runtime-upgrade.md), tasks 1 and 3; plan AC #1 | Full; installed edge resolution, selected artifact metadata, lock review and install |
+| 1 | Direct `^11`, resolution >=11.0.1, reproducible engine-strict installation, explained lock changes | [Plan 1](1-runtime-upgrade.md.done), tasks 1 and 3; plan AC #1 | Full; installed edge resolution, selected artifact metadata, lock review and install |
 | 2 | Valid fresh audit and parent chains show named GHSA absent from shipped library/CLI runtime; errors block conclusions | Plan 1, tasks 1 and 4; AC #4 | Full; `audit-json-valid`, `runtime-advisory-absent` and evidence protocol |
 | 3 | Residual development/docs/release-tool versions and chains remain upstream-only without zero-finding or exception claims | Plan 1, task 4; AC #4 and #7 | Full; `residual-inventory-complete`, advisory/path reconciliation and measured changelog |
 | 4 | Preserve file selection and existing tests, including absent/empty and model-disabled skills and relevant major edges | Plan 1, task 2; AC #2 | Full; fourteen named matrix rows, real registry/matcher, baseline and candidate runs |
@@ -19,8 +19,17 @@ Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md), merged 
 
 ## Coverage summary
 
-- Six spec criteria have full ownership in one pending execution plan. This is coverage of
-  planned work, not a claim that any implementation criterion has passed.
+- The sole implementation plan qualifies minimatch 11.0.7 with the authorized license
+  transition, original matching matrix and two explicit owner-approved matching changes.
+  Both newly accepted selections have baseline-red/candidate-green registry regressions.
+  The [plan evidence](1-runtime-upgrade.md.done#evidence) records both owner decisions;
+  every other preservation expectation remains mandatory, with no production-code change.
+- Runtime traversal removes the named advisory from llmist and inherited CLI paths.
+  The same two advisory identities remain on 42 affected cleanup, private-docs and
+  release-tool nodes, all enumerated with installed parent ranges and upstream-only status.
+- Final local verification, review and lifecycle results are recorded in the plan's Progress.
+  Exact-head `lint-and-test`, `validate-commits` and `e2e-tests`, then independent review,
+  remain an explicit CI-only handoff; this coverage map does not claim external success.
 - All six numbered Requirements map respectively to the same six spec ACs above. Constraints
   and strategic decisions carry into plan tasks, scope, documentation and governance handoff.
 - AC #6 in the plan is lifecycle/documentation hygiene. All other per-plan criteria cite
@@ -32,7 +41,7 @@ Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md), merged 
 1-runtime-upgrade
 ```
 
-Topological order: `1-runtime-upgrade.md`. Frontmatter `depends_on: []` has no missing
+Topological order: `1-runtime-upgrade.md.done`. Frontmatter `depends_on: []` has no missing
 references or cycle. Maximum concurrency: one. No same-layer plans share source files.
 
 ## Planning decisions and trade-offs

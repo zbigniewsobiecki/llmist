@@ -4,7 +4,7 @@ slug: runtime-minimatch-major-upgrade
 level: spec
 title: Direct runtime minimatch major upgrade
 created: 2026-11-10
-status: draft
+status: done
 ---
 
 # 004: Direct runtime minimatch major upgrade

@@ -134,6 +134,143 @@ describe("SkillRegistry", () => {
   });
 
   describe("findByFilePath", () => {
+    it.each([
+      { name: "matches a top-level file", patterns: ["*.ts"], yes: ["main.ts"], no: [] },
+      {
+        name: "matches nested globstar paths",
+        patterns: ["src/**/*.ts"],
+        yes: ["src/main.ts", "src/a/b.ts"],
+        no: [],
+      },
+      {
+        name: "rejects a nonmatching extension",
+        patterns: ["**/*.ts"],
+        yes: [],
+        no: ["readme.md"],
+      },
+      {
+        name: "selects when only a later pattern matches",
+        patterns: ["**/*.css", "**/*.ts"],
+        yes: ["src/a.ts"],
+        no: [],
+      },
+      {
+        name: "returns a skill once when multiple patterns match",
+        patterns: ["**/*.ts", "src/**"],
+        yes: ["src/a.ts"],
+        no: [],
+      },
+      {
+        name: "preserves default dotfile handling",
+        patterns: ["**/*.ts", "explicit/.*.ts"],
+        yes: ["explicit/.hidden.ts"],
+        no: ["src/.hidden.ts"],
+      },
+      {
+        name: "preserves brace alternatives",
+        patterns: ["src/*.{ts,tsx}"],
+        yes: ["src/a.tsx", "src/a.ts"],
+        no: ["src/a.js"],
+      },
+      {
+        name: "preserves extglob alternatives",
+        patterns: ["src/@(a|b).ts"],
+        yes: ["src/b.ts"],
+        no: ["src/c.ts"],
+      },
+      {
+        name: "preserves case-sensitive matching",
+        patterns: ["src/*.ts"],
+        yes: [],
+        no: ["SRC/a.TS"],
+      },
+      {
+        name: "preserves segment boundaries",
+        patterns: ["src/*.ts"],
+        yes: [],
+        no: ["src/nested/a.ts"],
+      },
+      {
+        name: "preserves default negation",
+        patterns: ["!**/*.test.ts"],
+        yes: ["src/a.ts"],
+        no: ["src/a.test.ts"],
+      },
+      {
+        name: "preserves character classes",
+        patterns: ["src/[ab]?.ts"],
+        yes: ["src/a1.ts", "src/b2.ts"],
+        no: ["src/c1.ts", "src/a.ts"],
+      },
+      {
+        name: "preserves escaped metacharacters",
+        patterns: [String.raw`src/\[draft\].ts`],
+        yes: ["src/[draft].ts"],
+        no: ["src/d.ts"],
+      },
+      {
+        name: "preserves literal Unicode without normalization",
+        patterns: ["src/café.ts"],
+        yes: ["src/café.ts"],
+        no: ["src/cafe\u0301.ts"],
+      },
+      {
+        name: "preserves default level-one path optimization",
+        patterns: ["src/temp/../**/**/a.ts"],
+        yes: ["src/a.ts", "src/nested/a.ts"],
+        no: ["src/nested/b.ts"],
+      },
+      { name: "preserves comment patterns", patterns: ["#*.ts"], yes: [], no: ["#main.ts"] },
+      {
+        name: "accepts owner-approved negative extglob suffix matching",
+        patterns: ["src/!(a)*.ts"],
+        yes: ["src/ab.ts"],
+        no: [],
+      },
+      {
+        name: "accepts owner-approved astral character wildcard matching",
+        patterns: ["src/?.ts"],
+        yes: ["src/😀.ts"],
+        no: [],
+      },
+    ])("$name", ({ patterns, yes, no }) => {
+      // JSON arrays are also YAML arrays and preserve backslash escapes in patterns.
+      const skill = Skill.fromContent(
+        `---\nname: selected\ndescription: File selection\npaths: ${JSON.stringify(patterns)}\n---\nInstructions.`,
+        "/fake/selected/SKILL.md",
+      );
+      const registry = SkillRegistry.from([skill]);
+      for (const filePath of yes) {
+        expect(registry.findByFilePath(filePath).map((s) => s.name)).toEqual(["selected"]);
+      }
+      for (const filePath of no) {
+        expect(registry.findByFilePath(filePath).map((s) => s.name)).toEqual([]);
+      }
+    });
+
+    it("excludes absent paths", () => {
+      const skill = makeSkill("absent", "No paths");
+      expect(skill.metadata.paths).toBeUndefined();
+      expect(SkillRegistry.from([skill]).findByFilePath("src/a.ts")).toEqual([]);
+    });
+
+    it("excludes empty paths", () => {
+      const skill = Skill.fromContent(
+        "---\nname: empty\ndescription: Empty paths\npaths: []\n---\nInstructions.",
+        "/fake/empty/SKILL.md",
+      );
+      expect(skill.metadata.paths).toEqual([]);
+      expect(SkillRegistry.from([skill]).findByFilePath("src/a.ts")).toEqual([]);
+    });
+
+    it("excludes model-disabled matching skills", () => {
+      const skill = makeSkill("disabled", "Disabled", {
+        paths: ["**/*.ts"],
+        "disable-model-invocation": true,
+      });
+      expect(SkillRegistry.from([skill]).findByFilePath("src/a.ts")).toEqual([]);
+    });
+
     it("finds skills matching file path patterns", () => {
       const registry = SkillRegistry.from([
         makeSkill("ts-skill", "TypeScript skill", { paths: ["src/**/*.ts"] }),
