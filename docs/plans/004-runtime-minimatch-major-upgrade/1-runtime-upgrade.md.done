@@ -5,14 +5,15 @@ plan: 1
 plan_slug: runtime-upgrade
 level: plan
 title: Upgrade direct runtime minimatch with skill compatibility and exposure evidence
-parent_spec: docs/specs/004-runtime-minimatch-major-upgrade.md
+parent_spec: docs/specs/004-runtime-minimatch-major-upgrade.md.done
 depends_on: []
-status: pending
+status: done
+locked_at: ba56f209d65c968ebc2a00f4993e46f9d9473c23
 ---
 
 # 004/1: Upgrade direct runtime minimatch with skill compatibility and exposure evidence
 
-> Part 1 of 1. Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md).
+> Part 1 of 1. Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md.done).
 
 ## Summary
 
@@ -23,6 +24,12 @@ minimatch range from `^9.0.9` to `^11`, selecting an upstream release at least 1
 Qualify the installed graph, preserve the existing matcher defaults and public behavior,
 and demonstrate removal of GHSA-g3hv-75wg-m249 from the library and inherited CLI runtime
 paths with fresh valid advisory data and actual parent chains.
+
+Preservation expectations throughout this plan have exactly two owner-approved changes:
+`src/!(a)*.ts` selects `src/ab.ts`, and `src/?.ts` selects `src/😀.ts` on minimatch 11.x;
+9.0.9 selected neither. Pin these two new results in registry regression tests. All other
+preservation expectations remain mandatory. Do not change matcher options, production code
+or other expected values; any further observed behavior difference requires owner direction.
 
 Deliver one atomic dependency-maintenance change with regression tests and evidence.
 Development cleanup, private documentation and release-tool findings remain visible and
@@ -119,7 +126,7 @@ their expected-red mechanism below uses temporary, reverted mutations, not an in
    propagated package entries. Workspace `dev`/`devOptional` flags and production-only audits
    cannot determine shipped runtime exposure by themselves.
 3. Before the dependency edit, inspect full metadata and the selected upstream artifact
-   satisfying `^11` / `>=11.0.1`, including integrity, ISC license, transitive dependencies,
+   satisfying `^11` / `>=11.0.1`, including integrity, `BlueOak-1.0.0` license, transitive dependencies,
    Node engines and ESM/CommonJS exports with the named `minimatch` function. Inspect its
    migration notes/types/source for changed default pattern semantics. Use pinned/cached
    package artifacts and authorized registry tools; do not bypass sandbox egress restrictions.
@@ -154,6 +161,8 @@ Use one small case per row or parameterized test; these are proposed descriptive
 | `preserves case-sensitive matching` | `src/*.ts` rejects `SRC/a.TS` | Set `nocase: true`: expected empty |
 | `preserves segment boundaries` | `src/*.ts` rejects `src/nested/a.ts` | Replace pattern with `src/**/*.ts`: expected empty, got selected skill |
 | `preserves default negation` | `!**/*.test.ts` selects `src/a.ts`, rejects `src/a.test.ts` | Set `nonegate: true`: expected selected name |
+| `accepts owner-approved negative extglob suffix matching` | `src/!(a)*.ts` selects `src/ab.ts` on 11.x | Baseline 9.0.9 returns no selection |
+| `accepts owner-approved astral character wildcard matching` | `src/?.ts` selects `src/😀.ts` on 11.x | Baseline 9.0.9 returns no selection |
 
 For empty paths, use explicit YAML `paths: []` with `Skill.fromContent` rather than the
 existing `makeSkill` helper's empty multiline YAML if it parses as null. Assert metadata
@@ -161,7 +170,8 @@ really contains the empty array, so this case differs from absent patterns.
 
 **Implementation — test fixtures and characterization evidence only:**
 
-- Run every row against baseline 9.0.9 first; pin observed defaults before the upgrade.
+- Run the fourteen original rows against baseline 9.0.9 first; pin observed defaults before
+  the upgrade. The two owner-approved change rows must instead fail on 9.0.9 and pass on 11.x.
   Apply the relevant minimal mutation to confirm the named assertion fails for the stated
   reason, then revert it and require green. Temporary mutations must never be committed.
   Do not accept missing-import, syntax or fixture-parsing errors as right-reason red.
@@ -331,7 +341,8 @@ All other criteria use automated commands/tests; AC #8 uses GitHub's exact-head 
    installation reproduces the explained lock delta under unchanged Node policy (spec AC #1).
 2. The registry characterization matrix and existing skill suites pass with preserved
    matching/nonmatching/nested/alternative/default-edge behavior, excluding absent/empty
-   patterns and model-disabled skills (spec AC #4).
+   patterns and model-disabled skills, with only the two owner-approved selection changes
+   enumerated in the Summary (spec AC #4 as qualified by the recorded owner decision).
 3. Built ESM and CommonJS consumers and the built CLI skill workflow checks pass without
    API, configuration, stored-data or behavior migration and without providers (spec AC #5).
 4. [manual] Valid fresh baseline/candidate audits and installed parent chains prove the
@@ -378,19 +389,298 @@ Exact-head CI and independent review remain required even when local implementat
 
 ## Evidence
 
-Pending implementation. Record baseline and candidate timestamps/hashes, artifact metadata,
-audit/advisory/path tables, residual ranges, characterization and built consumer results,
-local checks and review outcome here. Planning does not claim an installed upgrade or
-runtime advisory removal. Exact-head CI/review outcomes remain in GitHub's records.
+### Execution, owner decisions and artifact provenance
+
+Related to WAT-590
+
+Project `llmist`, target-qualified agent `llmist-implement`, repository
+`zbigniewsobiecki/llmist`, authorized snapshot base `dev` at
+`ba56f209d65c968ebc2a00f4993e46f9d9473c23`. The owner explicitly permits this preserved
+base without fetching: newer dev adds only the unrelated 007 documentation spec and its
+fragment. Integration with current dev and strict freshness remain operator merge gates.
+The supplied parent SHA-256 matches before its completion transition.
+
+Owner decision [WAT-591](https://linear.app/mongrel/issue/WAT-591): Zbigniew approves direct
+runtime minimatch `^11` under `BlueOak-1.0.0` instead of ISC on 2026-11-10 at 18:55 UTC,
+reaffirmed on 2026-11-11 at 03:12 UTC. Task 1 changes only its license expectation; all
+other gates remain unchanged. Baseline 9.0.9 is ISC; fetched upstream artifacts confirm
+the Blue Oak Model License 1.0.0 in both manifest and `LICENSE.md`.
+
+Ordinary range resolution selects minimatch **11.0.7**. Full registry metadata, the fetched
+tarball and its manifest/types/source are inspected before the accepted dependency edit.
+Its SHA-512 matches registry metadata and the final lock:
+`sha512-Tnk+M9mPjqKDZlUd77eMSjPjhnlBIa1mABOwetMryIshUwi1YmOBdGFfQnHgn4Z8A66eLT8ENzJrxwYmKfqrZg==`.
+Installed ESM source byte-matches that tarball. Engines `20 || >=22` cover Node 22.0.0
+and this worker's Node 24.22.2. Both actual artifact branches export the named `minimatch`
+function: `dist/esm/index.js` for import and `dist/commonjs/index.js` for require; both
+execute an ordinary brace-pattern match in Node. Dependencies are
+`@isaacs/nonrecursive-glob-match ^1.1.0` and `brace-expansion ^5.0.12`.
+
+The upstream README describes replacing regular-expression segment matching with the
+nonrecursive matcher. Source/types retain default optimization level 1, dot exclusion,
+case sensitivity, negation, brace/extglob support and disabled Unicode normalization.
+The new segment parser and brace-row merging justify ordinary character-class, escaped
+metacharacter, Unicode, comment and level-one optimization cases in addition to the plan
+matrix. This is bounded characterization, not exhaustive glob equivalence. No matcher
+options or production TypeScript change is applied. The two selection changes below are
+explicitly owner-approved; all other preservation requirements remain mandatory.
+No speed effect is claimed or benchmarked.
+
+### Baseline and candidate command acceptance
+
+Toolchain: Node 24.22.2, installation npm 10.9.2 at `/usr/local/bin/npm`; release-tool npm
+11.21.2 remains separate. Baseline and candidate engine-strict lifecycle-enabled installs
+exit 0. Direct Lefthook installation exits 0; executable pre-commit, commit-msg and pre-push
+hooks invoke Lefthook. The postinstall `@unblessed/core/dist/data` symlink resolves. The
+candidate install preserves the lock hash. Consumer Node `>=22.0.0`, `.nvmrc` 22,
+contributor prerequisites, toolchain manifests and hook configuration remain unchanged.
+
+| Observation | Baseline | Candidate |
+|---|---|---|
+| Audit UTC on 2026-11-11 | 03:16:43 | 04:26:24 |
+| Lock SHA-256 | `ab5bd11c811aa107c8d041b51f2ee865b5ac5858e12d840e0267ed9b67262de1` | `7446397d731d428b59a0633d809fe5b3ff0baa8da6c7131b2e9f09892ebd6f3b` |
+| Audit status/schema | 1 / 2, valid JSON | 1 / 2, valid JSON |
+| Unique advisories | 2 Moderate | Same 2 Moderate |
+| Propagated entries / affected installed nodes | 40 / 42 | 40 / 42 |
+| `npm ls --all --json` status | 0 | 0 |
+| Direct runtime target | Red: `^9.0.9`, 9.0.9 | Pass: `^11`, 11.0.7 |
+| Runtime advisory absence | Red: direct/inherited 9.0.9 affected | Pass: no affected minimatch on either runtime traversal |
+
+Both audit runs use `npm audit --package-lock-only --json --ignore-scripts`, capture stdout,
+stderr and status separately, and validate schema, vulnerability map and advisory objects.
+Neither has a registry/error object; status 1 is valid findings. Malformed JSON, unsupported
+schema and a simulated network-error object are rejected by the acceptance checker.
+`npm explain minimatch glob --json`, lock edges and installed manifests agree with the
+graph. The baseline inventory matches the historical 003 candidate's two identities and
+40 entries / 42 nodes. The fresh candidate's advisory objects, affected versions and node
+set are unchanged; no advisory is added, withdrawn or changed. The outcome is removal of
+runtime reachability, not a lower repository finding count.
+
+Actual installed runtime edges:
+
+- Baseline CLI 18.4.1 → llmist `^18.4.1` → workspace llmist 18.4.1 → minimatch `^9.0.9`
+  → `node_modules/minimatch@9.0.9`, inside `>=7.0.0 <11.0.1`.
+- Candidate CLI uses the same llmist edge; llmist → minimatch `^11` now resolves to
+  `packages/llmist/node_modules/minimatch@11.0.7`. Traversal of actual dependencies and
+  optional dependencies from both consumers finds no minimatch version in that advisory
+  range. Workspace dev flags are not used to classify these paths.
+
+The ordinary npm lock write changes exactly five entries: llmist's dependency range plus
+four new required package entries. It leaves every other lock entry byte-equivalent as JSON.
+
+| Required entry | Version / reason |
+|---|---|
+| `packages/llmist` | Only `dependencies.minimatch`: `^9.0.9` → `^11` |
+| `packages/llmist/node_modules/minimatch` | 11.0.7, direct runtime target; root 9.0.9 remains for glob/TypeDoc |
+| `node_modules/@isaacs/nonrecursive-glob-match` | 1.1.0, new `^1.1.0` matcher dependency, BlueOak-1.0.0 |
+| `packages/llmist/node_modules/brace-expansion` | 5.0.12, required `^5.0.12`, MIT |
+| `packages/llmist/node_modules/balanced-match` | 4.0.4, brace-expansion's `^4.0.2`, MIT |
+
+There is no workspace version/metadata normalization, unrelated update, forced resolution,
+bundler edit or manually rewritten lock. npm ci enforces transitive engine compatibility.
+
+### Characterization, mutation controls and built consumers
+
+Before the manifest edit, all 41 tests across the three touched test files pass against
+9.0.9, including the fourteen plan matrix cases, five additional default-edge cases and
+the built consumers. After upgrade/rebuild, all 183 tests in the eleven library/CLI skill
+files pass with the same assertions. Baseline and candidate builds both pass.
+
+Temporary production mutations independently demonstrate right-reason assertion failures:
+return no selection (top-level/globstar); select all (nonmatch); check only the first
+pattern (later alternative); collect per-pattern results (uniqueness); match missing and
+empty patterns (separate cases); include model-disabled skills; enable dot/nocase or
+disable brace/extglob/negation; and expand the segment boundary to globstar. All fourteen
+matrix cases fail at their named selection assertion under the relevant mutation. Empty
+paths use explicit YAML `[]` and assert parsed metadata, distinct from absent paths.
+
+Built ESM and CommonJS tests spawn real Node processes resolving `llmist` package exports
+from its workspace, outside Vitest's source alias. Each asserts exact selected names,
+read instructions, activated skill name and resolved instructions with shell preprocessing
+disabled, as well as zero exit and empty stderr. Independent fixture-name and instruction
+mutations fail both tests; invalid export paths fail their parent exit-status assertions.
+
+The built CLI test spawns the absolute CLI entry from a normal isolated temporary project,
+discovers its uniquely named `.llmist/skills` fixture, lists it, and verifies info's name,
+paths, source and exact instruction section. Different fixture names and instruction text
+each fail the parent assertion. Fixtures are cleaned in `finally`; child timeouts are
+bounded and neither `HOME` nor `TMPDIR` is overwritten. All temporary mutations are restored
+and the three touched files return to 41 passing tests before the dependency edit.
+No existing assertion is removed or narrowed; no provider or exploit calls are made.
+
+### Residual reconciliation — unresolved — upstream-only
+
+G = **GHSA-3g3m-2fjr-6pw4**, Moderate, glob `>=9.0.0 <=14.0.1`; fixed boundary 14.0.2.
+M = **GHSA-g3hv-75wg-m249**, Moderate, minimatch `>=7.0.0 <11.0.1`; fixed boundary 11.0.1.
+The fresh advisory ranges and semver checks place the fixed versions outside the following
+parent ranges. Every path below remains unresolved — upstream-only, without suppression,
+accepted-risk claim or exception. Reachability proves neither exploitability nor safety.
+
+- **Development cleanup:** root and llmist/CLI/testing dev manifests → rimraf `^5.0.5`
+  (5.0.10) → glob `^10.3.7` (10.5.0, G) → minimatch `^9.0.4` (root 9.0.9, M).
+  Both fixed boundaries require upstream parent changes beyond this direct runtime scope.
+- **Private documentation:** docs → TypeDoc `^0.28.15` (0.28.17) → minimatch `^9.0.5`
+  (root 9.0.9, M). Docs → starlight-typedoc `^0.22.0` (0.22.0) peers TypeDoc `>=0.28.0`
+  and typedoc-plugin-markdown `>=4.6.0`; docs also declares that plugin `^4.9.0` (4.10.0),
+  which peers TypeDoc `0.28.x`. These peers reach the same affected TypeDoc dependency.
+  Upstream TypeDoc/plugin changes are outside scope; private docs are not shipped runtime.
+- **Release tooling:** root → semantic-release `^25.0.2` (25.0.3) → @semantic-release/npm
+  `^13.1.1` (13.1.5) → npm `^11.6.2` (11.21.2). Actual bundled manifests retain glob
+  13.0.6 (G) and minimatch 10.2.5 (M): npm declares `^13.0.6` / `^10.2.5`; bundled glob
+  declares minimatch `^10.2.2`. Map-workspaces/package-json/cacache glob ranges are `^13.0.0`;
+  arborist/map-workspaces/ignore-walk/libnpmdiff minimatch ranges are `^10.0.3`, and
+  @tufjs/models uses `^10.1.1`. Neither fixed major is within those examined ranges.
+  Only an upstream release-tool bundle update can change these; no bundle edits are made.
+
+The complete affected-node table retains immediate installed parents and their ranges,
+including peer edges and cycles. Composing these edges with the root/workspace chains above
+gives actual full parent chains. `N/` means `node_modules/`; `B/` means
+`node_modules/npm/node_modules/`. All `B/` nodes and the semantic-release/plugin chain are
+release tooling; rimraf/glob/root minimatch are cleanup, and TypeDoc/plugin paths are private
+docs. Propagated entries carry G/M from their reachable advisory object, not a separate GHSA.
+
+| Affected installed path and version | GHSA | Immediate installed parents (edge ranges) |
+|---|---|---|
+| `B/@npmcli/arborist@9.9.3` | G, M | N/npm@11.21.2 (^9.9.3); B/libnpmdiff@8.1.14 (^9.9.3); B/libnpmexec@10.3.5 (^9.9.3); B/libnpmfund@7.0.28 (^9.9.3); B/libnpmpack@9.1.15 (^9.9.3) |
+| `B/@npmcli/config@10.14.0` | G, M | N/npm@11.21.2 (^10.14.0) |
+| `B/@npmcli/map-workspaces@5.0.3` | G, M | N/npm@11.21.2 (^5.0.3); B/@npmcli/arborist@9.9.3 (^5.0.0); B/@npmcli/config@10.14.0 (^5.0.0) |
+| `B/@npmcli/metavuln-calculator@9.0.3` | G, M | N/npm@11.21.2 (^9.0.3); B/@npmcli/arborist@9.9.3 (^9.0.2) |
+| `B/@npmcli/package-json@7.0.5` | G, M | N/npm@11.21.2 (^7.0.5); B/@npmcli/arborist@9.9.3 (^7.0.0); B/@npmcli/map-workspaces@5.0.3 (^7.0.0); B/pacote@21.5.2 (^7.0.0); B/@npmcli/run-script@10.0.4 (^7.0.0); B/@npmcli/config@10.14.0 (^7.0.0); B/init-package-json@8.2.5 (^7.0.0); B/libnpmexec@10.3.5 (^7.0.0); B/libnpmpublish@11.2.1 (^7.0.0) |
+| `B/@npmcli/run-script@10.0.4` | G, M | N/npm@11.21.2 (^10.0.4); B/@npmcli/arborist@9.9.3 (^10.0.0); B/pacote@21.5.2 (^10.0.0); B/libnpmexec@10.3.5 (^10.0.0); B/libnpmpack@9.1.15 (^10.0.0); B/libnpmversion@8.0.4 (^10.0.0) |
+| `N/@semantic-release/exec@7.1.0` | G, M | root (^7.0.3) |
+| `N/@semantic-release/github@12.0.6` | G, M | N/semantic-release@25.0.3 (^12.0.0) |
+| `N/@semantic-release/npm@13.1.5` | G, M | N/semantic-release@25.0.3 (^13.1.1) |
+| `B/@sigstore/sign@4.1.1` | G, M | B/sigstore@4.1.1 (^4.1.1) |
+| `B/@sigstore/tuf@4.0.2` | G, M | N/npm@11.21.2 (^4.0.2); B/sigstore@4.1.1 (^4.0.2) |
+| `B/@tufjs/models@4.1.0` | M | B/tuf-js@4.1.0 (4.1.0) |
+| `B/cacache@20.0.4` | G, M | N/npm@11.21.2 (^20.0.4); B/@npmcli/arborist@9.9.3 (^20.0.1); B/@npmcli/metavuln-calculator@9.0.3 (^20.0.0); B/pacote@21.5.2 (^20.0.0); B/make-fetch-happen@15.0.6 (^20.0.1) |
+| `N/glob@10.5.0` | G, M | N/rimraf@5.0.10 (^10.3.7) |
+| `B/glob@13.0.6` | G, M | N/npm@11.21.2 (^13.0.6); B/@npmcli/map-workspaces@5.0.3 (^13.0.0); B/@npmcli/package-json@7.0.5 (^13.0.0); B/cacache@20.0.4 (^13.0.0) |
+| `B/ignore-walk@8.0.0` | M | B/npm-packlist@10.0.4 (^8.0.0) |
+| `B/init-package-json@8.2.5` | G, M | N/npm@11.21.2 (^8.2.5) |
+| `B/libnpmaccess@10.0.3` | G, M | N/npm@11.21.2 (^10.0.3) |
+| `B/libnpmdiff@8.1.14` | G, M | N/npm@11.21.2 (^8.1.14) |
+| `B/libnpmexec@10.3.5` | G, M | N/npm@11.21.2 (^10.3.5) |
+| `B/libnpmfund@7.0.28` | G, M | N/npm@11.21.2 (^7.0.28) |
+| `B/libnpmorg@8.0.1` | G, M | N/npm@11.21.2 (^8.0.1) |
+| `B/libnpmpack@9.1.15` | G, M | N/npm@11.21.2 (^9.1.15) |
+| `B/libnpmpublish@11.2.1` | G, M | N/npm@11.21.2 (^11.2.1) |
+| `B/libnpmsearch@9.0.1` | G, M | N/npm@11.21.2 (^9.0.1) |
+| `B/libnpmteam@8.0.2` | G, M | N/npm@11.21.2 (^8.0.2) |
+| `B/libnpmversion@8.0.4` | G, M | N/npm@11.21.2 (^8.0.4) |
+| `B/make-fetch-happen@15.0.6` | G, M | N/npm@11.21.2 (^15.0.6); B/npm-registry-fetch@19.1.1 (^15.0.0); B/@sigstore/sign@4.1.1 (^15.0.4); B/tuf-js@4.1.0 (^15.0.1) |
+| `N/minimatch@9.0.9` | M | N/glob@10.5.0 (^9.0.4); N/typedoc@0.28.17 (^9.0.5) |
+| `B/minimatch@10.2.5` | M | N/npm@11.21.2 (^10.2.5); B/@npmcli/arborist@9.9.3 (^10.0.3); B/@npmcli/map-workspaces@5.0.3 (^10.0.3); B/glob@13.0.6 (^10.2.2); B/ignore-walk@8.0.0 (^10.0.3); B/@tufjs/models@4.1.0 (^10.1.1); B/libnpmdiff@8.1.14 (^10.0.3) |
+| `N/npm@11.21.2` | G, M | N/@semantic-release/npm@13.1.5 (^11.6.2) |
+| `B/npm-packlist@10.0.4` | M | B/pacote@21.5.2 (^10.0.1) |
+| `B/npm-profile@12.0.2` | G, M | N/npm@11.21.2 (^12.0.2) |
+| `B/npm-registry-fetch@19.1.1` | G, M | N/npm@11.21.2 (^19.1.1); B/@npmcli/arborist@9.9.3 (^19.0.0); B/pacote@21.5.2 (^19.0.0); B/libnpmaccess@10.0.3 (^19.0.0); B/libnpmorg@8.0.1 (^19.0.0); B/libnpmpublish@11.2.1 (^19.0.0); B/libnpmsearch@9.0.1 (^19.0.0); B/libnpmteam@8.0.2 (^19.0.0); B/npm-profile@12.0.2 (^19.0.0) |
+| `B/pacote@21.5.2` | G, M | N/npm@11.21.2 (^21.5.2); B/@npmcli/arborist@9.9.3 (^21.0.2); B/@npmcli/metavuln-calculator@9.0.3 (^21.0.0); B/libnpmdiff@8.1.14 (^21.0.2); B/libnpmexec@10.3.5 (^21.0.2); B/libnpmpack@9.1.15 (^21.0.2) |
+| `N/rimraf@5.0.10` | G, M | root (^5.0.5); packages/llmist@18.4.1 (^5.0.5); packages/cli@18.4.1 (^5.0.5); packages/testing@18.4.1 (^5.0.5) |
+| `N/semantic-release@25.0.3` | G, M | root (^25.0.2); N/@semantic-release/changelog@6.0.3 (>=18.0.0); N/@semantic-release/commit-analyzer@13.0.1 (>=20.1.0); N/@semantic-release/github@12.0.6 (>=24.1.0); N/@semantic-release/npm@13.1.5 (>=20.1.0); N/@semantic-release/release-notes-generator@14.1.0 (>=20.1.0); N/@semantic-release/exec@7.1.0 (>=24.1.0); N/@semantic-release/git@10.0.1 (>=18.0.0) |
+| `B/sigstore@4.1.1` | G, M | B/pacote@21.5.2 (^4.0.0); B/libnpmpublish@11.2.1 (^4.0.0) |
+| `packages/docs/N/starlight-typedoc@0.22.0` | M | packages/docs@8.1.2 (^0.22.0) |
+| `B/tuf-js@4.1.0` | G, M | B/@sigstore/tuf@4.0.2 (^4.1.0) |
+| `N/typedoc@0.28.17` | M | packages/docs@8.1.2 (^0.28.15); packages/docs/N/starlight-typedoc@0.22.0 (>=0.28.0); N/typedoc-plugin-markdown@4.10.0 (0.28.x) |
+| `N/typedoc-plugin-markdown@4.10.0` | M | packages/docs@8.1.2 (^4.9.0); packages/docs/N/starlight-typedoc@0.22.0 (>=4.6.0) |
+
+The reconciliation checker requires every affected installed node/version and a real parent
+edge, and deduplicates advisory objects separately from propagated entries. Deliberately
+omitting one known row fails; the complete 42-node/40-entry table passes. Manual comparison
+of the baseline/candidate inventories confirms all remaining paths, versions, GHSAs and
+upstream boundaries are represented, including the actual npm bundle. Total counts alone
+do not establish runtime remediation.
+
+### Lifecycle, scope and verification
+
+Targeted typecheck and lint pass after test authoring, after the upgrade and after adding
+the two approved regressions. The six final tiers run sequentially on 2026-11-11 from
+04:26:53 through 04:28:32 UTC, all exit 0:
+
+| Tier | Observed result |
+|---|---|
+| `npm run build` | Four package tasks successful |
+| `npm run typecheck` | Six tasks successful |
+| `npm run lint` | Exit 0; existing warning/info diagnostics remain, no suppression introduced |
+| `npm test` | 250 files, 7,069 tests pass |
+| `npm run test:coverage` | Same 250 files / 7,069 tests pass; statements 77.12%, branches 78.61%, functions 77.79%, lines 77.41% |
+| `npm run test:e2e` | Eleven files pass; 99 tests pass, four opt-in live tests skipped in three files |
+
+`RUN_LIVE_RESEARCH_TESTS` stays unset. The fresh-context `agent-plugins__z:local-review`
+gate, round 2, converges against the approved contract and complete delta with no must-fix
+finding. The reviewer verifies both baseline failures and candidate selections. Final
+lifecycle/documentation edits also undergo completion review before the normal-hook commit.
+
+#### Owner-approved ordinary default matching changes
+
+The independent reviewer checks baseline 9.0.9 and the built candidate through real
+`Skill.fromContent` → `SkillRegistry.from` → `findByFilePath` and observes:
+
+| Pattern | File path | Baseline 9.0.9 | Candidate 11.0.7 |
+|---|---|---|---|
+| `src/!(a)*.ts` | `src/ab.ts` | Unselected | Selected |
+| `src/?.ts` | `src/😀.ts` | Unselected | Selected |
+
+An independent in-session Node check also reproduces both results, comparing the installed
+baseline matcher against real built candidate skill selection with the same YAML patterns.
+These are ordinary default-option inputs, not exploit probes. The registry's unchanged
+production delegation exposes the different results directly to users. Positive extglob
+alternatives and literal Unicode tests do not cover these changed negative-extglob and
+wildcard/code-point semantics.
+
+Owner decision [WAT-609](https://linear.app/mongrel/issue/WAT-609): Zbigniew chooses option
+"a" on 2026-11-11 at 04:23 UTC, accepting and documenting exactly these two changes:
+`src/!(a)*.ts` now selects `src/ab.ts`, and `src/?.ts` now selects `src/😀.ts`, while 9.0.9
+selected neither. Only these two preservation expectations change. The owner explicitly
+requires unchanged matcher options, no production-code changes and no accommodation of
+any further behavioral difference. The original preservation expectations and assertions
+remain intact; two new registry matrix rows pin the newly authorized selections.
+
+Both new regression tests first run against the installed 9.0.9 matcher by temporarily
+changing only the registry import in the unfinished tree. Each fails for the intended
+assertion: expected `["selected"]`, received `[]`. Restoring the original production import
+returns the candidate to green: all 185 tests across the eleven skill files pass. No
+temporary mutation remains. The implementation fragment documents both accepted changes.
+This addresses the review finding through an explicit contract amendment and regression
+coverage, without a silent waiver or a broader relaxation. Parent requirements are not
+rewritten; their sole-plan completion is qualified by this recorded owner direction.
+Normal hooks, all existing assertions and required CI jobs remain enabled. Only the declared
+test files, direct manifest/required lock changes, this plan's lifecycle/evidence, coverage
+conclusions, parent completion and one implementation fragment belong to the delta.
+CLAUDE.md is untouched by this spec — nothing to audit. No new cross-spec decision record
+is needed: the license authorization is feature-scoped and recorded above; global guidance,
+README and migration docs do not change; the changelog names both accepted matching changes,
+and public APIs, configuration and stored shapes remain intact.
+
+The sole plan reaches `status: done` / `.md.done` after its done-gate. Its only parent
+reaches `status: done` / `.md.done`; byte comparison against the pinned source permits only
+that status substitution. Coverage links and conclusions follow the completed filenames.
+Manual scope review verifies the declared file set, exact five-entry lock delta, only the
+direct manifest range, one new implementation fragment, all original registry test lines
+preserved and the production registry byte-identical to the base. No shared guidance
+or historical evidence is changed. The mechanical done-gate and final scope/link checks
+are enforced before committing; no local blocker uses the CI-only handoff.
+
+Exact-head `lint-and-test`, `validate-commits` and `e2e-tests`, then independent review of that
+head, remain required after trusted-hook publication. Local review is not the required
+approving review. Approval identity, strict freshness and merge authority remain with the
+operator; no release, paid-provider test, publication of packages or governance change occurs.
 
 ## Progress
 
 <!-- /implement updates these from observed evidence; only AC #8 permits the existing CI-only handoff. -->
-- [ ] AC #1
-- [ ] AC #2
-- [ ] AC #3
-- [ ] AC #4
-- [ ] AC #5
-- [ ] AC #6
-- [ ] AC #7
-- [ ] AC #8
+- [x] AC #1 — artifact, exact range/resolution, narrow lock delta and engine-strict install pass.
+- [x] AC #2 — original preservation cases and controls pass; the two owner-approved new
+  selections have right-reason baseline red and candidate green regression coverage.
+- [x] AC #3 — real built ESM/CommonJS and CLI consumers pass, without API, configuration
+  or stored-data migration; the two accepted matching changes are documented explicitly.
+- [x] AC #4 — manual audit/installed-parent reconciliation above accounts for all 42 nodes,
+  unchanged advisory identities and every upstream-only residual; runtime traversal passes.
+- [x] AC #5 — all six sequential tiers pass after the two new regressions; observed results above.
+- [x] AC #6 — sole-plan and parent completion, pinned parent comparison, coverage links
+  and mechanical done-gate are checked before committing the completed candidate.
+- [x] AC #7 — manual scope/evidence review observes only authorized files and changes,
+  all residuals upstream-only and both accepted selections in the fragment; local-review
+  round 2 converges with no unresolved blocker, and completion documents undergo review.
+- [ ] AC #8 — deferred: CI-only handoff; `lint-and-test`, `validate-commits` and `e2e-tests`
+  must succeed on the final published head, followed by independent review of that head.
