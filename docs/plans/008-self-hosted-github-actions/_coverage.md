@@ -12,10 +12,10 @@ Related to WAT-751.
 | 1 | All six routes; preserve contracts with the Release environment exception | Plan 1 tasks 1–3, per-plan AC #2 | Full ownership; pending implementation |
 | 2 | Node 22 and npm 10.9.2 independently in every job | Plan 1 tasks 1–3, per-plan AC #3 | Full ownership; static and capability evidence pending |
 | 3 | Applied fresh-job containers on all pools and prepared restricted release environment | Plan 1 task 1, M1/M2, per-plan AC #1 | Full ownership; both external pre-start gates pending |
-| 4 | Independent review, exact-head CI on llmist-ci and post-merge dev success | Plan 1 tasks 4–5, per-plan AC #4 | Full ownership; future GitHub evidence required |
+| 4 | Existing merge delegation, independent review, exact-head CI on llmist-ci and post-merge dev success | Plan 1 tasks 4–5, per-plan AC #4 | Full ownership; future GitHub evidence required; no recorded approving review as plan completion evidence |
 | 5 | Accurate default-branch/main/dispatch activation reporting | Plan 1 task 5, M3, per-plan AC #5 | Full ownership; source/event reporting protocol specified |
 | 6 | Per-job registration versus execution proof and Claude credential gap | Plan 1 task 5, M3, per-plan AC #5 | Full ownership; real execution not claimed |
-| 7 | Owner-ordered secret removal, with conditional CI retention through promotion | Plan 1 task 5, M4, per-plan AC #7 | Full ownership; later owner actions pending |
+| 7 | Report owner removal as confirmed or pending, preserving ordering and conditional CI retention | Plan 1 task 5, M4, per-plan AC #7 | Full ownership; accurate pending reporting satisfies the criterion without waiting for owner deletion |
 
 ## Coverage summary
 
@@ -59,7 +59,7 @@ They change neither the supplied full-spec identity nor the owner's controls.
 | Tests | Seven structural check families plus command/live acceptance protocols; use existing locked YAML parsing and Node assertions in ignored scratch, with baseline-red targets and in-memory mutation proofs for preservation |
 | Tool steps | Preserve four existing Node setups; add Node to sync-dev/Claude, bootstrap/check npm in every job; no new cache on the two jobs without dependency installation |
 | Docs | This plan owns detailed evidence, one later operational fragment and the implementation PR description; no shared developer-guidance or public API edits |
-| Lifecycle | Candidate handoff can precede external outcomes; do not mark plan/spec done while post-merge or ordered owner-removal evidence remains pending |
+| Lifecycle | Candidate handoff can precede external outcomes; completion requires post-merge CI evidence and accurate owner-action status reporting, but pending owner deletion does not block completion |
 | Scope | Preserve the full spec's governance and credential limits; record the Claude gap and fresh-container proof limits without repair or broader isolation claims |
 
 The full spec is retained as assigned. Although the YAML delta is small, the
@@ -83,7 +83,7 @@ All checks belong to plan 1; no missing proof is assigned downstream.
 | Three exact-head feature-PR checks, runner metadata and review | Task 4, real GitHub records |
 | Post-merge dev push and expected skipped commit validation | Task 5, real GitHub records |
 | Activation/ref and registration/execution reporting | Task 5, M3, source and actual event/job records |
-| Ordered secret removal and conditional retention | Task 5, M4, owner-managed names-only inventories |
+| Confirmed-or-pending owner removal reporting, ordering and conditional retention | Task 5, M4, owner-managed names-only inventories when available |
 
 No permanent product tests, new dependency or weaker gate is planned. All changed
 workflow behavior has a command-driven or explicitly manual acceptance protocol.

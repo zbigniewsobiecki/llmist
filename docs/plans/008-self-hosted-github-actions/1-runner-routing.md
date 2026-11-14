@@ -264,9 +264,10 @@ They are verification helpers, not exported product APIs or committed infrastruc
   three jobs identifies the self-hosted llmist-ci pool, not just matching job names.
   Codecov upload remains advisory. A changed head invalidates the head-specific
   review/check evidence. Hosted-run refusal is reported concretely; no billing edit.
-- Existing one-approval and strict up-to-date required-check rules remain in force.
-  An independent COMMENT review does not supply the required approval. The operator
-  handles legitimate review identity and merge delegation; no bypass is authorized.
+- Record the dev merge under the existing merge delegation, with independent
+  review and the exact-head checks above. The repository's approval rule and strict
+  up-to-date required checks remain unchanged; this plan does not require a recorded
+  approving review as completion evidence or change the merge delegation.
 
 ### 5. Verify dev activation and track owner actions without triggering releases
 
@@ -280,9 +281,10 @@ They are verification helpers, not exported product APIs or committed infrastruc
   `[manual]` — follow M3. Expected red for a report claiming Release waits for main
   promotion, main CI has already migrated, or a skipped job proves execution:
   the report contradicts the workflow source and the parent requirements.
-- `owner-secret-state` — manual acceptance, spec AC #7 — follow M4. Expected
-  red/blocked before authorized ordering: secret removal is not yet confirmed;
-  record pending status rather than deleting credentials or inventing proof.
+- `owner-secret-state` — manual acceptance, spec AC #7 — follow M4. Expected red:
+  reporting claims removal without supporting names-only evidence, omits pending
+  owner action or violates the required deletion/retention ordering. An accurate
+  pending report passes; the implementation does not wait for owner deletion.
 
 **Implementation / evidence reconciliation** (this plan's Evidence and rollout body):
 
@@ -308,7 +310,9 @@ They are verification helpers, not exported product APIs or committed infrastruc
 - Keep external outcome boxes unchecked until their actual protocols pass. A clean
   committed implementation candidate may be handed off with its plan still in
   progress. Do not run the done-gate or rename the plan/spec `.done` while required
-  post-merge/owner evidence is missing; reconcile it in the normal reviewed lifecycle.
+  post-merge CI or owner-action status reporting is missing; reconcile it in the
+  normal reviewed lifecycle. Accurate confirmed-or-pending reporting satisfies the
+  owner-action criterion; pending deletion does not block implementation completion.
   Merely being configured and registered, with the OAuth gap disclosed, is the
   intended Release/Claude reporting limit, not an obligation to manufacture live runs.
 
@@ -401,11 +405,13 @@ proven by a sandbox YAML assertion or safely exercised via a manufactured releas
    `NPM_TOKEN`, after that merge and names-only verification. If main dispatch is
    needed before promotion, retain the CI copies until that separately authorized
    promotion. The repository copy has the spec's post-dev-merge ordering.
-3. Obtain dated names-only inventories confirming the actual removals while
-   `release` retains both names and its dev/main-only policy. Record retained copies
-   with the condition blocking deletion; distinguish pending from confirmed.
-4. Per-plan AC #7 is not checked until all required removals are confirmed. If CI
-   retention is required, leave that outcome pending through the promotion window.
+3. When available, obtain dated names-only inventories showing removal status and
+   that `release` retains both names and its dev/main-only policy. Report each old
+   copy as confirmed removed only with supporting evidence; otherwise report pending
+   owner action, including any conditional CI retention and unavailable inventory.
+4. Per-plan AC #7 passes when reporting accurately distinguishes confirmed removal
+   from pending owner action and preserves the ordering above. Pending removals,
+   including CI retention through promotion, do not block implementation completion.
    No settings API write, secret deletion or main promotion is performed by this plan.
 
 ## Acceptance Criteria (per-plan, testable)
@@ -418,18 +424,21 @@ proven by a sandbox YAML assertion or safely exercised via a manufactured releas
 3. Every job explicitly establishes Node 22 and npm 10.9.2 before consumers;
    cold-worker capability evidence and actual available CI logs support the claim,
    without claiming unexecuted Release/Claude actions have run (spec AC #2).
-4. Independent review, legitimate required approval, successful exact-head
-   lint-and-test/validate-commits/e2e-tests on llmist-ci and successful post-merge
-   dev push metadata are recorded; push commit validation remains skipped (spec AC #4).
+4. The dev merge under the existing merge delegation, independent review, successful
+   exact-head lint-and-test/validate-commits/e2e-tests on llmist-ci and successful
+   post-merge dev push metadata are recorded; push commit validation remains skipped.
+   The approval rule and strict required checks remain unchanged; a recorded
+   approving review is not required as plan completion evidence (spec AC #4).
 5. M3 accurately reports activation by ref/event, configured/registered status and
    the absent Claude OAuth credential; no validation release or promotion occurs
    (`[manual]`, spec ACs #5–6).
 6. All six sequential local tiers and fresh-context local review pass; hooks and
    tooling are preserved; documentation/fragment and evidence reflect actual results
    (verification and documentation hygiene).
-7. M4 confirms the owner's ordered removals and final names-only inventories;
-   any conditional retention remains pending until confirmed, with no secret
-   administration in the PR (`[manual]`, spec AC #7).
+7. M4 accurately reports owner removal as confirmed or pending, using names-only
+   inventories when available and preserving post-merge ordering and conditional
+   CI retention. Pending owner action does not block implementation completion;
+   no secret administration occurs in the PR (`[manual]`, spec AC #7).
 
 ## Documentation Impact
 
