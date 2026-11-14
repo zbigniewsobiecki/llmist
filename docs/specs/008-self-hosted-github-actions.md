@@ -116,9 +116,10 @@ specification only; Plan and implementation are separate deliveries into dev.
    hosted before promotion. No release is triggered to test this change.
 7. **Completion evidence.** Require independent review and successful exact-head
    lint-and-test, validate-commits and e2e-tests on llmist-ci before the
-   implementation merges to dev. Retain strict up-to-date required checks and
-   the approving review requirement. A COMMENT review does not supply that
-   approval. Require a passing post-merge dev push run and job metadata showing
+   implementation merges to dev under the existing merge delegation. The
+   repository's approval requirement and strict up-to-date required checks
+   remain unchanged; no ruleset change is made. Require a passing post-merge
+   dev push run and job metadata showing
    self-hosted llmist-ci execution. Validate-commits remains skipped on pushes.
 8. **Honest proof limits.** Release, sync-dev and Claude are reported as
    "configured and registered" once their configuration and online registration
@@ -218,9 +219,10 @@ specification only; Plan and implementation are separate deliveries into dev.
    applied infrastructure and all three pools registered on llmist and online,
    and settle the safety question without unauthorized governance changes.
    `[manual]` — Root controls infrastructure and live access evidence.
-4. WHEN the implementation merges to dev, independent review, the required
-   approval and all three successful exact-head CI checks SHALL be recorded;
-   the post-merge push SHALL pass with llmist-ci self-hosted runner metadata.
+4. WHEN the implementation merges to dev under the existing merge delegation,
+   independent review and successful exact-head lint-and-test, validate-commits
+   and e2e-tests on llmist-ci SHALL be recorded; the post-merge dev push SHALL
+   pass with job metadata showing llmist-ci self-hosted runners.
 5. WHEN dev activates the default-branch workflows, reporting SHALL distinguish
    the Release/Claude routing from main's still-hosted CI and selected-ref
    dispatch. No release or promotion SHALL be performed just for validation.
