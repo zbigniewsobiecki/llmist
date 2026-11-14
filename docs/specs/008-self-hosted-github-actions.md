@@ -100,9 +100,13 @@ specification only; Plan and implementation are separate deliveries into dev.
    their absence of an environment. Existing provider, Codecov, GH_PAT, NPM_TOKEN and
    CLAUDE_CODE_OAUTH_TOKEN references and permission declarations remain
    unchanged. Zbigniew creates release with a dev/main-only branch policy and
-   GH_PAT and NPM_TOKEN. Once that environment is confirmed, he deletes GH_PAT
-   and NPM_TOKEN from CI and the repository-level NPM_TOKEN. Creation, secret
-   entry and post-confirmation deletions are his actions outside the PR.
+   GH_PAT and NPM_TOKEN, followed by names-only verification. Only after the
+   implementation switching both Release jobs to release merges into dev does
+   he delete GH_PAT and NPM_TOKEN from CI and repository-level NPM_TOKEN.
+   If he relies on manual Release dispatch from main before the next dev-to-main
+   promotion, the CI copies stay until that promotion: main's workflow still
+   references CI. Creation, secret entry and deletions are his actions outside
+   the PR, reported as pending or confirmed.
    CLAUDE_CODE_OAUTH_TOKEN is absent from the supplied environment/repository
    inventories; record this existing gap without adding or broadening credentials
    or claiming Claude authentication is fixed.
@@ -192,8 +196,10 @@ specification only; Plan and implementation are separate deliveries into dev.
 - **Safety decision settled:** The manager reports that Zbigniew selected
   option A from his own account at 2026-11-14T22:42:08Z. Related to WAT-755.
   The decision requires fresh containers per job, the release environment and
-  its two secrets restricted to dev/main, and the owner's post-confirmation
-  deletions. Requirements 3 and 5 capture these consequences. This settles the
+  its two secrets restricted to dev/main, and the owner's deletions after
+  names-only verification and the implementation merge into dev, retaining CI
+  copies until promotion if main's manual dispatch is needed beforehand.
+  Requirements 3 and 5 capture these consequences. This settles the
   choice of controls; applying and verifying them remains outstanding.
 - Root reports infrastructure 3b8ebde840976ef6a13701153b660ee796d1b236 applied
   and bauer-llmist-ci-1 / llmist-ci, bauer-llmist-release-1 / llmist-release,
@@ -226,7 +232,9 @@ specification only; Plan and implementation are separate deliveries into dev.
    PR because default-branch events activate at the dev merge.
 4. **Apply decision A's explicit exception** — the two Release jobs use release;
    the owner prepares its dev/main-only policy and secrets, then removes the
-   old copies after confirmation. Root supplies fresh containers per job.
+   old copies only after names-only verification and the implementation merge
+   into dev. CI copies remain until promotion if manual dispatch from main is
+   relied on before then. Root supplies fresh containers per job.
    All other workflow contracts and approval rules remain unchanged. No broader
    governance or credential changes are authorized.
 5. **Evidence by job** — CI can be proven during delivery; release and Claude
@@ -262,8 +270,12 @@ specification only; Plan and implementation are separate deliveries into dev.
    evidence. Any later proof SHALL identify the real event and job result.
    The absent CLAUDE_CODE_OAUTH_TOKEN SHALL be reported as an existing gap,
    not as repaired or covered by runner registration.
-7. WHEN the owner confirms the release environment, Zbigniew SHALL remove
-   GH_PAT and NPM_TOKEN from CI and repository-level NPM_TOKEN. Reporting SHALL
+7. AFTER release is created with both secrets and its dev/main-only policy,
+   names-only verification succeeds, and the implementation switching both
+   Release jobs to release merges into dev, Zbigniew SHALL remove GH_PAT and
+   NPM_TOKEN from CI and repository-level NPM_TOKEN. If manual Release dispatch
+   from main is relied on before the next dev-to-main promotion, CI copies SHALL
+   stay until that promotion because main's workflow still references CI. Reporting SHALL
    distinguish confirmed removal from pending owner action; the PR SHALL not
    perform secret administration. `[manual]` — owner-managed secret inventories.
 
