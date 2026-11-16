@@ -13,7 +13,7 @@ on:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, llmist-ci]
     environment: CI
 
     steps:
@@ -24,6 +24,14 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+
+      - name: Install npm 10.9.2
+        run: |
+          npm install --global npm@10.9.2
+          node --version
+          npm --version
+          node -e "require('node:assert/strict').equal(process.versions.node.split('.')[0], '22')"
+          test "$(npm --version)" = "10.9.2"
 
       - name: Install dependencies
         run: npm ci
@@ -66,7 +74,7 @@ jobs:
           verbose: true
 
   validate-commits:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, llmist-ci]
     # Skip validation for PRs from dev to main (release PRs) since dev accumulates merge commit history
     if: github.event_name == 'pull_request' && !(github.head_ref == 'dev' && github.base_ref == 'main')
 
@@ -81,6 +89,14 @@ jobs:
           node-version: "22"
           cache: "npm"
 
+      - name: Install npm 10.9.2
+        run: |
+          npm install --global npm@10.9.2
+          node --version
+          npm --version
+          node -e "require('node:assert/strict').equal(process.versions.node.split('.')[0], '22')"
+          test "$(npm --version)" = "10.9.2"
+
       - name: Install dependencies
         run: npm ci
 
@@ -89,7 +105,7 @@ jobs:
 
   e2e-tests:
     # E2E tests now use mocks, so they can run on all PRs without API costs
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, llmist-ci]
     environment: CI
 
     steps:
@@ -100,6 +116,14 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+
+      - name: Install npm 10.9.2
+        run: |
+          npm install --global npm@10.9.2
+          node --version
+          npm --version
+          node -e "require('node:assert/strict').equal(process.versions.node.split('.')[0], '22')"
+          test "$(npm --version)" = "10.9.2"
 
       - name: Install dependencies
         run: npm ci

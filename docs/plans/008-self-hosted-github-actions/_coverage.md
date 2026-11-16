@@ -1,36 +1,40 @@
 # Coverage map for spec 008-self-hosted-github-actions
 
-Parent: [amended full spec](../../specs/008-self-hosted-github-actions.md).
-Execution: [1-runner-routing.md](1-runner-routing.md).
+Parent: [completed-form full spec](../../specs/008-self-hosted-github-actions.md.done).
+Execution: [completed-form runner-routing plan](1-runner-routing.md.done).
 
-Related to WAT-751.
+Related to WAT-763.
 
 ## Spec ACs
 
 | # | Spec AC (short) | Satisfied by | Coverage / current status |
 |---|---|---|---|
-| 1 | All six routes; preserve contracts with the Release environment exception | Plan 1 tasks 1–3, per-plan AC #2 | Full ownership; pending implementation |
-| 2 | Node 22 and npm 10.9.2 independently in every job | Plan 1 tasks 1–3, per-plan AC #3 | Full ownership; static and capability evidence pending |
-| 3 | Applied fresh-job containers on all pools and prepared restricted release environment | Plan 1 task 1, M1/M2, per-plan AC #1 | Full ownership; both external pre-start gates pending |
-| 4 | Existing merge delegation, independent review, exact-head CI on llmist-ci and post-merge dev success | Plan 1 tasks 4–5, per-plan AC #4 | Full ownership; future GitHub evidence required; no recorded approving review as plan completion evidence |
-| 5 | Accurate default-branch/main/dispatch activation reporting | Plan 1 task 5, M3, per-plan AC #5 | Full ownership; source/event reporting protocol specified |
-| 6 | Per-job registration versus execution proof and Claude credential gap | Plan 1 task 5, M3, per-plan AC #5 | Full ownership; real execution not claimed |
-| 7 | Report owner removal as confirmed or pending, preserving ordering and conditional CI retention | Plan 1 task 5, M4, per-plan AC #7 | Full ownership; accurate pending reporting satisfies the criterion without waiting for owner deletion |
+| 1 | All six routes; preserve contracts with the Release environment exception | Plan 1 tasks 1–3, per-plan AC #2 | Structural acceptance passes; contracts preserved |
+| 2 | Node 22 and npm 10.9.2 independently in every job | Plan 1 tasks 1–3, per-plan AC #3 | Static checks pass; actual exact-head CI install/version/action logs deferred to manager before merge; no Release/Claude execution claim |
+| 3 | Applied fresh-job containers on all pools and prepared restricted release environment | Plan 1 task 1, M1/M2, per-plan AC #1 | Both pre-start gates satisfied by supplied Root/owner evidence; sources and limits in plan |
+| 4 | Existing merge delegation, independent review, exact-head CI on llmist-ci and post-merge dev success | Plan 1 tasks 4–5, per-plan AC #4 | Deferred: manager verifies exact-head GitHub checks/review before merge and records post-merge dev run/runner metadata afterward; approval and strict checks remain unchanged |
+| 5 | Accurate default-branch/main/dispatch activation reporting | Plan 1 task 5, M3, per-plan AC #5 | Source/ref comparison and activation report recorded |
+| 6 | Per-job registration versus execution proof and Claude credential gap | Plan 1 task 5, M3, per-plan AC #5 | Release/sync-dev/Claude configured and registered; execution not proven; Claude authentication unqualified |
+| 7 | Report owner removal as confirmed or pending, preserving ordering and conditional CI retention | Plan 1 task 5, M4, per-plan AC #7 | Accurate pending report recorded; actual removal status deferred to dated owner names-only post-merge report |
 
 ## Coverage summary
 
 - Seven spec ACs map to one plan. All have full ownership; none depends on another
   implementation plan or has an unassigned verification path. Coverage means the
-  plan specifies the work, not that the outcome has already passed.
+  plan owns the work, not that deferred external outcomes have passed.
 - Requirements 1–3 map to spec AC #1; requirement 4 maps to #2, requirement 5 to #3,
   requirement 6 to #5, requirement 7 to #4 and requirement 8 to #6. The owner secret
   ordering in requirement 3 also maps to #7. All constraints and strategic decisions
   carry into the plan's prerequisites, allowed delta, proof limits and exclusions.
 - Per-plan AC #6 is local verification/documentation hygiene. Every other per-plan
   criterion traces directly to the spec; no criterion is orphaned.
-- Both pre-start gates are pending. Online registration and previously applied
-  persistent-container infrastructure are supplied observations, not fresh-container
-  or release-environment proof. No workflow changes occur in this Plan PR.
+- Both pre-start gates pass on the implementation brief's Root/owner evidence.
+  Plan Evidence records identities, actor/time/source and proof limits separately
+  from the old persistent-container observations. Only the authorized workflow
+  selectors, tools and two Release environment values change.
+- The implementation assignment requires completed-form plan/spec files at the PR
+  head with named deferrals. Publication-dependent checks/review and post-merge
+  evidence remain manager gates; lifecycle status does not assert their success.
 
 ## Plan dependency graph
 
@@ -41,7 +45,7 @@ External: fresh-per-job containers + prepared release environment
                        1-runner-routing
 ```
 
-Topological order: `1-runner-routing.md`. Frontmatter `depends_on: []` has no cycle
+Topological order: `1-runner-routing.md.done`. Frontmatter `depends_on: []` has no cycle
 or missing plan reference. Maximum concurrency is one; no same-layer ownership
 conflicts or shared append surfaces exist.
 
@@ -59,7 +63,7 @@ They change neither the supplied full-spec identity nor the owner's controls.
 | Tests | Seven structural check families plus command/live acceptance protocols; use existing locked YAML parsing and Node assertions in ignored scratch, with baseline-red targets and in-memory mutation proofs for preservation |
 | Tool steps | Preserve four existing Node setups; add Node to sync-dev/Claude, bootstrap/check npm in every job; no new cache on the two jobs without dependency installation |
 | Docs | This plan owns detailed evidence, one later operational fragment and the implementation PR description; no shared developer-guidance or public API edits |
-| Lifecycle | Candidate handoff can precede external outcomes; completion requires post-merge CI evidence and accurate owner-action status reporting, but pending owner deletion does not block completion |
+| Lifecycle | Implementation assignment requires completed-form files at PR head; external outcomes remain explicitly deferred to manager's exact-head/post-merge records and the owner's report; accurate pending owner-action reporting passes without deletion |
 | Scope | Preserve the full spec's governance and credential limits; record the Claude gap and fresh-container proof limits without repair or broader isolation claims |
 
 The full spec is retained as assigned. Although the YAML delta is small, the
@@ -95,9 +99,9 @@ No provider credential or release dispatch is needed for local validation.
 |---|---|
 | Routing contract, prerequisites, activation and proof limits | Plan 1 carries the parent by reference and expands its concrete execution/evidence protocols; parent requirements remain unchanged |
 | Later delivery description distinguishes exact-head/post-merge and non-CI evidence | Plan 1 tasks 4–5; separate sections/state in the implementation delivery body, with detailed proof in plan Evidence |
-| Operational implementation changelog | Plan 1 owns `changelog.d/wat-751-self-hosted-github-actions.md`; this Plan PR adds only `changelog.d/wat-751-self-hosted-github-actions-plan.md` |
+| Operational implementation changelog | Plan 1 owns `changelog.d/wat-763-self-hosted-github-actions.md`; previously landed Spec/Plan fragments remain intact |
 | No public API or general developer-guidance change | No edits to public docs, README, CONTRIBUTING.md or CLAUDE.md |
-| Normal completion lifecycle | Plan 1 updates only its own evidence, coverage conclusions and eventual parent/plan status/extensions after actual outcomes pass |
+| Completion lifecycle | Plan 1 updates its evidence and coverage conclusions; parent changes only status/extension. The assignment authorizes completed-form files with named external deferrals in plan Progress |
 
 ## Scope carried forward
 

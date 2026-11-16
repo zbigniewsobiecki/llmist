@@ -4,7 +4,7 @@ slug: self-hosted-github-actions
 level: full
 title: Repository-scoped self-hosted GitHub Actions
 created: 2026-11-14
-status: draft
+status: done
 ---
 
 # 008: Repository-scoped self-hosted GitHub Actions

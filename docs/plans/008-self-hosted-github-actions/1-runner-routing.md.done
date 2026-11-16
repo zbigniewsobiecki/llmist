@@ -5,19 +5,20 @@ plan: 1
 plan_slug: runner-routing
 level: plan
 title: Route all six GitHub Actions jobs after verified safety prerequisites
-parent_spec: docs/specs/008-self-hosted-github-actions.md
+parent_spec: docs/specs/008-self-hosted-github-actions.md.done
 depends_on: []
-status: pending
+status: done
+locked_at: 980e47fd294edd5df13f9c29aa11fa97cdbd9816
 ---
 
 # 008/1: Route all six GitHub Actions jobs
 
-> Part 1 of 1. Parent: [full spec](../../specs/008-self-hosted-github-actions.md).
+> Part 1 of 1. Parent: [full spec](../../specs/008-self-hosted-github-actions.md.done).
 > Resolve the parent by id/slug if its lifecycle extension changes.
 
 ## Summary
 
-Related to WAT-751.
+Related to WAT-763.
 
 Move the six existing jobs to their three designated repository-scoped x64 pools,
 establish Node 22 and npm 10.9.2 separately in each job, and change the two Release
@@ -40,7 +41,7 @@ infrastructure, environment, secret or governance administration.
 - `docs/plans/008-self-hosted-github-actions/_coverage.md`: conclusions/status links.
 - `docs/specs/008-self-hosted-github-actions.md`: normal completion status/rename only
   after every spec outcome has evidence; no rewriting the owner decision.
-- `changelog.d/wat-751-self-hosted-github-actions.md`: one later implementation fragment.
+- `changelog.d/wat-763-self-hosted-github-actions.md`: one implementation fragment.
 
 **Shared surfaces:** none in this single-plan set. Keep the landed Spec and Plan
 fragments; an unmerged implementation follow-up edits its existing fragment.
@@ -91,7 +92,7 @@ Do not lock this plan, edit workflows or open the implementation PR until both p
    `GH_PAT` and `NPM_TOKEN` and a deployment branch policy allowing only `dev` and
    `main`. Require names/scope/policy evidence only; never obtain secret values.
 
-Related to WAT-755. The owner has selected these controls; this plan does not
+The owner has selected these controls; this plan does not
 reopen that choice or design broader governance. Pool labels are routing selectors,
 not an authorization boundary. Container reset does not establish host/kernel,
 cache, artifact or external-state isolation.
@@ -307,14 +308,15 @@ They are verification helpers, not exported product APIs or committed infrastruc
   M4. If main manual Release dispatch is needed before promotion, CI copies remain
   until that separately authorized promotion. Never silently decide that owner choice.
   Pending owner action remains pending in evidence; the PR administers no secret.
-- Keep external outcome boxes unchecked until their actual protocols pass. A clean
-  committed implementation candidate may be handed off with its plan still in
-  progress. Do not run the done-gate or rename the plan/spec `.done` while required
-  post-merge CI or owner-action status reporting is missing; reconcile it in the
-  normal reviewed lifecycle. Accurate confirmed-or-pending reporting satisfies the
-  owner-action criterion; pending deletion does not block implementation completion.
-  Merely being configured and registered, with the OAuth gap disclosed, is the
-  intended Release/Claude reporting limit, not an obligation to manufacture live runs.
+- Keep external outcome boxes unchecked until their actual protocols pass. The
+  implementation assignment requires completed-form plan/spec files at the PR head
+  and explicitly permits deferrals with named evidence sources. Record unavailable
+  publication/merge-dependent outcomes as deferred in Progress; the manager verifies
+  exact-head CI/review before merging and records the post-merge dev run and owner
+  report afterward. This lifecycle transition does not claim those outcomes passed.
+  Accurate confirmed-or-pending reporting satisfies the owner-action criterion;
+  pending deletion does not block implementation completion. Configured and registered,
+  with the OAuth gap disclosed, remains the intended Release/Claude proof limit.
 
 ## Test Plan
 
@@ -325,24 +327,26 @@ and coverage suites remain intact. The structural checks below exercise real YAM
 
 ### Structural / integration acceptance
 
-- [ ] `workflow-contract-preserved`: all three parsed workflows and six separate
+- [x] `workflow-contract-preserved`: all three parsed workflows and six separate
   in-memory mutations prove only the authorized delta is allowed (tasks 1–3).
-- [ ] `ci-job-routing`: three rows (task 2).
-- [ ] `release-job-routing`: two rows (task 3).
-- [ ] `release-job-environment`: two rows (task 3).
-- [ ] `claude-job-routing`: one row (task 3).
-- [ ] `per-job-node-npm`: six rows, independently asserting Node, pinned npm and
+- [x] `ci-job-routing`: three rows (task 2).
+- [x] `release-job-routing`: two rows (task 3).
+- [x] `release-job-environment`: two rows (task 3).
+- [x] `claude-job-routing`: one row (task 3).
+- [x] `per-job-node-npm`: six rows, independently asserting Node, pinned npm and
   bootstrap-before-consumer order; existing setup inputs compare equal (tasks 2–3).
-- [ ] Parse validity/duplicate-key rejection in `readWorkflow` (task 1).
-- [ ] `mocked-project-gates`: all six sequential local tiers (task 4).
-- [ ] `exact-head-ci`: three successful feature-PR jobs, runner metadata and review (task 4).
-- [ ] `dev-push-ci`: post-merge dev run and correct skipped commit validation (task 5).
+- [x] Parse validity/duplicate-key rejection in `readWorkflow` (task 1).
+- [x] `mocked-project-gates`: all six sequential local tiers (task 4).
+- [ ] `exact-head-ci`: deferred: manager checks actual feature-PR head checks,
+  llmist-ci runner metadata and independent GitHub review after publication (task 4).
+- [ ] `dev-push-ci`: deferred: manager records the actual post-merge dev push run,
+  llmist-ci metadata and expected skipped commit validation after merging (task 5).
 
 ### Manual acceptance
 
-- [ ] `readiness-all-pools` / M1; `release-environment-ready` / M2.
-- [ ] `activation-report` / M3; `owner-secret-state` / M4.
-- [ ] Root capability inspection in task 1 distinguishes installed prerequisites
+- [x] `readiness-all-pools` / M1; `release-environment-ready` / M2.
+- [x] `activation-report` / M3; `owner-secret-state` / M4.
+- [x] Root capability inspection in task 1 distinguishes installed prerequisites
   from real action execution; release and Claude remain unproven by CI success.
 
 ## Manual Verification
@@ -446,9 +450,9 @@ proven by a sandbox YAML assertion or safely exercised via a manufactured releas
 |---|---|
 | This plan's Evidence/Progress | Prerequisites, red/green structural results, tool capability limits, local gates, head-specific review/CI, post-merge and owner-action states |
 | `_coverage.md` in this folder | Conclusions and lifecycle links only; detailed proof stays here |
-| `changelog.d/wat-751-self-hosted-github-actions.md` | One measured operational migration fragment for the later implementation PR |
+| `changelog.d/wat-763-self-hosted-github-actions.md` | One operational migration fragment; no performance claim |
 | Implementation PR description | Separate exact-head and post-merge CI, Release/Claude registration versus execution, activation/ref caveats and pending/confirmed owner actions |
-| Parent spec | Keep requirements unchanged; normal completion transition only once every outcome is verified |
+| Parent spec | Keep requirements unchanged; completed-form rename/status with external evidence deferrals recorded here as authorized by the implementation assignment |
 | Public API docs, README, CONTRIBUTING.md, CLAUDE.md | No edit: no public API or general guidance change is required |
 
 ## Out of Scope
@@ -471,20 +475,166 @@ amendment is merged via PR #691. Runner, environment and secret facts are suppli
 Root/operator observations, not independent live settings reads. Available tools
 do not expose those inventories. Both new prerequisites remain pending.
 
-Implementation records its own dated observations here. Required fields: check or
-protocol name, input identities, command/event, exit/result, actor/source, per-job
-runner and limitation. Do not paste secrets or sandbox-local log paths into PR text.
-Carry a measured result forward only with complete measured-input hash equality;
-when the full input set is uncertain, re-measure. GitHub head-specific results must
-always match the head being reviewed. No implementation outcome is claimed by this Plan.
+### Implementation — 2026-11-16
+
+Project `llmist`, target-qualified agent `llmist-implement`, repository
+`zbigniewsobiecki/llmist`, base `dev`. Checkout, `origin/dev` and GitHub MCP's live
+dev head all match `980e47fd294edd5df13f9c29aa11fa97cdbd9816`. The three workflow
+blobs match the preservation oracle above. MCP confirms base push run
+[43654543235](https://github.com/zbigniewsobiecki/llmist/actions/runs/43654543235)
+is successful at that head; this hosted baseline is not candidate execution proof.
+
+**Execution choices.** The headless implementation assignment authorizes this
+single-plan change, both pre-start gates, and completed-form plan/spec files at
+the PR head with explicit deferrals. That supplied lifecycle rule supersedes the
+planning-time requirement to wait for post-merge outcomes before renaming. No
+acceptance check or merge gate is waived. The lock, implementation and lifecycle
+evidence share the code commit to follow the target's stage/check/commit policy.
+The fragment uses the assigned child identifier; previously landed Spec/Plan
+fragments remain intact. No decision record or general guidance is added.
+
+**M1 / readiness-all-pools — passed on supplied evidence.** The implementation
+brief dated 2026-11-16 relays Root's verified pre-start gate through the coordinator:
+fresh-per-job lifecycle is delivered by infrastructure
+`91fde791594e9c0f67ab80142be3f1454940d70c`; toolchain exec repair
+`71853c3b02501c7515ceb51313f7c81ec4d24df0` is applied in Pulumi update 33.
+All three llmist units are idle-restarted onto the new mounts. As UID 1001,
+executable probes pass in HOME, `/opt/hostedtoolcache` and `/tmp/runner`, where
+noexec is false, on every pool. The brief explicitly confirms both pre-start
+gates are satisfied. The implementer accepts that Root verification rather than
+claiming independent worker inspection; raw container identities/reset markers
+and detailed tool/network probes are not exposed by this session's MCP tools.
+
+| Runner | Labels selected by workflow | Capacity | Supplied observation |
+|---|---|---|---|
+| `bauer-llmist-ci-1` | `self-hosted, linux, x64, llmist-ci` | 4 CPU, 8 GiB | Repository registered and online; fresh-per-job gate verified by Root |
+| `bauer-llmist-release-1` | `self-hosted, linux, x64, llmist-release` | 2 CPU, 4 GiB | Repository registered and online; fresh-per-job gate verified by Root |
+| `bauer-llmist-claude-1` | `self-hosted, linux, x64, llmist-claude` | 2 CPU, 4 GiB | Repository registered and online; fresh-per-job gate verified by Root |
+
+Registration proves availability, not execution or authentication. Fresh containers
+reset the writable filesystem and scratch, not the host/kernel, caches, artifacts
+or external state. Pool labels remain routing selectors, not authorization boundaries.
+Actual checkout/action runtimes, downloads, native installation and network behavior
+remain subject to the manager's exact-head CI gate; failures stop the rollout,
+without installers, retries or other workflow workarounds.
+
+**M2 / release-environment-ready — passed on supplied evidence.** The brief relays
+Zbigniew's own names-and-settings confirmation on the release-preparation child at
+2026-11-16T10:16:04Z, manager-verified as from his account: `release` contains
+`GH_PAT` and `NPM_TOKEN`, allows exactly dev/main, and has no required reviewers
+or wait timer. Existing CI and repository copies remain in place. No secret value
+is inspected. Newly scoped credentials expire on 14 February 2027; the npm token
+covers llmist, @llmist/cli and @llmist/testing with the approved 2FA bypass. The
+owner reports npm expects bypass tokens to lose direct publishing around January
+2027. Trusted/staged publishing and expiry handling are future owner work, outside
+this change. Neither credential values nor an actual release are tested.
+
+**Structural acceptance — passed.** Scratch Node assertions use locked `yaml`
+2.9.1, YAML 1.2, duplicate-key rejection and the three pinned workflow blobs.
+Before edits, 13/35 cases pass and 22 fail for the expected hosted selectors,
+CI environments or missing per-job tools/order; preservation is legitimately green.
+After edits, 35/35 pass (exit 0): six exact routes, two Release environments,
+six independent Node setup/npm bootstrap/order groups, parse rejection, preservation
+and six isolated mutation proofs. Mutating a CI trigger, commit condition,
+permission, secret reference, Release checkout ref or sync command raises a deep
+equality assertion. Existing steps, inputs, environments outside Release, names,
+events, conditions, dependencies, permissions and shell bodies compare equal after
+removing only the authorized additions/substitutions. No permanent test/assertion
+is deleted, narrowed, replaced or weakened. No reusable workflow is introduced.
+
+**Local qualification.** Trusted setup supplies dependencies; no bootstrap or
+dependency installation/change is performed by this implementation. Worker Node
+24.22.2 satisfies the existing engine policy and installed tools; workflows
+explicitly select Node 22. npm is 10.9.2 and command execution uses engine-strict.
+Root/workspace manifests match their lockfile entries; selected installed tools
+match the lockfile. Lefthook 1.13.6 is directly installed and executable hooks are
+verified; the unsuppressed postinstall succeeds and its data symlink resolves.
+No manifest, lockfile, script or hook policy changes. The snapshot contains no
+`.github/pull_request_template.md`; delivery uses all five mandated section headings.
+
+**Local command and review results — passed.** All six target commands run
+sequentially on the staged implementation with engine-strict npm 10.9.2 and
+compatible worker Node 24.22.2. No paid/provider suite is run.
+
+| Command | Result |
+|---|---|
+| `npm run build` | Exit 0; 4/4 tasks successful |
+| `npm run typecheck` | Exit 0; 6/6 tasks successful |
+| `npm run lint` | Exit 0; 632 files checked; 1,012 warnings and 61 informational diagnostics in unchanged source |
+| `npm test` | Exit 0; 250 files and 7,069 tests pass |
+| `npm run test:coverage` | Exit 0; 250 files and 7,069 tests pass; 77.13% statement coverage |
+| `npm run test:e2e` | Exit 0; 11 files pass, 3 skipped; 99 tests pass, 4 existing skips |
+
+Fresh-context `agent-plugins__z:local-review` gate round 1 reviews the complete
+workflow delta, plan/spec, coverage, fragment and acceptance helper/red-green
+evidence and reports no findings. The same reviewer checks final lifecycle/evidence
+and delivery text in round 2 and reports converged, with no blocking regressions;
+the local-review gate passes. No executable
+input changes after the six tiers; only lifecycle and evidence prose is finalized.
+These local results do not supply candidate GitHub execution/review evidence.
+
+**M3 / activation-report — passed by source comparison and supplied registration.**
+MCP confirms live main `df8da784ab1d75844433b4bd6003797aa04cb49c` matches
+`origin/main`; its three workflow blobs match the hosted baseline. The candidate's
+dev merge activates Release's default-branch workflow_run and Claude's default-branch
+issue/comment routing. Release still checks out main. The `release` environment
+permits dev for workflow_run and main for the permitted manual dispatch; trigger
+conditions are unchanged. Main CI and main-selected manual workflow definitions
+remain hosted until a separately authorized promotion. There is no candidate
+event/run to cite before publication.
+
+| Job | Candidate configuration and supplied registration | Execution / authentication proof |
+|---|---|---|
+| release | Configured and registered on llmist-release | Execution not proven; next real release must supply event/job/runner/result/logs |
+| sync-dev | Configured and registered on llmist-release | Execution not proven; its own next real job result is required |
+| claude | Configured and registered on llmist-claude | Execution not proven; authentication and functionality unqualified because `CLAUDE_CODE_OAUTH_TOKEN` is absent from both inventories |
+
+No validation release, qualifying Claude interaction, provider call, package
+publication or main promotion is performed. Registration, static tool setup,
+skipped jobs and CI success cannot upgrade these three per-job execution claims.
+
+**M4 / owner-secret-state — accurate pending report.** Old `CI` copies of `GH_PAT`
+and `NPM_TOKEN` and repository-level `NPM_TOKEN` remain, per the owner's preparation
+confirmation. Removal is pending Zbigniew's action after the actual dev merge and
+names-only verification. If he relies on main-selected manual Release dispatch
+before promotion, CI copies stay until that separately authorized promotion.
+That reliance is unanswered; conditional retention remains explicit. Repository
+token removal retains the post-dev-merge ordering. No removal is claimed and no
+secret/environment/settings administration is performed. The manager records a
+dated names-only owner report after merge, including continued release names/policy.
+
+**External handoff.** Publication uses the configured preparation/publication
+hooks; this session does not push or write delivery through MCP. Exact-head
+lint-and-test, validate-commits and e2e-tests with llmist-ci metadata, actual install
+logs and independent GitHub review are pending publication and required before the
+manager merges. The approving review count and strict required checks remain
+unchanged. A local COMMENT-quality review does not satisfy an approving review.
+Post-merge dev push success and runner metadata remain separately deferred; commit
+validation must be skipped on that push. These results and the dated owner report
+are recorded by the manager, not inferred from this completed-form lifecycle.
+
+CLAUDE.md is untouched throughout this spec's history; nothing needs migration.
+No cross-spec decision record is authored: this run applies the already selected
+controls within the explicitly limited file scope.
 
 ## Progress
 
 <!-- Implementation updates these only after the corresponding evidence exists. -->
-- [ ] AC #1
-- [ ] AC #2
-- [ ] AC #3
-- [ ] AC #4
-- [ ] AC #5
-- [ ] AC #6
-- [ ] AC #7
+- [x] AC #1 — M1/M2: Root/owner evidence supplied in the implementation brief;
+  dates, infrastructure identities, observation sources and proof limits above.
+- [x] AC #2 — structural acceptance passes 35/35, including the preservation oracle.
+- [ ] AC #3 — deferred: explicit tools pass structural checks; actual cold-worker
+  CI install/action/version logs come from the published PR's exact-head CI jobs.
+  Manager verifies these before merge; Release/Claude execution remains unproven.
+- [ ] AC #4 — deferred: manager records independent GitHub review and successful
+  exact-head feature-PR checks/llmist-ci metadata after publication and before merge,
+  then actual post-merge dev push results/runner metadata after the authorized merge.
+  These GitHub run/job/review records are the evidence source, not local results.
+- [x] AC #5 — M3: source/ref comparison and per-job configured/registered report above;
+  execution not proven and missing Claude OAuth credential explicitly disclosed.
+- [x] AC #6 — all six sequential local tiers pass; fresh-context local review
+  reports no findings; manifests/lockfile, hooks and postinstall qualification pass.
+  Command results, documentation, fragment and preservation evidence recorded above.
+- [x] AC #7 — M4: accurate pending report sourced to the owner's preparation statement;
+  removal status deferred: manager records the owner's dated names-only post-merge
+  inventory/report, preserving conditional CI retention if main dispatch is needed.

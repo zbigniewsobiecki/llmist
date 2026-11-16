@@ -17,7 +17,7 @@ jobs:
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, llmist-claude]
     permissions:
       contents: read
       pull-requests: read
@@ -29,6 +29,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install npm 10.9.2
+        run: |
+          npm install --global npm@10.9.2
+          node --version
+          npm --version
+          node -e "require('node:assert/strict').equal(process.versions.node.split('.')[0], '22')"
+          test "$(npm --version)" = "10.9.2"
 
       - name: Run Claude Code
         id: claude
