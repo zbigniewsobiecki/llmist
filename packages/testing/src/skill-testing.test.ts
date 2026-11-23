@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Skill } from "llmist";
 import { describe, expect, it } from "vitest";
 import {
   assertSkillContains,
@@ -31,6 +35,32 @@ describe("testSkillActivation", () => {
 
     expect(activation.skillName).toBe("search");
     expect(activation.resolvedInstructions).toContain("*.ts");
+  });
+
+  it("runs a trusted skill script relative to its skill directory", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "llmist test skill "));
+    try {
+      writeFileSync(join(dir, "read-argument.sh"), 'printf "%s" "$1"', "utf8");
+      const skill = Skill.fromContent(
+        [
+          "---",
+          "name: check",
+          "description: Check the supplied argument",
+          "---",
+          '!`bash "${CLAUDE_SKILL_DIR}/read-argument.sh" "$ARGUMENTS"`',
+          '!`bash ./read-argument.sh "${SKILL_DIR}"`',
+        ].join("\n"),
+        join(dir, "SKILL.md"),
+      );
+      const args = "two words, $0 & *";
+      const activation = await testSkillActivation(skill, {
+        arguments: args,
+        enableShellPreprocessing: true,
+      });
+      expect(activation.resolvedInstructions).toBe(`${args}\n${dir}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("works without arguments", async () => {

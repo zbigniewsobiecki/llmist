@@ -1,72 +1,69 @@
 /**
  * Skill activation logic.
  *
- * Handles $ARGUMENTS substitution and !`command` shell preprocessing
- * to resolve skill instructions before injection into agent context.
+ * Substitutes skill placeholders. Shell directives run only when the caller
+ * sets enableShellPreprocessing for a trusted skill.
  *
  * @module skills/activation
  */
 
 import { execSync } from "node:child_process";
 
-/**
- * Substitute $ARGUMENTS and positional $0, $1, etc. in skill instructions.
- */
-export function substituteArguments(instructions: string, args?: string): string {
-  if (!args) {
-    // Replace all argument placeholders with empty string.
-    // Order: indexed forms first, then bare $ARGUMENTS, then positional $N.
-    return instructions
-      .replace(/\$ARGUMENTS\[\d+\]/g, "")
-      .replace(/\$ARGUMENTS/g, "")
-      .replace(/\$\d+/g, "");
-  }
+const ARGUMENT = /\$ARGUMENTS(?:\[(\d+)\])?|\$(\d+)/g;
+const VARIABLE = /\$\{(\w+)\}/g;
+const SHELL_DIRECTIVE = /!`[^`]+`/g;
+const POSITIONAL_SHELL_PLACEHOLDER = /\$(?:\d+|\{\d+\}|ARGUMENTS\[\d+\])/;
+const TEMPLATE_TOKENS = new RegExp(
+  `${ARGUMENT.source}|${VARIABLE.source}|${SHELL_DIRECTIVE.source}`,
+  "g",
+);
 
+function argumentReplacer(args = "") {
   const parts = splitArguments(args);
-
-  // Replace indexed forms first (more specific), then bare $ARGUMENTS
-  let result = instructions.replace(/\$ARGUMENTS\[(\d+)\]/g, (_match, index) => {
-    const i = Number.parseInt(index, 10);
-    return parts[i] ?? "";
-  });
-
-  result = result.replace(/\$ARGUMENTS/g, args);
-
-  result = result.replace(/\$(\d+)/g, (_match, index) => {
-    const i = Number.parseInt(index, 10);
-    return parts[i] ?? "";
-  });
-
-  return result;
+  return (_token: string, indexed?: string, positional?: string): string => {
+    const index = indexed ?? positional;
+    return index === undefined ? args : (parts[Number(index)] ?? "");
+  };
 }
 
-/**
- * Execute !`command` shell preprocessing directives in skill instructions.
- *
- * Commands enclosed in !`...` are executed synchronously and their stdout
- * replaces the directive. This happens before the LLM sees the instructions.
- */
-export function preprocessShellCommands(
-  instructions: string,
-  options?: { cwd?: string; shell?: "bash" | "powershell"; timeoutMs?: number },
-): string {
-  const { cwd, shell = "bash", timeoutMs = 10_000 } = options ?? {};
+/** Substitute argument placeholders once, preserving caller-supplied text literally. */
+export function substituteArguments(instructions: string, args?: string): string {
+  return instructions.replace(ARGUMENT, argumentReplacer(args));
+}
 
-  return instructions.replace(/!`([^`]+)`/g, (_match, command: string) => {
-    try {
-      const output = execSync(command, {
-        cwd,
-        shell: shell === "powershell" ? "powershell" : "/bin/bash",
-        timeout: timeoutMs,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      return output.trim();
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      return `[Error executing \`${command}\`: ${msg}]`;
-    }
-  });
+export interface ResolveInstructionsOptions {
+  arguments?: string;
+  variables?: Record<string, string>;
+  cwd?: string;
+  shell?: "bash" | "powershell";
+  shellTimeoutMs?: number;
+  enableShellPreprocessing?: boolean;
+}
+
+function executeTemplateCommand(command: string, options: ResolveInstructionsOptions): string {
+  if (POSITIONAL_SHELL_PLACEHOLDER.test(command)) {
+    return `[Error executing \`${command}\`: Positional skill arguments are unsupported in inline commands. Use the ARGUMENTS environment variable or put the command in a script file.]`;
+  }
+  try {
+    return execSync(command, {
+      cwd: options.cwd,
+      shell: options.shell === "powershell" ? "powershell" : "/bin/bash",
+      timeout: options.shellTimeoutMs ?? 10_000,
+      // Only these skill values are shell inputs. Other template variables must
+      // never override process settings such as PATH.
+      env: {
+        ...process.env,
+        SKILL_DIR: options.variables?.SKILL_DIR ?? "",
+        CLAUDE_SKILL_DIR: options.variables?.CLAUDE_SKILL_DIR ?? "",
+        ARGUMENTS: options.arguments ?? "",
+      },
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return `[Error executing \`${command}\`: ${msg}]`;
+  }
 }
 
 /**
@@ -80,45 +77,31 @@ export function substituteVariables(
   instructions: string,
   variables: Record<string, string>,
 ): string {
-  return instructions.replace(/\$\{(\w+)\}/g, (_match, varName: string) => {
-    return variables[varName] ?? "";
-  });
+  return instructions.replace(VARIABLE, (_match, name: string) => variableValue(variables, name));
 }
 
-/**
- * Full activation pipeline: variables -> arguments -> shell preprocessing.
- */
+function variableValue(variables: Record<string, string>, name: string): string {
+  return Object.hasOwn(variables, name) ? variables[name] : "";
+}
+
+/** Render only tokens present in the original skill template. */
 export function resolveInstructions(
   instructions: string,
-  options?: {
-    arguments?: string;
-    variables?: Record<string, string>;
-    cwd?: string;
-    shell?: "bash" | "powershell";
-    shellTimeoutMs?: number;
-    enableShellPreprocessing?: boolean;
-  },
+  options?: ResolveInstructionsOptions,
 ): string {
-  let resolved = instructions;
-
-  // Step 1: Variable substitution
-  if (options?.variables) {
-    resolved = substituteVariables(resolved, options.variables);
-  }
-
-  // Step 2: Argument substitution
-  resolved = substituteArguments(resolved, options?.arguments);
-
-  // Step 3: Shell preprocessing (opt-in, since it executes commands)
-  if (options?.enableShellPreprocessing !== false) {
-    resolved = preprocessShellCommands(resolved, {
-      cwd: options?.cwd,
-      shell: options?.shell,
-      timeoutMs: options?.shellTimeoutMs,
-    });
-  }
-
-  return resolved;
+  const replaceArgument = argumentReplacer(options?.arguments);
+  // One pass keeps arguments, variables and command output out of the template grammar.
+  return instructions.replace(TEMPLATE_TOKENS, (token, indexed, positional, variable) => {
+    if (token.startsWith("!")) {
+      return options?.enableShellPreprocessing === true
+        ? executeTemplateCommand(token.slice(2, -1), options)
+        : token;
+    }
+    if (variable !== undefined) {
+      return options?.variables ? variableValue(options.variables, variable) : token;
+    }
+    return replaceArgument(token, indexed, positional);
+  });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

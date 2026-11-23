@@ -9,8 +9,8 @@
  */
 
 // Activation logic
+export type { ResolveInstructionsOptions } from "./activation.js";
 export {
-  preprocessShellCommands,
   resolveInstructions,
   substituteArguments,
   substituteVariables,

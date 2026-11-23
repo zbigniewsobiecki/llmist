@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  preprocessShellCommands,
-  resolveInstructions,
-  substituteArguments,
-  substituteVariables,
-} from "./activation.js";
+import { resolveInstructions, substituteArguments, substituteVariables } from "./activation.js";
 
 describe("substituteArguments", () => {
   it("replaces $ARGUMENTS with full argument string", () => {
@@ -43,26 +38,28 @@ describe("substituteArguments", () => {
   });
 });
 
-describe("preprocessShellCommands", () => {
+describe("resolveInstructions with shell preprocessing enabled", () => {
+  const options = { enableShellPreprocessing: true };
+
   it("executes !`command` and replaces with output", () => {
-    const result = preprocessShellCommands("Version: !`echo 42`");
+    const result = resolveInstructions("Version: !`echo 42`", options);
     expect(result).toBe("Version: 42");
   });
 
   it("handles multiple commands", () => {
-    const result = preprocessShellCommands("A=!`echo a`, B=!`echo b`");
+    const result = resolveInstructions("A=!`echo a`, B=!`echo b`", options);
     expect(result).toBe("A=a, B=b");
   });
 
   it("shows error for failing commands with error message", () => {
-    const result = preprocessShellCommands("Result: !`false`");
+    const result = resolveInstructions("Result: !`false`", options);
     expect(result).toContain("[Error executing `false`:");
     expect(result).toContain("Command failed");
   });
 
   it("leaves text without commands unchanged", () => {
     const input = "No commands here. Regular `code blocks` are fine.";
-    expect(preprocessShellCommands(input)).toBe(input);
+    expect(resolveInstructions(input, options)).toBe(input);
   });
 });
 
@@ -82,17 +79,20 @@ describe("substituteVariables", () => {
 });
 
 describe("resolveInstructions", () => {
-  it("runs full pipeline: variables -> arguments -> shell", () => {
-    const result = resolveInstructions(
-      "Dir: ${SKILL_DIR}\nTask: $ARGUMENTS\nDate: !`echo 2026-04-01`",
-      {
-        variables: { SKILL_DIR: "/skills/test" },
-        arguments: "check inbox",
-      },
-    );
-    expect(result).toContain("/skills/test");
-    expect(result).toContain("check inbox");
-    expect(result).toContain("2026-04-01");
+  it("leaves the contents of a disabled directive verbatim", () => {
+    const result = resolveInstructions("$0 !`echo $0 ${SKILL_DIR}`", {
+      arguments: "file",
+      variables: { SKILL_DIR: "/skill" },
+    });
+    expect(result).toBe("file !`echo $0 ${SKILL_DIR}`");
+  });
+
+  it("renders placeholders and leaves shell directives as text by default", () => {
+    const result = resolveInstructions("${SKILL_DIR}: $ARGUMENTS (!`echo version`)", {
+      variables: { SKILL_DIR: "/skills/test" },
+      arguments: "check inbox",
+    });
+    expect(result).toBe("/skills/test: check inbox (!`echo version`)");
   });
 
   it("skips shell preprocessing when disabled", () => {
