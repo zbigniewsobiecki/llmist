@@ -10,7 +10,6 @@
 
 // Activation logic
 export {
-  preprocessShellCommands,
   resolveInstructions,
   substituteArguments,
   substituteVariables,

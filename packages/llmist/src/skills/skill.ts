@@ -123,11 +123,8 @@ export class Skill {
   /**
    * Activate this skill with optional arguments.
    *
-   * Performs:
-   * 1. Variable substitution (${SKILL_DIR}, etc.)
-   * 2. Argument substitution ($ARGUMENTS, $0, $1)
-   * 3. Shell preprocessing (!`command`)
-   * 4. Resource loading (if eagerResources is true)
+   * Substitutes variables and arguments. Only an explicitly trusted activation
+   * executes shell directives written in the original skill body.
    */
   async activate(options?: SkillActivationOptions): Promise<SkillActivation> {
     const instructions = await this.getInstructions();

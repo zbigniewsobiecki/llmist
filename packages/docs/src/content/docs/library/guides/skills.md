@@ -90,7 +90,19 @@ Current branch: !`git branch --show-current`
 - `$ARGUMENTS` - Full argument string
 - `$0`, `$1`, `$ARGUMENTS[N]` - Positional arguments
 - `${SKILL_DIR}`, `${CLAUDE_SKILL_DIR}` - Skill directory path
-- `` !`command` `` - Shell command (executed before LLM sees instructions)
+
+Shell directives such as `` !`git branch --show-current` `` are plain text by default,
+including in CLI slash commands, `LoadSkill` and MCP prompts. Applications that rely
+on these directives can explicitly enable them for a trusted skill:
+
+```typescript
+await skill.activate({ arguments: "src", enableShellPreprocessing: true });
+```
+
+With this option, llmist sends the command exactly as written in the skill file to the
+configured shell. Skill placeholders are expanded only in surrounding text. Argument
+values, variables and command output are never evaluated as template syntax. The
+`shell` frontmatter field selects the interpreter and cannot enable execution.
 
 ## Three-Tier Progressive Disclosure
 

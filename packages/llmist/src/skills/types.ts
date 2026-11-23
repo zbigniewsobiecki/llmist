@@ -137,7 +137,7 @@ export interface SkillActivationOptions {
   /** Working directory for !`command` preprocessing. */
   cwd?: string;
 
-  /** Whether to execute !`command` preprocessing. Default: true. */
+  /** Execute shell directives in a trusted skill template. Default: false. */
   enableShellPreprocessing?: boolean;
 
   /** Timeout for !`command` execution in milliseconds. Default: 10000. */

@@ -63,7 +63,6 @@ export async function testSkillActivation(
 ): Promise<SkillActivation> {
   return skill.activate({
     ...options,
-    // Disable shell preprocessing in tests by default for safety
     cwd: options?.cwd ?? "/test",
   });
 }
