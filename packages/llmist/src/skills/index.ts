@@ -9,6 +9,7 @@
  */
 
 // Activation logic
+export type { ResolveInstructionsOptions } from "./activation.js";
 export {
   resolveInstructions,
   substituteArguments,

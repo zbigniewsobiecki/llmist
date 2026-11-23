@@ -531,6 +531,7 @@ export { BaseSessionManager, SimpleSessionManager } from "./session/index.js";
 // ============================================================================
 export type {
   ParsedSkill,
+  ResolveInstructionsOptions,
   SkillActivation,
   SkillActivationOptions,
   SkillMetadata,

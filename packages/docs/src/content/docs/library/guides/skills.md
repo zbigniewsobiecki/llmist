@@ -113,8 +113,11 @@ and `"$env:ARGUMENTS"` in PowerShell. Other template variables are for surroundi
 
 Use positional placeholders (`$0`, `$1`, `$ARGUMENTS[N]`) in the surrounding skill text.
 A directive containing one of these forms, or a braced shell position such as `${0}`,
-returns an error without starting the shell. Argument values, variables and command output are never read as new template
-syntax.
+returns an error that names the command, without starting the shell. This check applies
+before shell parsing, even inside single quotes or after a backslash. For example, put
+`{print $1}` in `first-field.awk` and invoke `awk -f "${SKILL_DIR}/first-field.awk"`
+in the directive. The script file uses normal shell or tool syntax. Argument values,
+variables and command output are never read as new template syntax.
 
 ## Three-Tier Progressive Disclosure
 

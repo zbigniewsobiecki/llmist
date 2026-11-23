@@ -12,6 +12,7 @@ import { execSync } from "node:child_process";
 const ARGUMENT = /\$ARGUMENTS(?:\[(\d+)\])?|\$(\d+)/g;
 const VARIABLE = /\$\{(\w+)\}/g;
 const SHELL_DIRECTIVE = /!`[^`]+`/g;
+const POSITIONAL_SHELL_PLACEHOLDER = /\$(?:\d+|\{\d+\}|ARGUMENTS\[\d+\])/;
 const TEMPLATE_TOKENS = new RegExp(
   `${ARGUMENT.source}|${VARIABLE.source}|${SHELL_DIRECTIVE.source}`,
   "g",
@@ -30,7 +31,7 @@ export function substituteArguments(instructions: string, args?: string): string
   return instructions.replace(ARGUMENT, argumentReplacer(args));
 }
 
-interface ResolveInstructionsOptions {
+export interface ResolveInstructionsOptions {
   arguments?: string;
   variables?: Record<string, string>;
   cwd?: string;
@@ -40,8 +41,8 @@ interface ResolveInstructionsOptions {
 }
 
 function executeTemplateCommand(command: string, options: ResolveInstructionsOptions): string {
-  if (/\$(?:\d+|\{\d+\}|ARGUMENTS\[\d+\])/.test(command)) {
-    return "[Error: Positional skill arguments are unsupported in shell directives. Use the ARGUMENTS environment variable.]";
+  if (POSITIONAL_SHELL_PLACEHOLDER.test(command)) {
+    return `[Error executing \`${command}\`: Positional skill arguments are unsupported in inline commands. Use the ARGUMENTS environment variable or put the command in a script file.]`;
   }
   try {
     return execSync(command, {

@@ -112,11 +112,15 @@ describe("skill rendering at the shell boundary", () => {
     "$12",
     "${1}",
     "$ARGUMENTS[0]",
+    "awk '{print $1}'",
+    "\\$1",
   ])("rejects %s in a trusted command before spawning", (placeholder) => {
-    const result = resolveInstructions("!`template-marker " + placeholder + "`", {
+    const command = `template-marker ${placeholder}`;
+    const result = resolveInstructions("!`" + command + "`", {
       enableShellPreprocessing: true,
     });
     expect(result).toContain("Positional skill arguments");
+    expect(result).toContain(command);
     expect(execSync).not.toHaveBeenCalled();
   });
 
