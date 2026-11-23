@@ -1,3 +1,17 @@
+## [19.0.0](https://github.com/zbigniewsobiecki/llmist/compare/v18.4.2...v19.0.0) (2026-11-23)
+
+### ⚠ BREAKING CHANGES
+
+* **agent:** Skill shell directives are literal by default. Opt in per trusted activation.
+
+### Bug Fixes
+
+* **agent:** identify rejected directives and export rendering options ([0ff9e41](https://github.com/zbigniewsobiecki/llmist/commit/0ff9e413441f156235bbcf4b653168dae08d4b03))
+* **agent:** keep skill inputs out of shell preprocessing ([0056baf](https://github.com/zbigniewsobiecki/llmist/commit/0056baf8f9e3cb5c12bec05ce1797ee9295aeb1b))
+* **agent:** restore trusted skill activation for library callers ([98217c8](https://github.com/zbigniewsobiecki/llmist/commit/98217c89c36050c7d4464b9a521841886daec404))
+* **deps:** reduce compatible dependency security exposure ([#680](https://github.com/zbigniewsobiecki/llmist/issues/680)) ([7b04b18](https://github.com/zbigniewsobiecki/llmist/commit/7b04b18ea36d4e6c4c222455679ac890b08d5df1))
+* **deps:** upgrade runtime minimatch ([#686](https://github.com/zbigniewsobiecki/llmist/issues/686)) ([687e0af](https://github.com/zbigniewsobiecki/llmist/commit/687e0af8d1b0a89ba2cd4ef041b0a65c8e9e4414))
+
 ## [18.4.2](https://github.com/zbigniewsobiecki/llmist/compare/v18.4.1...v18.4.2) (2026-11-03)
 
 ### Bug Fixes
