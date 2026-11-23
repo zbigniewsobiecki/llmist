@@ -96,7 +96,7 @@ The exported `createMcpServer` works seamlessly with the SDK's `InMemoryTranspor
 | Skill name | prompt name | identity |
 | Skill description | prompt description | falls back to synthesized when empty |
 | `argumentHint` | single optional `arguments` parameter | the existing `$ARGUMENTS` / `$0` substitution kicks in at render time |
-| Skill body | prompts/get response — single `user` text message | activated through `Skill.activate()` so substitution and shell preprocessing all run |
+| Skill body | prompts/get response — single `user` text message | skill placeholders are substituted as text; shell preprocessing is disabled |
 
 ## Related
 

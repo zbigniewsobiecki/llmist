@@ -14,8 +14,8 @@ on:
 jobs:
   release:
     name: Semantic Release
-    runs-on: ubuntu-latest
-    environment: CI
+    runs-on: [self-hosted, linux, x64, llmist-release]
+    environment: release
     # Run on (a) the normal workflow_run path after CI passes on main, or
     # (b) an explicit manual dispatch — but only when dispatched FROM main,
     # so an accidental "Run workflow" from a feature branch can't publish.
@@ -47,6 +47,14 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
+
+      - name: Install npm 10.9.2
+        run: |
+          npm install --global npm@10.9.2
+          node --version
+          npm --version
+          node -e "require('node:assert/strict').equal(process.versions.node.split('.')[0], '22')"
+          test "$(npm --version)" = "10.9.2"
 
       - name: Install dependencies
         run: npm ci
@@ -116,8 +124,8 @@ jobs:
   # Sync dev branch after any successful CI on main
   sync-dev:
     name: Sync dev branch
-    runs-on: ubuntu-latest
-    environment: CI
+    runs-on: [self-hosted, linux, x64, llmist-release]
+    environment: release
     needs: release
     if: always() && needs.release.result == 'success'
 
@@ -126,6 +134,19 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install npm 10.9.2
+        run: |
+          npm install --global npm@10.9.2
+          node --version
+          npm --version
+          node -e "require('node:assert/strict').equal(process.versions.node.split('.')[0], '22')"
+          test "$(npm --version)" = "10.9.2"
 
       - name: Sync dev with main
         run: |

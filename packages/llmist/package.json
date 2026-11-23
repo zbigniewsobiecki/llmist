@@ -75,7 +75,7 @@
     "js-yaml": "^4.3.2",
     "marked": "^15.0.12",
     "marked-terminal": "^7.3.0",
-    "minimatch": "^9.0.9",
+    "minimatch": "^11",
     "openai": "^6.0.0",
     "p-retry": "^7.1.1",
     "tiktoken": "^1.0.22",

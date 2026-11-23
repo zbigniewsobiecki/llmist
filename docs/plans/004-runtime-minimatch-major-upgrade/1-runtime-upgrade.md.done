@@ -1,0 +1,686 @@
+---
+id: "004"
+slug: runtime-minimatch-major-upgrade
+plan: 1
+plan_slug: runtime-upgrade
+level: plan
+title: Upgrade direct runtime minimatch with skill compatibility and exposure evidence
+parent_spec: docs/specs/004-runtime-minimatch-major-upgrade.md.done
+depends_on: []
+status: done
+locked_at: ba56f209d65c968ebc2a00f4993e46f9d9473c23
+---
+
+# 004/1: Upgrade direct runtime minimatch with skill compatibility and exposure evidence
+
+> Part 1 of 1. Parent: [full spec](../../specs/004-runtime-minimatch-major-upgrade.md.done).
+
+## Summary
+
+Related to WAT-558
+
+Characterize skill selection and built consumer loading before upgrading llmist's direct
+minimatch range from `^9.0.9` to `^11`, selecting an upstream release at least 11.0.1.
+Qualify the installed graph, preserve the existing matcher defaults and public behavior,
+and demonstrate removal of GHSA-g3hv-75wg-m249 from the library and inherited CLI runtime
+paths with fresh valid advisory data and actual parent chains.
+
+Preservation expectations throughout this plan have exactly two owner-approved changes:
+`src/!(a)*.ts` selects `src/ab.ts`, and `src/?.ts` selects `src/😀.ts` on minimatch 11.x;
+9.0.9 selected neither. Pin these two new results in registry regression tests. All other
+preservation expectations remain mandatory. Do not change matcher options, production code
+or other expected values; any further observed behavior difference requires owner direction.
+
+Deliver one atomic dependency-maintenance change with regression tests and evidence.
+Development cleanup, private documentation and release-tool findings remain visible and
+upstream-only. This is not a zero-finding audit target or risk acceptance. There is no
+later plan that supplies missing tests or evidence.
+
+**Components delivered / files owned exclusively within this spec:**
+
+- `packages/llmist/src/skills/registry.test.ts`: file-selection characterization.
+- `packages/llmist/src/skills/runtime-compatibility.test.ts`: new built ESM/CommonJS checks.
+- `packages/cli/src/skills/runtime-skills.test.ts`: new built CLI skill workflow checks.
+- `packages/llmist/package.json`: only the direct minimatch dependency range.
+- `package-lock.json`: that range and required upstream resolution changes.
+- This plan's Evidence and Progress sections, and its normal `.md` → `.md.wip` →
+  `.md.done` implementation lifecycle.
+- `docs/plans/004-runtime-minimatch-major-upgrade/_coverage.md`: completion links/conclusions.
+- The sole parent spec's completion status and `.md.done` rename when the implementation
+  lifecycle reaches spec completion; no other parent text change.
+- `changelog.d/wat-558-runtime-minimatch-upgrade.md`: one later implementation fragment.
+
+No production TypeScript change is expected: `SkillRegistry.findByFilePath(filePath: string):
+Skill[]` already uses the named `minimatch` export with default options. A necessary behavior,
+public API or stored-shape change blocks execution for owner direction rather than becoming
+an implicit migration. Do not change bundler configuration to conceal incompatibility.
+
+**Shared surfaces:** none in this one-plan set. Independent changelog fragments do not
+conflict. Preserve landed Spec and Plan fragments; edit the implementation fragment on
+unmerged follow-ups rather than adding a second one.
+
+**Deferred to later plans:** none. Upstream residuals require separate scope and ownership.
+
+## Spec ACs satisfied by this plan
+
+- Spec AC #1 — **full**: direct range, selected installed version, engine/module checks,
+  reproducible engine-strict install and explained lock delta.
+- Spec AC #2 — **full**: fresh valid audit plus shipped library/CLI dependency traversal.
+- Spec AC #3 — **full**: enumerated residual versions, chains, advisories and upstream boundaries.
+- Spec AC #4 — **full**: concrete file-selection characterization plus existing regressions.
+- Spec AC #5 — **full**: built ESM/CommonJS and inherited CLI skill workflows, no migration.
+- Spec AC #6 — **full**: six sequential local tiers and required exact-reviewed-head CI;
+  the external CI result is a merge gate, not inferred from local success.
+
+## Depends On
+
+None (`depends_on: []`). Start from current `dev` containing the merged full spec.
+Historical source: merge commit `c392dcd711b1ed399f2da9cba3532d5864785df4`, SHA-256
+`ea79004167e50940b33aa4479b3756920fd7f3046ca008f5e128b9a953b5090c`.
+Resolve the parent by id/slug if its lifecycle extension changes; retain the pinned source
+as provenance. Reassess if current code, ranges or advisory data invalidate this plan.
+
+Planning inspects the existing registry, skill parser/loader, package exports, tsup configs,
+CLI manager/commands and CI workflow. Cached registry metadata for minimatch 11.0.1 declares
+Node `18 || 20 || >=22`, dependencies `brace-expansion ^5.0.12` and
+`@isaacs/nonrecursive-glob-match ^1.0.1`. This supports the Node-major choice but is not a
+fresh artifact, license, export-map or installed-compatibility proof. Task 1 must verify
+the actual selected artifact before editing dependencies; task 3 qualifies its consumers.
+
+## Detailed Task List (TDD)
+
+Keep raw logs and one-shot audit/graph checks in ignored `.watershed/.cache/004-runtime/`.
+Record conclusions in this plan, not global docs or the historical 003 evidence. Do not
+commit dependency-version snapshot tests. No exploit patterns, optimization-level benchmarks
+or provider calls are needed. New characterization tests legitimately pass on the baseline;
+their expected-red mechanism below uses temporary, reverted mutations, not an invented bug.
+
+### 1. Establish baseline checks and selected-release compatibility
+
+**Tests first — command-driven acceptance checks on unchanged current `dev`:**
+
+- `direct-runtime-target`: resolve dependencies from `packages/llmist` and through
+  `packages/cli` → `llmist`; require the direct manifest range `^11` and installed version
+  satisfying it and `>=11.0.1`. Expected red on the pinned baseline: `^9.0.9` / 9.0.9 fails
+  these predicates. Use the installed resolver and lock edges, not the hoisted version alone.
+- `audit-json-valid`: run `npm audit --package-lock-only --json --ignore-scripts`, capturing
+  stdout, stderr and status separately. Parse JSON; require the supported audit schema,
+  vulnerability map, advisory entries and absence of a registry/error object. Exit 1 with
+  valid findings is a completed audit. Network failure, missing advisory data, malformed
+  JSON or unsupported schema blocks conclusions. This validity check should pass before
+  and after; a deliberately malformed saved response must fail parsing/validation.
+- `runtime-advisory-absent`: map GHSA-g3hv-75wg-m249 advisory ranges/nodes to installed
+  paths reachable on library and inherited CLI runtime dependency edges. Expected red:
+  baseline direct minimatch 9.0.9 is affected on both paths. Do not assert that this GHSA
+  disappears from the whole repository; residual copies are expected.
+
+**Implementation — baseline and pre-edit evidence in this plan:**
+
+1. Record current base SHA, UTC audit time, Node/npm versions, lock hash, command statuses
+   and deduplicated advisory inventory. Reconcile against historical
+   [003 evidence](../003-current-lock-security-remediation/1-compatible-remediation.md.done#evidence).
+   If a target check is already green, explain the actual graph; never reinstall a vulnerable
+   version to manufacture red or reuse the historical finding count as a fresh result.
+2. Use lock edges, `npm explain` and `npm ls --all --json` plus installed manifests to trace
+   parent chains. Explain tree errors before proceeding. Distinguish advisory objects from
+   propagated package entries. Workspace `dev`/`devOptional` flags and production-only audits
+   cannot determine shipped runtime exposure by themselves.
+3. Before the dependency edit, inspect full metadata and the selected upstream artifact
+   satisfying `^11` / `>=11.0.1`, including integrity, `BlueOak-1.0.0` license, transitive dependencies,
+   Node engines and ESM/CommonJS exports with the named `minimatch` function. Inspect its
+   migration notes/types/source for changed default pattern semantics. Use pinned/cached
+   package artifacts and authorized registry tools; do not bypass sandbox egress restrictions.
+   Cached abbreviated metadata alone is insufficient. Missing artifact evidence blocks the
+   upgrade; unsupported engines, missing exports or required behavior changes require direction.
+4. Preserve consumer Node `>=22.0.0`, `.nvmrc` 22 and the existing contributor toolchain floor.
+   Qualify on the worker's compatible Node per `CONTRIBUTING.md`, npm 10.9.2 and engine-strict;
+   record the selected artifact version rather than assuming `^11` alone proves remediation.
+
+### 2. Characterize existing skill matching before changing the dependency
+
+**Tests first — unit tests in `packages/llmist/src/skills/registry.test.ts`:**
+
+Exercise real `Skill`, `SkillRegistry.from` and `findByFilePath`; do not mock minimatch.
+Assert returned skill names (and uniqueness), not calls to the matcher. Retain the existing
+"finds skills matching file path patterns" and "returns empty array when no patterns match".
+Use one small case per row or parameterized test; these are proposed descriptive test names.
+
+| Test | Setup → expected selection | Expected red in a temporary mutation check |
+|---|---|---|
+| `matches a top-level file` | `*.ts`, `main.ts` → skill selected | Return `[]`: expected named skill, got none |
+| `matches nested globstar paths` | `src/**/*.ts`, both `src/main.ts` and `src/a/b.ts` → selected | Return `[]`: expected selection |
+| `rejects a nonmatching extension` | `**/*.ts`, `readme.md` → empty | Select every model-invocable skill: expected empty |
+| `selects when only a later pattern matches` | `['**/*.css', '**/*.ts']`, `src/a.ts` → selected | Check only first pattern: expected selection |
+| `returns a skill once when multiple patterns match` | `['**/*.ts', 'src/**']`, `src/a.ts` → one name | Collect per-pattern results: expected one, got two |
+| `excludes absent paths` | No `paths`, `src/a.ts` → empty | Treat absent patterns as match-all: expected empty |
+| `excludes empty paths` | Parsed skill with `paths: []`, `src/a.ts` → empty | Treat empty patterns as match-all: expected empty |
+| `excludes model-disabled matching skills` | Matching paths with `disable-model-invocation: true` → empty | Use `getAll()` instead of `getModelInvocable()`: expected empty |
+| `preserves default dotfile handling` | `**/*.ts` rejects `src/.hidden.ts`; `src/.*.ts` selects it | Set `dot: true` / reject explicit dot: selection mismatch |
+| `preserves brace alternatives` | `src/*.{ts,tsx}` selects `src/a.tsx`, rejects `src/a.js` | Disable brace expansion: expected selected name |
+| `preserves extglob alternatives` | `src/@(a|b).ts` selects `src/b.ts`, rejects `src/c.ts` | Disable extglob: expected selected name |
+| `preserves case-sensitive matching` | `src/*.ts` rejects `SRC/a.TS` | Set `nocase: true`: expected empty |
+| `preserves segment boundaries` | `src/*.ts` rejects `src/nested/a.ts` | Replace pattern with `src/**/*.ts`: expected empty, got selected skill |
+| `preserves default negation` | `!**/*.test.ts` selects `src/a.ts`, rejects `src/a.test.ts` | Set `nonegate: true`: expected selected name |
+| `accepts owner-approved negative extglob suffix matching` | `src/!(a)*.ts` selects `src/ab.ts` on 11.x | Baseline 9.0.9 returns no selection |
+| `accepts owner-approved astral character wildcard matching` | `src/?.ts` selects `src/😀.ts` on 11.x | Baseline 9.0.9 returns no selection |
+
+For empty paths, use explicit YAML `paths: []` with `Skill.fromContent` rather than the
+existing `makeSkill` helper's empty multiline YAML if it parses as null. Assert metadata
+really contains the empty array, so this case differs from absent patterns.
+
+**Implementation — test fixtures and characterization evidence only:**
+
+- Run the fourteen original rows against baseline 9.0.9 first; pin observed defaults before
+  the upgrade. The two owner-approved change rows must instead fail on 9.0.9 and pass on 11.x.
+  Apply the relevant minimal mutation to confirm the named assertion fails for the stated
+  reason, then revert it and require green. Temporary mutations must never be committed.
+  Do not accept missing-import, syntax or fixture-parsing errors as right-reason red.
+- Add bounded ordinary edge cases identified by task 1's artifact comparison, especially
+  changed pattern parsing/optimization paths actually reachable with default options. Record
+  why the matrix covers the relevant major boundary; do not claim exhaustive glob equivalence.
+- Preserve `findByFilePath(filePath: string): Skill[]`, `.some` semantics and default matcher
+  options. If any baseline result conflicts with the stated preservation contract, stop for
+  reassessment rather than changing expected values to fit the candidate.
+- Refactor fixtures on green if useful; keep all existing assertions and regression suites.
+
+### 3. Prove built library and CLI compatibility, then upgrade
+
+**Tests first — built consumer integration tests, before the dependency edit:**
+
+Build baseline packages, then add these tests. They must spawn real Node processes against
+package exports, bypassing Vitest's source aliases; don't mock llmist, minimatch or the CLI
+manager. Use ordinary temporary fixture directories with cleanup and bounded child-process
+timeouts; do not redirect `TMPDIR` or overwrite `HOME`. No provider client is needed.
+
+- `built ESM consumer selects and activates a skill` —
+  `packages/llmist/src/skills/runtime-compatibility.test.ts`: spawn Node in module mode and
+  `import('llmist')`; construct `Skill.fromContent` with a simple path pattern, register it,
+  select through `findByFilePath` and read/activate provider-free instructions with shell
+  preprocessing disabled. Assert exact selected name and instruction text, zero exit status
+  and no loading error. Expected red under a temporary fixture mismatch: expected selected
+  name/instruction, got a different value. A deliberately invalid export path must also
+  cause the parent test to fail rather than swallowing the child error.
+- `built CommonJS consumer selects and activates a skill` — same file and observable
+  assertions, using a separate CommonJS child process and `require('llmist')`. Expected red
+  by the same controlled fixture mismatch. An ESM success cannot stand in for this check.
+- `built CLI lists and describes a project skill` —
+  `packages/cli/src/skills/runtime-skills.test.ts`: create a uniquely named
+  `.llmist/skills/<name>/SKILL.md` beneath an isolated project fixture; spawn the absolute
+  built `packages/cli/dist/cli.js` path with `skill list` and `skill info <name>` from that
+  cwd. Assert the list contains the fixture name and info contains its paths and exact
+  instruction text, with successful exits. Expected red if the fixture uses a different
+  name: list/info assertions fail. Retain existing manager, command and slash-handler tests.
+
+**Implementation — direct manifest and lock:**
+
+1. Establish all task 2–3 tests green on the baseline, with mutation checks restored. Build
+   before running the new subprocess tests; `npm test` alone after a clean checkout does
+   not build dist artifacts. The six-tier final sequence and existing CI already build first.
+2. Change only `packages/llmist/package.json`'s minimatch range to exactly `^11`.
+   Use npm 10.9.2 ordinary range-respecting lock resolution, for example
+   `npm install --package-lock-only --ignore-scripts --engine-strict`, without forced
+   resolutions or adopting another branch. Explain each required changed dependency subtree
+   and workspace lock metadata field; reject unrelated dependency churn. Other manifests
+   and toolchain policy remain unchanged.
+3. Run `npm ci --engine-strict --ignore-scripts=false` with npm 10.9.2 (record its executable;
+   `node_modules/.bin/npm` belongs to release tooling). Verify the lock does not mutate.
+   Directly run `node_modules/.bin/lefthook install`; inspect executable pre-commit,
+   commit-msg and pre-push hooks and the expected `@unblessed/core/dist/data` symlink.
+   Wrapper success does not excuse hidden lifecycle or hook failures.
+4. Rebuild and rerun unchanged task 1–3 checks against the installed candidate. Verify the
+   artifact and resolved version match the lock and integrity provenance. Keep both library
+   module formats, CLI loading and skill selection usable. Stop for any needed public API,
+   configuration, stored-data or behavior migration; do not weaken tests or add shims.
+
+### 4. Re-audit and reconcile runtime removal and upstream residuals
+
+**Tests first — acceptance check `residual-inventory-complete`:**
+
+Compare valid fresh baseline/candidate audits by advisory identifier and dependency path,
+not total counts. Require every remaining affected path to have versions, parent chains,
+advisory identifiers, exposure and upstream-only status. Expected red on an incomplete
+report: a deliberately omitted known residual row fails reconciliation. Keep the unchanged
+`runtime-advisory-absent` check: candidate library/CLI paths must pass even if this advisory
+remains on unrelated paths. Network errors must fail `audit-json-valid`, never produce green.
+
+**Implementation — this plan's Evidence section and implementation changelog:**
+
+- Run the same audit protocol against the candidate lock and installed tree; record UTC
+  timestamp, lock hash, resolved versions and command outcomes. Deduplicate GHSA identities
+  while retaining each affected installation and full parent chain. Trace CLI → llmist →
+  selected minimatch explicitly. Reachability alone proves neither exploitability nor safety.
+- Enumerate remaining root/workspace rimraf → glob cleanup paths; private `@llmist/docs`
+  → TypeDoc / starlight-typedoc / typedoc-plugin-markdown paths; and semantic-release →
+  @semantic-release/npm → npm's bundled glob/minimatch artifacts. Inspect nested bundled
+  manifests, not only hoisted packages. Record GHSA-3g3m-2fjr-6pw4 and
+  GHSA-g3hv-75wg-m249 wherever still reported, and all added/changed/withdrawn advisories.
+- For each residual include affected version, dependency edge ranges, fixed upstream
+  boundary and why it remains outside the authorized direct upgrade. Keep residuals
+  **unresolved — upstream-only**, without a suppression, exception or accepted-risk claim.
+  Assess new findings explicitly; stop if disposition requires scope or an owner decision.
+- Update only this plan's evidence with candidate audit, graph, compatibility and gate
+  conclusions. Preserve historical 003 evidence. Add the one measured implementation
+  fragment with runtime-path remediation and retained residuals; do not imply an advisory-free
+  repository. No README, global guidance or user migration docs are expected.
+
+### 5. Qualify and deliver the completed implementation candidate
+
+**Tests first:** keep task 1–4 checks and all existing assertions. Existing library skill
+loader, activation, registry and LoadSkill tests, CLI manager/command/slash-handler tests,
+and mocked E2E remain regression checks, not substitutes for the fresh audit. No test
+removal or narrowing is planned. No exploit test or live research opt-in is authorized.
+
+**Implementation — lifecycle, verification and delivery:**
+
+- Follow the normal implementation lock/progress/done lifecycle. The sole completed plan
+  owns the parent spec's `status: draft` → `done` and `.md` → `.md.done` transition, plus
+  coverage links. Byte-compare the parent to the pinned source allowing only its status
+  change; do not rewrite requirements. Run the implementation skill's done-gate. The Plan PR
+  itself leaves the spec untouched and this plan pending.
+- Finish and stage intended candidate files before final checks. Run sequentially, stopping
+  on failure: `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`,
+  `npm run test:coverage`, `npm run test:e2e`. Record statuses, counts and skipped live suites.
+  Keep `RUN_LIVE_RESEARCH_TESTS` unset. If a suspected baseline failure appears, confirm once
+  on unchanged `origin/dev` in `.watershed/.cache/`, report test names/timings/failure mode
+  and stop. Never put a baseline worktree under `node_modules`.
+- Invoke `agent-plugins__z:local-review` in gate mode over the full implementation delta
+  with this plan as compliance input. Address blockers without weakening assertions or gates;
+  do not silently defer them. Keep npm, Lefthook, commitlint, Biome and all CI jobs intact.
+- Record local evidence before the final normal-hook Conventional Commit. Every commit and
+  PR title/body uses only `Related to WAT-558` for the issue reference. Deliver into `dev`
+  through the declared trusted publication hook; no push, package publication or auto-merge.
+- Apply the existing repository CI-only handoff used by plan 003: if the final head is not
+  yet published, only AC #8 may remain unchecked with an explicit note naming pending
+  `lint-and-test`, `validate-commits` and `e2e-tests` on that head. This records an outstanding
+  external check, not successful completion of it or a new waiver. All local criteria must
+  be verified before lifecycle completion. Run the done-gate with that explicit disposition;
+  no local failure or review blocker may use this handoff.
+- After publication all three checks must actually succeed at the exact head, followed by
+  independent review of that same head. Stale, pending, missing or failed checks block merge.
+  GitHub's head-specific results satisfy the CI handoff without a subsequent evidence-only
+  commit that would change the tested head. Any new commit requires checks/review for its head.
+
+## Test Plan
+
+| Check / suite | Owner task | Required result |
+|---|---|---|
+| `direct-runtime-target` | 1, 3 | Range `^11`, installed version >=11.0.1 on actual library/CLI edges |
+| `audit-json-valid` | 1, 4 | Fresh valid JSON; malformed/error/network responses block conclusions |
+| `runtime-advisory-absent` | 1, 4 | Named GHSA absent from shipped library/CLI paths, regardless of residual copies |
+| Registry characterization matrix | 2 | All named rows preserve baseline selection with real matcher defaults |
+| Built ESM/CommonJS integration | 3 | Both package-export branches load, select and activate fixture instructions |
+| Built CLI integration | 3 | Real project discovery, list and info work without providers |
+| Existing skill and mocked E2E suites | 5 | All existing assertions remain green |
+| `residual-inventory-complete` | 4 | All residual paths and advisory changes reconciled |
+| Engine-strict install, hooks, lock review | 1, 3 | Unchanged policy, valid lifecycle/hooks, narrowly explained lock delta |
+| Six local tiers and local-review | 5 | Sequential success, no unresolved gate findings |
+| Exact-head CI and independent review | 5 | Three named successful checks, then independent review of that head |
+| Parent lifecycle and done-gate | 5 | Completed implementation artifacts; parent otherwise byte-identical |
+
+## Manual Verification
+
+AC #4 and #7 require evidence interpretation in addition to automated checks.
+
+- **AC #4 — residual reconciliation.** Compare every baseline/candidate advisory identity
+  and affected lock/installed path against the Evidence inventory. For cleanup, private docs
+  and bundled release tooling, verify versions and edge ranges from actual manifests and
+  `npm explain`/tree results. Expected outcome: every residual and every added/changed finding
+  has an explicit disposition and chain; none is silently classified as safe or accepted.
+- **AC #7 — scope and documentation.** Review the entire delta and candidate evidence;
+  compare all manifests and the parent spec to the base/pinned versions. Expected outcome:
+  only authorized direct/required lock changes, tests, own lifecycle/evidence and one measured
+  implementation fragment; public contracts, policies, tools and assertions remain intact.
+  Record the local-review outcome and document any blocker instead of marking green.
+
+All other criteria use automated commands/tests; AC #8 uses GitHub's exact-head records.
+
+## Acceptance Criteria (per-plan, testable)
+
+1. Direct minimatch range is exactly `^11`, installed library/CLI resolution is at least
+   11.0.1, selected artifact engines/exports are compatible, and engine-strict npm 10.9.2
+   installation reproduces the explained lock delta under unchanged Node policy (spec AC #1).
+2. The registry characterization matrix and existing skill suites pass with preserved
+   matching/nonmatching/nested/alternative/default-edge behavior, excluding absent/empty
+   patterns and model-disabled skills, with only the two owner-approved selection changes
+   enumerated in the Summary (spec AC #4 as qualified by the recorded owner decision).
+3. Built ESM and CommonJS consumers and the built CLI skill workflow checks pass without
+   API, configuration, stored-data or behavior migration and without providers (spec AC #5).
+4. [manual] Valid fresh baseline/candidate audits and installed parent chains prove the
+   named advisory absent from shipped library/CLI runtime paths; every residual and changed
+   advisory has versions, parents and unresolved upstream-only disposition (spec AC #2–3).
+5. Build, typecheck, lint, unit, coverage and mocked E2E all pass sequentially; all existing
+   assertions remain intact; no paid providers or exploit execution (spec AC #6).
+6. The plan/spec completion lifecycle and done-gate pass; parent text is otherwise preserved
+   against the pinned source, with coverage links updated (workflow/documentation hygiene).
+7. [manual] Evidence and implementation changelog describe measured outcomes, the scoped
+   delta preserves required tools/policies and passes local-review with no outstanding
+   blocker; no forced mechanism, suppression, exception or waiver is introduced (spec
+   constraints and Documentation Impact).
+8. `lint-and-test`, `validate-commits` and `e2e-tests` succeed on the exact final head,
+   followed by independent review of that head (spec AC #6). Pending CI is explicitly
+   outstanding under task 5's CI-only handoff, never inferred from local results.
+
+## Documentation Impact
+
+| File | Change |
+|---|---|
+| This plan's Evidence and Progress | Baseline/candidate graph and audit, artifact provenance, pattern/module/CLI results, local gate outcomes; retain exact-head CI as external records |
+| `_coverage.md` in this folder | Completion links and measured coverage conclusions only |
+| Parent spec | Sole-plan completion rename/status only; historical content preserved |
+| `changelog.d/wat-558-runtime-minimatch-upgrade.md` | Measured direct runtime remediation and retained upstream residuals |
+| `README.md`, `CLAUDE.md`, user migration docs | No change: no new public contract or cross-cutting rule; a migration need blocks scope |
+
+## Operator governance handoff
+
+Required approval count, legitimate review identity, strict up-to-date rules and merge
+authority remain operator governance outside plan criteria. An independent COMMENT review
+does not supply the required approving review. No bypass or new credentials are authorized.
+Exact-head CI and independent review remain required even when local implementation is done.
+
+## Out of Scope
+
+- rimraf/development cleanup, TypeDoc/plugin upgrades, edits to npm's bundled dependencies,
+  alternative matchers, forced overrides/resolutions, vendor patches, suppressions, ignore
+  lists, new exceptions or waivers, and broader vulnerability remediation.
+- Skill syntax, APIs, stored shapes, provider behavior, architecture or performance promises.
+- Adopting, editing, commenting on or closing unowned Dependabot PR #677.
+- Release PRs, `main` promotion, package publication, automatic merge, ruleset changes or
+  new identities. No paid provider tests or exploit execution.
+
+## Evidence
+
+### Execution, owner decisions and artifact provenance
+
+Related to WAT-590
+
+Project `llmist`, target-qualified agent `llmist-implement`, repository
+`zbigniewsobiecki/llmist`, authorized snapshot base `dev` at
+`ba56f209d65c968ebc2a00f4993e46f9d9473c23`. The owner explicitly permits this preserved
+base without fetching: newer dev adds only the unrelated 007 documentation spec and its
+fragment. Integration with current dev and strict freshness remain operator merge gates.
+The supplied parent SHA-256 matches before its completion transition.
+
+Owner decision [WAT-591](https://linear.app/mongrel/issue/WAT-591): Zbigniew approves direct
+runtime minimatch `^11` under `BlueOak-1.0.0` instead of ISC on 2026-11-10 at 18:55 UTC,
+reaffirmed on 2026-11-11 at 03:12 UTC. Task 1 changes only its license expectation; all
+other gates remain unchanged. Baseline 9.0.9 is ISC; fetched upstream artifacts confirm
+the Blue Oak Model License 1.0.0 in both manifest and `LICENSE.md`.
+
+Ordinary range resolution selects minimatch **11.0.7**. Full registry metadata, the fetched
+tarball and its manifest/types/source are inspected before the accepted dependency edit.
+Its SHA-512 matches registry metadata and the final lock:
+`sha512-Tnk+M9mPjqKDZlUd77eMSjPjhnlBIa1mABOwetMryIshUwi1YmOBdGFfQnHgn4Z8A66eLT8ENzJrxwYmKfqrZg==`.
+Installed ESM source byte-matches that tarball. Engines `20 || >=22` cover Node 22.0.0
+and this worker's Node 24.22.2. Both actual artifact branches export the named `minimatch`
+function: `dist/esm/index.js` for import and `dist/commonjs/index.js` for require; both
+execute an ordinary brace-pattern match in Node. Dependencies are
+`@isaacs/nonrecursive-glob-match ^1.1.0` and `brace-expansion ^5.0.12`.
+
+The upstream README describes replacing regular-expression segment matching with the
+nonrecursive matcher. Source/types retain default optimization level 1, dot exclusion,
+case sensitivity, negation, brace/extglob support and disabled Unicode normalization.
+The new segment parser and brace-row merging justify ordinary character-class, escaped
+metacharacter, Unicode, comment and level-one optimization cases in addition to the plan
+matrix. This is bounded characterization, not exhaustive glob equivalence. No matcher
+options or production TypeScript change is applied. The two selection changes below are
+explicitly owner-approved; all other preservation requirements remain mandatory.
+No speed effect is claimed or benchmarked.
+
+### Baseline and candidate command acceptance
+
+Toolchain: Node 24.22.2, installation npm 10.9.2 at `/usr/local/bin/npm`; release-tool npm
+11.21.2 remains separate. Baseline and candidate engine-strict lifecycle-enabled installs
+exit 0. Direct Lefthook installation exits 0; executable pre-commit, commit-msg and pre-push
+hooks invoke Lefthook. The postinstall `@unblessed/core/dist/data` symlink resolves. The
+candidate install preserves the lock hash. Consumer Node `>=22.0.0`, `.nvmrc` 22,
+contributor prerequisites, toolchain manifests and hook configuration remain unchanged.
+
+| Observation | Baseline | Candidate |
+|---|---|---|
+| Audit UTC on 2026-11-11 | 03:16:43 | 04:26:24 |
+| Lock SHA-256 | `ab5bd11c811aa107c8d041b51f2ee865b5ac5858e12d840e0267ed9b67262de1` | `7446397d731d428b59a0633d809fe5b3ff0baa8da6c7131b2e9f09892ebd6f3b` |
+| Audit status/schema | 1 / 2, valid JSON | 1 / 2, valid JSON |
+| Unique advisories | 2 Moderate | Same 2 Moderate |
+| Propagated entries / affected installed nodes | 40 / 42 | 40 / 42 |
+| `npm ls --all --json` status | 0 | 0 |
+| Direct runtime target | Red: `^9.0.9`, 9.0.9 | Pass: `^11`, 11.0.7 |
+| Runtime advisory absence | Red: direct/inherited 9.0.9 affected | Pass: no affected minimatch on either runtime traversal |
+
+Both audit runs use `npm audit --package-lock-only --json --ignore-scripts`, capture stdout,
+stderr and status separately, and validate schema, vulnerability map and advisory objects.
+Neither has a registry/error object; status 1 is valid findings. Malformed JSON, unsupported
+schema and a simulated network-error object are rejected by the acceptance checker.
+`npm explain minimatch glob --json`, lock edges and installed manifests agree with the
+graph. The baseline inventory matches the historical 003 candidate's two identities and
+40 entries / 42 nodes. The fresh candidate's advisory objects, affected versions and node
+set are unchanged; no advisory is added, withdrawn or changed. The outcome is removal of
+runtime reachability, not a lower repository finding count.
+
+Actual installed runtime edges:
+
+- Baseline CLI 18.4.1 → llmist `^18.4.1` → workspace llmist 18.4.1 → minimatch `^9.0.9`
+  → `node_modules/minimatch@9.0.9`, inside `>=7.0.0 <11.0.1`.
+- Candidate CLI uses the same llmist edge; llmist → minimatch `^11` now resolves to
+  `packages/llmist/node_modules/minimatch@11.0.7`. Traversal of actual dependencies and
+  optional dependencies from both consumers finds no minimatch version in that advisory
+  range. Workspace dev flags are not used to classify these paths.
+
+The ordinary npm lock write changes exactly five entries: llmist's dependency range plus
+four new required package entries. It leaves every other lock entry byte-equivalent as JSON.
+
+| Required entry | Version / reason |
+|---|---|
+| `packages/llmist` | Only `dependencies.minimatch`: `^9.0.9` → `^11` |
+| `packages/llmist/node_modules/minimatch` | 11.0.7, direct runtime target; root 9.0.9 remains for glob/TypeDoc |
+| `node_modules/@isaacs/nonrecursive-glob-match` | 1.1.0, new `^1.1.0` matcher dependency, BlueOak-1.0.0 |
+| `packages/llmist/node_modules/brace-expansion` | 5.0.12, required `^5.0.12`, MIT |
+| `packages/llmist/node_modules/balanced-match` | 4.0.4, brace-expansion's `^4.0.2`, MIT |
+
+There is no workspace version/metadata normalization, unrelated update, forced resolution,
+bundler edit or manually rewritten lock. npm ci enforces transitive engine compatibility.
+
+### Characterization, mutation controls and built consumers
+
+Before the manifest edit, all 41 tests across the three touched test files pass against
+9.0.9, including the fourteen plan matrix cases, five additional default-edge cases and
+the built consumers. After upgrade/rebuild, all 183 tests in the eleven library/CLI skill
+files pass with the same assertions. Baseline and candidate builds both pass.
+
+Temporary production mutations independently demonstrate right-reason assertion failures:
+return no selection (top-level/globstar); select all (nonmatch); check only the first
+pattern (later alternative); collect per-pattern results (uniqueness); match missing and
+empty patterns (separate cases); include model-disabled skills; enable dot/nocase or
+disable brace/extglob/negation; and expand the segment boundary to globstar. All fourteen
+matrix cases fail at their named selection assertion under the relevant mutation. Empty
+paths use explicit YAML `[]` and assert parsed metadata, distinct from absent paths.
+
+Built ESM and CommonJS tests spawn real Node processes resolving `llmist` package exports
+from its workspace, outside Vitest's source alias. Each asserts exact selected names,
+read instructions, activated skill name and resolved instructions with shell preprocessing
+disabled, as well as zero exit and empty stderr. Independent fixture-name and instruction
+mutations fail both tests; invalid export paths fail their parent exit-status assertions.
+
+The built CLI test spawns the absolute CLI entry from a normal isolated temporary project,
+discovers its uniquely named `.llmist/skills` fixture, lists it, and verifies info's name,
+paths, source and exact instruction section. Different fixture names and instruction text
+each fail the parent assertion. Fixtures are cleaned in `finally`; child timeouts are
+bounded and neither `HOME` nor `TMPDIR` is overwritten. All temporary mutations are restored
+and the three touched files return to 41 passing tests before the dependency edit.
+No existing assertion is removed or narrowed; no provider or exploit calls are made.
+
+### Residual reconciliation — unresolved — upstream-only
+
+G = **GHSA-3g3m-2fjr-6pw4**, Moderate, glob `>=9.0.0 <=14.0.1`; fixed boundary 14.0.2.
+M = **GHSA-g3hv-75wg-m249**, Moderate, minimatch `>=7.0.0 <11.0.1`; fixed boundary 11.0.1.
+The fresh advisory ranges and semver checks place the fixed versions outside the following
+parent ranges. Every path below remains unresolved — upstream-only, without suppression,
+accepted-risk claim or exception. Reachability proves neither exploitability nor safety.
+
+- **Development cleanup:** root and llmist/CLI/testing dev manifests → rimraf `^5.0.5`
+  (5.0.10) → glob `^10.3.7` (10.5.0, G) → minimatch `^9.0.4` (root 9.0.9, M).
+  Both fixed boundaries require upstream parent changes beyond this direct runtime scope.
+- **Private documentation:** docs → TypeDoc `^0.28.15` (0.28.17) → minimatch `^9.0.5`
+  (root 9.0.9, M). Docs → starlight-typedoc `^0.22.0` (0.22.0) peers TypeDoc `>=0.28.0`
+  and typedoc-plugin-markdown `>=4.6.0`; docs also declares that plugin `^4.9.0` (4.10.0),
+  which peers TypeDoc `0.28.x`. These peers reach the same affected TypeDoc dependency.
+  Upstream TypeDoc/plugin changes are outside scope; private docs are not shipped runtime.
+- **Release tooling:** root → semantic-release `^25.0.2` (25.0.3) → @semantic-release/npm
+  `^13.1.1` (13.1.5) → npm `^11.6.2` (11.21.2). Actual bundled manifests retain glob
+  13.0.6 (G) and minimatch 10.2.5 (M): npm declares `^13.0.6` / `^10.2.5`; bundled glob
+  declares minimatch `^10.2.2`. Map-workspaces/package-json/cacache glob ranges are `^13.0.0`;
+  arborist/map-workspaces/ignore-walk/libnpmdiff minimatch ranges are `^10.0.3`, and
+  @tufjs/models uses `^10.1.1`. Neither fixed major is within those examined ranges.
+  Only an upstream release-tool bundle update can change these; no bundle edits are made.
+
+The complete affected-node table retains immediate installed parents and their ranges,
+including peer edges and cycles. Composing these edges with the root/workspace chains above
+gives actual full parent chains. `N/` means `node_modules/`; `B/` means
+`node_modules/npm/node_modules/`. All `B/` nodes and the semantic-release/plugin chain are
+release tooling; rimraf/glob/root minimatch are cleanup, and TypeDoc/plugin paths are private
+docs. Propagated entries carry G/M from their reachable advisory object, not a separate GHSA.
+
+| Affected installed path and version | GHSA | Immediate installed parents (edge ranges) |
+|---|---|---|
+| `B/@npmcli/arborist@9.9.3` | G, M | N/npm@11.21.2 (^9.9.3); B/libnpmdiff@8.1.14 (^9.9.3); B/libnpmexec@10.3.5 (^9.9.3); B/libnpmfund@7.0.28 (^9.9.3); B/libnpmpack@9.1.15 (^9.9.3) |
+| `B/@npmcli/config@10.14.0` | G, M | N/npm@11.21.2 (^10.14.0) |
+| `B/@npmcli/map-workspaces@5.0.3` | G, M | N/npm@11.21.2 (^5.0.3); B/@npmcli/arborist@9.9.3 (^5.0.0); B/@npmcli/config@10.14.0 (^5.0.0) |
+| `B/@npmcli/metavuln-calculator@9.0.3` | G, M | N/npm@11.21.2 (^9.0.3); B/@npmcli/arborist@9.9.3 (^9.0.2) |
+| `B/@npmcli/package-json@7.0.5` | G, M | N/npm@11.21.2 (^7.0.5); B/@npmcli/arborist@9.9.3 (^7.0.0); B/@npmcli/map-workspaces@5.0.3 (^7.0.0); B/pacote@21.5.2 (^7.0.0); B/@npmcli/run-script@10.0.4 (^7.0.0); B/@npmcli/config@10.14.0 (^7.0.0); B/init-package-json@8.2.5 (^7.0.0); B/libnpmexec@10.3.5 (^7.0.0); B/libnpmpublish@11.2.1 (^7.0.0) |
+| `B/@npmcli/run-script@10.0.4` | G, M | N/npm@11.21.2 (^10.0.4); B/@npmcli/arborist@9.9.3 (^10.0.0); B/pacote@21.5.2 (^10.0.0); B/libnpmexec@10.3.5 (^10.0.0); B/libnpmpack@9.1.15 (^10.0.0); B/libnpmversion@8.0.4 (^10.0.0) |
+| `N/@semantic-release/exec@7.1.0` | G, M | root (^7.0.3) |
+| `N/@semantic-release/github@12.0.6` | G, M | N/semantic-release@25.0.3 (^12.0.0) |
+| `N/@semantic-release/npm@13.1.5` | G, M | N/semantic-release@25.0.3 (^13.1.1) |
+| `B/@sigstore/sign@4.1.1` | G, M | B/sigstore@4.1.1 (^4.1.1) |
+| `B/@sigstore/tuf@4.0.2` | G, M | N/npm@11.21.2 (^4.0.2); B/sigstore@4.1.1 (^4.0.2) |
+| `B/@tufjs/models@4.1.0` | M | B/tuf-js@4.1.0 (4.1.0) |
+| `B/cacache@20.0.4` | G, M | N/npm@11.21.2 (^20.0.4); B/@npmcli/arborist@9.9.3 (^20.0.1); B/@npmcli/metavuln-calculator@9.0.3 (^20.0.0); B/pacote@21.5.2 (^20.0.0); B/make-fetch-happen@15.0.6 (^20.0.1) |
+| `N/glob@10.5.0` | G, M | N/rimraf@5.0.10 (^10.3.7) |
+| `B/glob@13.0.6` | G, M | N/npm@11.21.2 (^13.0.6); B/@npmcli/map-workspaces@5.0.3 (^13.0.0); B/@npmcli/package-json@7.0.5 (^13.0.0); B/cacache@20.0.4 (^13.0.0) |
+| `B/ignore-walk@8.0.0` | M | B/npm-packlist@10.0.4 (^8.0.0) |
+| `B/init-package-json@8.2.5` | G, M | N/npm@11.21.2 (^8.2.5) |
+| `B/libnpmaccess@10.0.3` | G, M | N/npm@11.21.2 (^10.0.3) |
+| `B/libnpmdiff@8.1.14` | G, M | N/npm@11.21.2 (^8.1.14) |
+| `B/libnpmexec@10.3.5` | G, M | N/npm@11.21.2 (^10.3.5) |
+| `B/libnpmfund@7.0.28` | G, M | N/npm@11.21.2 (^7.0.28) |
+| `B/libnpmorg@8.0.1` | G, M | N/npm@11.21.2 (^8.0.1) |
+| `B/libnpmpack@9.1.15` | G, M | N/npm@11.21.2 (^9.1.15) |
+| `B/libnpmpublish@11.2.1` | G, M | N/npm@11.21.2 (^11.2.1) |
+| `B/libnpmsearch@9.0.1` | G, M | N/npm@11.21.2 (^9.0.1) |
+| `B/libnpmteam@8.0.2` | G, M | N/npm@11.21.2 (^8.0.2) |
+| `B/libnpmversion@8.0.4` | G, M | N/npm@11.21.2 (^8.0.4) |
+| `B/make-fetch-happen@15.0.6` | G, M | N/npm@11.21.2 (^15.0.6); B/npm-registry-fetch@19.1.1 (^15.0.0); B/@sigstore/sign@4.1.1 (^15.0.4); B/tuf-js@4.1.0 (^15.0.1) |
+| `N/minimatch@9.0.9` | M | N/glob@10.5.0 (^9.0.4); N/typedoc@0.28.17 (^9.0.5) |
+| `B/minimatch@10.2.5` | M | N/npm@11.21.2 (^10.2.5); B/@npmcli/arborist@9.9.3 (^10.0.3); B/@npmcli/map-workspaces@5.0.3 (^10.0.3); B/glob@13.0.6 (^10.2.2); B/ignore-walk@8.0.0 (^10.0.3); B/@tufjs/models@4.1.0 (^10.1.1); B/libnpmdiff@8.1.14 (^10.0.3) |
+| `N/npm@11.21.2` | G, M | N/@semantic-release/npm@13.1.5 (^11.6.2) |
+| `B/npm-packlist@10.0.4` | M | B/pacote@21.5.2 (^10.0.1) |
+| `B/npm-profile@12.0.2` | G, M | N/npm@11.21.2 (^12.0.2) |
+| `B/npm-registry-fetch@19.1.1` | G, M | N/npm@11.21.2 (^19.1.1); B/@npmcli/arborist@9.9.3 (^19.0.0); B/pacote@21.5.2 (^19.0.0); B/libnpmaccess@10.0.3 (^19.0.0); B/libnpmorg@8.0.1 (^19.0.0); B/libnpmpublish@11.2.1 (^19.0.0); B/libnpmsearch@9.0.1 (^19.0.0); B/libnpmteam@8.0.2 (^19.0.0); B/npm-profile@12.0.2 (^19.0.0) |
+| `B/pacote@21.5.2` | G, M | N/npm@11.21.2 (^21.5.2); B/@npmcli/arborist@9.9.3 (^21.0.2); B/@npmcli/metavuln-calculator@9.0.3 (^21.0.0); B/libnpmdiff@8.1.14 (^21.0.2); B/libnpmexec@10.3.5 (^21.0.2); B/libnpmpack@9.1.15 (^21.0.2) |
+| `N/rimraf@5.0.10` | G, M | root (^5.0.5); packages/llmist@18.4.1 (^5.0.5); packages/cli@18.4.1 (^5.0.5); packages/testing@18.4.1 (^5.0.5) |
+| `N/semantic-release@25.0.3` | G, M | root (^25.0.2); N/@semantic-release/changelog@6.0.3 (>=18.0.0); N/@semantic-release/commit-analyzer@13.0.1 (>=20.1.0); N/@semantic-release/github@12.0.6 (>=24.1.0); N/@semantic-release/npm@13.1.5 (>=20.1.0); N/@semantic-release/release-notes-generator@14.1.0 (>=20.1.0); N/@semantic-release/exec@7.1.0 (>=24.1.0); N/@semantic-release/git@10.0.1 (>=18.0.0) |
+| `B/sigstore@4.1.1` | G, M | B/pacote@21.5.2 (^4.0.0); B/libnpmpublish@11.2.1 (^4.0.0) |
+| `packages/docs/N/starlight-typedoc@0.22.0` | M | packages/docs@8.1.2 (^0.22.0) |
+| `B/tuf-js@4.1.0` | G, M | B/@sigstore/tuf@4.0.2 (^4.1.0) |
+| `N/typedoc@0.28.17` | M | packages/docs@8.1.2 (^0.28.15); packages/docs/N/starlight-typedoc@0.22.0 (>=0.28.0); N/typedoc-plugin-markdown@4.10.0 (0.28.x) |
+| `N/typedoc-plugin-markdown@4.10.0` | M | packages/docs@8.1.2 (^4.9.0); packages/docs/N/starlight-typedoc@0.22.0 (>=4.6.0) |
+
+The reconciliation checker requires every affected installed node/version and a real parent
+edge, and deduplicates advisory objects separately from propagated entries. Deliberately
+omitting one known row fails; the complete 42-node/40-entry table passes. Manual comparison
+of the baseline/candidate inventories confirms all remaining paths, versions, GHSAs and
+upstream boundaries are represented, including the actual npm bundle. Total counts alone
+do not establish runtime remediation.
+
+### Lifecycle, scope and verification
+
+Targeted typecheck and lint pass after test authoring, after the upgrade and after adding
+the two approved regressions. The six final tiers run sequentially on 2026-11-11 from
+04:26:53 through 04:28:32 UTC, all exit 0:
+
+| Tier | Observed result |
+|---|---|
+| `npm run build` | Four package tasks successful |
+| `npm run typecheck` | Six tasks successful |
+| `npm run lint` | Exit 0; existing warning/info diagnostics remain, no suppression introduced |
+| `npm test` | 250 files, 7,069 tests pass |
+| `npm run test:coverage` | Same 250 files / 7,069 tests pass; statements 77.12%, branches 78.61%, functions 77.79%, lines 77.41% |
+| `npm run test:e2e` | Eleven files pass; 99 tests pass, four opt-in live tests skipped in three files |
+
+`RUN_LIVE_RESEARCH_TESTS` stays unset. The fresh-context `agent-plugins__z:local-review`
+gate, round 2, converges against the approved contract and complete delta with no must-fix
+finding. The reviewer verifies both baseline failures and candidate selections. Final
+lifecycle/documentation edits also undergo completion review before the normal-hook commit.
+
+#### Owner-approved ordinary default matching changes
+
+The independent reviewer checks baseline 9.0.9 and the built candidate through real
+`Skill.fromContent` → `SkillRegistry.from` → `findByFilePath` and observes:
+
+| Pattern | File path | Baseline 9.0.9 | Candidate 11.0.7 |
+|---|---|---|---|
+| `src/!(a)*.ts` | `src/ab.ts` | Unselected | Selected |
+| `src/?.ts` | `src/😀.ts` | Unselected | Selected |
+
+An independent in-session Node check also reproduces both results, comparing the installed
+baseline matcher against real built candidate skill selection with the same YAML patterns.
+These are ordinary default-option inputs, not exploit probes. The registry's unchanged
+production delegation exposes the different results directly to users. Positive extglob
+alternatives and literal Unicode tests do not cover these changed negative-extglob and
+wildcard/code-point semantics.
+
+Owner decision [WAT-609](https://linear.app/mongrel/issue/WAT-609): Zbigniew chooses option
+"a" on 2026-11-11 at 04:23 UTC, accepting and documenting exactly these two changes:
+`src/!(a)*.ts` now selects `src/ab.ts`, and `src/?.ts` now selects `src/😀.ts`, while 9.0.9
+selected neither. Only these two preservation expectations change. The owner explicitly
+requires unchanged matcher options, no production-code changes and no accommodation of
+any further behavioral difference. The original preservation expectations and assertions
+remain intact; two new registry matrix rows pin the newly authorized selections.
+
+Both new regression tests first run against the installed 9.0.9 matcher by temporarily
+changing only the registry import in the unfinished tree. Each fails for the intended
+assertion: expected `["selected"]`, received `[]`. Restoring the original production import
+returns the candidate to green: all 185 tests across the eleven skill files pass. No
+temporary mutation remains. The implementation fragment documents both accepted changes.
+This addresses the review finding through an explicit contract amendment and regression
+coverage, without a silent waiver or a broader relaxation. Parent requirements are not
+rewritten; their sole-plan completion is qualified by this recorded owner direction.
+Normal hooks, all existing assertions and required CI jobs remain enabled. Only the declared
+test files, direct manifest/required lock changes, this plan's lifecycle/evidence, coverage
+conclusions, parent completion and one implementation fragment belong to the delta.
+CLAUDE.md is untouched by this spec — nothing to audit. No new cross-spec decision record
+is needed: the license authorization is feature-scoped and recorded above; global guidance,
+README and migration docs do not change; the changelog names both accepted matching changes,
+and public APIs, configuration and stored shapes remain intact.
+
+The sole plan reaches `status: done` / `.md.done` after its done-gate. Its only parent
+reaches `status: done` / `.md.done`; byte comparison against the pinned source permits only
+that status substitution. Coverage links and conclusions follow the completed filenames.
+Manual scope review verifies the declared file set, exact five-entry lock delta, only the
+direct manifest range, one new implementation fragment, all original registry test lines
+preserved and the production registry byte-identical to the base. No shared guidance
+or historical evidence is changed. The mechanical done-gate and final scope/link checks
+are enforced before committing; no local blocker uses the CI-only handoff.
+
+Exact-head `lint-and-test`, `validate-commits` and `e2e-tests`, then independent review of that
+head, remain required after trusted-hook publication. Local review is not the required
+approving review. Approval identity, strict freshness and merge authority remain with the
+operator; no release, paid-provider test, publication of packages or governance change occurs.
+
+## Progress
+
+<!-- /implement updates these from observed evidence; only AC #8 permits the existing CI-only handoff. -->
+- [x] AC #1 — artifact, exact range/resolution, narrow lock delta and engine-strict install pass.
+- [x] AC #2 — original preservation cases and controls pass; the two owner-approved new
+  selections have right-reason baseline red and candidate green regression coverage.
+- [x] AC #3 — real built ESM/CommonJS and CLI consumers pass, without API, configuration
+  or stored-data migration; the two accepted matching changes are documented explicitly.
+- [x] AC #4 — manual audit/installed-parent reconciliation above accounts for all 42 nodes,
+  unchanged advisory identities and every upstream-only residual; runtime traversal passes.
+- [x] AC #5 — all six sequential tiers pass after the two new regressions; observed results above.
+- [x] AC #6 — sole-plan and parent completion, pinned parent comparison, coverage links
+  and mechanical done-gate are checked before committing the completed candidate.
+- [x] AC #7 — manual scope/evidence review observes only authorized files and changes,
+  all residuals upstream-only and both accepted selections in the fragment; local-review
+  round 2 converges with no unresolved blocker, and completion documents undergo review.
+- [ ] AC #8 — deferred: CI-only handoff; `lint-and-test`, `validate-commits` and `e2e-tests`
+  must succeed on the final published head, followed by independent review of that head.

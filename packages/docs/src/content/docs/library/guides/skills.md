@@ -64,7 +64,7 @@ paths:                            # Auto-activate on file pattern match
   - "src/**/*.ts"
 disable-model-invocation: false   # true = only user can invoke
 user-invocable: true              # false = background knowledge only
-shell: bash                       # Shell for !`command` preprocessing
+shell: bash                       # Interpreter used only when enableShellPreprocessing is true
 version: 1.0.0                    # Semantic version
 ---
 ```
@@ -90,7 +90,34 @@ Current branch: !`git branch --show-current`
 - `$ARGUMENTS` - Full argument string
 - `$0`, `$1`, `$ARGUMENTS[N]` - Positional arguments
 - `${SKILL_DIR}`, `${CLAUDE_SKILL_DIR}` - Skill directory path
-- `` !`command` `` - Shell command (executed before LLM sees instructions)
+
+Shell directives such as `` !`git branch --show-current` `` are plain text by default,
+including in CLI slash commands, `LoadSkill` and MCP prompts. Applications that rely
+on these directives can explicitly enable them for a trusted skill:
+
+```typescript
+await skill.activate({ arguments: "src", enableShellPreprocessing: true });
+// Or pre-activate this trusted skill on an agent builder:
+builder.withSkills(registry).withSkill(skill.name, "src", { enableShellPreprocessing: true });
+```
+
+The opt-in applies only to the named activation. Calling `withSkill` again for the same
+name replaces its options. The `shell` frontmatter field selects the interpreter only.
+
+In text mode, each shell directive is preserved verbatim. With execution enabled,
+llmist passes the original command to the shell, and provides `SKILL_DIR`,
+`CLAUDE_SKILL_DIR` and the full `ARGUMENTS` string as environment variables. For
+example, a Bash directive can call `"${SKILL_DIR}/scripts/lint.sh" "$ARGUMENTS"`.
+Use quoted environment references for paths and arguments, including `"$env:SKILL_DIR"`
+and `"$env:ARGUMENTS"` in PowerShell. Other template variables are for surrounding text.
+
+Use positional placeholders (`$0`, `$1`, `$ARGUMENTS[N]`) in the surrounding skill text.
+A directive containing one of these forms, or a braced shell position such as `${0}`,
+returns an error that names the command, without starting the shell. This check applies
+before shell parsing, even inside single quotes or after a backslash. For example, put
+`{print $1}` in `first-field.awk` and invoke `awk -f "${SKILL_DIR}/first-field.awk"`
+in the directive. The script file uses normal shell or tool syntax. Argument values,
+variables and command output are never read as new template syntax.
 
 ## Three-Tier Progressive Disclosure
 

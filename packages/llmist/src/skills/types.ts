@@ -53,7 +53,7 @@ export interface SkillMetadata {
   /** If false, skill is background knowledge only — hidden from user invocation. */
   userInvocable?: boolean;
 
-  /** Shell for !`command` preprocessing. */
+  /** Interpreter used only when the caller sets enableShellPreprocessing to true. */
   shell?: "bash" | "powershell";
 
   /** Semantic version number. */
@@ -114,7 +114,7 @@ export interface SkillActivation {
   /** The skill that was activated. */
   skillName: string;
 
-  /** Resolved instructions after $ARGUMENTS substitution and !`command` preprocessing. */
+  /** Instructions with placeholders resolved. Shell directives remain literal unless enableShellPreprocessing is true. */
   resolvedInstructions: string;
 
   /** Gadgets made available by this skill (if any). */
@@ -134,12 +134,12 @@ export interface SkillActivationOptions {
   /** Whether to load Tier 3 resources eagerly. Default: false. */
   eagerResources?: boolean;
 
-  /** Working directory for !`command` preprocessing. */
+  /** Working directory for trusted commands when enableShellPreprocessing is true. */
   cwd?: string;
 
-  /** Whether to execute !`command` preprocessing. Default: true. */
+  /** Execute shell directives in a trusted skill template. Default: false. */
   enableShellPreprocessing?: boolean;
 
-  /** Timeout for !`command` execution in milliseconds. Default: 10000. */
+  /** Timeout in milliseconds for explicitly enabled shell commands. Default: 10000. */
   shellTimeoutMs?: number;
 }
