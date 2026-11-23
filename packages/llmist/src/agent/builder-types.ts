@@ -99,6 +99,6 @@ export interface PolicyState {
 
 export interface SkillState {
   registry?: import("../skills/registry.js").SkillRegistry;
-  preActivated: Array<{ name: string; args?: string }>;
+  preActivated: Array<{ name: string; args?: string; enableShellPreprocessing?: boolean }>;
   skillDirs: string[];
 }

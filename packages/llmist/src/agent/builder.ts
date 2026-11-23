@@ -289,18 +289,20 @@ export class AgentBuilder {
 
   /**
    * Pre-activate a specific skill before the agent starts.
-   * Instructions are injected into the system prompt.
+   * Instructions are injected into the system prompt. Only enable shell preprocessing
+   * for a skill whose template you trust. The option applies to this activation only.
    *
    * Note: each call replaces (not appends) the pre-activated skill for that name.
    * This is safe for REPL loops where the same builder is reused.
    */
-  withSkill(name: string, args?: string): this {
+  withSkill(name: string, args?: string, options?: { enableShellPreprocessing?: boolean }): this {
+    const entry = { name, args, enableShellPreprocessing: options?.enableShellPreprocessing };
     // Deduplicate: replace existing entry for same skill name
     const existing = this.skills.preActivated.findIndex((s) => s.name === name);
     if (existing !== -1) {
-      this.skills.preActivated[existing] = { name, args };
+      this.skills.preActivated[existing] = entry;
     } else {
-      this.skills.preActivated.push({ name, args });
+      this.skills.preActivated.push(entry);
     }
     return this;
   }
@@ -460,13 +462,14 @@ export class AgentBuilder {
 
     const fs = require("node:fs");
     const blocks: string[] = [];
-    for (const { name, args } of this.skills.preActivated) {
+    for (const { name, args, enableShellPreprocessing } of this.skills.preActivated) {
       const skill = skillRegistry.get(name);
       if (!skill) continue;
       const content = fs.readFileSync(skill.sourcePath, "utf-8");
       const { body } = parseFrontmatter(content);
       const resolved = resolveInstructions(body, {
         arguments: args,
+        enableShellPreprocessing,
         variables: { SKILL_DIR: skill.sourceDir, CLAUDE_SKILL_DIR: skill.sourceDir },
         cwd: skill.sourceDir,
         shell: skill.metadata.shell,

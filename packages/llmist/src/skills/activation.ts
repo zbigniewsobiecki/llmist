@@ -1,8 +1,8 @@
 /**
  * Skill activation logic.
  *
- * Handles $ARGUMENTS substitution and !`command` shell preprocessing
- * to resolve skill instructions before injection into agent context.
+ * Substitutes skill placeholders. Shell directives run only when the caller
+ * sets enableShellPreprocessing for a trusted skill.
  *
  * @module skills/activation
  */
@@ -12,8 +12,10 @@ import { execSync } from "node:child_process";
 const ARGUMENT = /\$ARGUMENTS(?:\[(\d+)\])?|\$(\d+)/g;
 const VARIABLE = /\$\{(\w+)\}/g;
 const SHELL_DIRECTIVE = /!`[^`]+`/g;
-const PLACEHOLDERS = new RegExp(`${ARGUMENT.source}|${VARIABLE.source}`, "g");
-const TRUSTED_TEMPLATE_TOKENS = new RegExp(`${PLACEHOLDERS.source}|${SHELL_DIRECTIVE.source}`, "g");
+const TEMPLATE_TOKENS = new RegExp(
+  `${ARGUMENT.source}|${VARIABLE.source}|${SHELL_DIRECTIVE.source}`,
+  "g",
+);
 
 function argumentReplacer(args = "") {
   const parts = splitArguments(args);
@@ -28,17 +30,32 @@ export function substituteArguments(instructions: string, args?: string): string
   return instructions.replace(ARGUMENT, argumentReplacer(args));
 }
 
-type ShellOptions = { cwd?: string; shell?: "bash" | "powershell"; timeoutMs?: number };
+interface ResolveInstructionsOptions {
+  arguments?: string;
+  variables?: Record<string, string>;
+  cwd?: string;
+  shell?: "bash" | "powershell";
+  shellTimeoutMs?: number;
+  enableShellPreprocessing?: boolean;
+}
 
-function executeTemplateCommand(
-  command: string,
-  { cwd, shell = "bash", timeoutMs = 10_000 }: ShellOptions = {},
-): string {
+function executeTemplateCommand(command: string, options: ResolveInstructionsOptions): string {
+  if (/\$(?:\d+|\{\d+\}|ARGUMENTS\[\d+\])/.test(command)) {
+    return "[Error: Positional skill arguments are unsupported in shell directives. Use the ARGUMENTS environment variable.]";
+  }
   try {
     return execSync(command, {
-      cwd,
-      shell: shell === "powershell" ? "powershell" : "/bin/bash",
-      timeout: timeoutMs,
+      cwd: options.cwd,
+      shell: options.shell === "powershell" ? "powershell" : "/bin/bash",
+      timeout: options.shellTimeoutMs ?? 10_000,
+      // Only these skill values are shell inputs. Other template variables must
+      // never override process settings such as PATH.
+      env: {
+        ...process.env,
+        SKILL_DIR: options.variables?.SKILL_DIR ?? "",
+        CLAUDE_SKILL_DIR: options.variables?.CLAUDE_SKILL_DIR ?? "",
+        ARGUMENTS: options.arguments ?? "",
+      },
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
@@ -69,26 +86,15 @@ function variableValue(variables: Record<string, string>, name: string): string 
 /** Render only tokens present in the original skill template. */
 export function resolveInstructions(
   instructions: string,
-  options?: {
-    arguments?: string;
-    variables?: Record<string, string>;
-    cwd?: string;
-    shell?: "bash" | "powershell";
-    shellTimeoutMs?: number;
-    enableShellPreprocessing?: boolean;
-  },
+  options?: ResolveInstructionsOptions,
 ): string {
   const replaceArgument = argumentReplacer(options?.arguments);
-  const tokens =
-    options?.enableShellPreprocessing === true ? TRUSTED_TEMPLATE_TOKENS : PLACEHOLDERS;
   // One pass keeps arguments, variables and command output out of the template grammar.
-  return instructions.replace(tokens, (token, indexed, positional, variable) => {
+  return instructions.replace(TEMPLATE_TOKENS, (token, indexed, positional, variable) => {
     if (token.startsWith("!")) {
-      return executeTemplateCommand(token.slice(2, -1), {
-        cwd: options?.cwd,
-        shell: options?.shell,
-        timeoutMs: options?.shellTimeoutMs,
-      });
+      return options?.enableShellPreprocessing === true
+        ? executeTemplateCommand(token.slice(2, -1), options)
+        : token;
     }
     if (variable !== undefined) {
       return options?.variables ? variableValue(options.variables, variable) : token;

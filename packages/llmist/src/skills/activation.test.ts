@@ -79,6 +79,14 @@ describe("substituteVariables", () => {
 });
 
 describe("resolveInstructions", () => {
+  it("leaves the contents of a disabled directive verbatim", () => {
+    const result = resolveInstructions("$0 !`echo $0 ${SKILL_DIR}`", {
+      arguments: "file",
+      variables: { SKILL_DIR: "/skill" },
+    });
+    expect(result).toBe("file !`echo $0 ${SKILL_DIR}`");
+  });
+
   it("renders placeholders and leaves shell directives as text by default", () => {
     const result = resolveInstructions("${SKILL_DIR}: $ARGUMENTS (!`echo version`)", {
       variables: { SKILL_DIR: "/skills/test" },

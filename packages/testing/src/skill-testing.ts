@@ -42,7 +42,8 @@ export function testSkillParse(content: string, sourcePath = "/test/skill/SKILL.
 }
 
 /**
- * Test a skill's activation with given arguments.
+ * Test a skill's activation using its normal working directory and shell policy.
+ * Shell directives stay literal unless enableShellPreprocessing is true.
  *
  * @param skill - Skill instance to activate
  * @param options - Activation options (arguments, cwd, etc.)
@@ -61,10 +62,7 @@ export async function testSkillActivation(
   skill: Skill,
   options?: SkillActivationOptions,
 ): Promise<SkillActivation> {
-  return skill.activate({
-    ...options,
-    cwd: options?.cwd ?? "/test",
-  });
+  return skill.activate(options);
 }
 
 /**

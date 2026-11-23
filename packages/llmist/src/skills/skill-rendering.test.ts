@@ -42,13 +42,14 @@ describe("skill rendering at the shell boundary", () => {
 
   it("runs only the command written in the trusted template and preserves its stdout", () => {
     vi.mocked(execSync).mockReturnValue("$ARGUMENTS !`output-marker`\n");
-    const result = resolveInstructions("!`template-marker $0 ${VALUE}` / $ARGUMENTS", {
+    const result = resolveInstructions("!`template-marker $env:ARGUMENTS ${VALUE}` / $ARGUMENTS", {
       enableShellPreprocessing: true,
+      shell: "powershell",
       arguments: "description",
       variables: { VALUE: "metadata" },
     });
     expect(execSync).toHaveBeenCalledExactlyOnceWith(
-      "template-marker $0 ${VALUE}",
+      "template-marker $env:ARGUMENTS ${VALUE}",
       expect.anything(),
     );
     expect(result).toBe("$ARGUMENTS !`output-marker` / description");
@@ -71,6 +72,65 @@ describe("skill rendering at the shell boundary", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("opts in per builder activation and clears trust when the skill is replaced", () => {
+    const dir = mkdtempSync(join(tmpdir(), "llmist-trusted-"));
+    try {
+      const file = join(dir, "SKILL.md");
+      writeFileSync(file, skillContent);
+      const registry = SkillRegistry.from([Skill.fromContent(skillContent, file)]);
+      const builder = new AgentBuilder(createMockClient()).withSkills(registry);
+      const trusted = builder
+        .withSkill(skill.name, input, { enableShellPreprocessing: true })
+        .build();
+      expect(trusted.getConversation().getBaseMessages()).toContainEqual(
+        expect.objectContaining({
+          role: "system",
+          content: expect.stringContaining("with mock stdout"),
+        }),
+      );
+      expect(execSync).toHaveBeenCalledExactlyOnceWith(
+        "template-marker",
+        expect.objectContaining({
+          shell: "powershell",
+          env: expect.objectContaining({ SKILL_DIR: dir, ARGUMENTS: input }),
+        }),
+      );
+      const replaced = builder.withSkill(skill.name, input).build();
+      expect(replaced.getConversation().getBaseMessages()).toContainEqual(
+        expect.objectContaining({ role: "system", content: expect.stringContaining(expectedText) }),
+      );
+      expect(execSync).toHaveBeenCalledTimes(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    "$0",
+    "$12",
+    "${1}",
+    "$ARGUMENTS[0]",
+  ])("rejects %s in a trusted command before spawning", (placeholder) => {
+    const result = resolveInstructions("!`template-marker " + placeholder + "`", {
+      enableShellPreprocessing: true,
+    });
+    expect(result).toContain("Positional skill arguments");
+    expect(execSync).not.toHaveBeenCalled();
+  });
+
+  it("does not pass arbitrary template variables into the shell environment", () => {
+    resolveInstructions("!`template-marker`", {
+      variables: { PATH: "template-only-path" },
+      enableShellPreprocessing: true,
+    });
+    expect(execSync).toHaveBeenCalledExactlyOnceWith(
+      "template-marker",
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: process.env.PATH }),
+      }),
+    );
   });
 
   it("returns model-supplied arguments as text from LoadSkill", async () => {

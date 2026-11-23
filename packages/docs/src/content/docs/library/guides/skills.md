@@ -64,7 +64,7 @@ paths:                            # Auto-activate on file pattern match
   - "src/**/*.ts"
 disable-model-invocation: false   # true = only user can invoke
 user-invocable: true              # false = background knowledge only
-shell: bash                       # Shell for !`command` preprocessing
+shell: bash                       # Interpreter used only when enableShellPreprocessing is true
 version: 1.0.0                    # Semantic version
 ---
 ```
@@ -97,12 +97,24 @@ on these directives can explicitly enable them for a trusted skill:
 
 ```typescript
 await skill.activate({ arguments: "src", enableShellPreprocessing: true });
+// Or pre-activate this trusted skill on an agent builder:
+builder.withSkills(registry).withSkill(skill.name, "src", { enableShellPreprocessing: true });
 ```
 
-With this option, llmist sends the command exactly as written in the skill file to the
-configured shell. Skill placeholders are expanded only in surrounding text. Argument
-values, variables and command output are never evaluated as template syntax. The
-`shell` frontmatter field selects the interpreter and cannot enable execution.
+The opt-in applies only to the named activation. Calling `withSkill` again for the same
+name replaces its options. The `shell` frontmatter field selects the interpreter only.
+
+In text mode, each shell directive is preserved verbatim. With execution enabled,
+llmist passes the original command to the shell, and provides `SKILL_DIR`,
+`CLAUDE_SKILL_DIR` and the full `ARGUMENTS` string as environment variables. For
+example, a Bash directive can call `"${SKILL_DIR}/scripts/lint.sh" "$ARGUMENTS"`.
+Use quoted environment references for paths and arguments, including `"$env:SKILL_DIR"`
+and `"$env:ARGUMENTS"` in PowerShell. Other template variables are for surrounding text.
+
+Use positional placeholders (`$0`, `$1`, `$ARGUMENTS[N]`) in the surrounding skill text.
+A directive containing one of these forms, or a braced shell position such as `${0}`,
+returns an error without starting the shell. Argument values, variables and command output are never read as new template
+syntax.
 
 ## Three-Tier Progressive Disclosure
 
