@@ -51,8 +51,13 @@ LLMist.createAgent()
 |--------|------|---------|-------------|
 | `.withModel(model)` | `string` | `openai:gpt-5-nano` | Model name or alias |
 | `.withSystem(prompt)` | `string` | none | System prompt |
-| `.withTemperature(temp)` | `number` | Provider default | Temperature (0-1) |
+| `.withTemperature(temp)` | `number` | `0` without reasoning; unspecified with reasoning | Temperature (0-1) |
 | `.withMaxIterations(n)` | `number` | 10 | Max agent loop iterations |
+
+When `.withTemperature()` is omitted, reasoning-enabled agents leave temperature
+unspecified. Agents automatically enable reasoning for models whose catalog entry
+advertises reasoning support, unless disabled with `.withoutReasoning()`. An
+explicit numeric temperature, including `0`, overrides this default.
 
 ### Gadgets
 
@@ -267,9 +272,13 @@ LLMist.stream(prompt, options);
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `model` | `string` | `gpt-5-nano` | Model name or alias |
-| `temperature` | `number` | Provider default | Temperature (0-1) |
+| `temperature` | `number` | `0` | Temperature (0-1) |
 | `systemPrompt` | `string` | none | System prompt |
 | `maxTokens` | `number` | Provider default | Max tokens to generate |
+
+Quick methods do not expose reasoning configuration. See the
+[Quick Methods guide](/library/guides/quick-methods/#model-shortcuts) for the
+temperature default and the low-level `client.stream()` reasoning exception.
 
 ## Execution Methods
 
