@@ -1,0 +1,118 @@
+---
+id: 009
+slug: configuration-temperature-defaults
+level: spec-light
+title: Accurate configuration temperature defaults
+created: 2026-11-25
+status: done
+locked_at: fc08a2c8fc7eceeddbf034831d4153d8bef50c72
+---
+
+# 009: Accurate configuration temperature defaults (light)
+
+## Why
+
+The configuration reference labels both temperature defaults as “Provider
+default.” Readers need defaults that reflect the actual quick-method and agent
+builder paths, including reasoning configuration and automatic reasoning.
+
+## What
+
+- Correct both temperature rows in
+  `packages/docs/src/content/docs/library/getting-started/configuration.md`.
+- Explain the builder's reasoning-dependent default and link the existing
+  Quick Methods explanation of low-level reasoning behavior.
+- Deliver this completed light spec and one documentation changelog fragment.
+- Decisions: use one atomic documentation change; preserve runtime and tests;
+  use source tracing and a disposable offline runtime probe for evidence.
+  Combined-light delivery authorizes specification and execution together.
+  Research skipped: all relevant behavior is defined in repository source.
+
+## Out of scope
+
+- Runtime, public APIs, dependencies, test changes, other configuration rows.
+- Package publication, release work, promotion, merging, or issue-state changes.
+- New cross-spec decisions or changes to developer guidance.
+
+## Acceptance Criteria
+
+1. [manual] The quick-method temperature row says `0`; the builder row says
+   `0` without enabled reasoning and unspecified with enabled reasoning,
+   including automatic enablement. Manual prose review checks the distinction.
+2. Offline execution confirms omitted/undefined and explicit temperatures for
+   quick methods, low-level streaming, and agent builder calls separately.
+3. [manual] The configuration guide links the existing relevant explanation;
+   the tracked delta contains only documentation and this spec's evidence.
+   Manual review judges the link's relevance and the scope of the prose.
+4. Build, typecheck, lint, unit, coverage, mocked E2E, independent local review,
+   and the spec done-gate pass before delivery.
+
+## Execution (TDD task list)
+
+### 1. Verify each path before editing prose
+
+**Tests first**: run the existing `core/client.test.ts` and
+`core/quick-methods.test.ts` suites and a disposable offline adapter probe using
+the real client, quick helpers/instance methods, and builder/agent lifecycle.
+Exercise omitted, undefined, `0`, and `0.7` temperatures; reasoning absent,
+disabled and enabled; and builder catalog-driven automatic reasoning.
+Expected green: existing behavior already implements the required defaults.
+Expected documentation mismatch: both current rows say “Provider default.”
+No permanent test is added for a prose-only correction.
+
+**Implementation**: change only the two temperature rows and concise supporting
+prose in the configuration guide; add `changelog.d/wat-1019-temperature-defaults.md`.
+
+### 2. Verify and complete
+
+Re-read the changed guide against the runtime evidence, run all six target
+checks sequentially, obtain fresh-context local review, run the done-gate,
+and mark this spec done. Stage the authored spec/lock with the implementation
+for the first commit, using the target's normal hooks.
+
+## Manual Verification
+
+- AC #1: read both changed rows; trace quick helpers to `LLMist.stream`, and
+  builder options through `Agent` and `LLMCallLifecycle` to the same client.
+  Confirm automatic reasoning resolution and compare with the offline probe.
+- AC #3: follow the guide's link to the existing Quick Methods explanation;
+  confirm it describes low-level enabled reasoning leaving temperature unset.
+  Inspect the staged file list for documentation-only scope.
+
+## Documentation Impact
+
+| File | Change |
+|---|---|
+| `packages/docs/src/content/docs/library/getting-started/configuration.md` | Correct both temperature defaults and link the existing explanation. |
+| `changelog.d/wat-1019-temperature-defaults.md` | Record the documentation correction. |
+
+## Verification
+
+Run `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`,
+`npm run test:coverage`, and `npm run test:e2e`, in that order. Require successful
+exact-head CI checks and independent GitHub review after trusted publication;
+local verification does not claim either remote result.
+
+## Progress
+
+- [x] AC #1: both rows match the source trace and observed defaults below.
+- [x] AC #2: all 80 offline runtime cases pass; 82 existing targeted tests pass.
+- [x] AC #3: the link resolves to the existing explanation under Model Shortcuts;
+  the intended delta contains the guide, this spec, and one changelog fragment.
+- [x] AC #4: build/typecheck/lint pass; unit and coverage each pass 7,084 tests;
+  mocked E2E passes 99 tests (4 existing skips). Independent gate review passes
+  with no findings. Lint reports existing warnings; no tests are removed/weakened.
+
+Evidence: `core/quick-methods.ts:69,111` passes temperature without reasoning;
+`core/client.ts:159` selects `0` unless reasoning is explicitly enabled.
+`agent/builder.ts:513,537` passes temperature and reasoning independently;
+`agent/agent.ts:478` forwards them to `agent/llm-call-lifecycle.ts:179`, whose
+reasoning resolver at line 406 enables catalog-supported reasoning automatically.
+`agent/agent.ts:1100` calls the real client. Paths are under `packages/llmist/src/`.
+The offline probe uses an in-memory adapter and ordinary/reasoning model specs:
+four temperature inputs × two model types × (four quick helper/instance paths +
+three low-level reasoning modes + three builder reasoning modes) = 80 cases.
+Observed omitted/undefined values: quick methods `0` on both models; low-level
+`0` absent/disabled and `undefined` enabled; builder `0` absent/disabled and
+`undefined` enabled/auto-enabled. Explicit `0` and `0.7` reach the adapter intact.
+No network/provider calls occur. Existing tests and runtime source are unchanged.
