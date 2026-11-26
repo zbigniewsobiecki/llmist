@@ -129,6 +129,6 @@ beforeEach(() => {
 .withHooks(HookPresets.monitoring())
 ```
 
-2. Check the [Debugging Guide](/reference/debugging/)
+2. Check the [Debugging Guide](/library/reference/debugging/)
 
 3. [Open an issue](https://github.com/zbigniewsobiecki/llmist/issues)
