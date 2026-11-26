@@ -7,7 +7,7 @@ level: plan
 title: Upgrade js-toml with bounded parser and configuration verification
 parent_spec: docs/specs/010-js-toml-upgrade.md
 depends_on: []
-status: wip
+status: done
 locked_at: 01e2e9da271ac23af2a0d7038f9978c3c9c96731
 ---
 
@@ -316,24 +316,24 @@ section defines exact required outcomes. Treat missing evidence as an open hold.
 
 ### Unit and configuration integration tests
 
-- [ ] Task 2's nine named cases (string/array variants may be parameterized) feed
+- [x] Task 2's nine named cases (string/array variants may be parameterized) feed
   real TOML into `loadConfig()` in `config-loadconfig.test.ts` with only fs mocked.
-- [ ] Existing `config.test.ts`, `config-resolution.test.ts`,
+- [x] Existing `config.test.ts`, `config-resolution.test.ts`,
   `config-validators.test.ts`, `config-command.test.ts` and all other unit suites
   retain their assertions and pass; no production API changes are introduced.
 
 ### Isolated parser integration tests
 
-- [ ] Task 3's five named cases, UTC-offset variants and harness controls in
+- [x] Task 3's five named cases, UTC-offset variants and harness controls in
   `config-parser-security.test.ts` use real installed parsing and bounded children.
-- [ ] Baseline and candidate measurements record the fixed payload, budgets,
+- [x] Baseline and candidate measurements record the fixed payload, budgets,
   termination and outcomes; timeout/crash is never a successful rejection.
 
 ### Acceptance and complete tiers
 
-- [ ] Task 1/4 graph checks compare both manifests, all lock nodes, actual
+- [x] Task 1/4 graph checks compare both manifests, all lock nodes, actual
   per-workspace resolution, installed tree and explained lock delta (spec AC #1).
-- [ ] All six sequential local commands pass, including mocked E2E; normal hooks
+- [x] All six sequential local commands pass, including mocked E2E; normal hooks
   and independent local-review gate pass (spec AC #4).
 - [ ] External protocols below qualify exact-head checks/reviews and verified dev
   delivery/closeout (spec ACs #4–5); no external success is inferred locally.
@@ -550,7 +550,12 @@ expected mocked error-path logging. Live-provider flags stay unset.
 Fresh-context `agent-plugins__z:local-review`, gate round 1, inspects the entire
 base-to-candidate staged delta and the plan, with **no findings**. It confirms
 dependency scope, real-parser coverage, bounded-process controls and plan
-compliance. Normal commit-hook evidence and final clean handoff follow below.
+compliance. The implementation commit passes normal pre-commit Biome and
+typecheck plus commit-msg commitlint; Biome makes no changes. Its working tree is
+clean. The closing metadata commit records local readiness and the explicit
+external holds; it does not change any measured parser/test inputs. Delivery uses
+the declared prepare/publish hooks; no writer push or remote outcome is claimed.
+The mechanical done-gate passes with all eight local Progress criteria checked.
 
 Manual AC #5 inspection finds only the two declarations, js-toml lock metadata,
 the two test files, this plan/coverage lifecycle, one implementation changelog
@@ -587,6 +592,6 @@ until both external protocols are verified by their named owners.
 - [x] AC #3 — bounded multiline regression and harness/conformance controls.
 - [x] AC #4 — six sequential local tiers and test-first evidence.
 - [x] AC #5 — documentation and scope protocol.
-- [ ] AC #6 — independent local review, normal hooks and clean candidate handoff.
+- [x] AC #6 — independent local review, normal hooks and clean candidate handoff.
 - [x] AC #7 — truthful publication-readiness record with external gates and owners.
 - [x] AC #8 — completion-boundary inspection and explicit pending-outcome handoff.

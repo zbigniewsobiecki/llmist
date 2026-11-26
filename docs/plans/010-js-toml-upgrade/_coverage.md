@@ -1,9 +1,9 @@
 # Coverage map for spec 010-js-toml-upgrade
 
 Source: [complete merged specification](../../specs/010-js-toml-upgrade.md).
-Execution: [1-parser-upgrade.md.wip](1-parser-upgrade.md.wip), currently in progress.
-Every outcome belongs to this one implementation PR; assignment does not mark
-any outcome complete. This Plan stage preserves the merged specification in full.
+Execution: [1-parser-upgrade.md.done](1-parser-upgrade.md.done), locally complete.
+Local implementation and handoff criteria pass; external outcomes remain pending.
+The merged specification remains unchanged until external completion is verified.
 
 ## Spec ACs
 
@@ -18,7 +18,7 @@ any outcome complete. This Plan stage preserves the merged specification in full
 ## Coverage summary
 
 - **5 spec ACs** map to **1 plan**, with full outcome ownership and no partial chains.
-- **1 plan** has independently verifiable local criteria; external outcomes have
+- **1 plan** passes its independently verifiable local criteria; external outcomes have
   explicit manual protocols and owners. Local completion never implies closeout.
 - Plan lifecycle completion permits publication of the implementation PR. The
   parent spec stays pending until mandatory external gates A/B are verified,
