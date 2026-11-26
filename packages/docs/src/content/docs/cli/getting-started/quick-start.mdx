@@ -39,15 +39,19 @@ When running in a terminal (both stdin and stdout are TTY), the agent automatica
 
 ## Built-in Gadgets
 
-The CLI includes three built-in gadgets for agent-user communication:
+The CLI includes four built-in gadgets:
 
 | Gadget | Purpose |
 |--------|---------|
 | **AskUser** | Ask the user a question and wait for their response |
 | **TellUser** | Display important messages (info, success, warning, error) |
-| **Finish** | Signal that the agent has completed its task |
+| **Finish** | Signal that the agent has completed its task, ending the agent loop |
+| **TextToSpeech** | Convert text to speech audio |
 
-These are registered automatically. Use `--no-builtins` to disable them.
+These are registered by default, but `AskUser` requires interactive stdin and
+stdout (both TTYs) and is automatically excluded when input or output is piped.
+Use `--no-builtin-interaction` to disable `AskUser` in an interactive terminal.
+Use `--no-builtins` to disable default registration of all four built-in gadgets.
 
 <Aside type="note">
   For filesystem, shell, or web capabilities, create custom gadgets or use the library API.
