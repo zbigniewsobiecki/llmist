@@ -18,6 +18,11 @@ The CLI loads configuration from `~/.llmist/cli.toml`:
 
 ### Basic Structure
 
+The parser rejects duplicate table headers, including a repeated parent header after
+a nested table. Declare each table once and keep its settings together. Invalid UTC
+offsets and decimal integers longer than 1000 digits are also rejected. Parsing
+errors report the configuration file path; correct the TOML before running again.
+
 ```toml
 # ~/.llmist/cli.toml
 

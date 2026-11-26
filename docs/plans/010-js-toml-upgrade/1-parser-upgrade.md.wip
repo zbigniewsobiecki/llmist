@@ -7,7 +7,8 @@ level: plan
 title: Upgrade js-toml with bounded parser and configuration verification
 parent_spec: docs/specs/010-js-toml-upgrade.md
 depends_on: []
-status: pending
+status: wip
+locked_at: 01e2e9da271ac23af2a0d7038f9978c3c9c96731
 ---
 
 # 010/1: Upgrade js-toml with bounded parser and configuration verification
@@ -438,19 +439,154 @@ useful to configuration users, the conditional reference entry.
 
 ## Evidence
 
-Implementation evidence is pending. Planning confirms the parent fingerprint,
-current declarations and shared 1.1.2 resolution; it does not measure the attack
-or establish 1.2.2 behavior. Record implementation evidence here as tasks run.
-External delivery and closeout are pending until their named owners supply proof.
+### Execution binding and dependency evidence
+
+Execution on 2026-11-26 uses project `llmist`, agent `llmist-implement`, repository
+`zbigniewsobiecki/llmist`, base `dev` at the assigned `locked_at` revision. The
+headless assignment authorizes this merged plan without another sign-off. Its
+implementation issue-reference instruction supersedes the planning instruction
+for PR/commit text: **Related to WAT-1045**, without automatic closing language.
+The lock rides with the first code commit as required by the implementation role.
+
+The protected runtime selects Node 24.22.1 and npm 10.9.2. Baseline and candidate
+`npm ci --engine-strict --ignore-scripts=false` both pass (11s and 10s respectively).
+Direct `lefthook install`, `lefthook validate`, and executable checks for pre-commit,
+commit-msg and pre-push pass after each install. No manifests, scripts or hook
+policy change. Evidence caches move to ignored `.watershed/.cache/010-js-toml/`
+before the second install because `npm ci` removes `node_modules/.cache`.
+
+| Observation | Baseline | Candidate |
+|---|---|---|
+| Both consumer declarations | `^1.1.0` | `^1.2.2` |
+| All lock nodes / physical copies | one shared 1.1.2 | one shared 1.2.2 |
+| CLI and library actual resolver | root `js-toml/dist/index.cjs`, 1.1.2 | same entry, 1.2.2 |
+| `npm ls js-toml --all --json` | both edges valid, 1.1.2 | both edges valid, 1.2.2 |
+| Target acceptance | expected assertion failure | pass |
+| Explained lock/manifests check | pass | pass |
+
+Parsed comparison covers every lock package and the root/consumer manifests;
+only js-toml's node and its two workspace declarations differ. An injected
+`node_modules/unrelated-control` comparison entry produces the required assertion
+failure naming that path. The textual lock delta changes only the version, URL,
+integrity and two declarations. Filesystem enumeration finds only
+`node_modules/js-toml/package.json`; actual workspace resolvers and the complete
+npm dependency tree find no older, missing or invalid copy.
+
+Lock SHA-256 changes from
+`aecbcf36364aee0e8068de18c8fd4c8be026bfd98c8999c85411df1b6702da8e` to
+`18442975d07bcad196cf846cdecf422da0111f5e4cf0064120ea673106ff2714`.
+The fetched 1.2.2 tarball's independently calculated SHA-512 matches the lock:
+`sha512-NapVhoCRGcW7P5gZJLjRTgabe9EOa+RVSIiyZfElKNiyAayP4kzOd0mvSzkbSt8uJ3psLkU03DuJLDVjYO6ueQ==`.
+It retains MIT licensing, has no explicit engines field, keeps ESM/CommonJS/type
+exports and the named `load` export, and retains runtime dependencies
+`chevrotain: ^12.0.0` and `xregexp: ^5.1.2`. Its optional load-options argument
+does not require changing this caller. Its source adds a 1000-digit decimal
+guard, UTC-offset bounds and explicit super-table marking; the multiline token
+removes the overlapping trailing-whitespace repetition from escaped-newline
+matching. The lexer orders that multiline token before ordinary basic strings,
+so the fixed unterminated fixture attempts the inspected rule. Artifact evidence
+does not establish any advisory association or current alert state.
+
+### Test-first, compatibility and bounded probes
+
+Before the dependency edit, all 17 configuration-loading tests pass, including
+the ten new cases (the two string forms expand one planned case). Thirteen
+temporary mutations independently fail with assertion errors: empty config,
+omitted temperature, both string forms, multiline content, array membership,
+retry value, inherited model, prompt inclusion, syntax prefix, config path,
+validation, isolated valid continuation and isolated malformed rejection. Each
+mutation is immediately restored; production `config.ts` remains unchanged.
+Lint and typecheck pass before the bump. No existing assertion is removed or
+weakened; no test mocks js-toml or the configuration pipeline.
+
+Before upgrade the combined new suites have 25 passes and four intended failures:
+the 1001-digit decimal, `+25:00`, `+12:60` and duplicate super-table are accepted
+by 1.1.2. All four become identified `SyntaxParseError` rejections on 1.2.2.
+After upgrade all six focused configuration/parser suites pass: **473 tests**.
+The corresponding valid multiline continuation returns exactly `Helloworld`.
+
+The malformed fixture is exactly `x = `, three double quotes, backslash, LF and
+256 ASCII spaces, **265 bytes**, SHA-256
+`8c3665b49d688a3c98da74e73a70d2a8ac22b3eb981d108ad3aca2943e3d9fd2`.
+It always runs in a separately killable Node child importing installed js-toml
+from the CLI workspace. Budgets: ready 5000ms; dispatch-to-result 2000ms; reap
+1000ms; independent ceiling 8000ms (kill at 7000ms reserves reap time); explicit
+test timeout 12000ms. Child output is drained and capped at 16KiB; bigint results
+are not serialized. Rejections require actual parser exception identity, ready
+handshake, a valid result and normal child termination.
+
+| Fixed multiline observation (n=1 per selected focused run) | 1.1.2 | 1.2.2 |
+|---|---|---|
+| Dispatch-to-result / max | 3.849ms | 2.563ms |
+| Total child lifecycle / max | 180.331ms | 185.605ms |
+| Result / termination | SyntaxParseError, exit 0, reaped | SyntaxParseError, exit 0, reaped |
+
+The baseline **already rejects within budget**; no baseline hang or speed effect
+is claimed. The plan's already-green path applies: inspected token coverage and
+a reverted assertion mutation retain the bounded rejection contract without
+inventing red. These are observations of the specified modest fixture, not
+exhaustive parser equivalence or a benchmark. The valid-value, ordinary syntax,
+nonresponsive/killed/reaped, crashed, missing-import and missing-result controls
+all pass. A timeout or infrastructure failure cannot satisfy rejection.
+
+### Local verification and manual scope inspection
+
+All intended implementation files are staged before the six sequential tiers;
+all six exit 0. Results on the candidate implementation tree:
+
+| Command | Elapsed | Result |
+|---|---|---|
+| `npm run build` | 22.599s | 4 tasks pass, including 483 documentation pages |
+| `npm run typecheck` | 18.971s | 6 tasks pass; Astro reports zero diagnostics |
+| `npm run lint` | 1.050s | exit 0; 1020 warnings and 63 informational diagnostics |
+| `npm test` | 33.518s | 252 files, 7106 tests pass |
+| `npm run test:coverage` | 40.397s | 252 files, 7106 tests pass |
+| `npm run test:e2e` | 4.951s | 11 files/99 tests pass; 3 files/4 tests retain existing skips |
+
+Coverage: statements 77.29%, branches 78.78%, functions 77.98%, lines 77.59%.
+No lint rule or test gate is weakened. The existing test diagnostics include
+expected mocked error-path logging. Live-provider flags stay unset.
+
+Fresh-context `agent-plugins__z:local-review`, gate round 1, inspects the entire
+base-to-candidate staged delta and the plan, with **no findings**. It confirms
+dependency scope, real-parser coverage, bounded-process controls and plan
+compliance. Normal commit-hook evidence and final clean handoff follow below.
+
+Manual AC #5 inspection finds only the two declarations, js-toml lock metadata,
+the two test files, this plan/coverage lifecycle, one implementation changelog
+fragment and a short configuration-reference paragraph. Guidance explains
+duplicate headers, invalid UTC offsets and oversized decimal rejection. There
+is no production API, stored-shape, parser-option, unrelated dependency, README,
+CLAUDE.md or shared decision change. The complete parent remains byte-for-byte
+unchanged, with its pinned SHA-256 verified. Landed fragments are retained.
+
+### Publication readiness and completion boundary
+
+Manual AC #7/#8 protocol: the fresh locally ignored `.watershed/pull-request.md`
+uses all five required headings and the declared prepare/publish hook lane to
+target dev. The writer prepares a committed candidate without pushing or claiming
+publication, CI, approval, merge, reconciliation or closeout success.
+
+**External gate A remains pending, operator-owned:** published PR/head, independent
+exact-head COMMENT review with no blocker, separate legitimate approving review,
+successful exact-head `lint-and-test`, `validate-commits`, `e2e-tests`, strict
+freshness and verified dev merge. **External gate B remains pending:** operator's
+fresh merged-dev engine-strict install and all-copy/per-workspace 1.2.2 evidence;
+manager's linked evidence record and actual Linear closeout. Alert 272's current
+state/association remains unverified. The parent retains its original pending
+completion state (`status: draft`), regardless of the local plan lifecycle.
+No package publication, release, main promotion, governance change, new credential
+or paid provider test is performed. The implementation is not owner-complete
+until both external protocols are verified by their named owners.
 
 ## Progress
 
 <!-- /implement updates only from observed evidence. External holds remain explicit. -->
-- [ ] AC #1 — graph, exact resolution, reproducible installation and narrow delta.
-- [ ] AC #2 — real TOML compatibility, validation and documented stricter rejection.
-- [ ] AC #3 — bounded multiline regression and harness/conformance controls.
-- [ ] AC #4 — six sequential local tiers and test-first evidence.
-- [ ] AC #5 — documentation and scope protocol.
+- [x] AC #1 — graph, exact resolution, reproducible installation and narrow delta.
+- [x] AC #2 — real TOML compatibility, validation and documented stricter rejection.
+- [x] AC #3 — bounded multiline regression and harness/conformance controls.
+- [x] AC #4 — six sequential local tiers and test-first evidence.
+- [x] AC #5 — documentation and scope protocol.
 - [ ] AC #6 — independent local review, normal hooks and clean candidate handoff.
-- [ ] AC #7 — truthful publication-readiness record with external gates and owners.
-- [ ] AC #8 — completion-boundary inspection and explicit pending-outcome handoff.
+- [x] AC #7 — truthful publication-readiness record with external gates and owners.
+- [x] AC #8 — completion-boundary inspection and explicit pending-outcome handoff.

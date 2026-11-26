@@ -1,7 +1,7 @@
 # Coverage map for spec 010-js-toml-upgrade
 
 Source: [complete merged specification](../../specs/010-js-toml-upgrade.md).
-Execution: [1-parser-upgrade.md](1-parser-upgrade.md), currently pending.
+Execution: [1-parser-upgrade.md.wip](1-parser-upgrade.md.wip), currently in progress.
 Every outcome belongs to this one implementation PR; assignment does not mark
 any outcome complete. This Plan stage preserves the merged specification in full.
 
@@ -9,10 +9,10 @@ any outcome complete. This Plan stage preserves the merged specification in full
 
 | # | Spec AC (short) | Satisfied by | Coverage / state |
 |---|---|---|---|
-| 1 | Both workspaces lock/install exactly 1.2.2; compare complete graph/delta | Plan 1, tasks 1/4, per-plan AC #1 | Full / pending |
-| 2 | Real configuration parsing, semantics, useful errors and differences | Plan 1, tasks 2/3/4, AC #2/#5 | Full / pending |
-| 3 | Malformed multiline rejection inside a documented process bound | Plan 1, task 3, AC #3 | Full / pending |
-| 4 | Six local tiers, independent review, successful exact-head CI | Plan 1, tasks 4/5, AC #4/#6/#7 and external gate A | Full / pending, external CI/review hold |
+| 1 | Both workspaces lock/install exactly 1.2.2; compare complete graph/delta | Plan 1, tasks 1/4, per-plan AC #1 | Full / locally verified |
+| 2 | Real configuration parsing, semantics, useful errors and differences | Plan 1, tasks 2/3/4, AC #2/#5 | Full / locally verified |
+| 3 | Malformed multiline rejection inside a documented process bound | Plan 1, task 3, AC #3 | Full / locally verified; baseline also bounded |
+| 4 | Six local tiers, independent review, successful exact-head CI | Plan 1, tasks 4/5, AC #4/#6/#7 and external gate A | Full / local tiers and review verified; external CI/review hold |
 | 5 | Approving review, dev merge, fresh checkout and manager closeout | Plan 1, task 5, AC #7/#8 and external gates A/B | Full / pending, operator/manager evidence hold |
 
 ## Coverage summary
