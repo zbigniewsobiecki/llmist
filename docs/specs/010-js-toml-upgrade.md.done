@@ -4,7 +4,9 @@ slug: js-toml-upgrade
 level: spec
 title: Upgrade js-toml to 1.2.2
 created: 2026-11-26
-status: draft
+status: done
+completion_scope: implementation-readiness
+external_gates: pending-verification
 ---
 
 # 010: Upgrade js-toml to 1.2.2

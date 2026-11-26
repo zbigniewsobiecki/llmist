@@ -5,7 +5,7 @@ plan: 1
 plan_slug: parser-upgrade
 level: plan
 title: Upgrade js-toml with bounded parser and configuration verification
-parent_spec: docs/specs/010-js-toml-upgrade.md
+parent_spec: docs/specs/010-js-toml-upgrade.md.done
 depends_on: []
 status: done
 locked_at: 01e2e9da271ac23af2a0d7038f9978c3c9c96731
@@ -13,7 +13,7 @@ locked_at: 01e2e9da271ac23af2a0d7038f9978c3c9c96731
 
 # 010/1: Upgrade js-toml with bounded parser and configuration verification
 
-> Part 1 of 1. Parent: [complete merged specification](../../specs/010-js-toml-upgrade.md).
+> Part 1 of 1. Parent: [complete merged specification](../../specs/010-js-toml-upgrade.md.done).
 > Resolve the parent by `010-js-toml-upgrade.md*` if its lifecycle extension changes.
 
 ## Summary
@@ -54,8 +54,8 @@ direction. Do not alter parser options to hide incompatibility.
 **Shared surfaces:** no shared source files in this one-plan set. Distinct
 changelog fragments do not conflict; retain the landed fragments. The complete
 merged parent remains byte-for-byte unchanged during planning. At implementation
-completion, only its normal status/extension lifecycle transition is eligible;
-preserve all specification content.
+completion, its status, readiness metadata and extension record implementation
+readiness under the owner's decision. Preserve the full specification body.
 
 **Deferred to later plans:** none. External delivery gates have named owners below,
 not another implementation plan.
@@ -282,11 +282,12 @@ evidence before the manifest change. All tests above precede the bump.
    unsure, remeasure. Documentation-only evidence edits do not invent new runs.
 7. Follow the normal plan lifecycle and mechanical done-gate for the local
    readiness criteria in Progress, using Conventional Commits and normal hooks.
-   The plan's `.md.done` means its local implementation and handoff are ready;
-   it does not certify external outcomes. Guard the usual spec-completion step:
-   leave the parent specification pending until the external completion gates
-   below are verified, even though this is its sole execution plan. Preserve
-   parent content; never label the upgrade complete from local readiness alone.
+   Both Plan and Spec `.md.done` markers record implementation readiness under
+   the owner's decision. After this sole plan's local criteria pass, set the
+   parent status to done and rename it `.md.done`, preserving its body and
+   recording the marker's readiness scope. Review, CI, dev merge, post-merge CI,
+   fresh-checkout verification and Linear closeout remain external manager gates
+   pending verification. Owner completion requires their verified evidence.
 
 ### 5. Verify external delivery and hand off closeout
 
@@ -299,7 +300,7 @@ section defines exact required outcomes. Treat missing evidence as an open hold.
   clean committed candidate and fresh locally ignored `.watershed/pull-request.md`
   with Summary, What and why, Tests, Documentation, Breaking changes and rollout.
   No writer push, MCP/HTTP delivery write, release PR or main promotion.
-- PR and commit text refer to the parent issue only as `Related to WAT-1043`.
+- PR and commit text use only `Related to WAT-1045` for issue references.
   Preserve independent COMMENT review and the separate mandatory approving review;
   a COMMENT quality gate does not satisfy the approval count. No admin bypass or
   credential provisioning is authorized.
@@ -307,8 +308,9 @@ section defines exact required outcomes. Treat missing evidence as an open hold.
   `lint-and-test`, `validate-commits` and `e2e-tests`, strict up-to-date status,
   legitimate approval identity and merge into dev. A changed head invalidates
   stale review/check evidence. Codecov upload remains advisory.
-- The operator reconciles a fresh checkout of merged dev; the manager records
-  final evidence and owns Linear transitions/closeout. The writer reports local
+- The operator verifies post-merge CI and reconciles a fresh checkout of merged
+  dev. The manager records final evidence and owns Linear transitions/closeout.
+  The writer reports local
   completion and each unavailable external proof separately. Never close the
   issue automatically from a commit/PR or claim a package release.
 
@@ -350,15 +352,18 @@ owner-outcome gates, separate from the local done-gate's readiness criteria.
   no removed/weakened assertions, complete before/after conclusions in Evidence,
   one implementation fragment and justified configuration-reference change or
   an explicit no-change reason. Compare parent content with pinned source,
-  permitting only the normal completion status/extension when appropriate.
+  permitting the completion status, readiness metadata and extension authorized
+  by the owner's decision.
 - **Per-plan AC #7 — [manual], publication-readiness record:** inspect the fresh
   whole-branch PR text and the Evidence section. Require declared hook-lane
   handoff, dev-only target, local verification/review results, all external gates
   and named owners, explicit pending facts and no unverified success claims.
 - **Per-plan AC #8 — [manual], truthful completion boundary:** inspect Evidence,
   Progress, coverage conclusions and parent lifecycle. Require local readiness
-  distinguished from owner completion, parent still pending while any external
-  completion evidence is unavailable, and an explicit operator/manager handoff.
+  recorded by both Plan and Spec completion markers with the full parent body
+  preserved. Require explicit pending external outcomes and an operator/manager
+  handoff for review, CI, dev merge, post-merge CI, fresh-checkout verification
+  and Linear closeout.
 - **External completion gate A — operator-owned GitHub state:** record PR URL, base
   dev, published head SHA and matching reviewed SHA. Inspect checks at that head:
   all three named jobs must be successful, with run URLs; no pending/skipped job
@@ -367,6 +372,7 @@ owner-outcome gates, separate from the local done-gate's readiness criteria.
   head changes, requalify these facts. Capture merge URL/commit and confirm the
   candidate is incorporated into dev. Missing authority or evidence keeps this open.
 - **External completion gate B — operator/manager-owned reconciliation:** operator
+  records successful post-merge CI at the merged dev SHA with run URLs, then
   checks out fresh merged dev, records SHA, installs engine-strict from its lock
   with compatible Node/npm 10.9.2, runs task 1's per-workspace and all-copy checks
   and records exact 1.2.2 results and lock hash. Manager's Linear record links the
@@ -376,12 +382,12 @@ owner-outcome gates, separate from the local done-gate's readiness criteria.
   closeout record before telling the owner the upgrade is complete. No release
   or main merge is part of success.
 
-External completion gates A/B remain explicitly pending at hook handoff until
-observed. They do not block preparing the PR that they qualify, and cannot be
-waived by completing the local Progress boxes. After both protocols pass, record
-their evidence in the delivery/manager record and reconcile plan/coverage
-conclusions and the parent's normal completion metadata/extension. If any proof
-is missing, keep the spec pending and report the exact hold to the owner.
+The manager's external completion gates A/B remain pending verification at hook
+handoff. Operator evidence and actual manager closeout qualify those outcomes.
+The owner authorizes both completion markers to record implementation readiness
+before merge. After both external protocols pass, record their evidence in the
+delivery/manager record and reconcile plan/coverage conclusions and external-gate
+metadata. Report each missing proof as an open hold to the owner.
 
 ## Acceptance Criteria (per-plan, testable)
 
@@ -397,17 +403,18 @@ is missing, keep the spec pending and report the exact hold to the owner.
 4. All six sequential local tiers pass; new tests precede the bump and expected
    reds/sensitivity checks are recorded; no assertions are weakened (spec AC #4).
 5. [manual] Documentation Impact and scope inspection pass with honest evidence
-   and unchanged parent content except eligible lifecycle metadata (spec AC #2/#4).
+   and preserved parent body with authorized lifecycle metadata (spec AC #2/#4).
 6. Fresh-context local-review gate has no unresolved blocking finding and normal
    commit hooks pass; a clean committed candidate is handed to the declared lane
    (spec AC #4).
 7. [manual] Publication-readiness record includes local results, dev-only hook
    handoff, all mandatory external completion gates/owners and honest evidence
    holds; it claims no unverified review/CI/merge outcome (supports spec AC #4/#5).
-8. [manual] Completion-boundary inspection confirms the parent stays pending
-   and owner-complete language waits for external gate A (exact-head review,
-   approval, three successful checks and dev merge) and gate B (fresh resolution
-   and actual manager closeout); the handoff identifies these holds (spec AC #5).
+8. [manual] Completion-boundary inspection confirms both markers record
+   implementation readiness. Owner completion requires external gate A (exact-head
+   review, approval, three successful checks and dev merge) and gate B (post-merge
+   CI, fresh resolution and actual manager closeout). The handoff identifies each
+   pending outcome (spec AC #5).
 
 ## Documentation Impact (this plan only)
 
@@ -415,7 +422,7 @@ is missing, keep the spec pending and report the exact hold to the owner.
 |---|---|
 | This plan, Evidence and Progress | Record baseline/candidate graph, test controls, fixed fixture/budgets, timings, six-tier results, review and external holds. |
 | `_coverage.md` | Update sole-plan lifecycle links and conclusions from actual verified outcomes. |
-| `docs/specs/010-js-toml-upgrade.md` | Preserve complete content; only normal completion lifecycle metadata/extension after required work is complete. |
+| `docs/specs/010-js-toml-upgrade.md.done` | Preserve the full body and record implementation readiness in lifecycle metadata/extension under the owner's decision. External gates remain pending verification. |
 | `changelog.d/js-toml-upgrade.md` | One implementation fragment describing the actual upgrade and verified stricter invalid-input behavior; no release/alert-closure claim. |
 | `packages/docs/src/content/docs/cli/configuration/toml-reference.mdx` | Conditional short parser-compatibility guidance for verified user-relevant rejections; otherwise record why no supported guidance changes. No unrelated doc fixes. |
 | `.watershed/pull-request.md` (locally ignored) | Fresh whole-branch description and results, deliberate omissions, external holds; all five required headings. |
@@ -536,21 +543,28 @@ all six exit 0. Results on the candidate implementation tree:
 
 | Command | Elapsed | Result |
 |---|---|---|
-| `npm run build` | 22.599s | 4 tasks pass, including 483 documentation pages |
-| `npm run typecheck` | 18.971s | 6 tasks pass; Astro reports zero diagnostics |
-| `npm run lint` | 1.050s | exit 0; 1020 warnings and 63 informational diagnostics |
-| `npm test` | 33.518s | 252 files, 7106 tests pass |
-| `npm run test:coverage` | 40.397s | 252 files, 7106 tests pass |
-| `npm run test:e2e` | 4.951s | 11 files/99 tests pass; 3 files/4 tests retain existing skips |
+| `npm run build` | 25.101s | 4 tasks pass, including 483 documentation pages |
+| `npm run typecheck` | 18.447s | 6 tasks pass; Astro reports zero diagnostics |
+| `npm run lint` | 1.243s | exit 0; 1020 warnings and 63 informational diagnostics |
+| `npm test` | 34.086s | 252 files, 7106 tests pass |
+| `npm run test:coverage` | 40.461s | 252 files, 7106 tests pass |
+| `npm run test:e2e` | 4.902s | 11 files/99 tests pass; 3 files/4 tests retain existing skips |
 
 Coverage: statements 77.29%, branches 78.78%, functions 77.98%, lines 77.59%.
 No lint rule or test gate is weakened. The existing test diagnostics include
 expected mocked error-path logging. Live-provider flags stay unset.
 
-Fresh-context `agent-plugins__z:local-review`, gate round 1, inspects the entire
-base-to-candidate staged delta and the plan, with **no findings**. It confirms
-dependency scope, real-parser coverage, bounded-process controls and plan
-compliance. The implementation commit passes normal pre-commit Biome and
+The retained-author validation uses the protected Node 24.22.1 and npm 10.9.2.
+Engine-strict `npm ci` and direct Lefthook installation/validation pass. Both
+workspace resolvers and the complete npm tree resolve 1.2.2, with one 1.2.2 lock
+node. The reconciliation delta contains only this plan, coverage and the Spec's
+lifecycle transition. Source, tests, configuration, manifests, lock and changelog
+match the recorded head. The existing implementation fragment is retained.
+
+Fresh-context `agent-plugins__z:local-review`, gate round 1, inspects the
+retained-author staged delta and plan under the owner decision, with **no
+findings**. It confirms full Spec body preservation, both readiness markers and
+all pending external gates. The implementation commit passes normal pre-commit Biome and
 typecheck plus commit-msg commitlint; Biome makes no changes. Its working tree is
 clean. The closing metadata commit records local readiness and the explicit
 external holds; it does not change any measured parser/test inputs. Delivery uses
@@ -562,8 +576,9 @@ the two test files, this plan/coverage lifecycle, one implementation changelog
 fragment and a short configuration-reference paragraph. Guidance explains
 duplicate headers, invalid UTC offsets and oversized decimal rejection. There
 is no production API, stored-shape, parser-option, unrelated dependency, README,
-CLAUDE.md or shared decision change. The complete parent remains byte-for-byte
-unchanged, with its pinned SHA-256 verified. Landed fragments are retained.
+CLAUDE.md or shared decision change. The complete parent body is preserved
+byte-for-byte. Its pinned original SHA-256 is verified before changing its status,
+readiness metadata and extension. Landed fragments are retained.
 
 ### Publication readiness and completion boundary
 
@@ -572,14 +587,30 @@ uses all five required headings and the declared prepare/publish hook lane to
 target dev. The writer prepares a committed candidate without pushing or claiming
 publication, CI, approval, merge, reconciliation or closeout success.
 
-**External gate A remains pending, operator-owned:** published PR/head, independent
-exact-head COMMENT review with no blocker, separate legitimate approving review,
-successful exact-head `lint-and-test`, `validate-commits`, `e2e-tests`, strict
-freshness and verified dev merge. **External gate B remains pending:** operator's
-fresh merged-dev engine-strict install and all-copy/per-workspace 1.2.2 evidence;
-manager's linked evidence record and actual Linear closeout. Alert 272's current
-state/association remains unverified. The parent retains its original pending
-completion state (`status: draft`), regardless of the local plan lifecycle.
+PR #707's fresh head ref, its origin branch and the local branch match the
+retained-author assignment's expected head before editing. The working tree is
+clean at that check. This verifies the published starting head only.
+
+**External gate A remains pending verification:** independent exact-head COMMENT
+review with no blocker, separate legitimate approving review, successful exact-head
+`lint-and-test`, `validate-commits`, `e2e-tests`, strict freshness and verified dev
+merge. **External gate B remains pending verification:** successful post-merge CI,
+operator's fresh merged-dev engine-strict install and all-copy/per-workspace 1.2.2
+evidence, manager's linked evidence record and actual Linear closeout. These are
+external manager gates with operator-provided verification. Alert 272's current
+state/association remains unverified.
+
+The owner decision supplied in the retained-author assignment states, “let the
+marker record implementation readiness and keep actual delivery and closeout
+pending until verified” (event `Ev0CN322BBDW`, message `1795706557.028469`). Both
+completion markers now record that readiness. The parent retains its full body
+and records `completion_scope: implementation-readiness` and
+`external_gates: pending-verification` in frontmatter. Manual AC #8 inspection
+checks the markers, exact body preservation, updated links and all pending gates.
+The lifecycle scanner recognizes Spec 010 as done and reports no stale parent
+references, unfinished Progress markers, dangling locks or number collisions.
+The mechanical done-gate passes. GitHub's broker refuses the granted review-thread
+read with HTTP 403, so external review state remains unverified in this handoff.
 No package publication, release, main promotion, governance change, new credential
 or paid provider test is performed. The implementation is not owner-complete
 until both external protocols are verified by their named owners.
