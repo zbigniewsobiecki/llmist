@@ -1,0 +1,118 @@
+---
+id: 011
+slug: cli-builtin-gadget-docs
+level: spec-light
+title: Accurate CLI built-in gadget documentation
+created: 2026-11-26
+status: done
+locked_at: ce9a92ecd472f8b38d085d41bc7d5bf72f511d27
+---
+
+# 011: Accurate CLI built-in gadget documentation (light)
+
+## Why
+
+The CLI command overview describes a nonexistent TellUser completion option,
+and Quick Start omits the speech gadget. Readers need both pages to explain
+the existing gadgets and the conditions for interactive questions accurately.
+Related to WAT-1050.
+
+## What
+
+- Correct the agent section of `packages/docs/src/content/docs/cli/commands/overview.mdx`
+  and Built-in Gadgets in `packages/docs/src/content/docs/cli/getting-started/quick-start.mdx`.
+- Explain AskUser, TellUser, Finish, and TextToSpeech using
+  `packages/cli/src/agent-command.ts` and `packages/cli/src/builtin-gadgets.ts` on dev.
+- Explain interactive input/output requirements and the distinct disable flags.
+- Decisions: one atomic documentation change with a light spec and changelog;
+  use source tracing and existing mocked tests, with no new prose-pinning tests.
+  Combined-light execution is authorized; scope and execution proceed together.
+  Research skipped: the source of truth is existing repository code.
+
+## Out of scope
+
+- Other documentation pages, runtime behavior, APIs, stored shapes, dependencies,
+  test changes, cross-spec decisions, and developer guidance.
+- Independent PR review, remote CI, merging, issue closeout, releases,
+  package publication, and promotion remain with the manager.
+
+## Acceptance Criteria
+
+1. [manual] Both pages describe all four gadget roles; TellUser displays messages,
+   Finish signals task completion, and TextToSpeech converts text to speech audio.
+   The overview removes the nonexistent TellUser.done option. Prose accuracy
+   requires semantic review against source rather than a text snapshot.
+2. [manual] Both pages explain that AskUser requires interactive stdin and stdout,
+   is unavailable with piped input/output, and is disabled by
+   `--no-builtin-interaction`; `--no-builtins` disables default built-in registration.
+   Manual review checks the distinction against the registration conditions.
+3. [manual] The delta contains only the two scoped doc sections and normal
+   delivery artifacts. Manual diff review checks the editorial boundary.
+4. Build, typecheck, lint, unit tests, coverage, mocked E2E, fresh-context local
+   review, and the spec done-gate pass with normal commit hooks.
+
+## Execution (TDD task list)
+
+### 1. Establish behavior before editing
+
+**Tests first**: run existing `packages/cli/src/builtin-gadgets.test.ts` and
+`packages/cli/src/agent-command.test.ts`. Expected green: existing behavior
+already supplies the four gadgets and completion signal. Expected doc mismatch:
+the overview claims `done=true`, and Quick Start lists only three gadgets.
+Trace the AskUser registration guard before writing the flag explanation.
+No runtime change or permanent test is needed for this prose correction.
+
+**Implementation**: correct only the agent options/table and adjacent explanation
+in the overview, and the Built-in Gadgets section of Quick Start. Add one
+`changelog.d/wat-1050-cli-builtin-gadget-docs.md` fragment.
+
+### 2. Verify and deliver
+
+Run the manual protocols, stage intended files, run all six target checks
+sequentially, obtain `agent-plugins__z:local-review` in gate mode, run the
+done-gate, and complete this spec. The spec and lock ride with the first
+documentation commit; use Conventional Commits and normal hooks. Deliver
+one PR to dev through the existing publication hook.
+
+## Manual Verification
+
+- AC #1: read both gadget tables against `getBuiltinGadgets`, each schema and
+  execute function in `builtin-gadgets.ts`, and the TextToSpeech factory it imports.
+  Expected: four roles match source; completion belongs to Finish, with no
+  TellUser.done instruction in either page.
+- AC #2: compare both explanations against the `options.builtins` registration
+  block and AskUser guard in `agent-command.ts`. Expected: interactive stdin
+  and stdout required; each disable flag has its own accurately stated effect.
+- AC #3: inspect the diff against the locked base. Expected: only the scoped
+  doc sections, this spec, and one changelog fragment; no assertions removed.
+
+## Documentation Impact
+
+| File | Change |
+|---|---|
+| `packages/docs/src/content/docs/cli/commands/overview.mdx` | Correct agent gadget roles and flag semantics |
+| `packages/docs/src/content/docs/cli/getting-started/quick-start.mdx` | Complete gadget list and interaction conditions |
+
+## Verification
+
+Run `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`,
+`npm run test:coverage`, and `npm run test:e2e` sequentially; all must exit 0.
+Use mocked tests only, with no provider calls. Run the spec done-gate after
+all Progress criteria are verified; commit with normal hooks.
+
+## Progress
+
+- [x] AC #1 — Both tables match the four entries in `builtin-gadgets.ts:135`;
+  TellUser's schema has message/type only; Finish throws TaskCompletionSignal.
+- [x] AC #2 — Both explanations match `agent-command.ts:85-102`: AskUser is
+  skipped for either noninteractive stream or the interaction flag; the builtins
+  flag skips default registration. Custom gadget loading remains separate.
+- [x] AC #3 — Staged diff changes only the two scoped sections, spec, and fragment;
+  runtime, tests, dependencies, other docs, and CLAUDE.md are untouched.
+- [x] AC #4 — All six target checks exit 0; unit and coverage each pass 7,106
+  tests; mocked E2E passes 99 with 4 skipped. Lint reports warnings but no errors.
+  Fresh-context local-review round 1 reports no findings; done-gate passes.
+
+Before editing, targeted suites pass (38 tests, 2 files); both doc mismatches are
+confirmed. Number 011 exceeds dev and open managed PRs' specs at allocation.
+No PR template exists on this base; use the five required delivery headings.

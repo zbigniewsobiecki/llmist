@@ -78,7 +78,7 @@ Run the full agent loop with tools:
 | `--gadget <path>` | `-g` | Gadget file (repeatable) | none |
 | `--mcp-server <spec>` | | Attach an MCP stdio server; repeatable | none |
 | `--mcp-trust <name>` | | Bypass stdio command allowlist for a named MCP server | none |
-| `--no-builtins` | | Disable all built-in gadgets | false |
+| `--no-builtins` | | Disable default built-in gadget registration | false |
 | `--no-builtin-interaction` | | Disable AskUser gadget | false |
 | `--quiet` | `-q` | Suppress output except TellUser | false |
 
@@ -86,8 +86,15 @@ Run the full agent loop with tools:
 
 | Gadget | Description |
 |--------|-------------|
-| `AskUser` | Asks the user a question and waits for response |
-| `TellUser` | Outputs a message with type indicator. Set `done=true` to end conversation |
+| `AskUser` | Asks the user a question and waits for their response |
+| `TellUser` | Displays important messages (info, success, warning, error) |
+| `Finish` | Signals that the agent has completed its task, ending the agent loop |
+| `TextToSpeech` | Converts text to speech audio |
+
+`AskUser` requires interactive stdin and stdout (both TTYs), so it is automatically
+excluded when input or output is piped. Use `--no-builtin-interaction` to disable
+`AskUser` in an interactive terminal. Use `--no-builtins` to disable default
+registration of all four built-in gadgets.
 
 ### `mcp` - Model Context Protocol
 
