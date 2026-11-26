@@ -1,28 +1,31 @@
 # Coverage map for spec 010-js-toml-upgrade
 
-Source: [complete merged specification](../../specs/010-js-toml-upgrade.md).
-Execution: [1-parser-upgrade.md](1-parser-upgrade.md), currently pending.
-Every outcome belongs to this one implementation PR; assignment does not mark
-any outcome complete. This Plan stage preserves the merged specification in full.
+Source: [complete merged specification](../../specs/010-js-toml-upgrade.md.done).
+Execution: [1-parser-upgrade.md.done](1-parser-upgrade.md.done), locally complete.
+Local implementation and handoff criteria pass; external outcomes remain pending.
+Both completion markers record implementation readiness under the owner's
+decision. The full specification body is preserved. External review, CI, dev
+merge, post-merge CI, fresh-checkout verification and Linear closeout remain
+manager gates pending verification.
 
 ## Spec ACs
 
 | # | Spec AC (short) | Satisfied by | Coverage / state |
 |---|---|---|---|
-| 1 | Both workspaces lock/install exactly 1.2.2; compare complete graph/delta | Plan 1, tasks 1/4, per-plan AC #1 | Full / pending |
-| 2 | Real configuration parsing, semantics, useful errors and differences | Plan 1, tasks 2/3/4, AC #2/#5 | Full / pending |
-| 3 | Malformed multiline rejection inside a documented process bound | Plan 1, task 3, AC #3 | Full / pending |
-| 4 | Six local tiers, independent review, successful exact-head CI | Plan 1, tasks 4/5, AC #4/#6/#7 and external gate A | Full / pending, external CI/review hold |
-| 5 | Approving review, dev merge, fresh checkout and manager closeout | Plan 1, task 5, AC #7/#8 and external gates A/B | Full / pending, operator/manager evidence hold |
+| 1 | Both workspaces lock/install exactly 1.2.2; compare complete graph/delta | Plan 1, tasks 1/4, per-plan AC #1 | Full / locally verified |
+| 2 | Real configuration parsing, semantics, useful errors and differences | Plan 1, tasks 2/3/4, AC #2/#5 | Full / locally verified |
+| 3 | Malformed multiline rejection inside a documented process bound | Plan 1, task 3, AC #3 | Full / locally verified; baseline also bounded |
+| 4 | Six local tiers, independent review, successful exact-head CI | Plan 1, tasks 4/5, AC #4/#6/#7 and external gate A | Full / local tiers and review verified; external CI/review hold |
+| 5 | Approving review, dev merge, post-merge CI, fresh checkout and manager closeout | Plan 1, task 5, AC #7/#8 and external gates A/B | Full / pending, operator/manager evidence hold |
 
 ## Coverage summary
 
 - **5 spec ACs** map to **1 plan**, with full outcome ownership and no partial chains.
-- **1 plan** has independently verifiable local criteria; external outcomes have
+- **1 plan** passes its independently verifiable local criteria; external outcomes have
   explicit manual protocols and owners. Local completion never implies closeout.
-- Plan lifecycle completion permits publication of the implementation PR. The
-  parent spec stays pending until mandatory external gates A/B are verified,
-  including actual manager closeout; no local checkbox substitutes for proof.
+- Both Plan and Spec lifecycle markers record implementation readiness before
+  merge under the owner's decision. External gates A/B require operator evidence
+  and actual manager closeout. Their outcomes remain pending verification.
 - **0 unmapped spec ACs**, **0 orphaned per-plan ACs**, **0 dependency edges**.
 
 ## Plan dependency graph
